@@ -1,0 +1,12 @@
+{
+  "name": "pisetup",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personal pi package: extensions, skills and prompt templates for multi-agent work with Herdr",
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": ["./extensions"],
+    "skills": ["./skills"],
+    "prompts": ["./prompts"]
+  }
+}

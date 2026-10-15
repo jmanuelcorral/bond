@@ -16,5 +16,12 @@
     "baseDelayMs": 2000,
     "maxAgentDelayMs": 60000
   },
-  "lastChangelogVersion": "1.2.0"
+  "packages": [
+    "./pisetup"
+  ],
+  "defaultTools": [
+    "+grep",
+    "+find",
+    "+ls"
+  ]
 }

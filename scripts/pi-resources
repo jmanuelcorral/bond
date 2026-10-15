@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Lista lo que pi carga de verdad en un directorio: extensiones, prompts y skills,
+# con su origen (top-level o package) y su ruta. Usa el modo RPC de pi, sin sesión.
+#
+# Uso: scripts/pi-resources [directorio]   (defecto: el actual)
+set -euo pipefail
+
+command -v pi >/dev/null 2>&1 || { echo "pi no está en el PATH" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "jq no está en el PATH" >&2; exit 1; }
+
+cd -- "${1:-$PWD}"
+{
+  printf 'ORIGEN\tTIPO\tNOMBRE\tRUTA\n'
+  # La pausa deja a pi arrancar antes de cerrar stdin, que es lo que termina el modo RPC.
+  { echo '{"id":"1","type":"get_commands"}'; sleep 5; } |
+    timeout 30 pi --mode rpc --offline --no-session 2>/dev/null |
+    jq -r 'select(.command == "get_commands") | .data.commands[]
+      | [(.sourceInfo.origin // "-"), .source, .name, (.sourceInfo.path // "-")] | @tsv'
+} | column -t -s "$(printf '\t')"
