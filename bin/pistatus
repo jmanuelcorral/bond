@@ -34,7 +34,7 @@ if [ "${1:-}" = "-j" ] || [ "${1:-}" = "--json" ]; then
   exit 0
 fi
 
-count="$(jq '.agents | length' <<<"$raw")"
+count="$(jq '.result.agents | length' <<<"$raw")"
 if [ "$count" = "0" ]; then
   echo "Sin agentes vivos. Lanza uno con: pidev <directorio>"
   exit 0
@@ -43,7 +43,7 @@ fi
 {
   printf 'AGENTE\tKIND\tESTADO\tCWD\tPANEL\n'
   jq -r '
-    .agents[]
+    .result.agents[]
     | [ .name // "(sin nombre)",
         .agent // "?",
         .agent_status // "?",

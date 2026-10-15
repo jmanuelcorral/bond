@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
-# Abre (o reutiliza) un workspace de Herdr para un proyecto:
-# un panel con el agente pi y otro con una shell para ti.
+# Abre (o reutiliza) un workspace de Herdr para un proyecto: un panel con un agente (pi por
+# defecto, o cualquier kind que soporte Herdr) y otro con una shell para ti. Con --worktree,
+# el workspace es un worktree de git gestionado por Herdr (`herdr worktree`).
 set -euo pipefail
 
+BIN_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DIRECTION="right"
 RATIO="0.6"
 FOCUS=(--focus)
-START_PI=1
+START_AGENT=1
 ATTACH=0
 PROJECT=""
 LABEL=""
+KIND="pi"
+BRANCH=""
+BASE_REF=""
+TRUST=()
+AGENT_ARGS=()
 
 log() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33maviso:\033[0m %s\n' "$*" >&2; }
@@ -17,129 +24,202 @@ die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
   cat <<'EOF'
-Uso: pidev [directorio] [opciones]
+Uso: pidev [directorio] [opciones] [-- argumentos del agente]
 
-Crea un workspace de Herdr con el agente pi en un panel y una shell en el otro.
+Crea un workspace de Herdr con un agente en un panel y una shell en el otro.
 Si ya existe un workspace con la misma etiqueta, se enfoca en vez de crear otro.
 
+  -k, --kind <kind>             Agente a lanzar: pi, claude, codex, opencode, copilot...
+                                (los que admite `herdr agent start`; defecto: pi)
+  -w, --worktree <rama>         Trabaja en un worktree de git para <rama>, creado (o abierto,
+                                si ya existe) con `herdr worktree` en su propio workspace
+  -b, --base <ref>              Con --worktree: ref de la que sale una rama nueva
   -d, --direction <right|down>  Dirección del split (defecto: right)
   -r, --ratio <0.1-0.9>         Fracción que ocupa el panel del agente (defecto: 0.6)
-  -l, --label <texto>           Etiqueta del workspace (defecto: pi:<directorio>)
-  --no-agent                    No lanza pi; deja los dos paneles en shell
+  -l, --label <texto>           Etiqueta del workspace (defecto: pi:<dir> o pi:<dir>/<rama>)
+  --trust-repository            Pasa --trust-repository a `herdr worktree` (solo en repos que
+                                hayas revisado; Herdr lo pide si no confía en el repo)
+  --no-agent                    No lanza agente; deja los dos paneles en shell
   --no-focus                    No roba el foco al crear el workspace
   --attach                      Adjunta el TUI de Herdr al terminar (fuera de Herdr)
   -h, --help                    Esta ayuda
 
 Ejemplos:
   pidev ~/gitrepos/miapp
-  pidev . --direction down --ratio 0.5
-  pidev ~/gitrepos/miapp --attach
+  pidev ~/gitrepos/miapp --kind claude
+  pidev ~/gitrepos/miapp --worktree feat/login --base main
+  pidev . --direction down --ratio 0.5 -- --model halo/flash-halogen
 EOF
 }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    -d | --direction)
+    -k | --kind | -w | --worktree | -b | --base | -d | --direction | -r | --ratio | -l | --label)
       [ $# -ge 2 ] || die "$1 necesita un valor"
-      DIRECTION="$2"
+      case "$1" in
+        -k | --kind) KIND="$2" ;;
+        -w | --worktree) BRANCH="$2" ;;
+        -b | --base) BASE_REF="$2" ;;
+        -d | --direction) DIRECTION="$2" ;;
+        -r | --ratio) RATIO="$2" ;;
+        -l | --label) LABEL="$2" ;;
+      esac
       shift 2
       ;;
-    -r | --ratio)
-      [ $# -ge 2 ] || die "$1 necesita un valor"
-      RATIO="$2"
-      shift 2
-      ;;
-    -l | --label)
-      [ $# -ge 2 ] || die "$1 necesita un valor"
-      LABEL="$2"
-      shift 2
-      ;;
-    --no-agent)
-      START_PI=0
-      shift
-      ;;
-    --no-focus)
-      FOCUS=(--no-focus)
-      shift
-      ;;
-    --attach)
-      ATTACH=1
-      shift
-      ;;
-    -h | --help)
-      usage
-      exit 0
-      ;;
+    --trust-repository) TRUST=(--trust-repository); shift ;;
+    --no-agent) START_AGENT=0; shift ;;
+    --no-focus) FOCUS=(--no-focus); shift ;;
+    --attach) ATTACH=1; shift ;;
+    -h | --help) usage; exit 0 ;;
+    --) shift; AGENT_ARGS=("$@"); break ;;
     -*) die "opción desconocida: $1 (--help para ver las opciones)" ;;
-    *)
-      PROJECT="$1"
-      shift
-      ;;
+    *) PROJECT="$1"; shift ;;
   esac
 done
 
+# --- Comprobaciones -------------------------------------------------------------
+
 command -v herdr >/dev/null 2>&1 || die "herdr no está en el PATH"
 command -v jq >/dev/null 2>&1 || die "jq no está en el PATH (necesario para leer los ids)"
-if [ "$START_PI" = 1 ]; then
-  command -v pi >/dev/null 2>&1 || die "pi no está en el PATH; ejecuta ./install.sh o usa --no-agent"
+case "$DIRECTION" in right | down) ;; *) die "--direction debe ser right o down" ;; esac
+[ -z "$BASE_REF" ] || [ -n "$BRANCH" ] || die "--base solo tiene sentido con --worktree"
+
+if [ "$START_AGENT" = 1 ]; then
+  # Los kinds válidos los dice la versión instalada de Herdr, no esta lista.
+  kinds="$(herdr agent start --help 2>/dev/null | sed -n 's/.*possible values: \(.*\)\]/\1/p' | tr -d ' ')"
+  if [ -n "$kinds" ] && ! tr ',' '\n' <<<"$kinds" | grep -qx "$KIND"; then
+    die "kind '$KIND' no soportado por Herdr. Válidos: ${kinds//,/, }"
+  fi
+  # Herdr usa el kind como ejecutable canónico.
+  command -v "$KIND" >/dev/null 2>&1 || die "'$KIND' no está en el PATH; instálalo o usa --no-agent"
 fi
-case "$DIRECTION" in
-  right | down) ;;
-  *) die "--direction debe ser right o down" ;;
-esac
 
 PROJECT="$(cd -- "${PROJECT:-$PWD}" && pwd)"
+if [ -n "$BRANCH" ]; then
+  git -C "$PROJECT" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "--worktree necesita un repo git: $PROJECT"
+  PROJECT="$(git -C "$PROJECT" rev-parse --show-toplevel)"
+fi
 NAME="$(basename "$PROJECT")"
-LABEL="${LABEL:-pi:$NAME}"
+BASE_LABEL="pi:$NAME"
+if [ -z "$LABEL" ]; then
+  LABEL="$BASE_LABEL${BRANCH:+/$BRANCH}"
+fi
 
 # Herdr exige nombres de agente [a-z][a-z0-9_-]{0,31}.
-slug="$(printf '%s' "$NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_-]+/-/g; s/^-+//; s/-+$//')"
+slugify() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_-]+/-/g; s/^-+//; s/-+$//'; }
+slug="$(slugify "$NAME")"
 [ -n "$slug" ] || slug="proyecto"
-AGENT="pi-${slug:0:29}"
+[ -z "$BRANCH" ] || slug="$slug-$(slugify "$BRANCH")"
+AGENT_BASE="$(printf '%s' "$KIND-$slug" | cut -c1-29 | sed -E 's/-+$//')"
 
-existing="$(herdr workspace list 2>/dev/null |
-  jq -r --arg l "$LABEL" '.workspaces[]? | select(.label == $l) | .workspace_id' | head -1 || true)"
+workspace_by_label() {
+  herdr workspace list 2>/dev/null |
+    jq -r --arg l "$1" '.result.workspaces[]? | select(.label == $l) | .workspace_id' | head -1 || true
+}
+
+existing="$(workspace_by_label "$LABEL")"
 if [ -n "$existing" ]; then
   log "Ya hay workspace abierto para '$LABEL': $existing"
-  herdr workspace focus "$existing" >/dev/null
+  [ "${FOCUS[0]}" = "--no-focus" ] || herdr workspace focus "$existing" >/dev/null
   exit 0
 fi
 
-log "Creando workspace '$LABEL' en $PROJECT"
-created="$(herdr workspace create --cwd "$PROJECT" --label "$LABEL" "${FOCUS[@]}")"
-ws="$(jq -r '.result.workspace.workspace_id // empty' <<<"$created")"
-pi_pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$created")"
-{ [ -n "$ws" ] && [ -n "$pi_pane" ]; } || die "no pude leer los ids de 'workspace create': $created"
+# --- Workspace: normal o worktree -------------------------------------------------
 
-log "Partiendo el panel para tu shell ($DIRECTION, ratio $RATIO)"
-split="$(herdr pane split --pane "$pi_pane" --direction "$DIRECTION" --ratio "$RATIO" --cwd "$PROJECT" --no-focus)"
-my_pane="$(jq -r '.result.pane.pane_id // empty' <<<"$split")"
-[ -n "$my_pane" ] || die "no pude leer el id del panel nuevo: $split"
-
-if [ "$START_PI" = 1 ]; then
-  if herdr agent list 2>/dev/null |
-    jq -e --arg n "$AGENT" '.agents[]? | select(.name == $n)' >/dev/null 2>&1; then
-    AGENT="${AGENT:0:30}x"
-    log "Nombre en uso; el agente será '$AGENT'"
+if [ -z "$BRANCH" ]; then
+  log "Creando workspace '$LABEL' en $PROJECT"
+  created="$(herdr workspace create --cwd "$PROJECT" --label "$LABEL" "${FOCUS[@]}")"
+else
+  # Los worktrees se cuelgan del workspace del repo (pi:<dir>); si no existe se crea, para
+  # que Herdr no abra además uno propio sin etiqueta para el repo principal.
+  base_ws="$(workspace_by_label "$BASE_LABEL")"
+  if [ -z "$base_ws" ]; then
+    log "Creando el workspace del repo '$BASE_LABEL' (agrupa sus worktrees)"
+    base_ws="$(herdr workspace create --cwd "$PROJECT" --label "$BASE_LABEL" --no-focus |
+      jq -r '.result.workspace.workspace_id // empty')"
+    [ -n "$base_ws" ] || die "no pude crear el workspace del repo"
   fi
-  log "Lanzando pi como agente '$AGENT' en $pi_pane"
-  if herdr agent start "$AGENT" --kind pi --pane "$pi_pane" --timeout 60000 >/dev/null 2>&1; then
-    log "pi detectado y listo"
+  wt_path="$(herdr worktree list --workspace "$base_ws" "${TRUST[@]}" 2>/dev/null |
+    jq -r --arg b "$BRANCH" '.result.worktrees[]? | select(.branch == $b) | .path' | head -1 || true)"
+  if [ -n "$wt_path" ]; then
+    log "Abriendo el worktree existente de '$BRANCH' ($wt_path)"
+    created="$(herdr worktree open --workspace "$base_ws" --branch "$BRANCH" --label "$LABEL" "${FOCUS[@]}" "${TRUST[@]}" 2>&1)" ||
+      die "herdr worktree open falló: $created"
   else
-    warn "Herdr aún no detecta pi. Revisa el panel: herdr agent read $pi_pane"
+    log "Creando worktree para '$BRANCH'${BASE_REF:+ desde $BASE_REF}"
+    base_args=()
+    [ -z "$BASE_REF" ] || base_args=(--base "$BASE_REF")
+    created="$(herdr worktree create --workspace "$base_ws" --branch "$BRANCH" "${base_args[@]}" \
+      --label "$LABEL" "${FOCUS[@]}" "${TRUST[@]}" 2>&1)" ||
+      die "herdr worktree create falló: $created"
   fi
 fi
 
+ws="$(jq -r '.result.workspace.workspace_id // empty' <<<"$created")"
+agent_pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$created")"
+cwd="$(jq -r '.result.root_pane.cwd // empty' <<<"$created")"
+cwd="${cwd:-$PROJECT}"
+{ [ -n "$ws" ] && [ -n "$agent_pane" ]; } || die "no pude leer los ids de la respuesta de Herdr: $created"
+
+log "Partiendo el panel para tu shell ($DIRECTION, ratio $RATIO)"
+split="$(herdr pane split --pane "$agent_pane" --direction "$DIRECTION" --ratio "$RATIO" --cwd "$cwd" --no-focus)"
+my_pane="$(jq -r '.result.pane.pane_id // empty' <<<"$split")"
+[ -n "$my_pane" ] || die "no pude leer el id del panel nuevo: $split"
+
+# --- Agente ------------------------------------------------------------------------
+
+AGENT="$AGENT_BASE"
+if [ "$START_AGENT" = 1 ]; then
+  live="$(herdr agent list 2>/dev/null | jq -r '.result.agents[]?.name // empty' || true)"
+  n=2
+  while grep -qx "$AGENT" <<<"$live"; do
+    AGENT="$AGENT_BASE-$n"
+    n=$((n + 1))
+  done
+  [ "$AGENT" = "$AGENT_BASE" ] || log "Nombre en uso; el agente será '$AGENT'"
+  log "Lanzando $KIND como agente '$AGENT' en $agent_pane"
+  start_args=()
+  [ ${#AGENT_ARGS[@]} -eq 0 ] || start_args=(-- "${AGENT_ARGS[@]}")
+  if herdr agent start "$AGENT" --kind "$KIND" --pane "$agent_pane" --timeout 60000 "${start_args[@]}" >/dev/null 2>&1; then
+    log "$KIND detectado y listo"
+  else
+    status="$(herdr agent get "$AGENT" 2>/dev/null | jq -r '.result.agent.agent_status // empty' || true)"
+    if [ "$status" = "blocked" ]; then
+      # Típico en carpetas nuevas (un worktree): el agente pregunta si confías en ella.
+      # No se responde por ti: míralo y contesta en el panel.
+      warn "$KIND espera una respuesta tuya en $agent_pane (p. ej. confiar en la carpeta). Míralo:"
+      warn "  herdr agent read $AGENT --source visible"
+    else
+      warn "Herdr aún no detecta $KIND. Revisa el panel: herdr agent read $agent_pane"
+    fi
+  fi
+fi
+
+# Marca de BOND (lib/bond-logo.mts); sin node, en texto plano.
+echo
+printf '  '; "$BIN_DIR/bond-logo" --small --width 60 "licence to code" 2>/dev/null || echo "007 BOND · licence to code"
 cat <<EOF
 
   workspace   : $ws  ($LABEL)
-  panel pi    : $pi_pane   (agente: $AGENT)
+  directorio  : $cwd
+  panel agente: $agent_pane$( [ "$START_AGENT" = 1 ] && printf '   (%s: %s)' "$KIND" "$AGENT")
   panel tuyo  : $my_pane
+EOF
+if [ "$START_AGENT" = 1 ]; then
+  cat <<EOF
 
   Desde cualquier shell:
     herdr agent prompt $AGENT "la tarea" --wait
     herdr agent read $AGENT --source recent-unwrapped --lines 200
 EOF
+fi
+if [ -n "$BRANCH" ]; then
+  cat <<EOF
+
+  Al terminar con el worktree (borra la carpeta, no la rama):
+    herdr worktree remove --workspace $ws
+EOF
+fi
 
 if [ "$ATTACH" = 1 ]; then
   if [ "${HERDR_ENV:-}" = "1" ]; then
