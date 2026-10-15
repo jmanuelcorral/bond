@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Mapa compacto de un repo para orientarse antes de leer código:
+# manifiestos y comandos, árbol con número de ficheros, lenguajes y ficheros con más actividad.
+#
+# Uso: repo-map [directorio] [profundidad]   (defecto: . y 2)
+set -euo pipefail
+
+ROOT="$(cd -- "${1:-.}" && pwd)"
+DEPTH="${2:-2}"
+cd "$ROOT"
+
+# Ficheros versionados si es git (respeta .gitignore); si no, fd o find sin ocultos.
+list_files() {
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    # Sin los borrados del árbol de trabajo que siguen en el índice.
+    git ls-files --cached --others --exclude-standard | grep -vxF -f <(git ls-files --deleted) || true
+  elif command -v fd >/dev/null 2>&1; then
+    fd --type f
+  else
+    find . -type f -not -path '*/.*' | sed 's|^\./||'
+  fi
+}
+
+files="$(list_files)"
+total="$(grep -c . <<<"$files" || true)"
+echo "# $(basename "$ROOT")  ($total ficheros)"
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "rama: $(git branch --show-current 2>/dev/null || echo '?')  último commit: $(git log -1 --format='%h %ar: %s' 2>/dev/null || echo '-')"
+fi
+
+echo
+echo "## Manifiestos y comandos"
+for f in package.json Cargo.toml pyproject.toml go.mod pom.xml build.gradle build.gradle.kts Makefile justfile Taskfile.yml deno.json flake.nix docker-compose.yml compose.yaml; do
+  [ -f "$f" ] || continue
+  case "$f" in
+    package.json)
+      if command -v jq >/dev/null 2>&1; then
+        echo "- package.json: $(jq -r '[.name // "?", (.scripts // {} | keys | join(" "))] | "\(.[0]) | scripts: \(.[1])"' package.json)"
+      else
+        echo "- package.json"
+      fi
+      ;;
+    Makefile) echo "- Makefile: $(grep -oE '^[a-zA-Z0-9_.-]+:' Makefile | tr -d ':' | head -15 | tr '\n' ' ')" ;;
+    justfile) echo "- justfile: $(grep -oE '^[a-zA-Z0-9_-]+' justfile | head -15 | tr '\n' ' ')" ;;
+    *) echo "- $f" ;;
+  esac
+done
+for f in AGENTS.md CLAUDE.md README.md README.es.md CONTRIBUTING.md .pi/settings.json; do
+  [ -f "$f" ] && echo "- $f ($(wc -l <"$f") líneas)"
+done
+
+echo
+echo "## Árbol (profundidad $DEPTH, ficheros por carpeta)"
+awk -F/ -v d="$DEPTH" '
+  { path = ""; for (i = 1; i < NF && i <= d; i++) { path = path $i "/"; n[path]++ } }
+  NF == 1 { top++ }
+  END { for (p in n) print p "\t" n[p]; if (top) print "./\t" top }
+' <<<"$files" | sort | awk -F'\t' '{ depth = gsub("/", "/", $1); printf "%*s%s  %s\n", (depth - 1) * 2, "", $1, $2 }'
+
+echo
+echo "## Lenguajes (por extensión)"
+# Solo extensiones reales: se ignoran ficheros ocultos como .gitignore.
+awk -F/ '$NF ~ /^[^.].*\.[A-Za-z0-9]+$/ { sub(/.*\./, ".", $NF); print $NF }' <<<"$files" | sort | uniq -c | sort -rn | head -8 | awk '{ printf "%s %s  ", $2, $1 } END { print "" }'
+
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git rev-parse HEAD >/dev/null 2>&1; then
+  echo
+  echo "## Más tocados en los últimos 100 commits"
+  git log -100 --name-only --format= 2>/dev/null | grep . | sort | uniq -c | sort -rn | head -10 | awk '{ print "- " $2 " (" $1 ")" }'
+fi
