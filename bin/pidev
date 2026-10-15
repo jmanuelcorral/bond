@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# Abre (o reutiliza) un workspace de Herdr para un proyecto:
+# un panel con el agente pi y otro con una shell para ti.
+set -euo pipefail
+
+DIRECTION="right"
+RATIO="0.6"
+FOCUS=(--focus)
+START_PI=1
+ATTACH=0
+PROJECT=""
+LABEL=""
+
+log() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33maviso:\033[0m %s\n' "$*" >&2; }
+die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+
+usage() {
+  cat <<'EOF'
+Uso: pidev [directorio] [opciones]
+
+Crea un workspace de Herdr con el agente pi en un panel y una shell en el otro.
+Si ya existe un workspace con la misma etiqueta, se enfoca en vez de crear otro.
+
+  -d, --direction <right|down>  Dirección del split (defecto: right)
+  -r, --ratio <0.1-0.9>         Fracción que ocupa el panel del agente (defecto: 0.6)
+  -l, --label <texto>           Etiqueta del workspace (defecto: pi:<directorio>)
+  --no-agent                    No lanza pi; deja los dos paneles en shell
+  --no-focus                    No roba el foco al crear el workspace
+  --attach                      Adjunta el TUI de Herdr al terminar (fuera de Herdr)
+  -h, --help                    Esta ayuda
+
+Ejemplos:
+  pidev ~/gitrepos/miapp
+  pidev . --direction down --ratio 0.5
+  pidev ~/gitrepos/miapp --attach
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -d | --direction)
+      [ $# -ge 2 ] || die "$1 necesita un valor"
+      DIRECTION="$2"
+      shift 2
+      ;;
+    -r | --ratio)
+      [ $# -ge 2 ] || die "$1 necesita un valor"
+      RATIO="$2"
+      shift 2
+      ;;
+    -l | --label)
+      [ $# -ge 2 ] || die "$1 necesita un valor"
+      LABEL="$2"
+      shift 2
+      ;;
+    --no-agent)
+      START_PI=0
+      shift
+      ;;
+    --no-focus)
+      FOCUS=(--no-focus)
+      shift
+      ;;
+    --attach)
+      ATTACH=1
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -*) die "opción desconocida: $1 (--help para ver las opciones)" ;;
+    *)
+      PROJECT="$1"
+      shift
+      ;;
+  esac
+done
+
+command -v herdr >/dev/null 2>&1 || die "herdr no está en el PATH"
+command -v jq >/dev/null 2>&1 || die "jq no está en el PATH (necesario para leer los ids)"
+if [ "$START_PI" = 1 ]; then
+  command -v pi >/dev/null 2>&1 || die "pi no está en el PATH; ejecuta ./install.sh o usa --no-agent"
+fi
+case "$DIRECTION" in
+  right | down) ;;
+  *) die "--direction debe ser right o down" ;;
+esac
+
+PROJECT="$(cd -- "${PROJECT:-$PWD}" && pwd)"
+NAME="$(basename "$PROJECT")"
+LABEL="${LABEL:-pi:$NAME}"
+
+# Herdr exige nombres de agente [a-z][a-z0-9_-]{0,31}.
+slug="$(printf '%s' "$NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_-]+/-/g; s/^-+//; s/-+$//')"
+[ -n "$slug" ] || slug="proyecto"
+AGENT="pi-${slug:0:29}"
+
+existing="$(herdr workspace list 2>/dev/null |
+  jq -r --arg l "$LABEL" '.workspaces[]? | select(.label == $l) | .workspace_id' | head -1 || true)"
+if [ -n "$existing" ]; then
+  log "Ya hay workspace abierto para '$LABEL': $existing"
+  herdr workspace focus "$existing" >/dev/null
+  exit 0
+fi
+
+log "Creando workspace '$LABEL' en $PROJECT"
+created="$(herdr workspace create --cwd "$PROJECT" --label "$LABEL" "${FOCUS[@]}")"
+ws="$(jq -r '.result.workspace.workspace_id // empty' <<<"$created")"
+pi_pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$created")"
+{ [ -n "$ws" ] && [ -n "$pi_pane" ]; } || die "no pude leer los ids de 'workspace create': $created"
+
+log "Partiendo el panel para tu shell ($DIRECTION, ratio $RATIO)"
+split="$(herdr pane split --pane "$pi_pane" --direction "$DIRECTION" --ratio "$RATIO" --cwd "$PROJECT" --no-focus)"
+my_pane="$(jq -r '.result.pane.pane_id // empty' <<<"$split")"
+[ -n "$my_pane" ] || die "no pude leer el id del panel nuevo: $split"
+
+if [ "$START_PI" = 1 ]; then
+  if herdr agent list 2>/dev/null |
+    jq -e --arg n "$AGENT" '.agents[]? | select(.name == $n)' >/dev/null 2>&1; then
+    AGENT="${AGENT:0:30}x"
+    log "Nombre en uso; el agente será '$AGENT'"
+  fi
+  log "Lanzando pi como agente '$AGENT' en $pi_pane"
+  if herdr agent start "$AGENT" --kind pi --pane "$pi_pane" --timeout 60000 >/dev/null 2>&1; then
+    log "pi detectado y listo"
+  else
+    warn "Herdr aún no detecta pi. Revisa el panel: herdr agent read $pi_pane"
+  fi
+fi
+
+cat <<EOF
+
+  workspace   : $ws  ($LABEL)
+  panel pi    : $pi_pane   (agente: $AGENT)
+  panel tuyo  : $my_pane
+
+  Desde cualquier shell:
+    herdr agent prompt $AGENT "la tarea" --wait
+    herdr agent read $AGENT --source recent-unwrapped --lines 200
+EOF
+
+if [ "$ATTACH" = 1 ]; then
+  if [ "${HERDR_ENV:-}" = "1" ]; then
+    warn "Ya estás dentro de Herdr; se ignora --attach."
+  else
+    exec herdr
+  fi
+fi

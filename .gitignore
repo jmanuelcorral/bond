@@ -1,0 +1,10 @@
+# Backups que crea install.sh al enlazar
+*.bak.*
+
+# Generado por install.sh desde `herdr --skill`; no se versiona porque
+# depende de la versión de herdr instalada en cada máquina.
+/pi/agent/skills/herdr/
+
+# Basura habitual
+.DS_Store
+*.log

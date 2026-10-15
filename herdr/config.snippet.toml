@@ -1,0 +1,13 @@
+# Snippet de configuración de Herdr que aporta piSetup.
+# install.sh --herdr-config lo añade a ~/.config/herdr/config.toml entre las marcas
+# ">>> piSetup >>>" y "# <<< piSetup <<<". Claves verificadas con `herdr --default-config`.
+
+[terminal]
+# Los paneles, pestañas y workspaces nuevos heredan el directorio del panel de origen,
+# que es lo que quieres cuando repartes trabajo por proyectos desde un panel.
+new_cwd = "follow"
+
+[ui]
+# Etiqueta del agente detectado en el borde de los paneles divididos:
+# con varios agentes abiertos a la vez se ve quién está en cada sitio.
+show_agent_labels_on_pane_borders = true
