@@ -60,9 +60,54 @@ Para el futuro, pasa la misma etiqueta: `pidev ~/otraruta/miapp -l pi:miapp`.
 ## Los comandos `/review` `/commit` etc. no aparecen
 
 - Sesión ya abierta: ejecuta `/reload` en pi.
-- Comprueba que el enlace sigue bien: `ls -l ~/.pi/agent/prompts` debe apuntar al repo y
-  `ls ~/.pi/agent/prompts/` debe listar los `.md`.
+- Comprueba que el paquete está enlazado: `ls -l ~/.pi/agent/pisetup` debe apuntar al repo y
+  `pi list` debe mostrar `./pisetup`.
+- `scripts/pi-resources` lista lo que pi carga de verdad, con su origen y su ruta.
 - Symlink roto (moviste el repo): vuelve a correr `./install.sh`.
+
+## Un skill aparece duplicado o no es la versión que esperas
+
+pi lee skills de `~/.pi/agent/skills/`, de `~/.agents/skills/` (compartida con otros agentes)
+y de los paquetes. Si dos se llaman igual, pi se queda con el primero y avisa al arrancar.
+
+```bash
+scripts/pi-resources        # qué skill gana y desde qué ruta
+```
+
+`install.sh` ya resuelve el caso de `herdr`: si existe `~/.agents/skills/herdr`, usa ese y
+borra la copia que él mismo generaba en `~/.pi/agent/skills/herdr`.
+
+## Un servidor MCP no conecta
+
+```bash
+pi mcp list                  # estado y error de cada servidor
+tail -50 ~/.pi/agent/mcp.log
+```
+
+- `web` se lanza con `uvx`: la primera vez descarga el paquete y tarda. Si falla, comprueba
+  `uvx duckduckgo-mcp-server==0.7.0 --help` a mano.
+- `context7` es remoto: sin red, falla. Dentro de pi, `/mcp reconnect context7`.
+- DuckDuckGo limita peticiones si se busca mucho seguido: espera y reintenta.
+- Para apagar uno sin borrarlo: `"enabled": false` en su entrada, o desde `/mcp`.
+
+## Varios agentes a la vez y errores 429
+
+Con varios agentes sobre el mismo modelo local (`halo`), la pasarela puede responder 429 a
+alguno: no sirve tantas peticiones en paralelo. El pie de estado lo cuenta en `req ✗`. pi
+reintenta solo; si un agente se rinde, mándale la tarea otra vez cuando acabe otro. Para
+paralelismo real, reparte entre modelos o proveedores distintos (`pidev --kind`, o
+`-- --model …` en `piteam`).
+
+## Un agente lanzado con `pidev` se queda en `blocked`
+
+Típico de Claude Code (y otros) en una carpeta nueva, como un worktree recién creado:
+pregunta si confías en ella. `pidev` no contesta por ti.
+
+```bash
+herdr agent read <agente> --source visible   # qué pregunta
+```
+
+Contesta en el panel. Si es un repo tuyo, la próxima vez ya no preguntará para esa carpeta.
 
 ## La config no se nota
 

@@ -103,6 +103,16 @@ pistatus
 
 Tabla con agente, kind, estado, cwd y panel. `pistatus --json` para scripts.
 
+**Retomar una sesión.**
+
+```bash
+pisessions
+```
+
+Sesiones de todos los proyectos, cuáles están abiertas ahora en Herdr y el comando exacto
+para retomar cada una. Dentro de pi, el pie de estado te dice qué agente eres, en qué rama
+y worktree, y cuánto contexto te queda.
+
 **Enchufar otro proyecto.** Otro `pidev` y otro workspace. La barra lateral de Herdr te
 muestra todos los agentes de todos los proyectos a la vez: ves cuál está trabajando, cuál
 esperando y cuál terminado sin abrir nada.
@@ -121,14 +131,15 @@ trabajo en marcha).
 
 ## 6. Comandos de pi que trae el setup
 
-Plantillas versionadas en `pi/agent/prompts/`, disponibles en cualquier proyecto:
+Plantillas versionadas en `prompts/` (llegan a pi por el paquete), disponibles en cualquier proyecto:
 
 | Comando | Uso |
 |---|---|
 | `/review [foco]` | Revisa los cambios sin commitear, solo hallazgos accionables |
 | `/commit [contexto]` | Redacta el mensaje en inglés y espera tu OK antes de commitear |
 | `/handoff [ruta]` | Deja el estado escrito en `.pi-handoff.md` para retomar luego |
-| `/delegate [rol] [tarea]` | Lanza otro pi en un panel hermano y te trae el informe |
+| `/team <tarea>` | Reparte la tarea entre 2-3 agentes, cada uno en su worktree; espera tu OK y te resume cada rama |
+| `/delegate [rol] [tarea...]` | Lanza otro pi en un panel hermano (nombre único, p. ej. `reviewer-1`) y te trae el informe |
 
 Tras editar a mano cualquier config del setup, aplica en caliente dentro de pi con `/reload`.
 
