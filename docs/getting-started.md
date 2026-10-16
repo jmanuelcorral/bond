@@ -75,7 +75,20 @@ Prueba con algo pequeño:
 explícame la estructura de este repo y cómo se ejecutan sus comprobaciones
 ```
 
-## 4. El bucle de trabajo diario
+## 4. Preparar un repo
+
+En cada proyecto, una vez:
+
+```bash
+cd ~/gitrepos/mi-proyecto
+bond init
+```
+
+Crea `.bond/bond.toml`, un `AGENTS.md` para que lo completes y la configuración de pi y
+Claude Code (servidores MCP, skill `code-context`, comandos). Commitéalo todo. La primera vez
+que abras cada agente en el repo, te pedirá confiar en él.
+
+## 5. El bucle de trabajo diario
 
 **Trabajar en el panel.** Foco en el panel de pi y trabajar normal. Con el prefijo
 `ctrl+b` controlas Herdr: `prefix+v` parte a la derecha, `prefix+minus` parte abajo,
@@ -121,7 +134,7 @@ y worktree, y cuánto contexto te queda.
 muestra todos los agentes de todos los proyectos a la vez: ves cuál está trabajando, cuál
 esperando y cuál terminado sin abrir nada.
 
-## 5. Desconectarse y volver
+## 6. Desconectarse y volver
 
 `ctrl+b` seguido de `q` te desengancha. Todo sigue corriendo: los paneles, pi, los tests.
 
@@ -133,7 +146,7 @@ pi --continue            # dentro de un panel, retomar la última sesión de pi 
 Para parar de verdad todo: `herdr server stop` (cierra todos los paneles; no lo hagas con
 trabajo en marcha).
 
-## 6. Comandos de pi que trae el setup
+## 7. Comandos de pi que trae el setup
 
 Plantillas versionadas en `prompts/` (llegan a pi por el paquete), disponibles en cualquier proyecto:
 

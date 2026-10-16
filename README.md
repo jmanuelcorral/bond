@@ -121,6 +121,18 @@ herdr agent prompt pi-mi-proyecto "revisa el diff" --wait
 global de modelos, `bond init` por repo para todos los agentes):
 [docs/plan-bond-cli.md](docs/plan-bond-cli.md).
 
+## Por repo: `bond init`
+
+```bash
+cd ~/gitrepos/mi-proyecto
+bond init      # .bond/bond.toml + AGENTS.md + config de pi y Claude Code (MCP, skills, comandos)
+bond sync      # tras editar .bond/bond.toml
+```
+
+Instrucciones, servidores MCP, skills y comandos se declaran una vez en el repo y bond genera
+lo que lee cada agente, sin pisar lo que tengas a mano. Detalle en
+[docs/reference.md](docs/reference.md#configuración-por-repo-bond-init-y-bond-sync).
+
 ## Capa de contexto
 
 Para que el agente entienda un repo leyendo lo mínimo: tools de búsqueda nativas de pi
@@ -145,9 +157,11 @@ piSetup/
 │   ├── bond-header.ts            # cabecera de pi con el logo de BOND
 │   ├── status-line.ts            # pie: agente de Herdr, rama/worktree, contexto, coste
 │   └── repo-map.ts               # tool repo_map: mapa compacto del repo
-├── skills/
-│   └── code-context/             # contexto: repo-map, ast-grep, context7, web
-├── prompts/                      # /review /commit /handoff /delegate /team
+├── catalog/                      # lo que bond init instala en un repo
+│   ├── mcp.json                  # servidores MCP: context7, web
+│   ├── skills/code-context/      # contexto: repo-map, ast-grep, context7, web
+│   └── commands/                 # review, commit, handoff (sintaxis común pi/Claude)
+├── prompts/                      # /delegate /team (pi, Herdr)
 ├── cli/                          # CLI bond (TypeScript, Node ≥ 22.18, sin compilar)
 │   ├── main.mts                  # subcomandos
 │   ├── setup.mts                 # bond setup (antes install.sh)
@@ -156,6 +170,7 @@ piSetup/
 │   ├── models.mts                # bond models: init, list, probe, sync
 │   ├── agents.mts                # generadores de modelos por agente
 │   ├── run.mts                   # bond run copilot
+│   ├── repo.mts                  # bond init, bond sync (config por repo)
 │   └── util.mts
 ├── install.sh                    # atajo a `bond setup`
 ├── bin/

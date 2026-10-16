@@ -126,6 +126,18 @@ async function checkModels(): Promise<void> {
 	}
 }
 
+/** Si se ejecuta dentro de un repo con .bond/, comprueba que su config de agentes está al día. */
+async function checkRepo(): Promise<void> {
+	const top = run("git", ["rev-parse", "--show-toplevel"]);
+	const root = top.status === 0 ? top.stdout.trim() : process.cwd();
+	if (!existsSync(join(root, ".bond", "bond.toml")) || !existsSync(join(REPO_DIR, "node_modules", "smol-toml"))) return;
+	const { syncRepo } = await import("./repo.mts");
+	const actions = syncRepo({ check: true, quiet: true });
+	const conflicts = actions.filter((a) => a.sign === "!").length;
+	if (!actions.length) add("ok", "repo", `${root}: config de agentes al día`);
+	else add(conflicts ? "fail" : "warn", "repo", `${root}: ${actions.length} cambio(s) pendiente(s)${conflicts ? `, ${conflicts} conflicto(s)` : ""}`, "bond sync");
+}
+
 function checkBond(): void {
 	const p = which("bond");
 	if (p && samePath(p, join(REPO_DIR, "bin", "bond"))) add("ok", "bond en el PATH", p);
@@ -145,6 +157,7 @@ export async function doctor(args: string[]): Promise<void> {
 	checkTools();
 	if (!quick) checkMcp();
 	await checkModels();
+	await checkRepo();
 	checkBond();
 
 	const mark = { ok: ok("✓"), warn: caution("!"), fail: bad("✗") };

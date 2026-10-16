@@ -10,7 +10,7 @@ Inventario completo: qué hay en el repo, dónde acaba cada cosa y cómo se toca
 | **Herdr** | Multiplexor de terminales consciente de agentes. Servidor en segundo plano que mantiene vivos los paneles. |
 | **Integración Herdr para pi** | Extensión de pi (`herdr-agent-state.ts`) que reporta a Herdr el estado real del agente. |
 | **Skill de Herdr** | Documento que se carga pi para saber controlar Herdr desde dentro de un panel. |
-| **`bond`** | CLI (`bin/bond`, `cli/`): `setup`, `doctor`, `models`, `run`, `dev`, `team`, `status`, `sessions`, `logo`. |
+| **`bond`** | CLI (`bin/bond`, `cli/`): `setup`, `doctor`, `models`, `run`, `init`, `sync`, `dev`, `team`, `status`, `sessions`, `logo`. |
 | **`pidev`** | Lanzador del puesto de trabajo (`bond dev`). |
 | **`pistatus`** | Tabla de agentes vivos. |
 | **`piteam`** | Un agente por rama, cada uno en su worktree y workspace (`pidev --worktree` en bucle). |
@@ -43,10 +43,13 @@ Al ser symlinks, editar el fichero en `~/.pi/agent` edita el repo, que está en 
 ```json
 "pi": {
   "extensions": ["./extensions"],
-  "skills": ["./skills"],
-  "prompts": ["./prompts"]
+  "prompts": ["./prompts", "./catalog/commands"]
 }
 ```
+
+Los skills no van en el paquete: se instalan por repo con `bond init` (ver
+[Configuración por repo](#configuración-por-repo-bond-init-y-bond-sync)). Si el paquete los
+trajera, pi vería dos veces los que también están en el `.agents/skills/` del repo.
 
 `settings.json` lo carga con `"packages": ["./pisetup"]`. Las rutas de paquetes en los
 ajustes de usuario se resuelven desde `~/.pi/agent`, así que `bond setup` crea el symlink
@@ -54,8 +57,8 @@ ajustes de usuario se resuelven desde `~/.pi/agent`, así que `bond setup` crea 
 cambia. Un paquete local se carga desde su sitio, sin copiarlo, así que editar el repo y hacer
 `/reload` basta.
 
-Para añadir algo: un `.ts` en `extensions/`, una carpeta con `SKILL.md` en `skills/` o un
-`.md` en `prompts/`. Verifica con `pi list` y `scripts/pi-resources`.
+Para añadir algo: un `.ts` en `extensions/` o un `.md` en `prompts/` (solo pi) o en
+`catalog/commands/` (pi y, por repo, Claude); un skill nuevo, como carpeta en `catalog/skills/`. Verifica con `pi list` y `scripts/pi-resources`.
 
 ## `settings.json` y git
 
@@ -108,6 +111,68 @@ En `pi/agent/settings.json`. Todos cambiables; esto es lo puesto y el por qué.
 
 Regla general de reintentos: dejar `retry.provider.maxRetries` en `0` salvo necesidad, para
 que pi gestione él mismo los errores de cuota.
+
+## Configuración por repo (`bond init` y `bond sync`)
+
+Lo que es del proyecto (instrucciones, servidores MCP, skills, comandos) se declara en
+`.bond/bond.toml` y `bond sync` genera lo que lee cada agente. Hoy: pi y Claude Code.
+
+```bash
+cd ~/gitrepos/mi-proyecto
+bond init --list                 # catálogo: MCP, skills, comandos
+bond init                        # todo el catálogo, para los agentes instalados
+bond init --agents claude --skills "" --commands review,commit
+bond sync                        # tras editar .bond/bond.toml
+bond sync --check                # en CI: falla si algo está desfasado
+```
+
+```toml
+# .bond/bond.toml
+agents = ["pi", "claude"]
+mcp = ["context7", "web"]
+skills = ["code-context"]
+commands = ["commit", "handoff", "review"]
+
+[mcp_servers.postgres]           # servidores propios del repo; secretos con ${VAR}
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
+```
+
+Comandos propios del repo: ficheros Markdown en `.bond/commands/` (sintaxis común: `$ARGUMENTS`,
+`$1`…). Skills propios: carpetas con `SKILL.md` en `.agents/skills/`.
+
+| Fuente | pi | Claude Code |
+|---|---|---|
+| `AGENTS.md` (lo crea `init` si falta; es tuyo) | lo lee directamente | `CLAUDE.md` con un bloque `@AGENTS.md` |
+| MCP (`mcp` + `mcp_servers`) | `.pi/mcp.json` (`exposure: "direct"`) | `.mcp.json` |
+| skills del catálogo | copiados a `.agents/skills/`, que pi lee | symlink en `.claude/skills/` (Claude no lee `.agents/skills`) |
+| skills propios en `.agents/skills/` | directamente | symlink en `.claude/skills/` |
+| comandos del catálogo | vienen del paquete global de bond | `.claude/commands/` |
+| comandos propios (`.bond/commands/`) | `.pi/prompts/` | `.claude/commands/` |
+| tools de búsqueda | `.pi/settings.json` → `defaultTools: +grep +find +ls` | — |
+
+Comprobado: pi carga el skill y el comando propio del repo y conecta los MCP; Claude Code lee
+`AGENTS.md` a través de `CLAUDE.md`, ve los skills enlazados y ejecuta los comandos con
+`$ARGUMENTS`.
+
+### Qué toca y qué no
+
+`.bond/manifest.json` apunta todo lo que escribió bond:
+
+- **Ficheros de bond** (skills copiados, comandos): con su hash. Si alguien edita uno a mano,
+  `sync` no lo pisa y lo marca con `!`; `--force` lo sobrescribe guardando copia `.bak`.
+- **JSON compartidos** (`.mcp.json`, `.pi/mcp.json`, `.pi/settings.json`): bond solo reescribe
+  sus claves; un servidor tuyo en `.mcp.json` se queda.
+- **`CLAUDE.md`**: un bloque entre marcas `<!-- >>> bond >>> -->`; el resto es tuyo.
+- **Quitar algo** de `bond.toml` (un skill, un agente) borra lo que generó bond, salvo lo que se
+  editó a mano, y los directorios que quedan vacíos.
+
+Se commitea todo: `.bond/`, `AGENTS.md` y lo generado. Así quien clone el repo sin bond
+tiene igualmente la configuración de su agente.
+
+**Confianza.** La primera vez, pi pregunta si confías en el proyecto (sin eso no carga `.pi/`)
+y Claude Code pide aprobar los servidores de `.mcp.json`. bond no aprueba nada por ti.
+`bond doctor` dentro de un repo con `.bond/` comprueba además que está al día.
 
 ## Modelos globales (`bond models`)
 
@@ -413,7 +478,7 @@ con `halo/flash-halogen`.
 | MCP `context7` | `pi/agent/mcp.json` | Documentación de librerías por versión (`resolve-library-id`, `query-docs`). Remoto, sin clave. |
 | MCP `web` | `pi/agent/mcp.json` | Búsqueda en DuckDuckGo y lectura de páginas (`search`, `fetch_content`). `uvx duckduckgo-mcp-server==0.7.0`, sin clave. |
 | `ast-grep` | `bun add -g @ast-grep/cli@0.45.3` | Búsqueda estructural por sintaxis. |
-| Skill `code-context` | `skills/code-context/` | Cuándo usar cada cosa, recetas de `ast-grep` por lenguaje. |
+| Skill `code-context` | `catalog/skills/code-context/` (por repo, con `bond init`) | Cuándo usar cada cosa, recetas de `ast-grep` por lenguaje. |
 
 **Por qué `repo_map` es una tool y no solo un script del skill.** En la prueba, el modelo local
 no cargó el skill por iniciativa propia y se orientó con `git log` a mano (y contó mal). Con la

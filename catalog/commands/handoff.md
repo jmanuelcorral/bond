@@ -2,7 +2,10 @@
 description: Deja el estado del trabajo por escrito para retomarlo más tarde
 argument-hint: "[ruta del fichero]"
 ---
-Escribe un handoff en ${1:-.pi-handoff.md} (raíz del proyecto) con:
+Escribe un handoff en la ruta indicada aquí, o si está vacío en `.handoff.md` en la raíz del
+proyecto: $ARGUMENTS
+
+Contenido:
 
 - **Objetivo**: qué se está construyendo y qué decisiones se tomaron (y por qué).
 - **Estado**: qué funciona, qué está a medias, qué está roto.

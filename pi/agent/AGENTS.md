@@ -20,7 +20,8 @@
   salida va acotada. Lee rangos concretos de un fichero, no ficheros enteros sin motivo.
 - En un repo que no conoces, empieza por la tool `repo_map`.
 - Antes de usar una API externa que no conoces en la versión del proyecto, o cuando `grep` no
-  basta, carga el skill `code-context` (`ast-grep`, documentación con context7, búsqueda web).
+  basta, usa el skill `code-context` si el repo lo tiene (`ast-grep`, documentación con
+  context7, búsqueda web); si no, las tools MCP `context7` y `web` directamente.
 - No mandes código ni datos privados a la búsqueda web: busca el mensaje de error, no el fichero.
 
 ## Git

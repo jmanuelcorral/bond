@@ -1,6 +1,6 @@
 # Plan: CLI `bond`
 
-Estado: aprobado. F1 hecha (CLI `bond`: `setup`, `doctor`, `dev`, `team`, `status`, `sessions`, `logo`). F2 hecha (`bond models` y `bond run copilot`). Siguiente: F3. Fecha: 2026-10-15.
+Estado: aprobado. F1 hecha (CLI `bond`: `setup`, `doctor`, `dev`, `team`, `status`, `sessions`, `logo`). F2 hecha (`bond models` y `bond run copilot`). F3 hecha (`bond init` y `bond sync` para pi y Claude Code). Siguiente: F4. Fecha: 2026-10-15.
 
 ## Objetivo
 

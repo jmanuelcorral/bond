@@ -2,7 +2,7 @@
 description: Redacta y crea un commit a partir de lo que está staged
 argument-hint: "[contexto extra]"
 ---
-Prepara un commit con ${1:-los cambios ya staged}.
+Prepara un commit con los cambios ya staged. Contexto extra (puede estar vacío): $ARGUMENTS
 
 1. `git status` y `git diff --cached` para entender el alcance real.
 2. Redacta el mensaje en inglés: línea inicial de menos de 72 caracteres que explique el

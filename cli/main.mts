@@ -33,6 +33,10 @@ Máquina
   models       Registro global de modelos y su configuración en cada agente
   run          Lanza un agente con su entorno de modelos (hoy: copilot)
 
+Repo
+  init         Prepara el repo para los agentes: .bond/bond.toml, AGENTS.md y su config
+  sync         Regenera la config de cada agente desde .bond/bond.toml
+
 Herdr
 ${Object.entries(SCRIPTS)
 	.map(([name, s]) => `  ${name.padEnd(12)} ${s.summary}`)
@@ -71,6 +75,12 @@ async function main(argv: string[]): Promise<void> {
 		case "run": {
 			const r = await import("./run.mts");
 			return wantsHelp && rest.length <= 1 ? console.log(r.RUN_HELP) : r.runAgent(rest);
+		}
+		case "init":
+		case "sync": {
+			const r = await import("./repo.mts");
+			if (wantsHelp) return console.log(cmd === "init" ? r.INIT_HELP : r.SYNC_HELP);
+			return cmd === "init" ? r.init(rest) : r.sync(rest);
 		}
 		case "logo": {
 			return console.log(renderLogo({ width: termWidth(), version: `v${VERSION}`, stretch: randomStretch() }).join("\n"));

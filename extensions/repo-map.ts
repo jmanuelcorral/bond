@@ -1,6 +1,6 @@
 /**
  * Tool repo_map: mapa compacto de un repo (manifiestos y comandos, árbol con número de
- * ficheros, lenguajes, lo más tocado en git). Ejecuta skills/code-context/scripts/repo-map.
+ * ficheros, lenguajes, lo más tocado en git). Ejecuta catalog/skills/code-context/scripts/repo-map.
  *
  * Es una tool y no solo un script del skill porque los modelos pequeños usan mucho más una
  * tool declarada que un skill que tienen que decidir cargar.
@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-const SCRIPT = fileURLToPath(new URL("../skills/code-context/scripts/repo-map", import.meta.url));
+const SCRIPT = fileURLToPath(new URL("../catalog/skills/code-context/scripts/repo-map", import.meta.url));
 
 const repoMapTool = defineTool({
 	name: "repo_map",

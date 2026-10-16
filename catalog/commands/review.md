@@ -2,7 +2,7 @@
 description: Revisa los cambios sin commitear y reporta solo hallazgos accionables
 argument-hint: "[foco]"
 ---
-Revisa ${1:-los cambios sin commitear}.
+Revisa los cambios sin commitear. Foco opcional (puede estar vacío): $ARGUMENTS
 
 Empieza por `git status` y `git diff HEAD` para ver el alcance real; no te fíes de lo que
 creías que se había tocado.
