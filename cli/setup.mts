@@ -4,6 +4,7 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { renderSmall } from "../lib/bond-logo.mts";
+import { assetsPath, FROM_SOURCE } from "./runtime.mts";
 import {
 	act,
 	AGENT_DIR,
@@ -53,23 +54,23 @@ export async function setup(args: string[]): Promise<void> {
 	log(`herdr ${run("herdr", ["--version"]).stdout.trim().split(/\s+/).pop() ?? "?"}`);
 
 	installPi(withPi);
-	installDeps();
+	if (FROM_SOURCE) installDeps();
 	linkPiConfig();
 	herdrSkill();
 	globalSkills();
-	gitFilter();
+	if (FROM_SOURCE) gitFilter();
 	contextTools();
 	herdrIntegrations();
 	if (withHerdrConfig) herdrConfig();
 	await modelsStep();
-	linkBond();
+	if (FROM_SOURCE) linkBond();
 
 	log("Listo");
 	console.log(`
   ${renderSmall(60, "licence to code")}
 
-  Config de pi:   ${AGENT_DIR}  (symlinks a ${REPO_DIR}/pi/agent)
-  Paquete pi:     ${AGENT_DIR}/bond -> ${REPO_DIR}
+  Config de pi:   ${AGENT_DIR}
+  Paquete pi:     ${AGENT_DIR}/bond -> ${assetsPath()}
   Modelos:        ~/.config/bond/config.toml  -> bond models list | probe | sync
   MCP:            context7, duckduckgo  -> pi mcp list
   Comprobar todo: bond doctor
@@ -120,13 +121,16 @@ async function modelsStep(): Promise<void> {
 function linkPiConfig(): void {
 	log(`Config de pi en ${AGENT_DIR}`);
 	act(`mkdir -p ${AGENT_DIR}/extensions`, () => mkdirSync(join(AGENT_DIR, "extensions"), { recursive: true }));
-	// models.json no se enlaza: lo genera `bond models sync` desde ~/.config/bond/config.toml.
-	for (const f of ["settings.json", "AGENTS.md", "mcp.json"]) {
-		linkPath(join(REPO_DIR, "pi", "agent", f), join(AGENT_DIR, f));
+	// Config personal de pi enlazada desde el repo: solo desde el código fuente (en la 1.0 la
+	// genera bond; ver docs/plan-v1.md). models.json lo genera `bond models sync`.
+	if (FROM_SOURCE) {
+		for (const f of ["settings.json", "AGENTS.md", "mcp.json"]) {
+			linkPath(join(REPO_DIR, "pi", "agent", f), join(AGENT_DIR, f));
+		}
 	}
 	// El repo es un paquete de pi; settings.json lo declara como "./bond", relativo a
 	// AGENT_DIR, así que el repo puede vivir en cualquier ruta: solo cambia este symlink.
-	linkPath(REPO_DIR, join(AGENT_DIR, "bond"));
+	linkPath(assetsPath(), join(AGENT_DIR, "bond"));
 	// Antes del renombrado el enlace se llamaba "pisetup": con los dos, pi cargaría el paquete dos veces.
 	const oldPkg = join(AGENT_DIR, "pisetup");
 	if (linkTarget(oldPkg) !== undefined) {
@@ -199,7 +203,8 @@ function contextTools(): void {
 	for (const [cmd, why] of missing) warn(`falta ${cmd} (${why})`);
 }
 
-export const GLOBAL_SKILLS_DIR = join(REPO_DIR, "global", "skills");
+/** Skills globales (bond-delegate, bond-team): del repo o extraídos del binario. */
+export const globalSkillsDir = () => assetsPath("global", "skills");
 
 /** Destinos de los skills globales: ~/.agents/skills (pi, Codex, Copilot, opencode, Crush, Gemini) y ~/.claude/skills (Claude Code). */
 export function globalSkillTargets(name: string): string[] {
@@ -210,10 +215,10 @@ function globalSkills(): void {
 	// bond-delegate y bond-team son de Herdr, una herramienta de la máquina: van a nivel de
 	// usuario, como el skill herdr, para cualquier agente y en cualquier repo.
 	log("Skills globales de bond (multiagente con Herdr)");
-	for (const name of readdirSync(GLOBAL_SKILLS_DIR)) {
+	for (const name of readdirSync(globalSkillsDir())) {
 		for (const dest of globalSkillTargets(name)) {
 			act(`mkdir -p ${dirname(dest)}`, () => mkdirSync(dirname(dest), { recursive: true }));
-			linkPath(join(GLOBAL_SKILLS_DIR, name), dest);
+			linkPath(join(globalSkillsDir(), name), dest);
 		}
 	}
 }
@@ -244,7 +249,7 @@ function herdrConfig(): void {
 	log(`Añadiendo el snippet de Herdr a ${file}`);
 	act(`cat herdr/config.snippet.toml >> ${file}`, () => {
 		mkdirSync(dirname(file), { recursive: true });
-		const snippet = readFileSync(join(REPO_DIR, "herdr", "config.snippet.toml"), "utf8");
+		const snippet = readFileSync(assetsPath("herdr", "config.snippet.toml"), "utf8");
 		appendFileSync(file, `\n${HERDR_MARKER}\n${snippet}# <<< bond <<<\n`);
 		if (run("herdr", ["server", "reload-config"]).status !== 0) {
 			warn("Servidor de Herdr no recargó la config (¿no está en marcha?). Reinícialo tú.");

@@ -14,10 +14,12 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSy
 import { basename, dirname, join, relative } from "node:path";
 import { parse } from "smol-toml";
 import { parseJsonc } from "./agents.mts";
-import { bad, caution, die, dim, isDryRun, log, ok, REPO_DIR, run, STAMP, warn } from "./util.mts";
+import { assetsPath } from "./runtime.mts";
+import { bad, caution, die, dim, isDryRun, log, ok, run, STAMP, warn } from "./util.mts";
 
 export const SUPPORTED_AGENTS = ["pi", "claude", "copilot", "codex", "opencode", "crush", "gemini"];
-const CATALOG = join(REPO_DIR, "catalog");
+/** Catálogo: carpeta del repo o extraída del binario. */
+const catalogPath = (...p: string[]) => assetsPath("catalog", ...p);
 
 export const INIT_HELP = `Uso: bond init [opciones]
 
@@ -53,10 +55,10 @@ interface McpServer {
 }
 
 const catalog = {
-	mcp: () => JSON.parse(readFileSync(join(CATALOG, "mcp.json"), "utf8")) as Record<string, McpServer>,
-	skills: () => readdirSync(join(CATALOG, "skills")).filter((d) => existsSync(join(CATALOG, "skills", d, "SKILL.md"))),
+	mcp: () => JSON.parse(readFileSync(catalogPath("mcp.json"), "utf8")) as Record<string, McpServer>,
+	skills: () => readdirSync(catalogPath("skills")).filter((d) => existsSync(catalogPath("skills", d, "SKILL.md"))),
 	commands: () =>
-		readdirSync(join(CATALOG, "commands"))
+		readdirSync(catalogPath("commands"))
 			.filter((f) => f.endsWith(".md"))
 			.map((f) => f.slice(0, -3)),
 };
@@ -69,9 +71,9 @@ function printCatalog(): void {
 	console.log("Servidores MCP:");
 	for (const [name, s] of Object.entries(catalog.mcp())) console.log(`  ${name.padEnd(14)} ${dim(s.description ?? "")}`);
 	console.log("Skills:");
-	for (const name of catalog.skills()) console.log(`  ${name.padEnd(14)} ${dim(describe(readFileSync(join(CATALOG, "skills", name, "SKILL.md"), "utf8")).slice(0, 90))}`);
+	for (const name of catalog.skills()) console.log(`  ${name.padEnd(14)} ${dim(describe(readFileSync(catalogPath("skills", name, "SKILL.md"), "utf8")).slice(0, 90))}`);
 	console.log("Comandos:");
-	for (const name of catalog.commands()) console.log(`  ${name.padEnd(14)} ${dim(describe(readFileSync(join(CATALOG, "commands", `${name}.md`), "utf8")))}`);
+	for (const name of catalog.commands()) console.log(`  ${name.padEnd(14)} ${dim(describe(readFileSync(catalogPath("commands", `${name}.md`), "utf8")))}`);
 	console.log(`Agentes: ${SUPPORTED_AGENTS.join(", ")}`);
 }
 
@@ -179,7 +181,7 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 
 	// Skills: se copian a .agents/skills/, que leen pi y casi todos los agentes.
 	for (const name of cfg.skills) {
-		const src = join(CATALOG, "skills", name);
+		const src = catalogPath("skills", name);
 		for (const f of walk(src)) {
 			out.push({ kind: "file", path: join(".agents", "skills", name, relative(src, f)), content: readFileSync(f, "utf8"), mode: statSync(f).mode & 0o777 });
 		}
@@ -226,15 +228,25 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 		out.push({ kind: "json", path: ".mcp.json", parent: "mcpServers", entries: shared });
 		// Copilot también lee .claude/commands como skills: un solo sitio para los dos.
 		for (const name of cfg.commands) {
-			out.push({ kind: "file", path: join(".claude", "commands", `${name}.md`), content: readFileSync(join(CATALOG, "commands", `${name}.md`), "utf8") });
+			out.push({ kind: "file", path: join(".claude", "commands", `${name}.md`), content: readFileSync(catalogPath("commands", `${name}.md`), "utf8") });
 		}
 		for (const f of ownCommands) out.push({ kind: "file", path: join(".claude", "commands", f), content: readFileSync(join(ownDir, f), "utf8") });
 	}
 
 	if (agents.has("claude")) {
 		out.push({ kind: "block", path: "CLAUDE.md", body: "@AGENTS.md", style: "md" });
-		// Claude no lee .agents/skills: un symlink por skill.
-		for (const name of allSkills) out.push({ kind: "link", path: join(".claude", "skills", name), target: join("..", "..", ".agents", "skills", name) });
+		// Claude no lee .agents/skills: un symlink por skill. En Windows los symlinks necesitan
+		// permisos especiales, así que se copian los ficheros (desde el catálogo o del repo).
+		for (const name of allSkills) {
+			if (process.platform !== "win32") {
+				out.push({ kind: "link", path: join(".claude", "skills", name), target: join("..", "..", ".agents", "skills", name) });
+				continue;
+			}
+			const src = cfg.skills.includes(name) ? catalogPath("skills", name) : join(skillsDir, name);
+			for (const f of walk(src)) {
+				out.push({ kind: "file", path: join(".claude", "skills", name, relative(src, f)), content: readFileSync(f, "utf8") });
+			}
+		}
 	}
 
 	if (agents.has("codex")) {
@@ -266,7 +278,7 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 		);
 		out.push({ kind: "json", path: "opencode.json", parent: "mcp.servers", entries: oc });
 		for (const name of cfg.commands) {
-			out.push({ kind: "file", path: join(".opencode", "commands", `${name}.md`), content: readFileSync(join(CATALOG, "commands", `${name}.md`), "utf8") });
+			out.push({ kind: "file", path: join(".opencode", "commands", `${name}.md`), content: readFileSync(catalogPath("commands", `${name}.md`), "utf8") });
 		}
 		for (const f of ownCommands) out.push({ kind: "file", path: join(".opencode", "commands", f), content: readFileSync(join(ownDir, f), "utf8") });
 	}
@@ -299,7 +311,7 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 		);
 		out.push({ kind: "json", path: settings, parent: "mcpServers", entries: gm });
 		const commands = [
-			...cfg.commands.map((n) => [n, readFileSync(join(CATALOG, "commands", `${n}.md`), "utf8")] as const),
+			...cfg.commands.map((n) => [n, readFileSync(catalogPath("commands", `${n}.md`), "utf8")] as const),
 			...ownCommands.map((f) => [f.slice(0, -3), readFileSync(join(ownDir, f), "utf8")] as const),
 		];
 		for (const [name, md] of commands) out.push({ kind: "file", path: join(".gemini", "commands", `${name}.toml`), content: geminiCommand(md) });

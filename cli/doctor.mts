@@ -4,7 +4,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { readdirSync } from "node:fs";
-import { CONTEXT_TOOLS, GLOBAL_SKILLS_DIR, globalSkillTargets, herdrIntegrationStatus, PI_HERDR_SKILL, SHARED_HERDR_SKILL } from "./setup.mts";
+import { assetsPath, FROM_SOURCE } from "./runtime.mts";
+import { CONTEXT_TOOLS, globalSkillsDir, globalSkillTargets, herdrIntegrationStatus, PI_HERDR_SKILL, SHARED_HERDR_SKILL } from "./setup.mts";
 import { AGENT_DIR, bad, caution, die, dim, linkTarget, ok, REPO_DIR, run, samePath, which } from "./util.mts";
 
 export const DOCTOR_HELP = `Uso: bond doctor [--quick]
@@ -51,14 +52,14 @@ function checkHerdr(): void {
 function checkPi(): void {
 	if (!which("pi")) return add("fail", "pi", "no está en el PATH", "bond setup");
 	add("ok", "pi", run("pi", ["--version"]).stdout.trim());
-	for (const f of ["settings.json", "AGENTS.md", "mcp.json"]) {
+	for (const f of FROM_SOURCE ? ["settings.json", "AGENTS.md", "mcp.json"] : []) {
 		const dest = join(AGENT_DIR, f);
 		const src = join(REPO_DIR, "pi", "agent", f);
 		if (linkTarget(dest) && samePath(dest, src)) add("ok", `enlace ${f}`, `-> repo`);
 		else add("fail", `enlace ${f}`, existsSync(dest) ? "existe pero no apunta al repo" : "no existe", "bond setup");
 	}
 	const pkg = join(AGENT_DIR, "bond");
-	if (linkTarget(pkg) && samePath(pkg, REPO_DIR)) add("ok", "paquete pi", "~/.pi/agent/bond -> repo");
+	if (linkTarget(pkg) && samePath(pkg, assetsPath())) add("ok", "paquete pi", `~/.pi/agent/bond -> ${FROM_SOURCE ? "repo" : "runtime"}`);
 	else add("fail", "paquete pi", "falta el enlace ~/.pi/agent/bond", "bond setup");
 	if (!/\.\/bond\b/.test(run("pi", ["list"]).stdout)) add("fail", "paquete pi en settings", "pi list no muestra ./bond", "revisa pi/agent/settings.json");
 	if (linkTarget(join(AGENT_DIR, "pisetup")) !== undefined) add("warn", "enlace antiguo", "~/.pi/agent/pisetup (de antes del renombrado)", "bond setup");
@@ -79,14 +80,15 @@ function checkHerdrSkill(): void {
 
 function checkGlobalSkills(): void {
 	const missing: string[] = [];
-	for (const name of readdirSync(GLOBAL_SKILLS_DIR)) {
-		for (const dest of globalSkillTargets(name)) if (!(linkTarget(dest) && samePath(dest, join(GLOBAL_SKILLS_DIR, name)))) missing.push(dest.replace(process.env.HOME ?? "", "~"));
+	for (const name of readdirSync(globalSkillsDir())) {
+		for (const dest of globalSkillTargets(name)) if (!(linkTarget(dest) && samePath(dest, join(globalSkillsDir(), name)))) missing.push(dest.replace(process.env.HOME ?? "", "~"));
 	}
 	if (missing.length) add("fail", "skills globales", `faltan: ${missing.join(", ")}`, "bond setup");
-	else add("ok", "skills globales", `${readdirSync(GLOBAL_SKILLS_DIR).join(", ")} (~/.agents/skills, ~/.claude/skills)`);
+	else add("ok", "skills globales", `${readdirSync(globalSkillsDir()).join(", ")} (~/.agents/skills, ~/.claude/skills)`);
 }
 
 function checkGitFilter(): void {
+	if (!FROM_SOURCE) return;
 	if (run("git", ["-C", REPO_DIR, "rev-parse", "--git-dir"]).status !== 0) return add("warn", "filtro git", "el repo no es un repo git");
 	const v = run("git", ["-C", REPO_DIR, "config", "--get", "filter.pi-settings.clean"]).stdout.trim();
 	if (v === "scripts/git-clean-settings") add("ok", "filtro git", "pi-settings registrado");
@@ -111,7 +113,7 @@ function checkMcp(): void {
 
 /** Registro global de modelos: config, sincronía con cada agente y que las pasarelas respondan. */
 async function checkModels(): Promise<void> {
-	if (!existsSync(join(REPO_DIR, "node_modules", "smol-toml"))) {
+	if (FROM_SOURCE && !existsSync(join(REPO_DIR, "node_modules", "smol-toml"))) {
 		return add("fail", "dependencias", "falta node_modules (smol-toml)", "bond setup");
 	}
 	const { CONFIG_FILE, activeProviders, loadConfig } = await import("./config.mts");
@@ -145,7 +147,7 @@ async function checkModels(): Promise<void> {
 async function checkRepo(): Promise<void> {
 	const top = run("git", ["rev-parse", "--show-toplevel"]);
 	const root = top.status === 0 ? top.stdout.trim() : process.cwd();
-	if (!existsSync(join(root, ".bond", "bond.toml")) || !existsSync(join(REPO_DIR, "node_modules", "smol-toml"))) return;
+	if (!existsSync(join(root, ".bond", "bond.toml")) || (FROM_SOURCE && !existsSync(join(REPO_DIR, "node_modules", "smol-toml")))) return;
 	const { syncRepo } = await import("./repo.mts");
 	const actions = syncRepo({ check: true, quiet: true });
 	const conflicts = actions.filter((a) => a.sign === "!").length;
@@ -155,6 +157,7 @@ async function checkRepo(): Promise<void> {
 
 function checkBond(): void {
 	const p = which("bond");
+	if (!FROM_SOURCE) return add(p ? "ok" : "warn", "bond en el PATH", p ?? "no está (instálalo con tu gestor de paquetes)");
 	if (p && samePath(p, join(REPO_DIR, "bin", "bond"))) add("ok", "bond en el PATH", p);
 	else if (p) add("warn", "bond en el PATH", `${p} no es el de este repo`);
 	else add("warn", "bond en el PATH", "no está", "bond setup");

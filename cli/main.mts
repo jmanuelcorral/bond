@@ -1,17 +1,16 @@
 // Punto de entrada de `bond`: interpreta el subcomando y delega.
 
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomStretch, renderLogo } from "../lib/bond-logo.mts";
 import { DOCTOR_HELP, doctor } from "./doctor.mts";
 import { SETUP_HELP, setup } from "./setup.mts";
-import { die, REPO_DIR, setDryRun } from "./util.mts";
+import { assetsDir, assetsPath, VERSION } from "./runtime.mts";
+import { die, setDryRun } from "./util.mts";
 
 // Ancho de la terminal; si la salida no es una terminal, $COLUMNS o 80.
 const termWidth = () => process.stdout.columns || Number(process.env.COLUMNS) || 80;
 
-const VERSION = JSON.parse(readFileSync(join(REPO_DIR, "package.json"), "utf8")).version as string;
 
 // Subcomandos que de momento son los scripts de bin/ (se migrarán a TypeScript más adelante).
 const SCRIPTS: Record<string, { script: string; summary: string }> = {
@@ -51,6 +50,8 @@ async function main(argv: string[]): Promise<void> {
 	const [cmd, ...rest] = argv;
 	const wantsHelp = rest.includes("-h") || rest.includes("--help");
 	setDryRun(rest.includes("--dry-run"));
+	// Desde el binario, los ficheros de bond se extraen la primera vez (salvo para la ayuda).
+	if (cmd && !["help", "-h", "--help", "version", "--version", "-v", "logo"].includes(cmd)) await assetsDir();
 
 	switch (cmd) {
 		case undefined:
@@ -89,7 +90,8 @@ async function main(argv: string[]): Promise<void> {
 
 	const script = SCRIPTS[cmd];
 	if (!script) die(`comando desconocido: ${cmd} (bond help)`, 2);
-	const r = spawnSync(join(REPO_DIR, "bin", script.script), rest, { stdio: "inherit" });
+	if (process.platform === "win32") die(`bond ${cmd} todavía no funciona en Windows (llega en la fase G4)`);
+	const r = spawnSync(assetsPath("bin", script.script), rest, { stdio: "inherit" });
 	process.exitCode = r.status ?? 1;
 }
 

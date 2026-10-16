@@ -1,0 +1,45 @@
+# Compila bond en Linux, macOS y Windows y prueba el binario fuera del repo.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+          - os: macos-latest
+            target: darwin-arm64
+          - os: windows-latest
+            target: windows-x64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: bun scripts/build.mts --targets ${{ matrix.target }} --no-npm
+      - name: Prueba del binario fuera del repo
+        env:
+          BOND_HOME: ${{ runner.temp }}/bond-home
+        run: |
+          bin="$PWD/dist/bond-${{ matrix.target }}"
+          [ -f "$bin.exe" ] && bin="$bin.exe"
+          "$bin" --version
+          "$bin" init --list
+          repo="${{ runner.temp }}/repo"
+          mkdir -p "$repo" && cd "$repo" && git init -q
+          "$bin" init --agents pi,claude,copilot,codex,opencode,crush,gemini
+          "$bin" sync --check
+          test -f .claude/skills/code-context/SKILL.md
+          test -f .agents/skills/code-context/SKILL.md

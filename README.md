@@ -148,6 +148,18 @@ skill `code-context`. Detalle y porqués en [docs/reference.md](docs/reference.m
 pi mcp list            # comprobar los servidores MCP
 ```
 
+## Desarrollo
+
+```bash
+npm ci --ignore-scripts          # dependencias (smol-toml)
+bin/bond <comando>               # bond desde el código fuente (Node >= 22.18)
+bun scripts/build.mts            # dist/: binarios de Linux, macOS y Windows + paquete de npm
+```
+
+El binario lleva dentro el catálogo, los skills globales y las Bond Extensions, y los extrae
+la primera vez en `~/.bond/runtime/<versión>/`. CI (`.github/workflows/ci.yml`) lo compila y
+prueba en Linux, macOS y Windows. Hoja de ruta: [docs/plan-v1.md](docs/plan-v1.md).
+
 ## Estructura
 
 ```
