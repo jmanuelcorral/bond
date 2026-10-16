@@ -64,10 +64,11 @@ agente.
 | Otro agente en vez de pi | `pidev <dir> --kind claude` (cualquier kind de `herdr agent start`) |
 | Trabajar en un worktree | `pidev <dir> --worktree feat/x --base main` (usa `herdr worktree`) |
 | Un equipo, un agente por rama | `piteam <dir> feat/a feat/b:claude --base main` |
-| Delegar en un panel hermano, desde pi | `/delegate [rol] [tarea]` |
-| Repartir una tarea entre worktrees, desde pi | `/team <tarea>`: propone el reparto, espera tu OK, monta el equipo, espera y resume por rama |
+| Delegar en otro agente (cualquier kind) en un panel hermano | Skill `bond-delegate`: en pi `/delegate reviewer:claude revisa el diff`; en Claude/Copilot `/bond-delegate …` |
+| Repartir una tarea entre worktrees | Skill `bond-team`: en pi `/team <tarea>`; propone el reparto (`rama:kind`), espera tu OK, monta el equipo y resume por rama |
 
-Todo respeta las reglas del skill `herdr`: Herdr solo se usa cuando tú lo pides (lanzar estos
+`bond-delegate` y `bond-team` son skills globales: los usa cualquier agente, así que un Claude
+puede delegar en un pi o un pi en un Copilot. Todo respeta las reglas del skill `herdr`: Herdr solo se usa cuando tú lo pides (lanzar estos
 comandos es pedirlo), nombres únicos, nada de merge, push ni limpieza automática. Detalle en
 [docs/pidev.md](docs/pidev.md) y [docs/reference.md](docs/reference.md#herdr-skill-y-prompts).
 
@@ -138,7 +139,7 @@ lo que tengas a mano. Detalle en
 
 Para que el agente entienda un repo leyendo lo mínimo: tools de búsqueda nativas de pi
 (`grep`, `find`, `ls`), la tool `repo_map` (mapa del repo en ~40 líneas), documentación de
-librerías por versión (MCP `context7`), búsqueda web (MCP `web`, DuckDuckGo), `ast-grep` y el
+librerías por versión (MCP `context7`), búsqueda web (MCP `duckduckgo`), `ast-grep` y el
 skill `code-context`. Detalle y porqués en [docs/reference.md](docs/reference.md#capa-de-contexto).
 
 ```bash
@@ -162,7 +163,8 @@ piSetup/
 │   ├── mcp.json                  # servidores MCP: context7, web
 │   ├── skills/code-context/      # contexto: repo-map, ast-grep, context7, web
 │   └── commands/                 # review, commit, handoff (sintaxis común pi/Claude)
-├── prompts/                      # /delegate /team (pi, Herdr)
+├── global/skills/                # bond-delegate, bond-team (globales, para cualquier agente)
+├── prompts/                      # /delegate /team (atajos de pi a esos skills)
 ├── cli/                          # CLI bond (TypeScript, Node ≥ 22.18, sin compilar)
 │   ├── main.mts                  # subcomandos
 │   ├── setup.mts                 # bond setup (antes install.sh)

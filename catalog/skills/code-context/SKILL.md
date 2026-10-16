@@ -57,8 +57,8 @@ Prefiere esto a recordar la API: las APIs cambian entre versiones.
 
 ## 5. Web: errores, versiones, novedades
 
-- `mcp__web__search` para un error literal, una versión publicada o algo reciente.
-- `mcp__web__fetch_content` para leer la página que de verdad responde (releases,
+- `mcp__duckduckgo__search` para un error literal, una versión publicada o algo reciente.
+- `mcp__duckduckgo__fetch_content` para leer la página que de verdad responde (releases,
   changelog, issue). Cita la URL de la que sale el dato.
 
 No mandes a la web código ni datos privados del proyecto: busca el mensaje de error, no el

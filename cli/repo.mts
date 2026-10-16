@@ -109,6 +109,13 @@ function loadRepoConfig(root: string): RepoConfig {
 		commands: list("commands"),
 		mcp_servers: (raw.mcp_servers ?? {}) as Record<string, McpServer>,
 	};
+	// Nombres antiguos del catálogo: "web" chocaba con un espacio de nombres reservado de OpenAI.
+	const ALIASES: Record<string, string> = { web: "duckduckgo" };
+	cfg.mcp = cfg.mcp.map((n) => {
+		if (!ALIASES[n]) return n;
+		warn(`bond.toml: el servidor MCP "${n}" ahora se llama "${ALIASES[n]}"; cámbialo en .bond/bond.toml`);
+		return ALIASES[n];
+	});
 	const check = (kind: string, wanted: string[], known: string[]) => {
 		const unknown = wanted.filter((w) => !known.includes(w));
 		if (unknown.length) die(`bond.toml: ${kind} desconocidos: ${unknown.join(", ")} (bond init --list)`);

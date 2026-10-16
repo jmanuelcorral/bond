@@ -156,8 +156,8 @@ Plantillas versionadas en `prompts/` (llegan a pi por el paquete), disponibles e
 | `/review [foco]` | Revisa los cambios sin commitear, solo hallazgos accionables |
 | `/commit [contexto]` | Redacta el mensaje en inglés y espera tu OK antes de commitear |
 | `/handoff [ruta]` | Deja el estado escrito en `.pi-handoff.md` para retomar luego |
-| `/team <tarea>` | Reparte la tarea entre 2-3 agentes, cada uno en su worktree; espera tu OK y te resume cada rama |
-| `/delegate [rol] [tarea...]` | Lanza otro pi en un panel hermano (nombre único, p. ej. `reviewer-1`) y te trae el informe |
+| `/team <tarea>` | Reparte la tarea entre 2-3 agentes (cualquier kind), cada uno en su worktree; espera tu OK y te resume cada rama |
+| `/delegate [rol[:kind]] [tarea...]` | Lanza otro agente (pi por defecto; `reviewer:claude` para Claude) en un panel hermano y te trae el informe |
 
 Tras editar a mano cualquier config del setup, aplica en caliente dentro de pi con `/reload`.
 

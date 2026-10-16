@@ -3,7 +3,8 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { CONTEXT_TOOLS, PI_HERDR_SKILL, SHARED_HERDR_SKILL } from "./setup.mts";
+import { readdirSync } from "node:fs";
+import { CONTEXT_TOOLS, GLOBAL_SKILLS_DIR, globalSkillTargets, herdrIntegrationStatus, PI_HERDR_SKILL, SHARED_HERDR_SKILL } from "./setup.mts";
 import { AGENT_DIR, bad, caution, die, dim, linkTarget, ok, REPO_DIR, run, samePath, which } from "./util.mts";
 
 export const DOCTOR_HELP = `Uso: bond doctor [--quick]
@@ -38,9 +39,13 @@ function checkHerdr(): void {
 	const client = /client:[\s\S]*?version: (\S+)/.exec(status)?.[1] ?? "?";
 	const running = /server:[\s\S]*?status: running/.test(status);
 	add(running ? "ok" : "warn", "herdr", `${client}${running ? ", servidor en marcha" : ", servidor parado"}`, running ? undefined : "herdr (lo arranca)");
-	const integration = run("herdr", ["integration", "status"]).stdout;
-	if (/^pi: current/m.test(integration)) add("ok", "integración herdr-pi", "current");
-	else add("fail", "integración herdr-pi", integration.split("\n").find((l) => l.startsWith("pi:")) ?? "no instalada", "bond setup");
+	// Integración de Herdr de cada agente instalado: pi es obligatoria; las demás, aviso.
+	const states = herdrIntegrationStatus().filter((s) => which(s.agent));
+	const current = states.filter((s) => s.state.startsWith("current")).map((s) => s.agent);
+	if (current.length) add("ok", "integraciones herdr", current.join(", "));
+	for (const s of states.filter((x) => !x.state.startsWith("current"))) {
+		add(s.agent === "pi" ? "fail" : "warn", `integración herdr-${s.agent}`, s.state, "bond setup");
+	}
 }
 
 function checkPi(): void {
@@ -69,6 +74,15 @@ function checkHerdrSkill(): void {
 	if (fresh && readFileSync(file, "utf8").trimEnd() !== fresh) {
 		add("warn", "skill herdr", `${shared ? "compartido" : "de pi"}, desfasado respecto a 'herdr --skill'`, shared ? "npx skills update herdr" : "bond setup");
 	} else add("ok", "skill herdr", shared ? "compartido (~/.agents/skills)" : "de pi");
+}
+
+function checkGlobalSkills(): void {
+	const missing: string[] = [];
+	for (const name of readdirSync(GLOBAL_SKILLS_DIR)) {
+		for (const dest of globalSkillTargets(name)) if (!(linkTarget(dest) && samePath(dest, join(GLOBAL_SKILLS_DIR, name)))) missing.push(dest.replace(process.env.HOME ?? "", "~"));
+	}
+	if (missing.length) add("fail", "skills globales", `faltan: ${missing.join(", ")}`, "bond setup");
+	else add("ok", "skills globales", `${readdirSync(GLOBAL_SKILLS_DIR).join(", ")} (~/.agents/skills, ~/.claude/skills)`);
 }
 
 function checkGitFilter(): void {
@@ -153,6 +167,7 @@ export async function doctor(args: string[]): Promise<void> {
 	checkHerdr();
 	checkPi();
 	checkHerdrSkill();
+	checkGlobalSkills();
 	checkGitFilter();
 	checkTools();
 	if (!quick) checkMcp();

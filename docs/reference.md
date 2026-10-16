@@ -16,7 +16,7 @@ Inventario completo: qué hay en el repo, dónde acaba cada cosa y cómo se toca
 | **`piteam`** | Un agente por rama, cada uno en su worktree y workspace (`pidev --worktree` en bucle). |
 | **Cabecera BOND** | Extensión `extensions/bond-header.ts`: logo al arrancar pi, compacto en paneles estrechos. |
 | **`pisessions`** | Sesiones de pi de todos los proyectos, con el comando para retomarlas y el agente de Herdr que las tiene abiertas. |
-| **Capa de contexto** | Tools `grep`/`find`/`ls`, tool `repo_map`, MCP `context7` y `web`, `ast-grep`, skill `code-context`. |
+| **Capa de contexto** | Tools `grep`/`find`/`ls`, tool `repo_map`, MCP `context7` y `duckduckgo`, `ast-grep`, skill `code-context`. |
 | **Pie de estado** | Extensión `extensions/status-line.ts`: agente de Herdr, rama, worktree, contexto, coste, peticiones. |
 
 ## Dónde vive qué
@@ -27,7 +27,7 @@ El repo es la fuente de verdad; `~/.pi/agent` se enlaza a él.
 |---|---|---|
 | `pi/agent/settings.json` | `~/.pi/agent/settings.json` | Ajustes de pi |
 | `pi/agent/AGENTS.md` | `~/.pi/agent/AGENTS.md` | Instrucciones globales |
-| `pi/agent/mcp.json` | `~/.pi/agent/mcp.json` | Servidores MCP: `context7` y `web` |
+| `pi/agent/mcp.json` | `~/.pi/agent/mcp.json` | Servidores MCP: `context7` y `duckduckgo` |
 | raíz del repo (`package.json`) | `~/.pi/agent/pisetup` | Paquete de pi: `extensions/`, `skills/`, `prompts/` |
 | (generado) `bond models sync` | `~/.pi/agent/models.json` | Modelos, desde `~/.config/bond/config.toml` |
 | `herdr/config.snippet.toml` | se añade a `~/.config/herdr/config.toml` | Extras opcionales de Herdr |
@@ -130,7 +130,7 @@ bond sync --check                # en CI: falla si algo está desfasado
 ```toml
 # .bond/bond.toml
 agents = ["pi", "claude", "copilot", "opencode", "crush"]
-mcp = ["context7", "web"]
+mcp = ["context7", "duckduckgo"]
 skills = ["code-context"]
 commands = ["commit", "handoff", "review"]
 
@@ -385,12 +385,46 @@ que hace posible `/delegate`.
 
 ## Herdr: skill y prompts
 
+### Multiagente entre agentes distintos
+
+La delegación y los equipos son **skills globales** (`global/skills/`), porque dependen de
+Herdr, una herramienta de la máquina, igual que el skill `herdr`. `bond setup` los enlaza en
+`~/.agents/skills/` (lo leen pi, Codex, Copilot, opencode, Crush y Gemini) y en
+`~/.claude/skills/` (Claude Code), así que cualquier agente puede orquestar a cualquier otro:
+
+| Skill | Qué hace | Cómo se pide |
+|---|---|---|
+| `bond-delegate` | Lanza otro agente en un panel hermano, le pasa la tarea, espera y resume | pi: `/delegate rol:kind tarea`; Claude/Copilot: `/bond-delegate …` o pidiéndolo |
+| `bond-team` | Reparte una tarea en 2-3 ramas con `bond team` (`rama:kind`), espera el OK, recoge y resume | pi: `/team tarea`; resto: `/bond-team …` o pidiéndolo |
+
+El kind es cualquiera de `herdr agent start --help` con su ejecutable instalado; sin kind,
+`pi`. Un modelo concreto para el delegado va tras `--` (`--model haiku` en Claude). En pi,
+`/delegate` y `/team` son atajos que cargan estos skills.
+
+Los skills solo se activan si lo pides (lo dice su descripción, como exige el skill `herdr`).
+Cuando el delegado se para en una pregunta (confiar en la carpeta, aprobar algo), el
+orquestador te la enseña y espera tu respuesta: no contesta por ti.
+
+**Integraciones de Herdr.** `bond setup` instala `herdr integration install <agente>` para
+cada agente instalado que Herdr soporte (hoy: pi, Claude Code, Copilot, opencode; Crush no
+tiene integración y Herdr lo detecta por pantalla). Con la integración, el estado `working`,
+`blocked` o `done` lo cuenta el propio agente. `bond doctor` las comprueba.
+
+**Probado** en un workspace de prueba: un Claude Code (Haiku) orquestador usó `bond-delegate`
+para delegar en Copilot; Copilot se paró en la pregunta de confianza, Claude la enseñó y
+esperó, y con la respuesta Copilot hizo la tarea (`wc -l`, resultado correcto). La prueba
+encontró el choque del servidor `web` con el espacio de nombres reservado de OpenAI, ya
+resuelto (ahora `duckduckgo`). Pendiente: pi orquestando a otro kind con `halo` (la pasarela
+estaba saturada durante la prueba).
+
+### Reglas del skill `herdr`
+
 El skill `herdr` (lo escribe Herdr, no este repo) fija unas reglas que todo lo de este setup
 respeta, para que el agente no reciba instrucciones contradictorias:
 
 | Regla del skill | Cómo se cumple aquí |
 |---|---|
-| Solo se usa si el usuario lo pide, no porque algo tarde o se pueda paralelizar | `AGENTS.md` lo repite. Los prompts que usan Herdr (`/delegate`, `/team`) empiezan con "Te pido expresamente que uses Herdr…": invocarlos es la petición explícita. |
+| Solo se usa si el usuario lo pide, no porque algo tarde o se pueda paralelizar | `AGENTS.md` lo repite. Los skills `bond-delegate`/`bond-team` solo se activan a petición, y los prompts `/delegate` y `/team` empiezan con "Te pido expresamente que uses Herdr…": invocarlos es la petición explícita. |
 | Nada de workspaces, pestañas, worktrees ni otro directorio sin petición | `/delegate` trabaja en un panel hermano y en `$PWD`. Los worktrees los crean `pidev`/`piteam` (los lanzas tú) o `/team`, que lo pide expresamente y además espera tu OK al reparto antes de crear nada. |
 | Worktrees con `herdr worktree`, no `git worktree` a mano | `pidev --worktree` usa `worktree create`/`open` colgados del workspace `pi:<repo>`, así Herdr los agrupa y los sabe quitar. |
 | `--trust-repository` solo tras revisar el repo | `pidev`/`piteam` solo lo pasan si tú pones `--trust-repository`. |
@@ -502,7 +536,7 @@ con `halo/flash-halogen`.
 | Tools `grep`, `find`, `ls` | `settings.json` → `defaultTools` | Búsqueda con salida acotada. Necesitan `rg` y `fd`. |
 | Tool `repo_map` | `extensions/repo-map.ts` | Mapa del repo en ~40 líneas: manifiestos y comandos, árbol con nº de ficheros, lenguajes, ficheros más tocados. |
 | MCP `context7` | `pi/agent/mcp.json` | Documentación de librerías por versión (`resolve-library-id`, `query-docs`). Remoto, sin clave. |
-| MCP `web` | `pi/agent/mcp.json` | Búsqueda en DuckDuckGo y lectura de páginas (`search`, `fetch_content`). `uvx duckduckgo-mcp-server==0.7.0`, sin clave. |
+| MCP `duckduckgo` | `pi/agent/mcp.json` | Búsqueda en DuckDuckGo y lectura de páginas (`search`, `fetch_content`). `uvx duckduckgo-mcp-server==0.7.0`, sin clave. |
 | `ast-grep` | `bun add -g @ast-grep/cli@0.45.3` | Búsqueda estructural por sintaxis. |
 | Skill `code-context` | `catalog/skills/code-context/` (por repo, con `bond init`) | Cuándo usar cada cosa, recetas de `ast-grep` por lenguaje. |
 
@@ -511,16 +545,21 @@ no cargó el skill por iniciativa propia y se orientó con `git log` a mano (y c
 tool declarada la llama la primera y el resultado cuadra. Los modelos pequeños usan mucho mejor
 una tool que un skill que tienen que decidir abrir.
 
+**Por qué el servidor de búsqueda se llama `duckduckgo` y no `web`.** La API de OpenAI reserva
+el espacio de nombres `web` para sus tools: Copilot (con modelos de OpenAI) fallaba con
+`Function 'web.web-expand_link' is not allowed in reserved namespace 'web'`, y Codex usa la misma
+API. En `bond.toml`, `"web"` sigue aceptándose como alias (con aviso).
+
 **Por qué los MCP van con `exposure: "direct"`.** Por defecto pi expone las tools MCP solo a
 través de `codemode` (el modelo escribe JavaScript que las llama). Para un modelo local eso es
 un paso más donde fallar, y con 5 tools en total no hace falta ahorrar declaraciones. Si se
 añaden servidores grandes, conviene `"exposure": "deferred"` y `tool_search`.
 
-**Versiones fijadas.** El servidor `web` y `ast-grep` van con versión exacta y de al menos dos
+**Versiones fijadas.** El servidor `duckduckgo` y `ast-grep` van con versión exacta y de al menos dos
 semanas de antigüedad, para no ejecutar lo publicado ayer. Para actualizar: cambia la versión
 en `mcp.json` (o reinstala `ast-grep`) y verifica con `pi mcp list`.
 
-**Privacidad.** `context7` y `web` son servicios externos: reciben las consultas, no el código.
+**Privacidad.** `context7` y `duckduckgo` son servicios externos: reciben las consultas, no el código.
 `AGENTS.md` pide no mandar a la web código ni datos privados.
 
 Comprobar y depurar:

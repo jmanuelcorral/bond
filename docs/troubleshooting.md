@@ -93,7 +93,7 @@ pi mcp list                  # estado y error de cada servidor
 tail -50 ~/.pi/agent/mcp.log
 ```
 
-- `web` se lanza con `uvx`: la primera vez descarga el paquete y tarda. Si falla, comprueba
+- `duckduckgo` se lanza con `uvx`: la primera vez descarga el paquete y tarda. Si falla, comprueba
   `uvx duckduckgo-mcp-server==0.7.0 --help` a mano.
 - `context7` es remoto: sin red, falla. Dentro de pi, `/mcp reconnect context7`.
 - DuckDuckGo limita peticiones si se busca mucho seguido: espera y reintenta.

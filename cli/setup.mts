@@ -1,7 +1,7 @@
 // `bond setup`: deja la máquina lista. Mismos pasos que hacía install.sh, más el enlace de
 // `bond` en el PATH. Idempotente: se puede relanzar tras cada cambio en el repo.
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { renderSmall } from "../lib/bond-logo.mts";
 import {
@@ -53,9 +53,10 @@ export async function setup(args: string[]): Promise<void> {
 	installDeps();
 	linkPiConfig();
 	herdrSkill();
+	globalSkills();
 	gitFilter();
 	contextTools();
-	herdrIntegration();
+	herdrIntegrations();
 	if (withHerdrConfig) herdrConfig();
 	await modelsStep();
 	linkBond();
@@ -67,7 +68,7 @@ export async function setup(args: string[]): Promise<void> {
   Config de pi:   ${AGENT_DIR}  (symlinks a ${REPO_DIR}/pi/agent)
   Paquete pi:     ${AGENT_DIR}/pisetup -> ${REPO_DIR}
   Modelos:        ~/.config/bond/config.toml  -> bond models list | probe | sync
-  MCP:            context7, web  -> pi mcp list
+  MCP:            context7, duckduckgo  -> pi mcp list
   Comprobar todo: bond doctor
 
   Primer paso: arranca pi (pi o bond dev) y ejecuta /login para configurar proveedor y modelo.
@@ -189,10 +190,39 @@ function contextTools(): void {
 	for (const [cmd, why] of missing) warn(`falta ${cmd} (${why})`);
 }
 
-function herdrIntegration(): void {
-	log("Integración de Herdr para pi");
-	if (/^pi: current/m.test(run("herdr", ["integration", "status"]).stdout)) log("integración pi: ya actual");
-	else runAct("herdr", ["integration", "install", "pi"]);
+export const GLOBAL_SKILLS_DIR = join(REPO_DIR, "global", "skills");
+
+/** Destinos de los skills globales: ~/.agents/skills (pi, Codex, Copilot, opencode, Crush, Gemini) y ~/.claude/skills (Claude Code). */
+export function globalSkillTargets(name: string): string[] {
+	return [join(HOME, ".agents", "skills", name), join(HOME, ".claude", "skills", name)];
+}
+
+function globalSkills(): void {
+	// bond-delegate y bond-team son de Herdr, una herramienta de la máquina: van a nivel de
+	// usuario, como el skill herdr, para cualquier agente y en cualquier repo.
+	log("Skills globales de bond (multiagente con Herdr)");
+	for (const name of readdirSync(GLOBAL_SKILLS_DIR)) {
+		for (const dest of globalSkillTargets(name)) {
+			act(`mkdir -p ${dirname(dest)}`, () => mkdirSync(dirname(dest), { recursive: true }));
+			linkPath(join(GLOBAL_SKILLS_DIR, name), dest);
+		}
+	}
+}
+
+/** Integraciones de Herdr: estado por agente según `herdr integration status`. */
+export function herdrIntegrationStatus(): Array<{ agent: string; state: string }> {
+	return [...run("herdr", ["integration", "status"]).stdout.matchAll(/^([a-z0-9_-]+): (.+?)(?: \(|$)/gm)].map((m) => ({ agent: m[1], state: m[2] }));
+}
+
+function herdrIntegrations(): void {
+	// Con la integración, cada agente le cuenta a Herdr su estado real (working, blocked, done)
+	// en vez de que Herdr lo adivine mirando la pantalla. Solo para los agentes instalados.
+	log("Integraciones de Herdr");
+	for (const { agent, state } of herdrIntegrationStatus()) {
+		if (!which(agent)) continue;
+		if (state.startsWith("current")) log(`integración ${agent}: ya actual`);
+		else runAct("herdr", ["integration", "install", agent]);
+	}
 }
 
 function herdrConfig(): void {

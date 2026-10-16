@@ -6,9 +6,11 @@
       "exposure": "direct",
       "timeout": 30
     },
-    "web": {
+    "duckduckgo": {
       "command": "uvx",
-      "args": ["duckduckgo-mcp-server==0.7.0"],
+      "args": [
+        "duckduckgo-mcp-server==0.7.0"
+      ],
       "description": "Búsqueda web (DuckDuckGo) y lectura de páginas como texto",
       "exposure": "direct",
       "timeout": 45
