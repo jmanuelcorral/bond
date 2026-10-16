@@ -5,7 +5,7 @@
 //   lo genera scripts/build.mts) y se extraen una vez en ~/.bond/runtime/<versión>/, porque los
 //   agentes los leen por ruta. Cada versión trae los suyos: actualizar es cambiar el binario.
 
-import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readlinkSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import pkg from "../package.json" with { type: "json" };
@@ -52,4 +52,25 @@ export async function assetsDir(): Promise<string> {
 	}
 	extracted = dir;
 	return dir;
+}
+
+/**
+ * ~/.bond/pi: enlace estable al paquete de pi de bond (Bond Extensions) de la versión instalada.
+ * Los repos lo declaran en .pi/settings.json como "~/.bond/pi", así la ruta sirve en cualquier
+ * máquina y no cambia al actualizar bond. En Windows es una junction (no pide permisos).
+ */
+export async function ensureBondLink(): Promise<string> {
+	const target = await assetsDir();
+	const link = join(BOND_HOME, "pi");
+	let current: string | undefined;
+	try {
+		current = lstatSync(link).isSymbolicLink() ? readlinkSync(link) : "(no es un enlace)";
+	} catch {
+		// No existe.
+	}
+	if (current === target) return link;
+	if (current !== undefined) rmSync(link, { recursive: false, force: true });
+	mkdirSync(BOND_HOME, { recursive: true });
+	symlinkSync(target, link, process.platform === "win32" ? "junction" : "dir");
+	return link;
 }

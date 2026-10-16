@@ -4,7 +4,7 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { renderSmall } from "../lib/bond-logo.mts";
-import { assetsPath, FROM_SOURCE } from "./runtime.mts";
+import { assetsPath, ensureBondLink, FROM_SOURCE } from "./runtime.mts";
 import {
 	act,
 	AGENT_DIR,
@@ -74,7 +74,10 @@ export async function setup(args: string[]): Promise<void> {
 
 	const { ensurePersonal, propagate, PERSONAL_FILE } = await import("./instructions.mts");
 	log("Aplicando");
-	if (agents.includes("pi")) linkPiConfig();
+	if (agents.includes("pi")) {
+		linkPiConfig();
+		if (!isDryRun()) log(`Bond Extensions de pi: ${await ensureBondLink()} (los repos las cargan con bond init)`);
+	}
 	if (herdr) herdrSkill();
 	globalSkills();
 	if (FROM_SOURCE) gitFilter();

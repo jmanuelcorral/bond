@@ -120,16 +120,31 @@ Codex, opencode, Crush y Gemini CLI.
 
 ```bash
 cd ~/gitrepos/mi-proyecto
+bond init                        # con preguntas: agentes, agente por defecto, herramientas
+bond init --yes                  # sin preguntas: lo elegido en bond setup y todo el catálogo
+bond init --agents claude,codex --default claude --skills "" --commands review,commit
 bond init --list                 # catálogo: MCP, skills, comandos
-bond init                        # todo el catálogo, para los agentes instalados
-bond init --agents claude,codex --skills "" --commands review,commit
 bond sync                        # tras editar .bond/bond.toml
 bond sync --check                # en CI: falla si algo está desfasado
 ```
 
+`bond init` pregunta con qué agentes integrar el repo (de los instalados; marcados de partida
+los que elegiste en `bond setup`), cuál abre `bond` por defecto y qué herramientas del catálogo
+usar (todas marcadas). En un repo ya inicializado permite cambiar la selección: solo reescribe
+las líneas `agents`, `default_agent`, `mcp`, `skills` y `commands` de `bond.toml`, así que tus
+comentarios y tus `[mcp_servers]` se conservan, y `sync` quita lo que ya no se pide.
+
+**Bond Extensions (pi).** Si el repo usa pi, `.pi/settings.json` declara
+`"packages": ["~/.bond/pi"]`: el pie de estado, la cabecera BOND, la tool `repo_map`,
+`/delegate`, `/team` y los comandos del catálogo. `~/.bond/pi` es un enlace estable a la versión
+instalada de bond (en Windows, una *junction*), así la misma ruta sirve en cualquier máquina con
+bond y no cambia al actualizarlo. Quien clone el repo sin bond no las tiene, pero el resto de
+la config de pi funciona.
+
 ```toml
 # .bond/bond.toml
 agents = ["pi", "claude", "copilot", "opencode", "crush"]
+default_agent = "claude"
 mcp = ["context7", "duckduckgo"]
 skills = ["code-context"]
 commands = ["commit", "handoff", "review"]

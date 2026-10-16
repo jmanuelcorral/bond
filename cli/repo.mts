@@ -14,8 +14,8 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSy
 import { basename, dirname, join, relative } from "node:path";
 import { parse } from "smol-toml";
 import { parseJsonc } from "./agents.mts";
-import { assetsPath } from "./runtime.mts";
-import { bad, caution, die, dim, isDryRun, log, ok, run, STAMP, warn } from "./util.mts";
+import { assetsPath, ensureBondLink } from "./runtime.mts";
+import { bad, caution, die, dim, isDryRun, log, ok, run, STAMP, warn, which } from "./util.mts";
 
 export const SUPPORTED_AGENTS = ["pi", "claude", "copilot", "codex", "opencode", "crush", "gemini"];
 /** Catálogo: carpeta del repo o extraída del binario. */
@@ -23,17 +23,19 @@ const catalogPath = (...p: string[]) => assetsPath("catalog", ...p);
 
 export const INIT_HELP = `Uso: bond init [opciones]
 
-Prepara el repo actual para los agentes: crea .bond/bond.toml con lo elegido, un AGENTS.md
-(si falta) y genera la configuración de cada agente con \`bond sync\`.
+Prepara el repo actual para tus agentes. Pregunta con cuáles integrarlo (de los instalados,
+partiendo de los elegidos en bond setup), cuál abre \`bond\` por defecto y qué herramientas del
+catálogo usar. Crea .bond/bond.toml, un AGENTS.md (si falta) y la config de cada agente; con
+pi, además las Bond Extensions. En un repo ya inicializado, permite cambiar la selección.
 
-  --agents <a,b>      Agentes (defecto: los instalados de: ${SUPPORTED_AGENTS.join(", ")})
+  --agents <a,b>      Agentes, sin preguntar (${SUPPORTED_AGENTS.join(", ")})
+  --default <a>       Agente por defecto
   --mcp <a,b>         Servidores MCP del catálogo (defecto: todos)
   --skills <a,b>      Skills del catálogo (defecto: todos)
   --commands <a,b>    Comandos del catálogo (defecto: todos)
+  --yes               Sin preguntas: lo elegido en bond setup y todo el catálogo
   --list              Enseña el catálogo y sale
-  --dry-run           Enseña lo que haría sin escribir
-
-Después: edita .bond/bond.toml y ejecuta \`bond sync\`.`;
+  --dry-run           Enseña lo que haría sin escribir`;
 
 export const SYNC_HELP = `Uso: bond sync [opciones]
 
@@ -81,6 +83,8 @@ function printCatalog(): void {
 
 interface RepoConfig {
 	agents: string[];
+	/** Agente que abre `bond` en este repo. */
+	default_agent?: string;
 	mcp: string[];
 	skills: string[];
 	commands: string[];
@@ -106,6 +110,7 @@ function loadRepoConfig(root: string): RepoConfig {
 	const list = (k: string) => (Array.isArray(raw[k]) ? (raw[k] as string[]) : []);
 	const cfg: RepoConfig = {
 		agents: list("agents"),
+		default_agent: typeof raw.default_agent === "string" ? raw.default_agent : undefined,
 		mcp: list("mcp"),
 		skills: list("skills"),
 		commands: list("commands"),
@@ -210,7 +215,10 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 			]),
 		);
 		out.push({ kind: "json", path: join(".pi", "mcp.json"), parent: "mcpServers", entries: piServers });
-		out.push({ kind: "json", path: join(".pi", "settings.json"), parent: null, entries: { defaultTools: ["+grep", "+find", "+ls"] } });
+		// Bond Extensions (pie de estado, cabecera, repo_map, /delegate, /team, comandos del
+		// catálogo): por ~/.bond/pi, un enlace estable a la versión instalada de bond, así la
+		// ruta sirve en cualquier máquina con bond.
+		out.push({ kind: "json", path: join(".pi", "settings.json"), parent: null, entries: { defaultTools: ["+grep", "+find", "+ls"], packages: ["~/.bond/pi"] } });
 		// Los comandos del catálogo le llegan a pi por el paquete global de bond; aquí, solo los propios.
 		for (const f of ownCommands) out.push({ kind: "file", path: join(".pi", "prompts", f), content: readFileSync(join(ownDir, f), "utf8") });
 	}
@@ -573,15 +581,18 @@ Las personales de cada uno van en su configuración global; aquí, solo lo de es
 `;
 }
 
-function bondToml(cfg: Omit<RepoConfig, "mcp_servers">): string {
-	const arr = (a: string[]) => `[${a.map((x) => JSON.stringify(x)).join(", ")}]`;
+type Selection = Omit<RepoConfig, "mcp_servers">;
+const tomlArr = (a: string[]) => `[${a.map((x) => JSON.stringify(x)).join(", ")}]`;
+
+function bondToml(cfg: Selection): string {
 	return `# bond: configuración de los agentes de este repo. Tras editarla: bond sync
 # Catálogo disponible: bond init --list
 
-agents = ${arr(cfg.agents)}          # ${SUPPORTED_AGENTS.join(", ")}
-mcp = ${arr(cfg.mcp)}                # servidores MCP del catálogo
-skills = ${arr(cfg.skills)}          # se copian a .agents/skills/
-commands = ${arr(cfg.commands)}      # comandos del catálogo
+agents = ${tomlArr(cfg.agents)}          # ${SUPPORTED_AGENTS.join(", ")}
+default_agent = ${JSON.stringify(cfg.default_agent ?? cfg.agents[0] ?? "")}   # el que abre \`bond\`
+mcp = ${tomlArr(cfg.mcp)}                # servidores MCP del catálogo
+skills = ${tomlArr(cfg.skills)}          # se copian a .agents/skills/
+commands = ${tomlArr(cfg.commands)}      # comandos del catálogo
 
 # Servidores MCP propios del repo (claves: command/args/env, o url/headers). Usa \${VAR}
 # para secretos, nunca el valor:
@@ -594,49 +605,153 @@ commands = ${arr(cfg.commands)}      # comandos del catálogo
 `;
 }
 
-export function init(args: string[]): void {
-	if (args.includes("--list")) return printCatalog();
-	const opt = (name: string, all: string[]) => {
-		const i = args.indexOf(name);
-		if (i < 0) return all;
-		const v = args[i + 1];
-		if (v === undefined) die(`${name} necesita una lista separada por comas`);
-		return v === "" ? [] : v.split(",").map((s) => s.trim()).filter(Boolean);
+/** Cambia solo las líneas de la selección en un bond.toml existente: comentarios y mcp_servers se conservan. */
+function updateBondToml(text: string, cfg: Selection): string {
+	const set = (t: string, key: string, value: string) => {
+		const re = new RegExp(`^${key}\\s*=.*$`, "m");
+		// Las claves de primer nivel van antes de cualquier tabla.
+		return re.test(t) ? t.replace(re, `${key} = ${value}`) : t.replace(/^(?=\[)/m, `${key} = ${value}\n`) || `${t}\n${key} = ${value}\n`;
 	};
+	let t = text;
+	t = set(t, "agents", tomlArr(cfg.agents));
+	t = set(t, "default_agent", JSON.stringify(cfg.default_agent ?? cfg.agents[0] ?? ""));
+	t = set(t, "mcp", tomlArr(cfg.mcp));
+	t = set(t, "skills", tomlArr(cfg.skills));
+	t = set(t, "commands", tomlArr(cfg.commands));
+	return t;
+}
+
+const AGENT_NAMES: Record<string, string> = { pi: "pi", claude: "Claude Code", copilot: "Copilot CLI", codex: "Codex", opencode: "opencode", crush: "Crush", gemini: "Gemini CLI" };
+
+/** Preguntas de init: agentes (de los instalados), agente por defecto y herramientas del catálogo. */
+async function askSelection(current: Selection, installed: string[]): Promise<Selection | undefined> {
+	const p = await import("@clack/prompts");
+	const cancel = <T,>(v: T | symbol): T => {
+		if (p.isCancel(v)) {
+			p.cancel("cancelado: no se ha cambiado nada");
+			process.exit(130);
+		}
+		return v as T;
+	};
+	const agents = cancel(
+		await p.multiselect({
+			message: "¿Con qué agentes integrar este repo?",
+			options: installed.map((a) => ({ value: a, label: AGENT_NAMES[a] ?? a })),
+			initialValues: current.agents.filter((a) => installed.includes(a)),
+			required: true,
+		}),
+	);
+	const def =
+		agents.length === 1
+			? agents[0]
+			: cancel(
+					await p.select({
+						message: "¿Agente por defecto? (el que abre `bond` en este repo)",
+						options: agents.map((a) => ({ value: a, label: AGENT_NAMES[a] ?? a })),
+						initialValue: current.default_agent && agents.includes(current.default_agent) ? current.default_agent : agents[0],
+					}),
+				);
+	const describeOf = (kind: "skills" | "commands", n: string) =>
+		describe(readFileSync(kind === "skills" ? catalogPath("skills", n, "SKILL.md") : catalogPath("commands", `${n}.md`), "utf8")).slice(0, 60);
+	const tools = cancel(
+		await p.groupMultiselect({
+			message: "¿Qué herramientas del catálogo? (espacio para marcar o desmarcar)",
+			options: {
+				"Servidores MCP": Object.entries(catalog.mcp()).map(([n, s]) => ({ value: `mcp:${n}`, label: n, hint: s.description?.slice(0, 60) })),
+				Skills: catalog.skills().map((n) => ({ value: `skills:${n}`, label: n, hint: describeOf("skills", n) })),
+				Comandos: catalog.commands().map((n) => ({ value: `commands:${n}`, label: n, hint: describeOf("commands", n) })),
+			},
+			initialValues: [...current.mcp.map((n) => `mcp:${n}`), ...current.skills.map((n) => `skills:${n}`), ...current.commands.map((n) => `commands:${n}`)],
+			required: false,
+		}),
+	);
+	const pick = (prefix: string) => tools.filter((t) => t.startsWith(`${prefix}:`)).map((t) => t.slice(prefix.length + 1));
+	return { agents, default_agent: def, mcp: pick("mcp"), skills: pick("skills"), commands: pick("commands") };
+}
+
+export async function init(args: string[]): Promise<void> {
+	if (args.includes("--list")) return printCatalog();
+	const opt = (name: string) => {
+		const i = args.indexOf(name);
+		if (i < 0) return undefined;
+		const v = args[i + 1];
+		if (v === undefined) die(`${name} necesita un valor`);
+		return v;
+	};
+	const list = (name: string) => {
+		const v = opt(name);
+		return v === undefined ? undefined : v === "" ? [] : v.split(",").map((s) => s.trim()).filter(Boolean);
+	};
+	const flags = ["--agents", "--default", "--mcp", "--skills", "--commands"];
 	for (let i = 0; i < args.length; i++) {
-		if (["--agents", "--mcp", "--skills", "--commands"].includes(args[i])) i++;
-		else if (args[i] !== "--dry-run") die(`opción desconocida: ${args[i]} (bond init --help)`);
+		if (flags.includes(args[i])) i++;
+		else if (!["--dry-run", "--yes", "-y"].includes(args[i])) die(`opción desconocida: ${args[i]} (bond init --help)`);
 	}
 
 	const root = repoRoot();
 	const tomlPath = join(bondDir(root), "bond.toml");
-	if (existsSync(tomlPath)) die(`${relative(process.cwd(), tomlPath)} ya existe: edítalo y ejecuta bond sync`);
+	const exists = existsSync(tomlPath);
 	if (run("git", ["rev-parse", "--show-toplevel"]).status !== 0) warn(`${root} no es un repo git: los ficheros generados conviene versionarlos`);
 
-	const installed = SUPPORTED_AGENTS.filter((a) => run("sh", ["-c", `command -v ${a}`]).status === 0);
-	const cfg = {
-		agents: opt("--agents", installed.length ? installed : SUPPORTED_AGENTS),
-		mcp: opt("--mcp", Object.keys(catalog.mcp())),
-		skills: opt("--skills", catalog.skills()),
-		commands: opt("--commands", catalog.commands()),
+	// Agentes instalados, y lo elegido en bond setup como punto de partida.
+	const installed = SUPPORTED_AGENTS.filter((a) => which(a));
+	if (!installed.length) die("no hay ningún agente instalado (bond setup te dice cómo instalar uno)");
+	let global: { agents: string[]; default_agent?: string } = { agents: [] };
+	try {
+		const { configExists, loadConfig } = await import("./config.mts");
+		if (configExists()) global = loadConfig();
+	} catch {
+		// Sin configuración global: se parte de lo instalado.
+	}
+	const current: Selection = exists
+		? loadRepoConfig(root)
+		: {
+				agents: global.agents.filter((a) => installed.includes(a)).length ? global.agents.filter((a) => installed.includes(a)) : installed,
+				default_agent: global.default_agent,
+				mcp: Object.keys(catalog.mcp()),
+				skills: catalog.skills(),
+				commands: catalog.commands(),
+			};
+
+	// Con flags o --yes, sin preguntas; si no, preguntas (si hay terminal).
+	const explicit = flags.some((f) => args.includes(f));
+	const interactive = !explicit && !args.includes("--yes") && !args.includes("-y") && process.stdin.isTTY === true;
+	let sel: Selection = {
+		agents: list("--agents") ?? current.agents,
+		default_agent: opt("--default") ?? current.default_agent,
+		mcp: list("--mcp") ?? current.mcp,
+		skills: list("--skills") ?? current.skills,
+		commands: list("--commands") ?? current.commands,
 	};
+	if (exists && !interactive && !explicit) die(`${relative(process.cwd(), tomlPath)} ya existe: edítalo y ejecuta bond sync (o bond init para cambiarlo con preguntas)`);
+	if (interactive) {
+		const p = await import("@clack/prompts");
+		const { renderSmall } = await import("../lib/bond-logo.mts");
+		p.intro(renderSmall(56, `init · ${basename(root)}`));
+		if (exists) p.log.info("Este repo ya tiene .bond/bond.toml: cambia lo que quieras (se conservan tus comentarios y servidores MCP propios)");
+		sel = (await askSelection(current, installed))!;
+	}
+	if (!sel.agents.length) die("hace falta al menos un agente");
+	if (!sel.default_agent || !sel.agents.includes(sel.default_agent)) sel.default_agent = sel.agents[0];
+
 	log(`bond init en ${root}`);
-	console.log(dim(`  agentes: ${cfg.agents.join(", ") || "-"} · mcp: ${cfg.mcp.join(", ") || "-"} · skills: ${cfg.skills.join(", ") || "-"} · comandos: ${cfg.commands.join(", ") || "-"}`));
+	console.log(dim(`  agentes: ${sel.agents.join(", ")} (por defecto: ${sel.default_agent}) · mcp: ${sel.mcp.join(", ") || "-"} · skills: ${sel.skills.join(", ") || "-"} · comandos: ${sel.commands.join(", ") || "-"}`));
 	if (isDryRun()) {
 		console.log(dim(`  [dry-run] escribiría .bond/bond.toml${existsSync(join(root, "AGENTS.md")) ? "" : " y AGENTS.md"}`));
 		return;
 	}
 	mkdirSync(bondDir(root), { recursive: true });
-	writeFileSync(tomlPath, bondToml(cfg));
-	console.log(`${ok("+")} .bond/bond.toml`);
+	writeFileSync(tomlPath, exists ? updateBondToml(readFileSync(tomlPath, "utf8"), sel) : bondToml(sel));
+	console.log(`${ok(exists ? "~" : "+")} .bond/bond.toml`);
 	if (!existsSync(join(root, "AGENTS.md"))) {
 		writeFileSync(join(root, "AGENTS.md"), agentsMd(basename(root)));
 		console.log(`${ok("+")} AGENTS.md  ${dim("plantilla: complétala")}`);
 	}
+	if (sel.agents.includes("pi")) await ensureBondLink();
 	syncRepo();
 	const generated = [...new Set(plan(root, loadRepoConfig(root), loadManifest(root)).map((o) => o.path.split("/")[0]))].sort();
 	const trust: Record<string, string> = {
-		pi: "pi pregunta si confías en el proyecto (sin eso no carga .pi/)",
+		pi: "pi pregunta si confías en el proyecto (sin eso no carga .pi/ ni las Bond Extensions)",
 		claude: "Claude Code pide aprobar los servidores de .mcp.json",
 		copilot: "Copilot pide confiar en la carpeta (sin eso no carga .mcp.json)",
 		codex: "Codex solo carga .codex/config.toml en proyectos de confianza",
@@ -648,8 +763,9 @@ Siguiente:
   1. Completa AGENTS.md (instrucciones del proyecto para todos los agentes).
   2. Commitea la configuración: git add .bond AGENTS.md ${generated.join(" ")}
   3. La primera vez, cada agente pide confiar en el repo; bond no lo concede por ti:
-${cfg.agents
+${sel.agents
 	.filter((a) => trust[a])
 	.map((a) => `     - ${trust[a]}`)
-	.join("\n")}`);
+	.join("\n")}
+  4. Abre el puesto de trabajo: bond`);
 }
