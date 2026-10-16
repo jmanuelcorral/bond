@@ -1,6 +1,6 @@
 # Plan: CLI `bond`
 
-Estado: aprobado. F1 hecha (CLI `bond`: `setup`, `doctor`, `dev`, `team`, `status`, `sessions`, `logo`). F2 hecha (`bond models` y `bond run copilot`). F3 hecha (`bond init` y `bond sync` para pi y Claude Code). F4 hecha (Copilot, Codex, opencode, Crush, Gemini). F5 hecha (skills globales `bond-delegate`/`bond-team` con kind, integraciones de Herdr por agente). Siguiente: F6. Fecha: 2026-10-15.
+Estado: F1 a F6 hechas. Publicado en https://github.com/jmanuelcorral/bond (v0.7.0).
 
 ## Objetivo
 
@@ -201,6 +201,6 @@ Cada fase termina usable, con pruebas y documentación.
 | 1 | Lenguaje de la CLI | TypeScript sobre Node ≥ 22, módulos `.mts` ejecutados sin compilar |
 | 2 | Formato de configuración | TOML (`config.toml`, `bond.toml`) |
 | 3 | ¿Se commitean los ficheros generados? | Sí, con `bond sync --check` para CI |
-| 4 | Publicación y renombrado | Pendiente: se decide en F6 (¿público o privado?) |
+| 4 | Publicación y renombrado | Repo público `jmanuelcorral/bond`, tags `vX.Y.Z` por versión |
 | 5 | Primera ronda de agentes | pi y Claude Code (F3); el resto en F4 |
 | 6 | URL de `halo` | `http://halo.example/v1` (la IP local es el mismo servicio detrás del proxy) |

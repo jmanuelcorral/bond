@@ -33,6 +33,7 @@ Dos piezas:
 | [docs/pidev.md](docs/pidev.md) | `pidev` y `piteam` paso a paso: kinds de agente, worktrees, equipos, limpieza, casos de fallo |
 | [docs/reference.md](docs/reference.md) | Inventario completo: ficheros, cada ajuste y su porqué, integración, actualizar, desinstalar |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Diagnóstico rápido y errores habituales |
+| [CHANGELOG.md](CHANGELOG.md) | Cambios por versión |
 
 ## ¿Qué hace `pidev`?
 
