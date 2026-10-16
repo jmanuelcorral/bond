@@ -69,8 +69,8 @@ Para el futuro, pasa la misma etiqueta: `pidev ~/otraruta/miapp -l pi:miapp`.
 ## Los comandos `/review` `/commit` etc. no aparecen
 
 - Sesión ya abierta: ejecuta `/reload` en pi.
-- Comprueba que el paquete está enlazado: `ls -l ~/.pi/agent/pisetup` debe apuntar al repo y
-  `pi list` debe mostrar `./pisetup`.
+- Comprueba que el paquete está enlazado: `ls -l ~/.pi/agent/bond` debe apuntar al repo y
+  `pi list` debe mostrar `./bond`.
 - `scripts/pi-resources` lista lo que pi carga de verdad, con su origen y su ruta.
 - Symlink roto (moviste el repo): vuelve a correr `bond setup`.
 

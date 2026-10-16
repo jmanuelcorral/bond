@@ -1,4 +1,4 @@
-# piSetup · BOND
+# BOND
 
 ![BOND](assets/bond-logo.png)
 
@@ -77,7 +77,8 @@ comandos es pedirlo), nombres únicos, nada de merge, push ni limpieza automáti
 Requisitos: Node 22.18 o más, Herdr, y `bun` o `npm` para instalar pi.
 
 ```bash
-cd ~/gitrepos/piSetup
+git clone https://github.com/jmanuelcorral/bond ~/gitrepos/bond
+cd ~/gitrepos/bond
 bin/bond setup --dry-run   # opcional: ver qué va a hacer
 bin/bond setup             # deja además `bond` en el PATH
 bond doctor                # comprueba que todo está bien
@@ -87,7 +88,7 @@ bond doctor                # comprueba que todo está bien
 
 Qué hace: instala pi si falta (con `bun`, sin `sudo`), enlaza `settings.json`,
 `AGENTS.md` y `mcp.json` en `~/.pi/agent` (guardando backup de lo previo), registra el repo
-como **paquete de pi** (`~/.pi/agent/pisetup`, de donde pi carga `extensions/`, `skills/` y
+como **paquete de pi** (`~/.pi/agent/bond`, de donde pi carga `extensions/`, `skills/` y
 `prompts/`), deja un único skill de Herdr visible para pi e instala la integración
 `~/.pi/agent/extensions/herdr-agent-state.ts`, que es lo que hace que los estados del
 agente sean reales y no adivinados por pantalla.
@@ -149,7 +150,7 @@ pi mcp list            # comprobar los servidores MCP
 ## Estructura
 
 ```
-piSetup/
+bond/
 ├── package.json                  # el repo es un paquete de pi (manifiesto "pi")
 ├── assets/
 │   └── bond-logo.png             # el logo para este README
@@ -192,7 +193,7 @@ piSetup/
 │   ├── reference.md
 │   └── troubleshooting.md
 ├── pi/agent/                     # → symlinks desde ~/.pi/agent
-│   ├── settings.json             # ajustes de pi (declara el paquete ./pisetup)
+│   ├── settings.json             # ajustes de pi (declara el paquete ./bond)
 │   ├── AGENTS.md                 # instrucciones globales (español, estilo, git, Herdr)
 │   └── mcp.json                  # MCP: context7 (docs de librerías), web (DuckDuckGo)
 └── herdr/

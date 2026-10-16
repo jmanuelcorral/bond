@@ -268,7 +268,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("statusline", {
-		description: "Activa o desactiva el pie de estado de piSetup",
+		description: "Activa o desactiva el pie de estado de bond",
 		handler: async (_args, ctx) => {
 			enabled = !enabled;
 			if (ctx.mode !== "tui") return;

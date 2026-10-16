@@ -57,10 +57,11 @@ function checkPi(): void {
 		if (linkTarget(dest) && samePath(dest, src)) add("ok", `enlace ${f}`, `-> repo`);
 		else add("fail", `enlace ${f}`, existsSync(dest) ? "existe pero no apunta al repo" : "no existe", "bond setup");
 	}
-	const pkg = join(AGENT_DIR, "pisetup");
-	if (linkTarget(pkg) && samePath(pkg, REPO_DIR)) add("ok", "paquete pi", "~/.pi/agent/pisetup -> repo");
-	else add("fail", "paquete pi", "falta el enlace ~/.pi/agent/pisetup", "bond setup");
-	if (!/\.\/pisetup/.test(run("pi", ["list"]).stdout)) add("fail", "paquete pi en settings", "pi list no muestra ./pisetup", "revisa pi/agent/settings.json");
+	const pkg = join(AGENT_DIR, "bond");
+	if (linkTarget(pkg) && samePath(pkg, REPO_DIR)) add("ok", "paquete pi", "~/.pi/agent/bond -> repo");
+	else add("fail", "paquete pi", "falta el enlace ~/.pi/agent/bond", "bond setup");
+	if (!/\.\/bond\b/.test(run("pi", ["list"]).stdout)) add("fail", "paquete pi en settings", "pi list no muestra ./bond", "revisa pi/agent/settings.json");
+	if (linkTarget(join(AGENT_DIR, "pisetup")) !== undefined) add("warn", "enlace antiguo", "~/.pi/agent/pisetup (de antes del renombrado)", "bond setup");
 	if (linkTarget(join(AGENT_DIR, "prompts"))) add("warn", "prompts antiguos", "~/.pi/agent/prompts sigue enlazado (duplica comandos)", "bond setup");
 }
 

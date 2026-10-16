@@ -1,6 +1,6 @@
-# Snippet de configuración de Herdr que aporta piSetup.
+# Snippet de configuración de Herdr que aporta bond.
 # install.sh --herdr-config lo añade a ~/.config/herdr/config.toml entre las marcas
-# ">>> piSetup >>>" y "# <<< piSetup <<<". Claves verificadas con `herdr --default-config`.
+# ">>> bond >>>" y "# <<< bond <<<" (antes ">>> piSetup >>>", que también se reconoce). Claves verificadas con `herdr --default-config`.
 
 [terminal]
 # Los paneles, pestañas y workspaces nuevos heredan el directorio del panel de origen,

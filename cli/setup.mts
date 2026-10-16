@@ -18,6 +18,7 @@ import {
 	run,
 	runAct,
 	samePath,
+	brokenLink,
 	warn,
 	which,
 } from "./util.mts";
@@ -33,7 +34,9 @@ pone \`bond\` en el PATH. Se puede relanzar tras cada cambio.
   --dry-run        Muestra lo que haría sin tocar nada
   -h, --help       Esta ayuda`;
 
-const HERDR_MARKER = ">>> piSetup >>>";
+const HERDR_MARKER = ">>> bond >>>";
+// Marca de antes del renombrado: si ya está en config.toml, el bloque no se vuelve a añadir.
+const OLD_HERDR_MARKER = ">>> piSetup >>>";
 
 export async function setup(args: string[]): Promise<void> {
 	let withPi = true;
@@ -66,7 +69,7 @@ export async function setup(args: string[]): Promise<void> {
   ${renderSmall(60, "licence to code")}
 
   Config de pi:   ${AGENT_DIR}  (symlinks a ${REPO_DIR}/pi/agent)
-  Paquete pi:     ${AGENT_DIR}/pisetup -> ${REPO_DIR}
+  Paquete pi:     ${AGENT_DIR}/bond -> ${REPO_DIR}
   Modelos:        ~/.config/bond/config.toml  -> bond models list | probe | sync
   MCP:            context7, duckduckgo  -> pi mcp list
   Comprobar todo: bond doctor
@@ -121,9 +124,15 @@ function linkPiConfig(): void {
 	for (const f of ["settings.json", "AGENTS.md", "mcp.json"]) {
 		linkPath(join(REPO_DIR, "pi", "agent", f), join(AGENT_DIR, f));
 	}
-	// El repo es un paquete de pi; settings.json lo declara como "./pisetup", relativo a
+	// El repo es un paquete de pi; settings.json lo declara como "./bond", relativo a
 	// AGENT_DIR, así que el repo puede vivir en cualquier ruta: solo cambia este symlink.
-	linkPath(REPO_DIR, join(AGENT_DIR, "pisetup"));
+	linkPath(REPO_DIR, join(AGENT_DIR, "bond"));
+	// Antes del renombrado el enlace se llamaba "pisetup": con los dos, pi cargaría el paquete dos veces.
+	const oldPkg = join(AGENT_DIR, "pisetup");
+	if (linkTarget(oldPkg) !== undefined) {
+		log(`quitando el enlace antiguo ${oldPkg}`);
+		act(`rm ${oldPkg}`, () => rmSync(oldPkg));
+	}
 
 	// Migración: antes prompts/ se enlazaba suelto; con el paquete duplicaría los comandos.
 	const oldPrompts = join(AGENT_DIR, "prompts");
@@ -227,8 +236,8 @@ function herdrIntegrations(): void {
 
 function herdrConfig(): void {
 	const file = join(process.env.XDG_CONFIG_HOME || join(HOME, ".config"), "herdr", "config.toml");
-	if (existsSync(file) && readFileSync(file, "utf8").includes(HERDR_MARKER)) {
-		warn(`${file} ya tiene el bloque de piSetup; no lo duplico.`);
+	if (existsSync(file) && [HERDR_MARKER, OLD_HERDR_MARKER].some((m) => readFileSync(file, "utf8").includes(m))) {
+		warn(`${file} ya tiene el bloque de bond; no lo duplico.`);
 		warn("Para cambiarlo, edita herdr/config.snippet.toml y reemplaza el bloque a mano.");
 		return;
 	}
@@ -236,7 +245,7 @@ function herdrConfig(): void {
 	act(`cat herdr/config.snippet.toml >> ${file}`, () => {
 		mkdirSync(dirname(file), { recursive: true });
 		const snippet = readFileSync(join(REPO_DIR, "herdr", "config.snippet.toml"), "utf8");
-		appendFileSync(file, `\n${HERDR_MARKER}\n${snippet}# <<< piSetup <<<\n`);
+		appendFileSync(file, `\n${HERDR_MARKER}\n${snippet}# <<< bond <<<\n`);
 		if (run("herdr", ["server", "reload-config"]).status !== 0) {
 			warn("Servidor de Herdr no recargó la config (¿no está en marcha?). Reinícialo tú.");
 		}
@@ -266,10 +275,12 @@ function linkBond(): void {
 		return;
 	}
 	const dest = join(dir, "bond");
-	if (exists(dest)) {
+	if (exists(dest) && !brokenLink(dest)) {
 		warn(`${dest} existe y no es este bond; no lo toco`);
 		return;
 	}
+	// Un enlace roto (p. ej. tras mover el repo) se sustituye.
+	if (brokenLink(dest)) act(`rm ${dest}`, () => rmSync(dest));
 	act(`ln -s ${src} ${dest}`, () => symlinkSync(src, dest));
 	log(`bond en el PATH: ${dest} -> ${src}`);
 }

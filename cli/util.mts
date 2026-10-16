@@ -1,7 +1,7 @@
 // Utilidades comunes de la CLI: salida, modo --dry-run, ejecución de comandos y symlinks.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, readlinkSync, realpathSync, renameSync, symlinkSync } from "node:fs";
+import { existsSync, lstatSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -88,13 +88,25 @@ function samePath(a: string, b: string): boolean {
 	}
 }
 
+/** ¿Es un symlink cuyo destino ya no existe (p. ej. tras mover el repo)? */
+export function brokenLink(p: string): boolean {
+	try {
+		return lstatSync(p).isSymbolicLink() && !existsSync(p);
+	} catch {
+		return false;
+	}
+}
+
 /** Deja `dest` como symlink a `src`; lo que hubiera antes se guarda como .bak.<fecha>. */
 export function linkPath(src: string, dest: string): void {
 	if (exists(dest) && lstatSync(dest).isSymbolicLink() && samePath(dest, src)) {
 		log(`ya enlazado: ${dest}`);
 		return;
 	}
-	if (exists(dest)) {
+	if (brokenLink(dest)) {
+		// Un enlace roto no guarda nada: se sustituye sin copia.
+		act(`rm ${dest}`, () => rmSync(dest));
+	} else if (exists(dest)) {
 		warn(`${dest} ya existe; lo guardo como ${basename(dest)}.bak.${STAMP}`);
 		act(`mv ${dest} ${dest}.bak.${STAMP}`, () => renameSync(dest, `${dest}.bak.${STAMP}`));
 	}

@@ -23,7 +23,7 @@ Si falta Herdr: https://herdr.dev/docs/install/
 ## 2. Instalar
 
 ```bash
-cd ~/gitrepos/piSetup
+cd ~/gitrepos/bond
 bin/bond setup --dry-run   # opcional: ver qué va a hacer
 bin/bond setup
 bond doctor                # comprueba la instalación

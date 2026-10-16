@@ -17,7 +17,7 @@
     "maxAgentDelayMs": 60000
   },
   "packages": [
-    "./pisetup"
+    "./bond"
   ],
   "defaultTools": [
     "+grep",

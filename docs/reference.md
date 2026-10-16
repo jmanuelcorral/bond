@@ -28,7 +28,7 @@ El repo es la fuente de verdad; `~/.pi/agent` se enlaza a él.
 | `pi/agent/settings.json` | `~/.pi/agent/settings.json` | Ajustes de pi |
 | `pi/agent/AGENTS.md` | `~/.pi/agent/AGENTS.md` | Instrucciones globales |
 | `pi/agent/mcp.json` | `~/.pi/agent/mcp.json` | Servidores MCP: `context7` y `duckduckgo` |
-| raíz del repo (`package.json`) | `~/.pi/agent/pisetup` | Paquete de pi: `extensions/`, `skills/`, `prompts/` |
+| raíz del repo (`package.json`) | `~/.pi/agent/bond` | Paquete de pi: `extensions/`, `skills/`, `prompts/` |
 | (generado) `bond models sync` | `~/.pi/agent/models.json` | Modelos, desde `~/.config/bond/config.toml` |
 | `herdr/config.snippet.toml` | se añade a `~/.config/herdr/config.toml` | Extras opcionales de Herdr |
 | (compartido) | `~/.agents/skills/herdr/SKILL.md` | Skill de Herdr; si no existe, se genera en `~/.pi/agent/skills/herdr/` |
@@ -51,9 +51,9 @@ Los skills no van en el paquete: se instalan por repo con `bond init` (ver
 [Configuración por repo](#configuración-por-repo-bond-init-y-bond-sync)). Si el paquete los
 trajera, pi vería dos veces los que también están en el `.agents/skills/` del repo.
 
-`settings.json` lo carga con `"packages": ["./pisetup"]`. Las rutas de paquetes en los
+`settings.json` lo carga con `"packages": ["./bond"]`. Las rutas de paquetes en los
 ajustes de usuario se resuelven desde `~/.pi/agent`, así que `bond setup` crea el symlink
-`~/.pi/agent/pisetup -> <repo>`: el repo puede vivir en cualquier ruta y `settings.json` no
+`~/.pi/agent/bond -> <repo>`: el repo puede vivir en cualquier ruta y `settings.json` no
 cambia. Un paquete local se carga desde su sitio, sin copiarlo, así que editar el repo y hacer
 `/reload` basta.
 
@@ -464,14 +464,14 @@ opciones. Orden que sigue:
 3. Crea `~/.pi/agent/extensions`.
 4. Instala las dependencias de la CLI (`npm ci --ignore-scripts`) si faltan.
 5. Enlaza `settings.json`, `AGENTS.md` y `mcp.json` (backup `.bak.<fecha>` de lo previo).
-5. Enlaza el repo como paquete en `~/.pi/agent/pisetup` y quita el symlink antiguo
+5. Enlaza el repo como paquete en `~/.pi/agent/bond` y quita el symlink antiguo
    `~/.pi/agent/prompts` si apuntaba al repo.
 6. Deja un único skill de Herdr (ver arriba).
 7. Registra el filtro de git `pi-settings` en el repo.
 8. Avisa de las herramientas de contexto que falten (`rg`, `fd`, `ast-grep`, `uvx`, `jq`).
 9. Instala la integración de Herdr para pi si no está `current`.
 10. Con `--herdr-config`, añade el snippet a `~/.config/herdr/config.toml` entre marcas
-    `>>> piSetup >>>` y recarga el servidor.
+    `>>> bond >>>` y recarga el servidor.
 11. Enlaza `bond` en el primero de `~/.local/bin`, `~/bin` o `~/.bun/bin` que esté en el PATH.
     Si ya hay otro `bond`, no lo toca.
 
@@ -494,7 +494,7 @@ fuera, y sale con 1 si algo falla:
 |---|---|
 | Node ≥ 22.18 | actualizar Node |
 | Herdr: binario, servidor, integración de pi | `herdr`; `bond setup` |
-| pi: binario, enlaces de `~/.pi/agent`, paquete `./pisetup` en `pi list` | `bond setup` |
+| pi: binario, enlaces de `~/.pi/agent`, paquete `./bond` en `pi list` | `bond setup` |
 | Symlink antiguo `~/.pi/agent/prompts` (aviso) | `bond setup` |
 | Skill de Herdr: uno solo y al día con `herdr --skill` | `bond setup`; `npx skills update herdr` |
 | Filtro de git `pi-settings` | `bond setup` |
@@ -701,7 +701,7 @@ gestor de paquetes.
 
 ```bash
 # Desactivar la config versionada (solo los symlinks)
-rm ~/.pi/agent/settings.json ~/.pi/agent/AGENTS.md ~/.pi/agent/mcp.json ~/.pi/agent/pisetup
+rm ~/.pi/agent/settings.json ~/.pi/agent/AGENTS.md ~/.pi/agent/mcp.json ~/.pi/agent/bond
 rm -r ~/.config/bond              # registro de modelos (los models.json generados se quedan)
 rm "$(command -v bond)"          # el enlace de bond en el PATH
 rm -rf ~/.pi/agent/skills/herdr   # solo si lo generó bond setup

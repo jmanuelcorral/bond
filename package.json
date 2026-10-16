@@ -1,5 +1,5 @@
 {
-  "name": "pisetup",
+  "name": "bond",
   "version": "0.6.0",
   "private": true,
   "description": "BOND: pi package and CLI for multi-agent work with Herdr",
