@@ -95,6 +95,18 @@ async function main(argv: string[]): Promise<void> {
 		}
 		case "sessions":
 			return (await import("./sessions.mts")).sessions(rest);
+		case "migrate": {
+			// Migra una instalación anterior sin pasar por el asistente (bond setup también lo hace).
+			const { migrateLegacy } = await import("./migrate.mts");
+			const { ensurePersonal, propagate } = await import("./instructions.mts");
+			const r = migrateLegacy();
+			if (r.legacyInstructions !== undefined) {
+				ensurePersonal(r.legacyInstructions);
+				propagate(["pi"]);
+			}
+			if (!r.actions.length) console.log("nada que migrar");
+			return;
+		}
 		case "key":
 			return (await import("./keys.mts")).keyCommand(rest);
 		case "logo":

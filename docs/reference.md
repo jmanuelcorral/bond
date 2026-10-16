@@ -1,116 +1,58 @@
-# Referencia del setup
+# Referencia de bond
 
-Inventario completo: qué hay en el repo, dónde acaba cada cosa y cómo se toca.
+Cada comando, qué escribe en cada sitio y por qué.
 
-## Componentes
+## Comandos
 
-| Pieza | Rol |
+| Comando | Qué hace |
 |---|---|
-| **pi** | El agente. CLI mínimo y extensible (`@earendil-works/pi-coding-agent`). |
-| **Herdr** | Multiplexor de terminales consciente de agentes. Servidor en segundo plano que mantiene vivos los paneles. |
-| **Integración Herdr para pi** | Extensión de pi (`herdr-agent-state.ts`) que reporta a Herdr el estado real del agente. |
-| **Skill de Herdr** | Documento que se carga pi para saber controlar Herdr desde dentro de un panel. |
-| **`bond`** | CLI (`bin/bond`, `cli/`): `setup`, `doctor`, `models`, `run`, `init`, `sync`, `dev`, `team`, `status`, `sessions`, `logo`. |
-| **`bond`** (sin comando) | Abre el puesto de trabajo del repo en Herdr ([puesto.md](puesto.md)); `bond dev <dir>` para otro directorio. |
-| **`bond status`** | Tabla de agentes vivos. |
-| **`bond team`** | Un agente por rama, cada uno en su worktree y workspace (`bond --worktree` en bucle). |
-| **Cabecera BOND** | Extensión `extensions/bond-header.ts`: logo al arrancar pi, compacto en paneles estrechos. |
-| **`bond sessions`** | Sesiones de pi de todos los proyectos, con el comando para retomarlas y el agente de Herdr que las tiene abiertas. |
-| **Capa de contexto** | Tools `grep`/`find`/`ls`, tool `repo_map`, MCP `context7` y `duckduckgo`, `ast-grep`, skill `code-context`. |
-| **Pie de estado** | Extensión `extensions/status-line.ts`: agente de Herdr, rama, worktree, contexto, coste, peticiones. |
+| `bond setup` | Una vez por máquina: Herdr, endpoints de modelos, agentes; aplica modelos, integraciones, skills e instrucciones ([abajo](#bond-setup)) |
+| `bond init` | Una vez por repo: agentes, agente por defecto y herramientas; genera la config de cada agente ([abajo](#configuración-por-repo-bond-init-y-bond-sync)) |
+| `bond` | Dentro de un repo: abre su puesto de trabajo en Herdr ([puesto.md](puesto.md)) |
+| `bond dev <dir>` | Lo mismo para otro directorio |
+| `bond team` | Un agente por rama, cada uno en su worktree |
+| `bond status` | Agentes vivos en Herdr |
+| `bond sessions` | Sesiones de pi y cómo retomarlas |
+| `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
+| `bond models list\|probe\|sync` | Endpoints y modelos globales, y su config en cada agente |
+| `bond run copilot` | Copilot CLI contra un modelo propio (variables de entorno) |
+| `bond key <endpoint>` | Imprime una clave guardada (la usan los agentes) |
+| `bond doctor` | Comprueba la instalación (y el repo, si estás en uno) |
+| `bond migrate` | Convierte una instalación 0.7 (config de pi enlazada al repo); `setup` lo hace solo |
+| `bond logo` | El logo |
 
-## Dónde vive qué
+## Dónde vive cada cosa
 
-El repo es la fuente de verdad; `~/.pi/agent` se enlaza a él.
+**Global, en `~/.bond/`** (nunca en un proyecto):
 
-| En el repo | Destino | Contenido |
-|---|---|---|
-| `pi/agent/settings.json` | `~/.pi/agent/settings.json` | Ajustes de pi |
-| `pi/agent/AGENTS.md` | `~/.pi/agent/AGENTS.md` | Instrucciones globales |
-| `pi/agent/mcp.json` | `~/.pi/agent/mcp.json` | Servidores MCP: `context7` y `duckduckgo` |
-| raíz del repo (`package.json`) | `~/.pi/agent/bond` | Paquete de pi: `extensions/`, `skills/`, `prompts/` |
-| (generado) `bond models sync` | `~/.pi/agent/models.json` | Modelos, desde `~/.bond/config.toml` |
-| `herdr/config.snippet.toml` | se añade a `~/.config/herdr/config.toml` | Extras opcionales de Herdr |
-| (compartido) | `~/.agents/skills/herdr/SKILL.md` | Skill de Herdr; si no existe, se genera en `~/.pi/agent/skills/herdr/` |
-| (lo escribe Herdr) | `~/.pi/agent/extensions/herdr-agent-state.ts` | Integración |
-
-Al ser symlinks, editar el fichero en `~/.pi/agent` edita el repo, que está en git.
-
-## El repo como paquete de pi
-
-`package.json` declara el repo como [paquete de pi](https://pi.dev/docs/latest/packages):
-
-```json
-"pi": {
-  "extensions": ["./extensions"],
-  "prompts": ["./prompts", "./catalog/commands"]
-}
-```
-
-Los skills no van en el paquete: se instalan por repo con `bond init` (ver
-[Configuración por repo](#configuración-por-repo-bond-init-y-bond-sync)). Si el paquete los
-trajera, pi vería dos veces los que también están en el `.agents/skills/` del repo.
-
-`settings.json` lo carga con `"packages": ["./bond"]`. Las rutas de paquetes en los
-ajustes de usuario se resuelven desde `~/.pi/agent`, así que `bond setup` crea el symlink
-`~/.pi/agent/bond -> <repo>`: el repo puede vivir en cualquier ruta y `settings.json` no
-cambia. Un paquete local se carga desde su sitio, sin copiarlo, así que editar el repo y hacer
-`/reload` basta.
-
-Para añadir algo: un `.ts` en `extensions/` o un `.md` en `prompts/` (solo pi) o en
-`catalog/commands/` (pi y, por repo, Claude); un skill nuevo, como carpeta en `catalog/skills/`. Verifica con `pi list` y `scripts/pi-resources`.
-
-## `settings.json` y git
-
-pi escribe en `settings.json` (es suyo): `lastChangelogVersion` en cada actualización, y
-también lo que guardes con `Ctrl+S` en `/model` o `/thinking`. Como el fichero es un symlink
-al repo, esos cambios caen en el repo:
-
-- `lastChangelogVersion` es estado de máquina. El filtro de git `pi-settings`
-  (`.gitattributes` + `scripts/git-clean-settings`, que registra `bond setup`) lo quita al
-  hacer `git add`. El fichero de trabajo no se toca.
-- Modelo y thinking por defecto sí son configuración: aparecen en `git diff` y se versionan
-  si los commiteas.
-
-## Layout de `~/.pi/agent`
-
-Lo que pi reconoce ahí (lo que no creamos, lo crea pi al usarlo):
-
-| Ruta | Qué guarda |
+| Ruta | Qué |
 |---|---|
-| `settings.json` | Ajustes de usuario |
-| `keybindings.json` | Atajos de la UI de pi |
-| `models.json` | Endpoints y modelos compatibles |
-| `auth.json` | Claves y credenciales OAuth (**no versionar**) |
-| `AGENTS.md` | Instrucciones globales |
-| `SYSTEM.md` / `APPEND_SYSTEM.md` | Sustituye / añade al system prompt |
-| `extensions/` | Extensiones de pi (aquí cae la de Herdr) |
-| `skills/` | Skills y sus ficheros de apoyo |
-| `prompts/` | Plantillas expuestas como comandos `/` |
-| `themes/` | Temas |
+| `config.toml` | Agentes elegidos, agente por defecto, endpoints y modelos |
+| `keys/<endpoint>` | Claves, una por fichero, permisos 600 |
+| `AGENTS.md` | Tus instrucciones para todos los agentes |
+| `state.json` | Lo que detectó la sonda y lo que bond gestiona en cada agente |
+| `runtime/<versión>/` | Ficheros que lleva dentro el binario, extraídos |
+| `pi` | Enlace a las Bond Extensions de la versión instalada |
 
-La ubicación se puede cambiar con la variable `PI_CODING_AGENT_DIR`. La config de proyecto
-vive en `.pi/` dentro del directorio de trabajo y carga tras conceder confianza al proyecto.
+**En la config de cada agente** (siempre solo lo de bond; el resto del fichero no se toca):
 
-## Ajustes de pi puestos
+| Qué | Dónde |
+|---|---|
+| Modelos de tus endpoints | `~/.pi/agent/models.json`, `~/.config/opencode/opencode.jsonc`, `~/.config/crush/crushrc` (bloque), `~/.codex/config.toml` (bloque) |
+| Tus instrucciones + reglas de bond | Un bloque en el fichero global de instrucciones de cada agente |
+| Skills `bond-delegate`, `bond-team` | `~/.agents/skills/` y `~/.claude/skills/` |
+| Integración de Herdr | La instala `herdr integration install <agente>` |
 
-En `pi/agent/settings.json`. Todos cambiables; esto es lo puesto y el por qué.
+**En cada repo**: `.bond/bond.toml` (lo que pides), `.bond/manifest.json` (lo que generó bond),
+`AGENTS.md` (tuyo) y la config de cada agente ([abajo](#configuración-por-repo-bond-init-y-bond-sync)).
 
-| Clave | Valor | Razón |
-|---|---|---|
-| `tuiMode` | `regular` | pi no usa pantalla alternativa: el transcript queda en el scrollback del panel de Herdr y se puede releer con el ratón o con `pane read`. Con `fullscreen` se comporta como app a pantalla completa dentro del panel. |
-| `quietStartup` | `header` | Menos ruido al arrancar en paneles estrechos. |
-| `defaultTools` | `+grep`, `+find`, `+ls` | Añade a las tools por defecto las de búsqueda nativas de pi (usan `rg` y `fd`): salida acotada, mejor que `rg` por `bash`. Ver [Capa de contexto](#capa-de-contexto). |
-| `defaultThinkingLevel` | `medium` | Equilibrio coste/calidad. Se cambia con `/thinking` (`Ctrl+S` guarda). |
-| `hideThinkingBlock` | `false` | Ver el razonamiento en el transcript. |
-| `enableInstallTelemetry` | `false` | Sin telemetría de instalación/actualización. |
-| `compaction.enabled` | `true` | Resumen automático al llenarse el contexto. |
-| `compaction.reserveTokens` | `16384` | Reservado para la respuesta del modelo. |
-| `compaction.keepRecentTokens` | `20000` | Reciente que se conserva sin resumir. |
-| `retry.*` | `3` intentos, backoff `2s` a `60s` | Tolerancia a fallos transitorios del proveedor. |
+## Bond Extensions (pi)
 
-Regla general de reintentos: dejar `retry.provider.maxRetries` en `0` salvo necesidad, para
-que pi gestione él mismo los errores de cuota.
+El repo de bond es también un paquete de pi (`package.json` → `"pi"`): las extensiones
+`status-line.ts` (pie de estado), `bond-header.ts` (cabecera) y `repo-map.ts` (tool `repo_map`),
+y los comandos `/delegate`, `/team` (`prompts/`) y `/review`, `/commit`, `/handoff`
+(`catalog/commands/`). Se cargan **por repo**: `bond init` añade `"packages": ["~/.bond/pi"]` a
+`.pi/settings.json` cuando el repo usa pi. En los repos sin bond, pi funciona sin ellas.
 
 ## Configuración por repo (`bond init` y `bond sync`)
 
@@ -168,7 +110,7 @@ los leen directamente pi, Copilot, Codex, opencode, Crush y Gemini. Las excepcio
 
 | Agente | MCP del repo | Comandos | Probado |
 |---|---|---|---|
-| pi | `.pi/mcp.json` (`exposure: "direct"`) | catálogo: paquete global de bond; propios: `.pi/prompts/` | sí |
+| pi | `.pi/mcp.json` (`exposure: "direct"`) | catálogo: Bond Extensions; propios: `.pi/prompts/` | sí |
 | Claude Code | `.mcp.json` | `.claude/commands/` | sí |
 | Copilot CLI | el mismo `.mcp.json` | lee `.claude/commands/` como skills | sí |
 | opencode v2 | `opencode.json` → `mcp.servers` | `.opencode/commands/` | sí (MCP) |
@@ -336,37 +278,32 @@ que no están declarados. `bond models probe` enseña qué lista la pasarela en 
 - **Varios agentes a la vez** contra la misma pasarela local dan errores 429: no atiende varias
   peticiones en paralelo.
 
-## Instrucciones globales (`AGENTS.md`)
+## Instrucciones globales
 
-Se aplican en todos los proyectos, en cualquier carpeta. Cubren:
+`~/.bond/AGENTS.md` son tus instrucciones (idioma, estilo, cómo trabajas, git…). `bond setup`
+las escribe, junto con las reglas de bond, en un bloque del fichero de instrucciones global de
+cada agente elegido. Para cambiarlas: edita `~/.bond/AGENTS.md` y repite `bond setup`. La
+primera vez se siembran con las de una instalación anterior, si la hay.
 
-- **Idioma**: respuestas en español; código, identificadores y commits en inglés.
-- **Método**: leer antes de editar, no asumir APIs, verificar con lo más específico primero,
-  no repetir un enfoque que ya falló.
-- **Git**: ni commit ni push sin pedido explícito.
-- **Contexto**: tools `grep`/`find`/`ls` antes que `bash`, `repo_map` al entrar en un repo,
-  skill `code-context` para APIs externas; nada privado a la búsqueda web.
-- **Herdr**: alineado con el skill `herdr` (ver [Herdr: skill y prompts](#herdr-skill-y-prompts)).
-  Solo se usa cuando lo pides tú o un comando como `/delegate`; nada de paneles ni agentes por
-  iniciativa propia, ni workspaces o worktrees sin petición; `--no-focus`, `--cwd "$PWD"`,
-  ids del JSON y nombres únicos; no cerrar lo ajeno; no ejecutar `herdr` sin subcomando; y
-  fuera de Herdr no controlar ninguna sesión.
-- **Seguridad**: no volcar secretos (`auth.json`, `.npmrc`, tokens) en respuestas ni logs.
+Reglas de bond (iguales para todos): Herdr solo cuando lo pides o lo pide un comando como
+`/delegate` o `/team`; `bond-delegate` y `bond-team` para trabajar con otros agentes; no cerrar
+lo que no creaste ni ejecutar `herdr` sin subcomando; nada privado a búsquedas web.
 
-## Plantillas de prompt
+Las instrucciones **del proyecto** van en el `AGENTS.md` del repo (lo crea `bond init`).
 
-Ficheros Markdown en `prompts/` (parte del paquete); el nombre de fichero es el comando.
+## Comandos del catálogo
+
+Ficheros Markdown en `catalog/commands/`, con la sintaxis común a todos los agentes
+(`$ARGUMENTS`, `$1`…): bond los convierte al formato de cada uno.
 
 | Comando | Argumentos | Resultado |
 |---|---|---|
-| `/review [foco]` | foco, por defecto "los cambios sin commitear" | Revisión priorizada (bugs, seguridad, errores, rendimiento, estilo) con `fichero:línea`. No edita. |
+| `/review [foco]` | foco opcional | Revisión priorizada (bugs, seguridad, errores, rendimiento, estilo) con `fichero:línea`. No edita. |
 | `/commit [contexto]` | contexto extra | Propuesta de mensaje en inglés, muestra y espera OK. Nunca push. |
-| `/handoff [ruta]` | ruta, por defecto `.pi-handoff.md` | Estado escrito: objetivo, estado, ficheros, verificación, siguientes pasos. |
-| `/team <tarea...>` | tarea a repartir | Propone 2-3 subtareas independientes con su rama, espera tu OK, monta el equipo con `bond team`, reparte, espera, revisa cada rama y propone orden de integración. Sin merge ni push. |
-| `/delegate [rol] [tarea...]` | rol `reviewer`; tarea por defecto, revisar los cambios sin commitear | Lanza otro pi con nombre único en un panel hermano, le pasa la tarea, espera, lee y resume. Ver [abajo](#herdr-skill-y-prompts). |
+| `/handoff [ruta]` | ruta, por defecto `.handoff.md` | Estado escrito: objetivo, estado, ficheros, verificación, siguientes pasos. |
 
-Sustituciones disponibles en cualquier plantilla: `$1`, `$@` / `$ARGUMENTS`,
-`${1:-defecto}`, `${@:N}`, `${@:N:L}`.
+En pi, además, `/delegate` y `/team`, atajos a los skills `bond-delegate` y `bond-team`
+([abajo](#herdr-skill-y-prompts)).
 
 ## Integración de Herdr para pi
 
@@ -471,7 +408,7 @@ lo limita la pasarela; con proveedores en la nube, la cuota.
 ## `bond setup`
 
 `cli/setup.mts` y `cli/wizard.mts`. Interactivo y repetible (cada vez enseña lo que ya hay);
-`--yes` usa lo detectado sin preguntar. `./install.sh` es un atajo a `bond setup`.
+`--yes` usa lo detectado sin preguntar.
 
 **Preguntas:**
 
@@ -521,9 +458,8 @@ La configuración de bond 0.3–0.7 (`~/.bond/`) se mueve sola a `~/.bond/` la p
 | `--dry-run` | Pregunta, pero solo enseña lo que haría al aplicar |
 | `--herdr-config` | Aplica el snippet de Herdr (opt-in: tu `config.toml` de Herdr es tuyo) |
 
-Desde el código fuente hace además lo de antes: instala las dependencias de la CLI, enlaza tu
-config personal de pi desde el repo, registra el filtro de git y pone `bond` en el PATH. Eso
-desaparece en la fase G5 de [plan-v1.md](plan-v1.md).
+Desde el código fuente, además, instala las dependencias de la CLI (`npm ci`) y pone `bond`
+en el PATH. Antes de aplicar, convierte una instalación anterior (`bond migrate`).
 
 ## `bond doctor`
 
@@ -535,7 +471,7 @@ fuera, y sale con 1 si algo falla:
 | Node ≥ 22.18 | actualizar Node |
 | Herdr: binario, servidor, integración de pi | `herdr`; `bond setup` |
 | pi: binario, enlaces de `~/.pi/agent`, paquete `./bond` en `pi list` | `bond setup` |
-| Symlink antiguo `~/.pi/agent/prompts` (aviso) | `bond setup` |
+| Restos de bond 0.7: config de pi enlazada al repo (aviso) | `bond migrate` |
 | Skill de Herdr: uno solo y al día con `herdr --skill` | `bond setup`; `npx skills update herdr` |
 | Filtro de git `pi-settings` | `bond setup` |
 | `rg`, `fd`, `ast-grep`, `uvx`, `jq` (aviso) | instalar la que falte |
@@ -575,8 +511,8 @@ con `halo/flash-halogen`.
 |---|---|---|
 | Tools `grep`, `find`, `ls` | `settings.json` → `defaultTools` | Búsqueda con salida acotada. Necesitan `rg` y `fd`. |
 | Tool `repo_map` | `extensions/repo-map.ts` | Mapa del repo en ~40 líneas: manifiestos y comandos, árbol con nº de ficheros, lenguajes, ficheros más tocados. |
-| MCP `context7` | `pi/agent/mcp.json` | Documentación de librerías por versión (`resolve-library-id`, `query-docs`). Remoto, sin clave. |
-| MCP `duckduckgo` | `pi/agent/mcp.json` | Búsqueda en DuckDuckGo y lectura de páginas (`search`, `fetch_content`). `uvx duckduckgo-mcp-server==0.7.0`, sin clave. |
+| MCP `context7` | `catalog/mcp.json` (por repo) | Documentación de librerías por versión (`resolve-library-id`, `query-docs`). Remoto, sin clave. |
+| MCP `duckduckgo` | `catalog/mcp.json` (por repo) | Búsqueda en DuckDuckGo y lectura de páginas (`search`, `fetch_content`). `uvx duckduckgo-mcp-server==0.7.0`, sin clave. |
 | `ast-grep` | `bun add -g @ast-grep/cli@0.45.3` | Búsqueda estructural por sintaxis. |
 | Skill `code-context` | `catalog/skills/code-context/` (por repo, con `bond init`) | Cuándo usar cada cosa, recetas de `ast-grep` por lenguaje. |
 
@@ -740,18 +676,10 @@ gestor de paquetes.
 ## Desinstalar
 
 ```bash
-# Desactivar la config versionada (solo los symlinks)
-rm ~/.pi/agent/settings.json ~/.pi/agent/AGENTS.md ~/.pi/agent/mcp.json ~/.pi/agent/bond
-rm -r ~/.bond                     # config global, claves e instrucciones (lo generado en cada agente se queda)
-rm "$(command -v bond)"          # el enlace de bond en el PATH
-rm -rf ~/.pi/agent/skills/herdr   # solo si lo generó bond setup
-
-# Quitar la integración de Herdr
-herdr integration uninstall pi
-
-# Quitar el CLI de pi
-bun uninstall -g @earendil-works/pi-coding-agent    # o npm uninstall -g ...
+rm -r ~/.bond                     # config global, claves, instrucciones y runtime
+rm -r ~/.agents/skills/bond-delegate ~/.agents/skills/bond-team ~/.claude/skills/bond-*
 ```
 
-Los backups `.bak.<fecha>` que creó `bond setup` siguen en `~/.pi/agent`. Sesiones y
-credenciales no se tocan.
+Lo que bond escribió en cada agente (modelos, bloque de instrucciones) se queda: es tuyo. En
+cada repo, `.bond/` y los ficheros generados son parte del repo. Para quitar las integraciones
+de Herdr: `herdr integration uninstall <agente>`.

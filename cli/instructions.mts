@@ -7,8 +7,8 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { dirname, join } from "node:path";
 import { agentInfo } from "./catalog-agents.mts";
 import { withBlock } from "./repo.mts";
-import { BOND_HOME, FROM_SOURCE } from "./runtime.mts";
-import { act, REPO_DIR } from "./util.mts";
+import { BOND_HOME } from "./runtime.mts";
+import { act } from "./util.mts";
 
 export const PERSONAL_FILE = join(BOND_HOME, "AGENTS.md");
 
@@ -31,21 +31,22 @@ const PERSONAL_TEMPLATE = `# Mis instrucciones para todos los agentes
      Idioma, estilo, cómo trabajas, reglas de git... -->
 `;
 
-/** Primera vez: si hay un AGENTS.md personal en el repo de bond, sus secciones propias; si no, plantilla. */
-function seedPersonal(): string {
-	const legacy = join(REPO_DIR, "pi", "agent", "AGENTS.md");
-	if (!FROM_SOURCE || !existsSync(legacy)) return PERSONAL_TEMPLATE;
-	// Las secciones de Herdr y de contexto ya las cubren las reglas de bond y las tools de cada agente.
-	const sections = readFileSync(legacy, "utf8").split(/^(?=## )/m);
-	const keep = sections.filter((s) => !/^## (Entorno Herdr|Contexto)\b/.test(s));
+/**
+ * Primera vez: las instrucciones que tenías (el AGENTS.md personal de una instalación anterior,
+ * sin las secciones de Herdr y de contexto, que ya cubren las reglas de bond y las tools de cada
+ * agente); si no hay, una plantilla.
+ */
+function seedPersonal(legacy?: string): string {
+	if (!legacy?.trim()) return PERSONAL_TEMPLATE;
+	const keep = legacy.split(/^(?=## )/m).filter((s) => !/^## (Entorno Herdr|Contexto)\b/.test(s));
 	return `${keep.join("").trimEnd()}\n`;
 }
 
-export function ensurePersonal(): void {
+export function ensurePersonal(legacy?: string): void {
 	if (existsSync(PERSONAL_FILE)) return;
 	act(`escribir ${PERSONAL_FILE}`, () => {
 		mkdirSync(BOND_HOME, { recursive: true });
-		writeFileSync(PERSONAL_FILE, seedPersonal());
+		writeFileSync(PERSONAL_FILE, seedPersonal(legacy));
 	});
 }
 
@@ -69,7 +70,7 @@ export function propagate(agents: string[]): Array<{ agent: string; file: string
 			// No existe: se crea.
 		}
 		if (isLink) {
-			out.push({ agent: id, file, result: "omitido" as const, why: "es un enlace (config personal enlazada; se migra en bond 1.0)" });
+			out.push({ agent: id, file, result: "omitido" as const, why: "es un enlace: no se escribe a través de él (bond migrate convierte los de bond 0.7)" });
 			continue;
 		}
 		const current = existsSync(file) ? readFileSync(file, "utf8") : "";

@@ -1,5 +1,13 @@
 # Cambios
 
+## 0.11.0
+
+- Migración a la 1.0: la config de pi ya no se enlaza desde el repo de bond. `bond migrate` (y
+  `bond setup`, que la ejecuta) convierte los enlaces de una instalación anterior en ficheros
+  propios con copia `.bak`, pasa tus instrucciones a `~/.bond/AGENTS.md` y quita el paquete
+  global de pi: las Bond Extensions se cargan por repo.
+- Se quitan `install.sh`, `pi/agent/` y el filtro de git de `settings.json`.
+
 ## 0.10.0
 
 - `bond` a secas dentro de un repo abre su puesto de trabajo en Herdr con el agente por

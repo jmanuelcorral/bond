@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-# Filtro "clean" de git para pi/agent/settings.json (ver .gitattributes).
-#
-# pi escribe estado de máquina en su settings.json, que aquí es un symlink al repo.
-# Este filtro lo quita al hacer `git add`, así el repo solo guarda configuración:
-# el fichero de trabajo no se toca y pi sigue leyendo lo que escribió.
-set -euo pipefail
-jq 'del(.lastChangelogVersion)'

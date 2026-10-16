@@ -9,7 +9,7 @@ bond doctor            # todo de una vez; --quick se salta los MCP
 ```
 
 Comprueba Node, Herdr (servidor e integración), pi, los enlaces de `~/.pi/agent`, el paquete,
-el skill de Herdr, el filtro de git, las herramientas de contexto, los servidores MCP y que la
+el skill de Herdr, las Bond Extensions, las herramientas de contexto, los servidores MCP y que la
 pasarela de modelos sirve lo declarado. Cada fallo dice cómo arreglarlo (casi siempre
 `bond setup`). Si hace falta más detalle:
 
@@ -69,8 +69,9 @@ Para el futuro, pasa la misma etiqueta: `bond dev ~/otraruta/miapp -l bond:miapp
 ## Los comandos `/review` `/commit` etc. no aparecen
 
 - Sesión ya abierta: ejecuta `/reload` en pi.
-- Comprueba que el paquete está enlazado: `ls -l ~/.pi/agent/bond` debe apuntar al repo y
-  `pi list` debe mostrar `./bond`.
+- Los comandos llegan a pi por las Bond Extensions, solo en repos con `bond init` y pi entre
+  sus agentes: `.pi/settings.json` debe declarar `~/.bond/pi`, y `~/.bond/pi` existir
+  (`bond doctor`).
 - `scripts/pi-resources` lista lo que pi carga de verdad, con su origen y su ruta.
 - Symlink roto (moviste el repo): vuelve a correr `bond setup`.
 

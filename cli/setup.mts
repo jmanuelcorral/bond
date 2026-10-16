@@ -74,19 +74,21 @@ export async function setup(args: string[]): Promise<void> {
 
 	const { ensurePersonal, propagate, PERSONAL_FILE } = await import("./instructions.mts");
 	log("Aplicando");
+	// Instalación anterior (config de pi enlazada al repo, paquete global): se convierte primero.
+	const { migrateLegacy } = await import("./migrate.mts");
+	const { legacyInstructions } = migrateLegacy();
 	if (agents.includes("pi")) {
-		linkPiConfig();
+		act(`mkdir -p ${join(AGENT_DIR, "extensions")}`, () => mkdirSync(join(AGENT_DIR, "extensions"), { recursive: true }));
 		if (!isDryRun()) log(`Bond Extensions de pi: ${await ensureBondLink()} (los repos las cargan con bond init)`);
 	}
 	if (herdr) herdrSkill();
 	globalSkills();
-	if (FROM_SOURCE) gitFilter();
 	contextTools();
 	if (herdr) herdrIntegrations(agents);
 	if (withHerdrConfig && herdr) herdrConfig();
 	const { syncAgents } = await import("./models.mts");
 	if (!isDryRun() && cfg.providers.length) syncAgents({ agents: agents.filter((a) => ["pi", "opencode", "crush", "codex"].includes(a)) });
-	ensurePersonal();
+	ensurePersonal(legacyInstructions);
 	for (const r of propagate(agents)) log(`instrucciones ${r.agent}: ${r.result}${r.why ? ` (${r.why})` : ""}  ${r.file}`);
 	if (FROM_SOURCE) linkBond();
 
@@ -110,35 +112,6 @@ function installDeps(): void {
 	if (which("npm")) runAct("npm", ["ci", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: REPO_DIR });
 	else if (which("bun")) runAct("bun", ["install", "--frozen-lockfile", "--ignore-scripts"], { cwd: REPO_DIR });
 	else die("hace falta npm o bun para instalar las dependencias de bond");
-}
-
-function linkPiConfig(): void {
-	log(`Config de pi en ${AGENT_DIR}`);
-	act(`mkdir -p ${AGENT_DIR}/extensions`, () => mkdirSync(join(AGENT_DIR, "extensions"), { recursive: true }));
-	// Config personal de pi enlazada desde el repo: solo desde el código fuente (en la 1.0 la
-	// genera bond; ver docs/plan-v1.md). models.json lo genera `bond models sync`.
-	if (FROM_SOURCE) {
-		for (const f of ["settings.json", "AGENTS.md", "mcp.json"]) {
-			linkPath(join(REPO_DIR, "pi", "agent", f), join(AGENT_DIR, f));
-		}
-	}
-	// El repo es un paquete de pi; settings.json lo declara como "./bond", relativo a
-	// AGENT_DIR, así que el repo puede vivir en cualquier ruta: solo cambia este symlink.
-	linkPath(assetsPath(), join(AGENT_DIR, "bond"));
-	// Antes del renombrado el enlace se llamaba "pisetup": con los dos, pi cargaría el paquete dos veces.
-	const oldPkg = join(AGENT_DIR, "pisetup");
-	if (linkTarget(oldPkg) !== undefined) {
-		log(`quitando el enlace antiguo ${oldPkg}`);
-		act(`rm ${oldPkg}`, () => rmSync(oldPkg));
-	}
-
-	// Migración: antes prompts/ se enlazaba suelto; con el paquete duplicaría los comandos.
-	const oldPrompts = join(AGENT_DIR, "prompts");
-	const target = linkTarget(oldPrompts);
-	if (target === join(REPO_DIR, "pi", "agent", "prompts") || target === join(REPO_DIR, "prompts")) {
-		log(`quitando el symlink antiguo ${oldPrompts} (ahora llega por el paquete)`);
-		act(`rm ${oldPrompts}`, () => rmSync(oldPrompts));
-	}
 }
 
 export const SHARED_HERDR_SKILL = join(HOME, ".agents", "skills", "herdr", "SKILL.md");
@@ -169,16 +142,6 @@ function herdrSkill(): void {
 			mkdirSync(dirname(PI_HERDR_SKILL), { recursive: true });
 			writeFileSync(PI_HERDR_SKILL, `${fresh}\n`);
 		});
-	}
-}
-
-function gitFilter(): void {
-	// pi escribe lastChangelogVersion en settings.json (symlink a este repo); el filtro
-	// pi-settings (.gitattributes) lo quita al hacer `git add`.
-	if (run("git", ["-C", REPO_DIR, "rev-parse", "--git-dir"]).status !== 0) return;
-	if (run("git", ["-C", REPO_DIR, "config", "--get", "filter.pi-settings.clean"]).stdout.trim() !== "scripts/git-clean-settings") {
-		log("registrando el filtro de git pi-settings");
-		runAct("git", ["-C", REPO_DIR, "config", "filter.pi-settings.clean", "scripts/git-clean-settings"]);
 	}
 }
 

@@ -66,18 +66,14 @@ function checkPi(): void {
 	if (chosen.length && !chosen.includes("pi")) return; // pi no es uno de tus agentes
 	if (!which("pi")) return add("fail", "pi", "no está en el PATH", "bond setup");
 	add("ok", "pi", run("pi", ["--version"]).stdout.trim());
-	for (const f of FROM_SOURCE ? ["settings.json", "AGENTS.md", "mcp.json"] : []) {
-		const dest = join(AGENT_DIR, f);
-		const src = join(REPO_DIR, "pi", "agent", f);
-		if (linkTarget(dest) && samePath(dest, src)) add("ok", `enlace ${f}`, `-> repo`);
-		else add("fail", `enlace ${f}`, existsSync(dest) ? "existe pero no apunta al repo" : "no existe", "bond setup");
-	}
-	const pkg = join(AGENT_DIR, "bond");
-	if (linkTarget(pkg) && samePath(pkg, assetsPath())) add("ok", "paquete pi", `~/.pi/agent/bond -> ${FROM_SOURCE ? "repo" : "runtime"}`);
-	else add("fail", "paquete pi", "falta el enlace ~/.pi/agent/bond", "bond setup");
-	if (!/\.\/bond\b/.test(run("pi", ["list"]).stdout)) add("fail", "paquete pi en settings", "pi list no muestra ./bond", "revisa pi/agent/settings.json");
-	if (linkTarget(join(AGENT_DIR, "pisetup")) !== undefined) add("warn", "enlace antiguo", "~/.pi/agent/pisetup (de antes del renombrado)", "bond setup");
-	if (linkTarget(join(AGENT_DIR, "prompts"))) add("warn", "prompts antiguos", "~/.pi/agent/prompts sigue enlazado (duplica comandos)", "bond setup");
+	// Restos de bond 0.7: config de pi enlazada al repo o el repo como paquete global.
+	const legacy = ["settings.json", "AGENTS.md", "mcp.json", "bond", "pisetup", "prompts"].filter((f) => linkTarget(join(AGENT_DIR, f)) !== undefined);
+	if (legacy.length) add("warn", "instalación anterior", `enlaces en ~/.pi/agent: ${legacy.join(", ")}`, "bond migrate");
+	// Bond Extensions: ~/.bond/pi tiene que apuntar a la versión instalada.
+	const link = join(BOND_HOME, "pi");
+	if (!linkTarget(link)) add("warn", "Bond Extensions", "falta ~/.bond/pi", "bond setup");
+	else if (samePath(link, assetsPath())) add("ok", "Bond Extensions", `~/.bond/pi -> ${FROM_SOURCE ? "repo" : "runtime"}`);
+	else add("fail", "Bond Extensions", "~/.bond/pi apunta a otra versión de bond", "bond setup");
 }
 
 function checkHerdrSkill(): void {
@@ -101,13 +97,6 @@ function checkGlobalSkills(): void {
 	else add("ok", "skills globales", `${readdirSync(globalSkillsDir()).join(", ")} (~/.agents/skills, ~/.claude/skills)`);
 }
 
-function checkGitFilter(): void {
-	if (!FROM_SOURCE) return;
-	if (run("git", ["-C", REPO_DIR, "rev-parse", "--git-dir"]).status !== 0) return add("warn", "filtro git", "el repo no es un repo git");
-	const v = run("git", ["-C", REPO_DIR, "config", "--get", "filter.pi-settings.clean"]).stdout.trim();
-	if (v === "scripts/git-clean-settings") add("ok", "filtro git", "pi-settings registrado");
-	else add("fail", "filtro git", "pi-settings sin registrar", "bond setup");
-}
 
 function checkTools(): void {
 	const missing = CONTEXT_TOOLS.filter(([c]) => !which(c));
@@ -198,7 +187,6 @@ export async function doctor(args: string[]): Promise<void> {
 	checkPi();
 	checkHerdrSkill();
 	checkGlobalSkills();
-	checkGitFilter();
 	checkTools();
 	if (!quick) checkMcp();
 	await checkModels();
