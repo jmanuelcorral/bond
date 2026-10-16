@@ -105,7 +105,7 @@ bond dev ~/gitrepos/mi-proyecto --attach
 
 Dentro de pi, una sola vez: `/login` (proveedor y credenciales, van a `~/.pi/agent/auth.json`)
 y `/model` (`Ctrl+S` guarda el modelo por defecto). Los modelos propios (como `halo`, en
-`halo.example`) se declaran una vez en `~/.config/bond/config.toml` y
+`halo.example`) se declaran una vez en `~/.bond/config.toml` y
 `bond models sync` los lleva a pi, opencode, Crush y Codex; `bond run copilot` los usa en
 Copilot. Detalle en [docs/reference.md](docs/reference.md#modelos-globales-bond-models).
 
@@ -183,7 +183,7 @@ bond/
 │   ├── main.mts                  # subcomandos
 │   ├── setup.mts                 # bond setup (antes install.sh)
 │   ├── doctor.mts                # bond doctor
-│   ├── config.mts                # registro global de modelos (~/.config/bond/config.toml)
+│   ├── config.mts                # registro global de modelos (~/.bond/config.toml)
 │   ├── models.mts                # bond models: init, list, probe, sync
 │   ├── agents.mts                # generadores de modelos por agente
 │   ├── run.mts                   # bond run copilot

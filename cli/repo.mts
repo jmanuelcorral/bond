@@ -142,7 +142,7 @@ type Output =
 	/** Bloque entre marcas al final de un fichero de texto: comentario HTML (md) o almohadilla (hash). */
 	| { kind: "block"; path: string; body: string; style: BlockStyle };
 
-type BlockStyle = "md" | "hash";
+export type BlockStyle = "md" | "hash";
 
 interface Manifest {
 	files: Record<string, string>;
@@ -321,15 +321,19 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 
 // --- aplicar ------------------------------------------------------------------------------
 
-const MARKERS: Record<BlockStyle, [string, string]> = {
-	md: ["<!-- >>> bond >>> generado por `bond sync`; no editar -->", "<!-- <<< bond <<< -->"],
-	hash: ["# >>> bond >>> generado por `bond sync`; no editar", "# <<< bond <<<"],
+const DEFAULT_NOTE = "generado por `bond sync`; no editar";
+const MARKER_TEXT: Record<BlockStyle, { open: string; begin: (note: string) => string; end: string }> = {
+	md: { open: "<!-- >>> bond >>>", begin: (n) => `<!-- >>> bond >>> ${n} -->`, end: "<!-- <<< bond <<< -->" },
+	hash: { open: "# >>> bond >>>", begin: (n) => `# >>> bond >>> ${n}`, end: "# <<< bond <<<" },
 };
 
-/** El bloque de bond va al final; en TOML, unas tablas al final no cambian el resto. */
-function withBlock(current: string, body: string, style: BlockStyle): string {
-	const [begin, end] = MARKERS[style];
-	const start = current.indexOf(begin);
+/**
+ * El bloque de bond va al final; en TOML, unas tablas al final no cambian el resto. El bloque
+ * existente se reconoce por el principio de la marca, sea cual sea su nota.
+ */
+export function withBlock(current: string, body: string, style: BlockStyle, note = DEFAULT_NOTE): string {
+	const { open, begin, end } = MARKER_TEXT[style];
+	const start = current.indexOf(open);
 	let rest = current;
 	if (start >= 0) {
 		const stop = current.indexOf(end, start);
@@ -341,7 +345,7 @@ function withBlock(current: string, body: string, style: BlockStyle): string {
 	rest = rest.replace(/^\n+/, "");
 	if (!body) return rest;
 	const base = rest.trim() ? `${rest.replace(/\n*$/, "")}\n\n` : "";
-	return `${base}${begin}\n${body}\n${end}\n`;
+	return `${base}${begin(note)}\n${body}\n${end}\n`;
 }
 
 /** Contenedor en una ruta con puntos ("mcp.servers"), creando los niveles que falten. */

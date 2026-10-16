@@ -29,7 +29,7 @@ El repo es la fuente de verdad; `~/.pi/agent` se enlaza a él.
 | `pi/agent/AGENTS.md` | `~/.pi/agent/AGENTS.md` | Instrucciones globales |
 | `pi/agent/mcp.json` | `~/.pi/agent/mcp.json` | Servidores MCP: `context7` y `duckduckgo` |
 | raíz del repo (`package.json`) | `~/.pi/agent/bond` | Paquete de pi: `extensions/`, `skills/`, `prompts/` |
-| (generado) `bond models sync` | `~/.pi/agent/models.json` | Modelos, desde `~/.config/bond/config.toml` |
+| (generado) `bond models sync` | `~/.pi/agent/models.json` | Modelos, desde `~/.bond/config.toml` |
 | `herdr/config.snippet.toml` | se añade a `~/.config/herdr/config.toml` | Extras opcionales de Herdr |
 | (compartido) | `~/.agents/skills/herdr/SKILL.md` | Skill de Herdr; si no existe, se genera en `~/.pi/agent/skills/herdr/` |
 | (lo escribe Herdr) | `~/.pi/agent/extensions/herdr-agent-state.ts` | Integración |
@@ -202,7 +202,7 @@ y Claude Code pide aprobar los servidores de `.mcp.json`. bond no aprueba nada p
 
 ## Modelos globales (`bond models`)
 
-Los modelos se declaran **una vez** en `~/.config/bond/config.toml` (fuera del repo: son de
+Los modelos se declaran **una vez** en `~/.bond/config.toml` (fuera del repo: son de
 tu máquina) y `bond models sync` genera la configuración de cada agente que puede usarlos.
 
 ```toml
@@ -231,7 +231,7 @@ maxTokensField = "max_tokens"
 |---|---|
 | `bond models init` | Crea `config.toml`. Si hay un `models.json` de pi, importa sus proveedores (y los modelos comentados con `//`, como `enabled = false`) |
 | `bond models list` | Proveedores, modelos, APIs y qué agentes pueden usar cada uno |
-| `bond models probe [id]` | Pregunta a la pasarela qué sirve: lista de modelos y las APIs `chat`, `responses` y `messages` (una petición tras otra; las pasarelas locales no atienden varias a la vez). Lo guarda en `~/.config/bond/state.json` |
+| `bond models probe [id]` | Pregunta a la pasarela qué sirve: lista de modelos y las APIs `chat`, `responses` y `messages` (una petición tras otra; las pasarelas locales no atienden varias a la vez). Lo guarda en `~/.bond/state.json` |
 | `bond models sync` | Escribe la config de modelos de cada agente instalado. `--agent x`, `--dry-run` (enseña el diff), `--check` (sale con 1 si hay algo desfasado) |
 | `bond run copilot` | Lanza Copilot CLI contra un modelo del registro (ver abajo) |
 
@@ -453,37 +453,62 @@ lo limita la pasarela; con proveedores en la nube, la cuota.
 `reviewer` y tarea `revisa el diff` (`${@:2}`). Si el primer argumento no parece un rol
 (`/delegate revisa el diff`), el prompt le dice al agente que use `reviewer`.
 
-## `bond setup` (antes `install.sh`)
+## `bond setup`
 
-`cli/setup.mts`. `./install.sh` es ahora un atajo que llama a `bond setup` con las mismas
-opciones. Orden que sigue:
+`cli/setup.mts` y `cli/wizard.mts`. Interactivo y repetible (cada vez enseña lo que ya hay);
+`--yes` usa lo detectado sin preguntar. `./install.sh` es un atajo a `bond setup`.
 
-1. Comprueba `herdr` en el PATH.
-2. Instala pi si falta: `bun add -g @earendil-works/pi-coding-agent`, o si no hay bun
-   `npm install -g --ignore-scripts --prefix ~/.npm-global ...`.
-3. Crea `~/.pi/agent/extensions`.
-4. Instala las dependencias de la CLI (`npm ci --ignore-scripts`) si faltan.
-5. Enlaza `settings.json`, `AGENTS.md` y `mcp.json` (backup `.bak.<fecha>` de lo previo).
-5. Enlaza el repo como paquete en `~/.pi/agent/bond` y quita el symlink antiguo
-   `~/.pi/agent/prompts` si apuntaba al repo.
-6. Deja un único skill de Herdr (ver arriba).
-7. Registra el filtro de git `pi-settings` en el repo.
-8. Avisa de las herramientas de contexto que falten (`rg`, `fd`, `ast-grep`, `uvx`, `jq`).
-9. Instala la integración de Herdr para pi si no está `current`.
-10. Con `--herdr-config`, añade el snippet a `~/.config/herdr/config.toml` entre marcas
-    `>>> bond >>>` y recarga el servidor.
-11. Enlaza `bond` en el primero de `~/.local/bin`, `~/bin` o `~/.bun/bin` que esté en el PATH.
-    Si ya hay otro `bond`, no lo toca.
+**Preguntas:**
+
+1. **Herdr.** Si no está, enseña cómo instalarlo según el sistema (`curl … | sh`, `brew`,
+   PowerShell en Windows) y el enlace https://herdr.dev/docs/install/. Se puede seguir sin él.
+2. **Endpoints de modelos.** Detecta solo Ollama (`localhost:11434`) y LM Studio
+   (`localhost:1234`). Ofrece añadir OpenAI o cualquier endpoint compatible con OpenAI
+   (como `halo`): URL, clave si la pide y nombre. Lee sus modelos (con contexto y salida máxima
+   si la pasarela los publica), deja elegir cuáles registrar y prueba qué APIs sirve (chat,
+   responses) y si el modelo razona.
+3. **Agentes.** Detecta los instalados (pi, Claude Code, Codex, Copilot CLI, opencode, Crush,
+   Gemini CLI). Ninguno es obligatorio, pero hace falta al menos uno: si no hay ninguno, enseña
+   cómo instalar cada uno y para. Eliges con cuáles trabajar y cuál es el de por defecto.
+
+**Después aplica**, solo para los agentes elegidos:
+
+- los modelos en los agentes que pueden usar endpoints propios (pi, opencode, Crush, Codex);
+- la integración de Herdr de cada uno (si un agente aún no creó su carpeta de config, avisa y
+  se instala en el siguiente `setup`);
+- los skills globales `bond-delegate` y `bond-team`;
+- tus instrucciones (`~/.bond/AGENTS.md`) y las reglas de bond, en un bloque del fichero de
+  instrucciones global de cada agente (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
+  `~/.copilot/copilot-instructions.md`, `~/.config/opencode/AGENTS.md`, `~/.config/crush/CRUSH.md`,
+  `~/.gemini/GEMINI.md`, `~/.pi/agent/AGENTS.md`). Lo de fuera del bloque no se toca. Para
+  cambiarlas: edita `~/.bond/AGENTS.md` y repite `bond setup`.
+
+**Dónde guarda todo: `~/.bond/`** (nunca en un proyecto):
+
+| Fichero | Qué |
+|---|---|
+| `config.toml` | Agentes, agente por defecto, endpoints y modelos (lo escribe `setup`; se puede editar) |
+| `keys/<endpoint>` | Una clave por fichero, permisos 600 (carpeta 700) |
+| `AGENTS.md` | Tus instrucciones para todos los agentes |
+| `state.json` | Lo que detectó la sonda y lo que bond gestiona en cada agente |
+| `runtime/<versión>/` | Los ficheros que lleva dentro el binario, extraídos |
+
+Las claves nunca se copian a la configuración de los agentes: pi las lee con
+`!bond key <endpoint>`, opencode con `{file:~/.bond/keys/<endpoint>}`, Crush con
+`$(bond key <endpoint>)`, y Codex y Copilot por variable de entorno con `bond run`.
+`bond key <endpoint>` imprime una clave.
+
+La configuración de bond 0.3–0.7 (`~/.bond/`) se mueve sola a `~/.bond/` la primera vez.
 
 | Flag | Efecto |
 |---|---|
-| `--dry-run` | Imprime las acciones sin ejecutar nada |
-| `--no-pi` | Se salta la instalación del CLI de pi |
-| `--herdr-config` | Aplica el snippet de Herdr (opt-in: tu `config.toml` es tuyo) |
-| `-h`, `--help` | Uso |
+| `--yes` | Sin preguntas: lo detectado y lo ya configurado |
+| `--dry-run` | Pregunta, pero solo enseña lo que haría al aplicar |
+| `--herdr-config` | Aplica el snippet de Herdr (opt-in: tu `config.toml` de Herdr es tuyo) |
 
-Respeta `PI_CODING_AGENT_DIR`: con un directorio vacío hace una instalación desde cero sin
-tocar la tuya, que es como se prueba.
+Desde el código fuente hace además lo de antes: instala las dependencias de la CLI, enlaza tu
+config personal de pi desde el repo, registra el filtro de git y pone `bond` en el PATH. Eso
+desaparece en la fase G5 de [plan-v1.md](plan-v1.md).
 
 ## `bond doctor`
 
@@ -702,7 +727,7 @@ gestor de paquetes.
 ```bash
 # Desactivar la config versionada (solo los symlinks)
 rm ~/.pi/agent/settings.json ~/.pi/agent/AGENTS.md ~/.pi/agent/mcp.json ~/.pi/agent/bond
-rm -r ~/.config/bond              # registro de modelos (los models.json generados se quedan)
+rm -r ~/.bond                     # config global, claves e instrucciones (lo generado en cada agente se queda)
 rm "$(command -v bond)"          # el enlace de bond en el PATH
 rm -rf ~/.pi/agent/skills/herdr   # solo si lo generó bond setup
 

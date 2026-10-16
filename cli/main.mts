@@ -83,6 +83,8 @@ async function main(argv: string[]): Promise<void> {
 			if (wantsHelp) return console.log(cmd === "init" ? r.INIT_HELP : r.SYNC_HELP);
 			return cmd === "init" ? r.init(rest) : r.sync(rest);
 		}
+		case "key":
+			return (await import("./keys.mts")).keyCommand(rest);
 		case "logo": {
 			return console.log(renderLogo({ width: termWidth(), version: `v${VERSION}`, stretch: randomStretch() }).join("\n"));
 		}

@@ -3,6 +3,7 @@
 
 import { spawnSync } from "node:child_process";
 import { activeProviders, loadConfig, loadState, providerApis } from "./config.mts";
+import { readKey } from "./keys.mts";
 import { die, which } from "./util.mts";
 
 export const RUN_HELP = `Uso: bond run copilot [--model <proveedor>/<modelo>] [argumentos de copilot...]
@@ -51,7 +52,8 @@ export function runAgent(args: string[]): void {
 	} as Record<string, string>;
 	if (m.context) env.COPILOT_PROVIDER_MAX_PROMPT_TOKENS = String(m.context - (m.max_output ?? 0));
 	if (m.max_output) env.COPILOT_PROVIDER_MAX_OUTPUT_TOKENS = String(m.max_output);
-	if (p.api_key_env && process.env[p.api_key_env]) env.COPILOT_PROVIDER_API_KEY = process.env[p.api_key_env]!;
+	const key = p.key_stored ? readKey(p.id) : p.api_key_env ? process.env[p.api_key_env] : undefined;
+	if (key) env.COPILOT_PROVIDER_API_KEY = key;
 
 	const r = spawnSync("copilot", pass, { stdio: "inherit", env });
 	process.exitCode = r.status ?? 1;

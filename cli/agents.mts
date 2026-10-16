@@ -8,6 +8,7 @@
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import type { Api, Model, Provider, State } from "./config.mts";
+import { keyPath } from "./keys.mts";
 import { AGENT_DIR, HOME, which } from "./util.mts";
 
 export interface Rendered {
@@ -91,8 +92,9 @@ const pi: Target = {
 				...(p.name ? { name: p.name } : {}),
 				baseUrl: p.base_url,
 				api: "openai-completions",
-				// pi necesita una clave para listar el modelo; sin variable, una de relleno.
-				apiKey: p.api_key_env ? `\${${p.api_key_env}}` : "bond",
+				// pi necesita una clave para listar el modelo; sin clave, una de relleno. La guardada
+				// en ~/.bond/keys la lee pi al usarla, con un comando (no se copia aquí).
+				apiKey: p.key_stored ? `!bond key ${p.id}` : p.api_key_env ? `\${${p.api_key_env}}` : "bond",
 				...extra,
 				models: modelsFor(p, "pi").map((m) => ({
 					id: m.id,
@@ -129,8 +131,8 @@ const opencode: Target = {
 			generated[p.id] = {
 				...(p.name ? { name: p.name } : {}),
 				package: "@opencode/ai/providers/openai-compatible",
-				...(p.api_key_env ? { env: [p.api_key_env] } : {}),
-				settings: { baseURL: p.base_url },
+				...(p.api_key_env && !p.key_stored ? { env: [p.api_key_env] } : {}),
+				settings: { baseURL: p.base_url, ...(p.key_stored ? { apiKey: `{file:${keyPath(p.id)}}` } : {}) },
 				models: Object.fromEntries(
 					modelsFor(p, "opencode").map((m) => [
 						m.id,
@@ -195,7 +197,7 @@ const crush: Target = {
 				continue;
 			}
 			managed.push(p.id);
-			const key = p.api_key_env ? `"\${${p.api_key_env}}"` : "bond";
+			const key = p.key_stored ? `"$(bond key ${p.id})"` : p.api_key_env ? `"\${${p.api_key_env}}"` : "bond";
 			body += `provider add ${p.id} \\\n  --name ${shq(p.name ?? p.id)} \\\n  --type openai-compat \\\n  --base-url ${shq(p.base_url)} \\\n  --api-key ${key} \\\n  --discover-models false\n`;
 			for (const m of modelsFor(p, "crush")) {
 				body += `model add ${p.id}/${m.id} \\\n  --name ${shq(m.name ?? m.id)}`;
@@ -219,7 +221,9 @@ const codex: Target = {
 		let body = "";
 		for (const p of providers) {
 			body += `[model_providers.${p.id}]\nname = ${tomlStr(p.name ?? p.id)}\nbase_url = ${tomlStr(p.base_url)}\nwire_api = "responses"\n`;
-			if (p.api_key_env) body += `env_key = ${tomlStr(p.api_key_env)}\n`;
+			// Codex solo lee claves de variables de entorno: con clave guardada, la pone `bond run codex`.
+			if (p.key_stored) body += `env_key = ${tomlStr(`BOND_KEY_${p.id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}`)}\n`;
+			else if (p.api_key_env) body += `env_key = ${tomlStr(p.api_key_env)}\n`;
 			for (const m of modelsFor(p, "codex")) {
 				body += `\n[profiles.${tomlStr(`${p.id}-${m.id}`)}]\nmodel_provider = ${tomlStr(p.id)}\nmodel = ${tomlStr(m.id)}\n`;
 				if (m.context) body += `model_context_window = ${m.context}\n`;

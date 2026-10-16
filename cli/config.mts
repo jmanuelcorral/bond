@@ -1,17 +1,40 @@
-// Configuración global de bond (~/.config/bond/config.toml) y su estado (state.json).
+// Configuración global de bond (~/.bond/config.toml) y su estado (state.json).
 //
-// config.toml lo edita el usuario: proveedores y modelos. state.json lo escribe bond: qué
+// config.toml lo escribe `bond setup` (y se puede editar a mano): agentes, agente por defecto,
+// proveedores y modelos. Las claves no van aquí sino en ~/.bond/keys/ (ver keys.mts).
+// state.json lo escribe bond: qué
 // sirve cada pasarela (bond models probe) y qué claves gestiona en la config de cada agente,
 // para poder quitar lo que ya no está sin tocar lo que no es suyo.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { parse } from "smol-toml";
-import { die, HOME } from "./util.mts";
+import { parse, stringify } from "smol-toml";
+import { BOND_HOME } from "./runtime.mts";
+import { die, HOME, log } from "./util.mts";
 
-export const CONFIG_DIR = join(process.env.XDG_CONFIG_HOME || join(HOME, ".config"), "bond");
+export const CONFIG_DIR = BOND_HOME;
 export const CONFIG_FILE = join(CONFIG_DIR, "config.toml");
 const STATE_FILE = join(CONFIG_DIR, "state.json");
+/** Ubicación de bond 0.3-0.7: se migra sola a ~/.bond la primera vez. */
+const LEGACY_DIR = join(process.env.XDG_CONFIG_HOME || join(HOME, ".config"), "bond");
+
+let migrated = false;
+function migrateLegacy(): void {
+	if (migrated) return;
+	migrated = true;
+	if (existsSync(CONFIG_FILE) || !existsSync(join(LEGACY_DIR, "config.toml"))) return;
+	mkdirSync(CONFIG_DIR, { recursive: true });
+	for (const f of ["config.toml", "state.json"]) {
+		if (existsSync(join(LEGACY_DIR, f))) copyFileSync(join(LEGACY_DIR, f), join(CONFIG_DIR, f));
+	}
+	log(`configuración global movida de ${LEGACY_DIR} a ${CONFIG_DIR} (la antigua se queda como copia)`);
+}
+
+/** ¿Hay configuración global? */
+export function configExists(): boolean {
+	migrateLegacy();
+	return existsSync(CONFIG_FILE);
+}
 
 /** APIs que puede servir una pasarela. */
 export type Api = "chat" | "responses" | "messages";
@@ -34,6 +57,10 @@ export interface Provider {
 	base_url: string;
 	/** Nombre de la variable de entorno con la clave; nunca la clave. */
 	api_key_env?: string;
+	/** La clave está guardada en ~/.bond/keys/<id> (la pide `bond setup`). */
+	key_stored?: boolean;
+	/** Tipo de endpoint, informativo: ollama, lmstudio, openai, custom. */
+	kind?: string;
 	/** APIs que sirve; si falta, se usa lo que detectó `bond models probe` (o "chat"). */
 	apis?: Api[];
 	/** Modelos propios sin coste: pi no simula gasto. */
@@ -45,6 +72,10 @@ export interface Provider {
 }
 
 export interface Config {
+	/** Agentes con los que bond se integra (los elige `bond setup`). */
+	agents: string[];
+	/** Agente que se propone por defecto en `bond init`. */
+	default_agent?: string;
 	providers: Provider[];
 }
 
@@ -57,7 +88,7 @@ export interface State {
 }
 
 export function loadConfig(): Config {
-	if (!existsSync(CONFIG_FILE)) die(`no hay configuración global: ${CONFIG_FILE}\n  créala con: bond models init`);
+	if (!configExists()) die(`no hay configuración global: ${CONFIG_FILE}\n  créala con: bond setup`);
 	let raw: Record<string, unknown>;
 	try {
 		raw = parse(readFileSync(CONFIG_FILE, "utf8")) as Record<string, unknown>;
@@ -72,7 +103,31 @@ export function loadConfig(): Config {
 		for (const m of p.models) if (typeof m.id !== "string") die(`proveedor '${id}': hay un modelo sin id`);
 		providers.push(p);
 	}
-	return { providers };
+	return {
+		agents: Array.isArray(raw.agents) ? (raw.agents as string[]) : [],
+		default_agent: typeof raw.default_agent === "string" ? raw.default_agent : undefined,
+		providers,
+	};
+}
+
+/** Config vacía (primera vez) o la que haya. */
+export function loadConfigOrEmpty(): Config {
+	return configExists() ? loadConfig() : { agents: [], providers: [] };
+}
+
+const SAVED_HEADER = `# Configuración global de bond. La escribe \`bond setup\`; se puede editar a mano y
+# aplicar con \`bond models sync\`. Las claves NO van aquí: están en ~/.bond/keys/.
+`;
+
+/** Guarda config.toml (los comentarios a mano se pierden; se guarda copia de la versión anterior). */
+export function saveConfig(cfg: Config): void {
+	mkdirSync(CONFIG_DIR, { recursive: true });
+	if (existsSync(CONFIG_FILE)) copyFileSync(CONFIG_FILE, `${CONFIG_FILE}.prev`);
+	const providers = Object.fromEntries(cfg.providers.map(({ id, ...rest }) => [id, rest]));
+	const data: Record<string, unknown> = { agents: cfg.agents };
+	if (cfg.default_agent) data.default_agent = cfg.default_agent;
+	data.providers = providers;
+	writeFileSync(CONFIG_FILE, `${SAVED_HEADER}\n${stringify(data)}\n`);
 }
 
 /** Proveedores y modelos activos. */
@@ -84,6 +139,7 @@ export function activeProviders(cfg: Config): Provider[] {
 }
 
 export function loadState(): State {
+	migrateLegacy();
 	try {
 		const s = JSON.parse(readFileSync(STATE_FILE, "utf8"));
 		return { probes: s.probes ?? {}, managed: s.managed ?? {}, backedUp: s.backedUp ?? [] };

@@ -65,7 +65,7 @@ defecto) y `/thinking` para el nivel de razonamiento. Las claves quedan en
 
 El modelo local del proveedor `halo` (`flash-halogen`) aparece en `/model` sin necesidad de
 login: apunta a `http://halo.example/v1` y se declara en
-`~/.config/bond/config.toml`, que `bond setup` crea la primera vez. Para usarlo también en
+`~/.bond/config.toml`, que `bond setup` crea la primera vez. Para usarlo también en
 opencode, Crush o Codex: `bond models sync`; en Copilot: `bond run copilot`.
 Detalle, verificación y cómo activar más modelos en [reference.md](reference.md).
 

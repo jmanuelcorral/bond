@@ -2,7 +2,8 @@
 
 Estado: aprobado. G1 hecha: binario autocontenido (`bun scripts/build.mts`) y paquete de npm;
 probado en Linux fuera del repo; Windows y macOS, en CI (`.github/workflows/ci.yml`).
-Siguiente: G2. Fecha: 2026-10-16.
+G2 hecha: `bond setup` interactivo (Herdr, endpoints, agentes, instrucciones), config en
+`~/.bond/`. Siguiente: G3. Fecha: 2026-10-16.
 Sustituye la dirección de [plan-bond-cli.md](plan-bond-cli.md), que queda como historia.
 
 ## La idea en tres comandos

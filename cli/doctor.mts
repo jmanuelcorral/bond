@@ -3,8 +3,8 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { readdirSync } from "node:fs";
-import { assetsPath, FROM_SOURCE } from "./runtime.mts";
+import { readdirSync, statSync } from "node:fs";
+import { assetsPath, BOND_HOME, FROM_SOURCE } from "./runtime.mts";
 import { CONTEXT_TOOLS, globalSkillsDir, globalSkillTargets, herdrIntegrationStatus, PI_HERDR_SKILL, SHARED_HERDR_SKILL } from "./setup.mts";
 import { AGENT_DIR, bad, caution, die, dim, linkTarget, ok, REPO_DIR, run, samePath, which } from "./util.mts";
 
@@ -26,7 +26,20 @@ interface Check {
 }
 
 const results: Check[] = [];
+/** Agentes elegidos en `bond setup` (vacío: todavía no hay configuración). */
+let chosen: string[] = [];
 const add = (level: Level, name: string, detail: string, fix?: string) => results.push({ level, name, detail, fix });
+
+function checkConfig(): void {
+	if (!chosen.length) return add("warn", "agentes", "sin elegir todavía", "bond setup");
+	add("ok", "agentes", chosen.join(", "));
+	// Claves: carpeta 700 y ficheros 600 (en Windows no aplica).
+	const keys = join(BOND_HOME, "keys");
+	if (process.platform === "win32" || !existsSync(keys)) return;
+	const loose = [keys, ...readdirSync(keys).map((f) => join(keys, f))].filter((f) => (statSync(f).mode & 0o077) !== 0);
+	if (loose.length) add("fail", "claves", `permisos demasiado abiertos: ${loose.join(", ")}`, "chmod 700 ~/.bond/keys && chmod 600 ~/.bond/keys/*");
+	else add("ok", "claves", "~/.bond/keys con permisos 600");
+}
 
 function checkNode(): void {
 	const [major, minor] = process.versions.node.split(".").map(Number);
@@ -41,7 +54,7 @@ function checkHerdr(): void {
 	const running = /server:[\s\S]*?status: running/.test(status);
 	add(running ? "ok" : "warn", "herdr", `${client}${running ? ", servidor en marcha" : ", servidor parado"}`, running ? undefined : "herdr (lo arranca)");
 	// Integración de Herdr de cada agente instalado: pi es obligatoria; las demás, aviso.
-	const states = herdrIntegrationStatus().filter((s) => which(s.agent));
+	const states = herdrIntegrationStatus().filter((s) => which(s.agent) && (!chosen.length || chosen.includes(s.agent)));
 	const current = states.filter((s) => s.state.startsWith("current")).map((s) => s.agent);
 	if (current.length) add("ok", "integraciones herdr", current.join(", "));
 	for (const s of states.filter((x) => !x.state.startsWith("current"))) {
@@ -50,6 +63,7 @@ function checkHerdr(): void {
 }
 
 function checkPi(): void {
+	if (chosen.length && !chosen.includes("pi")) return; // pi no es uno de tus agentes
 	if (!which("pi")) return add("fail", "pi", "no está en el PATH", "bond setup");
 	add("ok", "pi", run("pi", ["--version"]).stdout.trim());
 	for (const f of FROM_SOURCE ? ["settings.json", "AGENTS.md", "mcp.json"] : []) {
@@ -117,17 +131,21 @@ async function checkModels(): Promise<void> {
 		return add("fail", "dependencias", "falta node_modules (smol-toml)", "bond setup");
 	}
 	const { CONFIG_FILE, activeProviders, loadConfig } = await import("./config.mts");
-	if (!existsSync(CONFIG_FILE)) return add("fail", "modelos", `no existe ${CONFIG_FILE}`, "bond models init");
+	if (!existsSync(CONFIG_FILE)) return add("fail", "configuración", `no existe ${CONFIG_FILE}`, "bond setup");
 	const { syncAgents } = await import("./models.mts");
-	const stale = syncAgents({ check: true, quiet: true });
-	if (stale.includes("pi")) add("fail", "modelos pi", "desfasado respecto a config.toml", "bond models sync --agent pi");
-	else add("ok", "modelos pi", "al día con config.toml");
+	const withModels = ["pi", "opencode", "crush", "codex"].filter((a) => !chosen.length || chosen.includes(a));
+	const stale = withModels.length && activeProviders(loadConfig()).length ? syncAgents({ check: true, quiet: true, agents: withModels.filter((a) => which(a)) }) : [];
+	if (withModels.includes("pi") && which("pi")) {
+		if (stale.includes("pi")) add("fail", "modelos pi", "desfasado respecto a config.toml", "bond models sync --agent pi");
+		else add("ok", "modelos pi", "al día con config.toml");
+	}
 	const others = stale.filter((a) => a !== "pi");
 	if (others.length) add("warn", "modelos otros agentes", `desfasados: ${others.join(", ")}`, "bond models sync");
 
 	for (const p of activeProviders(loadConfig())) {
 		try {
-			const key = p.api_key_env ? process.env[p.api_key_env] : undefined;
+			const { readKey } = await import("./keys.mts");
+			const key = p.key_stored ? readKey(p.id) : p.api_key_env ? process.env[p.api_key_env] : undefined;
 			const res = await fetch(`${p.base_url.replace(/\/$/, "")}/models`, {
 				headers: key ? { authorization: `Bearer ${key}` } : {},
 				signal: AbortSignal.timeout(10_000),
@@ -167,7 +185,15 @@ export async function doctor(args: string[]): Promise<void> {
 	const quick = args.includes("--quick");
 	for (const a of args) if (a !== "--quick") die(`opción desconocida: ${a} (bond doctor --help)`);
 
+	// Agentes elegidos en bond setup: las comprobaciones de cada agente solo si es uno de ellos.
+	try {
+		const { configExists, loadConfig } = await import("./config.mts");
+		if (configExists()) chosen = loadConfig().agents;
+	} catch {
+		// Sin dependencias (repo sin npm ci): se comprueba todo lo instalado.
+	}
 	checkNode();
+	checkConfig();
 	checkHerdr();
 	checkPi();
 	checkHerdrSkill();

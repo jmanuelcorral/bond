@@ -26,13 +26,19 @@ import {
 
 export const SETUP_HELP = `Uso: bond setup [opciones]
 
-Deja la máquina lista para BOND: instala pi si falta, enlaza su configuración a este repo,
-registra el paquete de pi, deja un único skill de Herdr, instala la integración de Herdr y
-pone \`bond\` en el PATH. Se puede relanzar tras cada cambio.
+Configura bond en esta máquina (una vez; se puede repetir para cambiar algo):
 
-  --no-pi          No instala el CLI de pi (solo configuración e integración)
+  1. Herdr: si falta, explica cómo instalarlo.
+  2. Endpoints de modelos: detecta Ollama y LM Studio y pregunta por otros (OpenAI o
+     compatibles con OpenAI). Las claves se guardan en ~/.bond/keys (permisos 600).
+  3. Agentes: con cuáles trabajar (de los instalados; hace falta al menos uno) y cuál por
+     defecto.
+  4. Aplica: modelos en cada agente, integraciones de Herdr, skills globales y tus
+     instrucciones (~/.bond/AGENTS.md) en cada agente.
+
+  --yes            Sin preguntas: usa lo detectado y lo ya configurado
   --herdr-config   Añade el snippet de Herdr a ~/.config/herdr/config.toml
-  --dry-run        Muestra lo que haría sin tocar nada
+  --dry-run        Pregunta, pero solo enseña lo que haría al aplicar
   -h, --help       Esta ayuda`;
 
 const HERDR_MARKER = ">>> bond >>>";
@@ -40,59 +46,58 @@ const HERDR_MARKER = ">>> bond >>>";
 const OLD_HERDR_MARKER = ">>> piSetup >>>";
 
 export async function setup(args: string[]): Promise<void> {
-	let withPi = true;
 	let withHerdrConfig = false;
+	let yes = false;
 	for (const a of args) {
-		if (a === "--no-pi") withPi = false;
-		else if (a === "--herdr-config") withHerdrConfig = true;
-		else if (a === "--dry-run") continue; // lo trata main
+		if (a === "--herdr-config") withHerdrConfig = true;
+		else if (a === "--yes" || a === "-y") yes = true;
+		else if (a === "--dry-run" || a === "--no-pi") continue; // --dry-run lo trata main; --no-pi ya no hace falta
 		else die(`opción desconocida: ${a} (bond setup --help)`);
 	}
-
-	// Requisitos.
-	if (!which("herdr")) die("herdr no está en el PATH. Instálalo en https://herdr.dev/docs/install/");
-	log(`herdr ${run("herdr", ["--version"]).stdout.trim().split(/\s+/).pop() ?? "?"}`);
-
-	installPi(withPi);
+	// Desde el repo, las dependencias (prompts, TOML) se instalan antes de cargar el asistente.
 	if (FROM_SOURCE) installDeps();
-	linkPiConfig();
-	herdrSkill();
+	const { runWizard } = await import("./wizard.mts");
+	const { saveConfig, configExists } = await import("./config.mts");
+	const { init: importLegacyModels } = await import("./models.mts");
+	// Instalación anterior desde el repo: sus modelos de pi pasan al registro global.
+	if (FROM_SOURCE && !configExists()) importLegacyModels();
+
+	const interactive = !yes && process.stdin.isTTY === true;
+	const result = await runWizard({ interactive, logo: renderSmall(56, "setup") });
+	if (!result) {
+		process.exitCode = 1;
+		return;
+	}
+	const { cfg, herdr } = result;
+	const agents = cfg.agents;
+	if (!isDryRun()) saveConfig(cfg);
+
+	const { ensurePersonal, propagate, PERSONAL_FILE } = await import("./instructions.mts");
+	log("Aplicando");
+	if (agents.includes("pi")) linkPiConfig();
+	if (herdr) herdrSkill();
 	globalSkills();
 	if (FROM_SOURCE) gitFilter();
 	contextTools();
-	herdrIntegrations();
-	if (withHerdrConfig) herdrConfig();
-	await modelsStep();
+	if (herdr) herdrIntegrations(agents);
+	if (withHerdrConfig && herdr) herdrConfig();
+	const { syncAgents } = await import("./models.mts");
+	if (!isDryRun() && cfg.providers.length) syncAgents({ agents: agents.filter((a) => ["pi", "opencode", "crush", "codex"].includes(a)) });
+	ensurePersonal();
+	for (const r of propagate(agents)) log(`instrucciones ${r.agent}: ${r.result}${r.why ? ` (${r.why})` : ""}  ${r.file}`);
 	if (FROM_SOURCE) linkBond();
 
-	log("Listo");
+	const { CONFIG_FILE } = await import("./config.mts");
 	console.log(`
-  ${renderSmall(60, "licence to code")}
+  ${renderSmall(60, "listo")}
 
-  Config de pi:   ${AGENT_DIR}
-  Paquete pi:     ${AGENT_DIR}/bond -> ${assetsPath()}
-  Modelos:        ~/.config/bond/config.toml  -> bond models list | probe | sync
-  MCP:            context7, duckduckgo  -> pi mcp list
-  Comprobar todo: bond doctor
+  Agentes:        ${agents.join(", ")}  (por defecto: ${cfg.default_agent})
+  Endpoints:      ${cfg.providers.map((x) => x.id).join(", ") || "ninguno (cada agente usa su proveedor)"}
+  Configuración:  ${CONFIG_FILE}
+  Instrucciones:  ${PERSONAL_FILE}  (edítalas y repite bond setup para propagarlas)
+  Comprobar:      bond doctor
 
-  Primer paso: arranca pi (pi o bond dev) y ejecuta /login para configurar proveedor y modelo.
-  Tras tocar esta config en caliente, usa /reload dentro de pi.`);
-}
-
-function installPi(withPi: boolean): void {
-	if (withPi) {
-		if (which("pi")) log(`pi ya instalado: ${which("pi")}`);
-		else if (which("bun")) {
-			log("Instalando pi con bun (a nivel de usuario, sin sudo)...");
-			runAct("bun", ["add", "-g", "@earendil-works/pi-coding-agent"]);
-		} else if (which("npm")) {
-			const prefix = process.env.NPM_GLOBAL_PREFIX || join(HOME, ".npm-global");
-			log(`Instalando pi con npm en ${prefix} (sin sudo)...`);
-			runAct("npm", ["install", "-g", "--ignore-scripts", "--prefix", prefix, "@earendil-works/pi-coding-agent"]);
-			warn(`Añade ${prefix}/bin al PATH si no lo está ya.`);
-		} else die("No encuentro ni bun ni npm para instalar pi.");
-	}
-	if (!isDryRun() && !which("pi")) die("pi sigue sin estar en el PATH tras la instalación; revisa PATH y reintenta.");
+  Siguiente: cd <tu-repo> && bond init`);
 }
 
 /** Dependencias de la CLI (smol-toml): node_modules del repo, desde package-lock.json. */
@@ -102,20 +107,6 @@ function installDeps(): void {
 	if (which("npm")) runAct("npm", ["ci", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: REPO_DIR });
 	else if (which("bun")) runAct("bun", ["install", "--frozen-lockfile", "--ignore-scripts"], { cwd: REPO_DIR });
 	else die("hace falta npm o bun para instalar las dependencias de bond");
-}
-
-/** Registro global de modelos: lo crea si falta (importando el models.json de pi) y sincroniza pi. */
-async function modelsStep(): Promise<void> {
-	if (isDryRun() && !existsSync(join(REPO_DIR, "node_modules", "smol-toml"))) {
-		console.log("    [dry-run] bond models init && bond models sync --agent pi");
-		return;
-	}
-	const m = await import("./models.mts");
-	log("Modelos globales");
-	m.init();
-	if (!isDryRun()) m.syncAgents({ agents: ["pi"] });
-	else console.log("    [dry-run] bond models sync --agent pi");
-	log("otros agentes (opencode, crush, codex): bond models sync");
 }
 
 function linkPiConfig(): void {
@@ -228,14 +219,23 @@ export function herdrIntegrationStatus(): Array<{ agent: string; state: string }
 	return [...run("herdr", ["integration", "status"]).stdout.matchAll(/^([a-z0-9_-]+): (.+?)(?: \(|$)/gm)].map((m) => ({ agent: m[1], state: m[2] }));
 }
 
-function herdrIntegrations(): void {
+function herdrIntegrations(agents: string[]): void {
 	// Con la integración, cada agente le cuenta a Herdr su estado real (working, blocked, done)
 	// en vez de que Herdr lo adivine mirando la pantalla. Solo para los agentes instalados.
 	log("Integraciones de Herdr");
 	for (const { agent, state } of herdrIntegrationStatus()) {
-		if (!which(agent)) continue;
-		if (state.startsWith("current")) log(`integración ${agent}: ya actual`);
-		else runAct("herdr", ["integration", "install", agent]);
+		if (!which(agent) || !agents.includes(agent)) continue;
+		if (state.startsWith("current")) {
+			log(`integración ${agent}: ya actual`);
+			continue;
+		}
+		// Herdr se niega si el agente aún no creó su carpeta de config (nunca se ha abierto):
+		// es un aviso, no un error; se instala en el siguiente bond setup.
+		act(`herdr integration install ${agent}`, () => {
+			const r = run("herdr", ["integration", "install", agent]);
+			if (r.status === 0) log(`integración ${agent}: instalada`);
+			else warn(`integración ${agent}: ${(r.stderr || r.stdout).trim().split("\n").pop()} (abre ${agent} una vez y repite bond setup)`);
+		});
 	}
 }
 
