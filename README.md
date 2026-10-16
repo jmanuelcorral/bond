@@ -125,12 +125,13 @@ global de modelos, `bond init` por repo para todos los agentes):
 
 ```bash
 cd ~/gitrepos/mi-proyecto
-bond init      # .bond/bond.toml + AGENTS.md + config de pi y Claude Code (MCP, skills, comandos)
+bond init      # .bond/bond.toml + AGENTS.md + config de cada agente (MCP, skills, comandos)
 bond sync      # tras editar .bond/bond.toml
 ```
 
 Instrucciones, servidores MCP, skills y comandos se declaran una vez en el repo y bond genera
-lo que lee cada agente, sin pisar lo que tengas a mano. Detalle en
+lo que lee cada agente (pi, Claude Code, Copilot, Codex, opencode, Crush, Gemini), sin pisar
+lo que tengas a mano. Detalle en
 [docs/reference.md](docs/reference.md#configuración-por-repo-bond-init-y-bond-sync).
 
 ## Capa de contexto

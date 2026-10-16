@@ -1,6 +1,6 @@
 {
   "name": "pisetup",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "BOND: pi package and CLI for multi-agent work with Herdr",
   "keywords": [

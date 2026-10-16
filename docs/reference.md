@@ -115,20 +115,21 @@ que pi gestione él mismo los errores de cuota.
 ## Configuración por repo (`bond init` y `bond sync`)
 
 Lo que es del proyecto (instrucciones, servidores MCP, skills, comandos) se declara en
-`.bond/bond.toml` y `bond sync` genera lo que lee cada agente. Hoy: pi y Claude Code.
+`.bond/bond.toml` y `bond sync` genera lo que lee cada agente: pi, Claude Code, Copilot CLI,
+Codex, opencode, Crush y Gemini CLI.
 
 ```bash
 cd ~/gitrepos/mi-proyecto
 bond init --list                 # catálogo: MCP, skills, comandos
 bond init                        # todo el catálogo, para los agentes instalados
-bond init --agents claude --skills "" --commands review,commit
+bond init --agents claude,codex --skills "" --commands review,commit
 bond sync                        # tras editar .bond/bond.toml
 bond sync --check                # en CI: falla si algo está desfasado
 ```
 
 ```toml
 # .bond/bond.toml
-agents = ["pi", "claude"]
+agents = ["pi", "claude", "copilot", "opencode", "crush"]
 mcp = ["context7", "web"]
 skills = ["code-context"]
 commands = ["commit", "handoff", "review"]
@@ -141,19 +142,44 @@ args = ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
 Comandos propios del repo: ficheros Markdown en `.bond/commands/` (sintaxis común: `$ARGUMENTS`,
 `$1`…). Skills propios: carpetas con `SKILL.md` en `.agents/skills/`.
 
-| Fuente | pi | Claude Code |
-|---|---|---|
-| `AGENTS.md` (lo crea `init` si falta; es tuyo) | lo lee directamente | `CLAUDE.md` con un bloque `@AGENTS.md` |
-| MCP (`mcp` + `mcp_servers`) | `.pi/mcp.json` (`exposure: "direct"`) | `.mcp.json` |
-| skills del catálogo | copiados a `.agents/skills/`, que pi lee | symlink en `.claude/skills/` (Claude no lee `.agents/skills`) |
-| skills propios en `.agents/skills/` | directamente | symlink en `.claude/skills/` |
-| comandos del catálogo | vienen del paquete global de bond | `.claude/commands/` |
-| comandos propios (`.bond/commands/`) | `.pi/prompts/` | `.claude/commands/` |
-| tools de búsqueda | `.pi/settings.json` → `defaultTools: +grep +find +ls` | — |
+**Instrucciones y skills.** `AGENTS.md` (lo crea `init` si falta; es tuyo) y `.agents/skills/`
+los leen directamente pi, Copilot, Codex, opencode, Crush y Gemini. Las excepciones:
 
-Comprobado: pi carga el skill y el comando propio del repo y conecta los MCP; Claude Code lee
-`AGENTS.md` a través de `CLAUDE.md`, ve los skills enlazados y ejecuta los comandos con
-`$ARGUMENTS`.
+- Claude Code: `CLAUDE.md` con un bloque `@AGENTS.md` y un symlink por skill en
+  `.claude/skills/`.
+- Gemini: `context.fileName = ["AGENTS.md", "GEMINI.md"]` en `.gemini/settings.json`.
+
+**MCP y comandos:**
+
+| Agente | MCP del repo | Comandos | Probado |
+|---|---|---|---|
+| pi | `.pi/mcp.json` (`exposure: "direct"`) | catálogo: paquete global de bond; propios: `.pi/prompts/` | sí |
+| Claude Code | `.mcp.json` | `.claude/commands/` | sí |
+| Copilot CLI | el mismo `.mcp.json` | lee `.claude/commands/` como skills | sí |
+| opencode v2 | `opencode.json` → `mcp.servers` | `.opencode/commands/` | sí (MCP) |
+| Crush | `.crush.json` → `mcp` | no se generan (ver abajo) | sí (MCP) |
+| Codex | bloque en `.codex/config.toml` (`[mcp_servers.x]`) | no tiene comandos de proyecto | no instalado |
+| Gemini CLI | `.gemini/settings.json` → `mcpServers` (`httpUrl` para HTTP) | `.gemini/commands/*.toml` (`{{args}}`) | no instalado |
+
+Comprobado con los agentes instalados: pi carga el skill y el comando propio y conecta los
+MCP; Claude Code lee `AGENTS.md` a través de `CLAUDE.md`, ve los skills enlazados y ejecuta
+comandos; Copilot lista los servidores del `.mcp.json` y los comandos de `.claude/commands`;
+opencode y Crush conectan sus servidores. Codex y Gemini: ficheros generados según su
+documentación y validados (TOML), pero sin probar con el agente.
+
+Detalles por agente:
+
+- **Copilot** solo carga los MCP del repo si confías en la carpeta (lo pregunta la primera vez;
+  se guarda en `trustedFolders` de `~/.copilot/config.json`).
+- **opencode** reconoce el proyecto cuando el repo tiene al menos un commit, y la primera
+  consulta tras ese commit puede no ver aún los servidores. Usa un servicio en segundo plano:
+  si cambias `XDG_CONFIG_HOME` para probar algo, ese servicio se queda con esa configuración
+  hasta que lo pares.
+- **Crush**: sus comandos de proyecto van en `.crush/commands/`, dentro de su directorio de
+  datos, que él mismo ignora en git; por eso bond no los genera. Crush ofrece los skills como
+  comandos.
+- **Codex** solo carga `.codex/config.toml` en proyectos de confianza, y no tiene comandos de
+  proyecto (solo de usuario y obsoletos en favor de skills).
 
 ### Qué toca y qué no
 

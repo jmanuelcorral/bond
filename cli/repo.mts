@@ -16,7 +16,7 @@ import { parse } from "smol-toml";
 import { parseJsonc } from "./agents.mts";
 import { bad, caution, die, dim, isDryRun, log, ok, REPO_DIR, run, STAMP, warn } from "./util.mts";
 
-export const SUPPORTED_AGENTS = ["pi", "claude"];
+export const SUPPORTED_AGENTS = ["pi", "claude", "copilot", "codex", "opencode", "crush", "gemini"];
 const CATALOG = join(REPO_DIR, "catalog");
 
 export const INIT_HELP = `Uso: bond init [opciones]
@@ -128,20 +128,38 @@ function loadRepoConfig(root: string): RepoConfig {
 type Output =
 	| { kind: "file"; path: string; content: string; mode?: number }
 	| { kind: "link"; path: string; target: string }
+	/** Claves de bond dentro de un JSON; `parent` es una ruta con puntos ("mcp.servers") o null (raíz). */
 	| { kind: "json"; path: string; parent: string | null; entries: Record<string, unknown> }
-	| { kind: "block"; path: string; body: string };
+	/** Bloque entre marcas al final de un fichero de texto: comentario HTML (md) o almohadilla (hash). */
+	| { kind: "block"; path: string; body: string; style: BlockStyle };
+
+type BlockStyle = "md" | "hash";
 
 interface Manifest {
 	files: Record<string, string>;
 	links: Record<string, string>;
-	json: Record<string, { parent: string | null; keys: string[] }>;
-	blocks: string[];
+	json: Record<string, Array<{ parent: string | null; keys: string[] }>>;
+	blocks: Record<string, BlockStyle>;
 }
 
 const sha = (s: string | Buffer) => createHash("sha256").update(s).digest("hex");
 
 function walk(dir: string): string[] {
 	return readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]));
+}
+
+const tomlKey = (k: string) => (/^[A-Za-z0-9_-]+$/.test(k) ? k : JSON.stringify(k));
+const tomlInline = (o: Record<string, string>) => `{ ${Object.entries(o).map(([k, v]) => `${tomlKey(k)} = ${JSON.stringify(v)}`).join(", ")} }`;
+
+/** Comando en Markdown (frontmatter + cuerpo con $ARGUMENTS) a comando TOML de Gemini ({{args}}). */
+function geminiCommand(md: string): string {
+	const m = /^---\n([\s\S]*?)\n---\n?/.exec(md);
+	const body = (m ? md.slice(m[0].length) : md).replace(/\$ARGUMENTS|\$@|\$[1-9]/g, "{{args}}").trim();
+	const desc = describe(md);
+	// Cadena literal multilínea de TOML (''' ... '''): no interpreta escapes ni comillas.
+	const q = "'''";
+	const prompt = body.includes(q) ? JSON.stringify(body) : `${q}\n${body}\n${q}`;
+	return `${desc ? `description = ${JSON.stringify(desc)}\n` : ""}prompt = ${prompt}\n`;
 }
 
 function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
@@ -188,9 +206,9 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 		for (const f of ownCommands) out.push({ kind: "file", path: join(".pi", "prompts", f), content: readFileSync(join(ownDir, f), "utf8") });
 	}
 
-	if (agents.has("claude")) {
-		out.push({ kind: "block", path: "CLAUDE.md", body: "@AGENTS.md" });
-		const claudeServers = Object.fromEntries(
+	// Claude y Copilot leen el mismo .mcp.json (Copilot, solo si confías en la carpeta).
+	if (agents.has("claude") || agents.has("copilot")) {
+		const shared = Object.fromEntries(
 			Object.entries(servers).map(([n, s]) => [
 				n,
 				s.url
@@ -198,32 +216,134 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 					: { command: s.command, args: s.args ?? [], ...(s.env ? { env: s.env } : {}) },
 			]),
 		);
-		out.push({ kind: "json", path: ".mcp.json", parent: "mcpServers", entries: claudeServers });
-		// Claude no lee .agents/skills: un symlink por skill.
-		for (const name of allSkills) out.push({ kind: "link", path: join(".claude", "skills", name), target: join("..", "..", ".agents", "skills", name) });
+		out.push({ kind: "json", path: ".mcp.json", parent: "mcpServers", entries: shared });
+		// Copilot también lee .claude/commands como skills: un solo sitio para los dos.
 		for (const name of cfg.commands) {
 			out.push({ kind: "file", path: join(".claude", "commands", `${name}.md`), content: readFileSync(join(CATALOG, "commands", `${name}.md`), "utf8") });
 		}
 		for (const f of ownCommands) out.push({ kind: "file", path: join(".claude", "commands", f), content: readFileSync(join(ownDir, f), "utf8") });
+	}
+
+	if (agents.has("claude")) {
+		out.push({ kind: "block", path: "CLAUDE.md", body: "@AGENTS.md", style: "md" });
+		// Claude no lee .agents/skills: un symlink por skill.
+		for (const name of allSkills) out.push({ kind: "link", path: join(".claude", "skills", name), target: join("..", "..", ".agents", "skills", name) });
+	}
+
+	if (agents.has("codex")) {
+		// MCP en .codex/config.toml (Codex solo lo carga en proyectos de confianza). Sin comandos
+		// de proyecto: Codex los tiene solo a nivel de usuario y obsoletos en favor de skills.
+		let body = "";
+		for (const [n, s] of Object.entries(servers)) {
+			body += `[mcp_servers.${tomlKey(n)}]\n`;
+			if (s.url) {
+				body += `url = ${JSON.stringify(s.url)}\n`;
+				if (s.headers) body += `http_headers = ${tomlInline(s.headers)}\n`;
+			} else {
+				body += `command = ${JSON.stringify(s.command)}\nargs = ${JSON.stringify(s.args ?? [])}\n`;
+				if (s.env) body += `env = ${tomlInline(s.env)}\n`;
+			}
+			body += "\n";
+		}
+		out.push({ kind: "block", path: join(".codex", "config.toml"), body: body.trimEnd(), style: "hash" });
+	}
+
+	if (agents.has("opencode")) {
+		const oc = Object.fromEntries(
+			Object.entries(servers).map(([n, s]) => [
+				n,
+				s.url
+					? { type: "remote", url: s.url, ...(s.headers ? { headers: s.headers } : {}) }
+					: { type: "local", command: [s.command, ...(s.args ?? [])], ...(s.env ? { environment: s.env } : {}) },
+			]),
+		);
+		out.push({ kind: "json", path: "opencode.json", parent: "mcp.servers", entries: oc });
+		for (const name of cfg.commands) {
+			out.push({ kind: "file", path: join(".opencode", "commands", `${name}.md`), content: readFileSync(join(CATALOG, "commands", `${name}.md`), "utf8") });
+		}
+		for (const f of ownCommands) out.push({ kind: "file", path: join(".opencode", "commands", f), content: readFileSync(join(ownDir, f), "utf8") });
+	}
+
+	if (agents.has("crush")) {
+		// Sin comandos: los de proyecto van en .crush/commands, dentro del directorio de datos de
+		// Crush, que él mismo ignora en git. Crush ofrece además los skills como comandos.
+		const cr = Object.fromEntries(
+			Object.entries(servers).map(([n, s]) => [
+				n,
+				s.url
+					? { type: "http", url: s.url, ...(s.headers ? { headers: s.headers } : {}) }
+					: { type: "stdio", command: s.command, args: s.args ?? [], ...(s.env ? { env: s.env } : {}) },
+			]),
+		);
+		out.push({ kind: "json", path: ".crush.json", parent: "mcp", entries: cr });
+	}
+
+	if (agents.has("gemini")) {
+		const settings = join(".gemini", "settings.json");
+		// Gemini lee GEMINI.md por defecto: se le añade AGENTS.md.
+		out.push({ kind: "json", path: settings, parent: "context", entries: { fileName: ["AGENTS.md", "GEMINI.md"] } });
+		const gm = Object.fromEntries(
+			Object.entries(servers).map(([n, s]) => [
+				n,
+				s.url
+					? { httpUrl: s.url, ...(s.headers ? { headers: s.headers } : {}) }
+					: { command: s.command, args: s.args ?? [], ...(s.env ? { env: s.env } : {}) },
+			]),
+		);
+		out.push({ kind: "json", path: settings, parent: "mcpServers", entries: gm });
+		const commands = [
+			...cfg.commands.map((n) => [n, readFileSync(join(CATALOG, "commands", `${n}.md`), "utf8")] as const),
+			...ownCommands.map((f) => [f.slice(0, -3), readFileSync(join(ownDir, f), "utf8")] as const),
+		];
+		for (const [name, md] of commands) out.push({ kind: "file", path: join(".gemini", "commands", `${name}.toml`), content: geminiCommand(md) });
 	}
 	return out;
 }
 
 // --- aplicar ------------------------------------------------------------------------------
 
-const MD_BEGIN = "<!-- >>> bond >>> generado por `bond sync`; no editar -->";
-const MD_END = "<!-- <<< bond <<< -->";
+const MARKERS: Record<BlockStyle, [string, string]> = {
+	md: ["<!-- >>> bond >>> generado por `bond sync`; no editar -->", "<!-- <<< bond <<< -->"],
+	hash: ["# >>> bond >>> generado por `bond sync`; no editar", "# <<< bond <<<"],
+};
 
-function withBlock(current: string, body: string): string {
-	const start = current.indexOf(MD_BEGIN);
+/** El bloque de bond va al final; en TOML, unas tablas al final no cambian el resto. */
+function withBlock(current: string, body: string, style: BlockStyle): string {
+	const [begin, end] = MARKERS[style];
+	const start = current.indexOf(begin);
 	let rest = current;
 	if (start >= 0) {
-		const end = current.indexOf(MD_END, start);
-		rest = current.slice(0, start).replace(/\n+$/, "\n") + (end < 0 ? "" : current.slice(end + MD_END.length).replace(/^\n/, ""));
+		const stop = current.indexOf(end, start);
+		const before = current.slice(0, start).replace(/\n+$/, "\n");
+		const after = stop < 0 ? "" : current.slice(stop + end.length).replace(/^\n/, "");
+		// Sin nada delante del bloque, lo de detrás no debe empezar con líneas en blanco.
+		rest = before.trim() ? before + after : after.replace(/^\n+/, "");
 	}
+	rest = rest.replace(/^\n+/, "");
 	if (!body) return rest;
 	const base = rest.trim() ? `${rest.replace(/\n*$/, "")}\n\n` : "";
-	return `${base}${MD_BEGIN}\n${body}\n${MD_END}\n`;
+	return `${base}${begin}\n${body}\n${end}\n`;
+}
+
+/** Contenedor en una ruta con puntos ("mcp.servers"), creando los niveles que falten. */
+function containerAt(obj: Record<string, unknown>, path: string | null): Record<string, unknown> {
+	let cur = obj;
+	for (const k of path ? path.split(".") : []) {
+		if (typeof cur[k] !== "object" || cur[k] === null || Array.isArray(cur[k])) cur[k] = {};
+		cur = cur[k] as Record<string, unknown>;
+	}
+	return cur;
+}
+
+/** Quita los objetos vacíos que dejó bond a lo largo de la ruta. */
+function pruneEmpty(obj: Record<string, unknown>, path: string | null): void {
+	const keys = path ? path.split(".") : [];
+	for (let n = keys.length; n > 0; n--) {
+		const parent = containerAt(obj, n > 1 ? keys.slice(0, n - 1).join(".") : null);
+		const child = parent[keys[n - 1]] as Record<string, unknown>;
+		if (child && Object.keys(child).length === 0) delete parent[keys[n - 1]];
+		else break;
+	}
 }
 
 function readText(p: string): string | undefined {
@@ -261,15 +381,18 @@ interface Action {
 function loadManifest(root: string): Manifest {
 	try {
 		const m = JSON.parse(readFileSync(join(bondDir(root), "manifest.json"), "utf8"));
-		return { files: m.files ?? {}, links: m.links ?? {}, json: m.json ?? {}, blocks: m.blocks ?? [] };
+		// Registro de bond 0.4: json con un solo contenedor por fichero y blocks como lista.
+		const json = Object.fromEntries(Object.entries(m.json ?? {}).map(([p, v]) => [p, Array.isArray(v) ? v : [v]])) as Manifest["json"];
+		const blocks = Array.isArray(m.blocks) ? Object.fromEntries((m.blocks as string[]).map((p) => [p, "md"])) : (m.blocks ?? {});
+		return { files: m.files ?? {}, links: m.links ?? {}, json, blocks };
 	} catch {
-		return { files: {}, links: {}, json: {}, blocks: [] };
+		return { files: {}, links: {}, json: {}, blocks: {} };
 	}
 }
 
 function diffActions(root: string, outputs: Output[], prev: Manifest, force: boolean): { actions: Action[]; next: Manifest } {
 	const actions: Action[] = [];
-	const next: Manifest = { files: {}, links: {}, json: {}, blocks: [] };
+	const next: Manifest = { files: {}, links: {}, json: {}, blocks: {} };
 	const abs = (p: string) => join(root, p);
 	const write = (p: string, content: string, mode?: number) => () => {
 		mkdirSync(dirname(abs(p)), { recursive: true });
@@ -281,10 +404,49 @@ function diffActions(root: string, outputs: Output[], prev: Manifest, force: boo
 
 	// Lo que estaba gestionado y ya no se genera: JSON y bloques se vacían; ficheros y links se borran.
 	const planned = new Set(outputs.map((o) => o.path));
-	for (const [p, j] of Object.entries(prev.json)) if (!planned.has(p)) outputs.push({ kind: "json", path: p, parent: j.parent, entries: {} });
-	for (const p of prev.blocks) if (!planned.has(p)) outputs.push({ kind: "block", path: p, body: "" });
+	const jsonPlanned = new Set(outputs.filter((o) => o.kind === "json").map((o) => `${o.path}\0${o.parent ?? ""}`));
+	for (const [p, list] of Object.entries(prev.json)) {
+		for (const j of list) if (!jsonPlanned.has(`${p}\0${j.parent ?? ""}`)) outputs.push({ kind: "json", path: p, parent: j.parent, entries: {} });
+	}
+	for (const [p, style] of Object.entries(prev.blocks)) if (!planned.has(p)) outputs.push({ kind: "block", path: p, body: "", style });
+
+	// JSON: todas las salidas de un mismo fichero se aplican juntas sobre su contenido actual.
+	const jsonByPath = new Map<string, Array<Extract<Output, { kind: "json" }>>>();
+	for (const o of outputs) if (o.kind === "json") jsonByPath.set(o.path, [...(jsonByPath.get(o.path) ?? []), o]);
+	for (const [p, group] of jsonByPath) {
+		const cur = readText(abs(p));
+		let obj: Record<string, unknown>;
+		try {
+			obj = cur?.trim() ? parseJsonc(cur) : {};
+		} catch {
+			actions.push({ sign: "!", path: p, why: "no es JSON válido; no lo toco" });
+			continue;
+		}
+		const created = cur === undefined;
+		const touched: string[] = [];
+		for (const o of group) {
+			const container = containerAt(obj, o.parent);
+			const before = prev.json[p]?.find((j) => (j.parent ?? "") === (o.parent ?? ""))?.keys ?? [];
+			for (const k of before) delete container[k];
+			Object.assign(container, o.entries);
+			pruneEmpty(obj, o.parent);
+			const keys = Object.keys(o.entries);
+			if (keys.length) {
+				next.json[p] = [...(next.json[p] ?? []), { parent: o.parent, keys }];
+				touched.push(`${o.parent ?? "raíz"}: ${keys.join(", ")}`);
+			}
+		}
+		// opencode.json nuevo: con su $schema, como lo crea opencode.
+		if (created && p === "opencode.json" && Object.keys(obj).length) obj = { $schema: "https://opencode.ai/config.json", ...obj };
+		const empty = Object.keys(obj).length === 0;
+		const text = empty ? "" : `${JSON.stringify(obj, null, 2)}\n`;
+		if ((cur ?? "") === text) continue;
+		if (empty && cur !== undefined) actions.push({ sign: "-", path: p, apply: () => rmSync(abs(p)) });
+		else if (!empty) actions.push({ sign: created ? "+" : "~", path: p, why: touched.join("; ") || "sin claves de bond", apply: write(p, text) });
+	}
 
 	for (const o of outputs) {
+		if (o.kind === "json") continue;
 		const cur = readText(abs(o.path));
 		if (o.kind === "file") {
 			const recorded = prev.files[o.path];
@@ -308,31 +470,9 @@ function diffActions(root: string, outputs: Output[], prev: Manifest, force: boo
 				actions.push({ sign: "+", path: o.path, why: `-> ${o.target}`, apply: () => (mkdirSync(dirname(abs(o.path)), { recursive: true }), symlinkSync(o.target, abs(o.path))) });
 				next.links[o.path] = o.target;
 			} else actions.push({ sign: "!", path: o.path, why: "ya existe y no es el enlace de bond" });
-		} else if (o.kind === "json") {
-			let obj: Record<string, unknown> = {};
-			try {
-				obj = cur?.trim() ? parseJsonc(cur) : {};
-			} catch {
-				actions.push({ sign: "!", path: o.path, why: "no es JSON válido; no lo toco" });
-				continue;
-			}
-			const container = o.parent ? { ...((obj[o.parent] as Record<string, unknown>) ?? {}) } : obj;
-			for (const k of prev.json[o.path]?.keys ?? []) delete container[k];
-			Object.assign(container, o.entries);
-			if (o.parent) {
-				if (Object.keys(container).length) obj[o.parent] = container;
-				else delete obj[o.parent];
-			}
-			const keys = Object.keys(o.entries);
-			const empty = Object.keys(obj).length === 0;
-			const text = empty ? "" : `${JSON.stringify(obj, null, 2)}\n`;
-			if (keys.length) next.json[o.path] = { parent: o.parent, keys };
-			if ((cur ?? "") === text) continue;
-			if (empty && cur !== undefined) actions.push({ sign: "-", path: o.path, apply: () => rmSync(abs(o.path)) });
-			else if (!empty) actions.push({ sign: cur === undefined ? "+" : "~", path: o.path, why: keys.length ? `${o.parent ?? "claves"}: ${keys.join(", ")}` : "sin claves de bond", apply: write(o.path, text) });
 		} else {
-			const text = withBlock(cur ?? "", o.body);
-			if (o.body) next.blocks.push(o.path);
+			const text = withBlock(cur ?? "", o.body, o.style);
+			if (o.body) next.blocks[o.path] = o.style;
 			if ((cur ?? "") === text) continue;
 			if (!text.trim() && cur !== undefined) actions.push({ sign: "-", path: o.path, apply: () => rmSync(abs(o.path)) });
 			else actions.push({ sign: cur === undefined ? "+" : "~", path: o.path, why: "bloque de bond", apply: write(o.path, text) });
@@ -471,9 +611,22 @@ export function init(args: string[]): void {
 		console.log(`${ok("+")} AGENTS.md  ${dim("plantilla: complétala")}`);
 	}
 	syncRepo();
+	const generated = [...new Set(plan(root, loadRepoConfig(root), loadManifest(root)).map((o) => o.path.split("/")[0]))].sort();
+	const trust: Record<string, string> = {
+		pi: "pi pregunta si confías en el proyecto (sin eso no carga .pi/)",
+		claude: "Claude Code pide aprobar los servidores de .mcp.json",
+		copilot: "Copilot pide confiar en la carpeta (sin eso no carga .mcp.json)",
+		codex: "Codex solo carga .codex/config.toml en proyectos de confianza",
+		opencode: "opencode reconoce el proyecto cuando el repo tiene al menos un commit",
+		gemini: "Gemini pide confiar en la carpeta (security.folderTrust)",
+	};
 	console.log(`
 Siguiente:
   1. Completa AGENTS.md (instrucciones del proyecto para todos los agentes).
-  2. Commitea .bond/ y lo generado: git add .bond AGENTS.md ${cfg.agents.includes("claude") ? "CLAUDE.md .mcp.json .claude " : ""}${cfg.agents.includes("pi") ? ".pi " : ""}${cfg.skills.length ? ".agents" : ""}
-  3. La primera vez cada agente pide confiar en el repo:${cfg.agents.includes("pi") ? "\n     - pi pregunta si confías en el proyecto (carga .pi/ solo tras aceptar)" : ""}${cfg.agents.includes("claude") ? "\n     - Claude Code pide aprobar los servidores de .mcp.json (al abrir claude en el repo)" : ""}`);
+  2. Commitea la configuración: git add .bond AGENTS.md ${generated.join(" ")}
+  3. La primera vez, cada agente pide confiar en el repo; bond no lo concede por ti:
+${cfg.agents
+	.filter((a) => trust[a])
+	.map((a) => `     - ${trust[a]}`)
+	.join("\n")}`);
 }

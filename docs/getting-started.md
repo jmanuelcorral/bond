@@ -84,8 +84,9 @@ cd ~/gitrepos/mi-proyecto
 bond init
 ```
 
-Crea `.bond/bond.toml`, un `AGENTS.md` para que lo completes y la configuración de pi y
-Claude Code (servidores MCP, skill `code-context`, comandos). Commitéalo todo. La primera vez
+Crea `.bond/bond.toml`, un `AGENTS.md` para que lo completes y la configuración de cada agente
+instalado (pi, Claude Code, Copilot, opencode, Crush…): servidores MCP, skill `code-context` y
+comandos. Commitéalo todo. La primera vez
 que abras cada agente en el repo, te pedirá confiar en él.
 
 ## 5. El bucle de trabajo diario
