@@ -46,7 +46,7 @@ function checkHerdr(): void {
 function checkPi(): void {
 	if (!which("pi")) return add("fail", "pi", "no está en el PATH", "bond setup");
 	add("ok", "pi", run("pi", ["--version"]).stdout.trim());
-	for (const f of ["settings.json", "models.json", "AGENTS.md", "mcp.json"]) {
+	for (const f of ["settings.json", "AGENTS.md", "mcp.json"]) {
 		const dest = join(AGENT_DIR, f);
 		const src = join(REPO_DIR, "pi", "agent", f);
 		if (linkTarget(dest) && samePath(dest, src)) add("ok", `enlace ${f}`, `-> repo`);
@@ -94,28 +94,34 @@ function checkMcp(): void {
 	if (r.status !== 0 && !/connected/.test(r.stdout)) add("fail", "mcp", r.stderr.trim().split("\n")[0] || "pi mcp list falló");
 }
 
-/** models.json admite comentarios //: se quitan las líneas que solo son comentario. */
-function readModels(): { providers?: Record<string, { baseUrl?: string; models?: Array<{ id: string }> }> } {
-	try {
-		const text = readFileSync(join(REPO_DIR, "pi", "agent", "models.json"), "utf8");
-		return JSON.parse(text.replace(/^\s*\/\/.*$/gm, ""));
-	} catch {
-		return {};
-	}
-}
-
+/** Registro global de modelos: config, sincronía con cada agente y que las pasarelas respondan. */
 async function checkModels(): Promise<void> {
-	for (const [id, p] of Object.entries(readModels().providers ?? {})) {
-		if (!p.baseUrl) continue;
+	if (!existsSync(join(REPO_DIR, "node_modules", "smol-toml"))) {
+		return add("fail", "dependencias", "falta node_modules (smol-toml)", "bond setup");
+	}
+	const { CONFIG_FILE, activeProviders, loadConfig } = await import("./config.mts");
+	if (!existsSync(CONFIG_FILE)) return add("fail", "modelos", `no existe ${CONFIG_FILE}`, "bond models init");
+	const { syncAgents } = await import("./models.mts");
+	const stale = syncAgents({ check: true, quiet: true });
+	if (stale.includes("pi")) add("fail", "modelos pi", "desfasado respecto a config.toml", "bond models sync --agent pi");
+	else add("ok", "modelos pi", "al día con config.toml");
+	const others = stale.filter((a) => a !== "pi");
+	if (others.length) add("warn", "modelos otros agentes", `desfasados: ${others.join(", ")}`, "bond models sync");
+
+	for (const p of activeProviders(loadConfig())) {
 		try {
-			const res = await fetch(`${p.baseUrl.replace(/\/$/, "")}/models`, { signal: AbortSignal.timeout(10_000) });
+			const key = p.api_key_env ? process.env[p.api_key_env] : undefined;
+			const res = await fetch(`${p.base_url.replace(/\/$/, "")}/models`, {
+				headers: key ? { authorization: `Bearer ${key}` } : {},
+				signal: AbortSignal.timeout(10_000),
+			});
 			const served = new Set(((await res.json()) as { data?: Array<{ id: string }> }).data?.map((m) => m.id) ?? []);
-			const declared = (p.models ?? []).map((m) => m.id);
+			const declared = p.models.map((m) => m.id);
 			const missing = declared.filter((m) => !served.has(m));
-			if (missing.length) add("warn", `modelos ${id}`, `la pasarela no lista: ${missing.join(", ")}`);
-			else add("ok", `modelos ${id}`, `${p.baseUrl} sirve ${declared.join(", ")}`);
+			if (missing.length) add("warn", `pasarela ${p.id}`, `no lista: ${missing.join(", ")}`);
+			else add("ok", `pasarela ${p.id}`, `${p.base_url} sirve ${declared.join(", ")}`);
 		} catch (e) {
-			add("fail", `modelos ${id}`, `${p.baseUrl} no responde (${(e as Error).message})`);
+			add("fail", `pasarela ${p.id}`, `${p.base_url} no responde (${(e as Error).message})`);
 		}
 	}
 }

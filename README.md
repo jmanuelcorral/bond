@@ -85,7 +85,7 @@ bond doctor                # comprueba que todo está bien
 `./install.sh` sigue funcionando: es un atajo a `bond setup`.
 
 Qué hace: instala pi si falta (con `bun`, sin `sudo`), enlaza `settings.json`,
-`models.json` y `AGENTS.md` en `~/.pi/agent` (guardando backup de lo previo), registra el repo
+`AGENTS.md` y `mcp.json` en `~/.pi/agent` (guardando backup de lo previo), registra el repo
 como **paquete de pi** (`~/.pi/agent/pisetup`, de donde pi carga `extensions/`, `skills/` y
 `prompts/`), deja un único skill de Herdr visible para pi e instala la integración
 `~/.pi/agent/extensions/herdr-agent-state.ts`, que es lo que hace que los estados del
@@ -101,9 +101,10 @@ bond dev ~/gitrepos/mi-proyecto --attach
 ```
 
 Dentro de pi, una sola vez: `/login` (proveedor y credenciales, van a `~/.pi/agent/auth.json`)
-y `/model` (`Ctrl+S` guarda el modelo por defecto). El proveedor `halo` de la config apunta a
-los modelos locales de `halo.example` y no necesita credenciales: aparece en
-`/model` nada más instalado el setup.
+y `/model` (`Ctrl+S` guarda el modelo por defecto). Los modelos propios (como `halo`, en
+`halo.example`) se declaran una vez en `~/.config/bond/config.toml` y
+`bond models sync` los lleva a pi, opencode, Crush y Codex; `bond run copilot` los usa en
+Copilot. Detalle en [docs/reference.md](docs/reference.md#modelos-globales-bond-models).
 
 Para el día a día:
 
@@ -151,6 +152,10 @@ piSetup/
 │   ├── main.mts                  # subcomandos
 │   ├── setup.mts                 # bond setup (antes install.sh)
 │   ├── doctor.mts                # bond doctor
+│   ├── config.mts                # registro global de modelos (~/.config/bond/config.toml)
+│   ├── models.mts                # bond models: init, list, probe, sync
+│   ├── agents.mts                # generadores de modelos por agente
+│   ├── run.mts                   # bond run copilot
 │   └── util.mts
 ├── install.sh                    # atajo a `bond setup`
 ├── bin/
@@ -170,7 +175,6 @@ piSetup/
 │   └── troubleshooting.md
 ├── pi/agent/                     # → symlinks desde ~/.pi/agent
 │   ├── settings.json             # ajustes de pi (declara el paquete ./pisetup)
-│   ├── models.json               # modelos locales (proveedor `halo`)
 │   ├── AGENTS.md                 # instrucciones globales (español, estilo, git, Herdr)
 │   └── mcp.json                  # MCP: context7 (docs de librerías), web (DuckDuckGo)
 └── herdr/

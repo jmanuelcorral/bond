@@ -30,6 +30,8 @@ Uso: bond <comando> [opciones]   (bond <comando> --help para el detalle)
 Máquina
   setup        Deja la máquina lista: pi, configuración, Herdr, bond en el PATH
   doctor       Comprueba la instalación y lo que depende de fuera
+  models       Registro global de modelos y su configuración en cada agente
+  run          Lanza un agente con su entorno de modelos (hoy: copilot)
 
 Herdr
 ${Object.entries(SCRIPTS)
@@ -60,6 +62,16 @@ async function main(argv: string[]): Promise<void> {
 			return wantsHelp ? console.log(SETUP_HELP) : setup(rest);
 		case "doctor":
 			return wantsHelp ? console.log(DOCTOR_HELP) : doctor(rest);
+		// models y run dependen de smol-toml: se cargan solo al usarlos, para que `bond setup`
+		// funcione en un clon recién descargado, antes de instalar dependencias.
+		case "models": {
+			const m = await import("./models.mts");
+			return wantsHelp ? console.log(m.MODELS_HELP) : m.models(rest);
+		}
+		case "run": {
+			const r = await import("./run.mts");
+			return wantsHelp && rest.length <= 1 ? console.log(r.RUN_HELP) : r.runAgent(rest);
+		}
 		case "logo": {
 			return console.log(renderLogo({ width: termWidth(), version: `v${VERSION}`, stretch: randomStretch() }).join("\n"));
 		}

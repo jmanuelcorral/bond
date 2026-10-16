@@ -35,7 +35,7 @@ pone \`bond\` en el PATH. Se puede relanzar tras cada cambio.
 
 const HERDR_MARKER = ">>> piSetup >>>";
 
-export function setup(args: string[]): void {
+export async function setup(args: string[]): Promise<void> {
 	let withPi = true;
 	let withHerdrConfig = false;
 	for (const a of args) {
@@ -50,12 +50,14 @@ export function setup(args: string[]): void {
 	log(`herdr ${run("herdr", ["--version"]).stdout.trim().split(/\s+/).pop() ?? "?"}`);
 
 	installPi(withPi);
+	installDeps();
 	linkPiConfig();
 	herdrSkill();
 	gitFilter();
 	contextTools();
 	herdrIntegration();
 	if (withHerdrConfig) herdrConfig();
+	await modelsStep();
 	linkBond();
 
 	log("Listo");
@@ -64,7 +66,7 @@ export function setup(args: string[]): void {
 
   Config de pi:   ${AGENT_DIR}  (symlinks a ${REPO_DIR}/pi/agent)
   Paquete pi:     ${AGENT_DIR}/pisetup -> ${REPO_DIR}
-  Modelos:        halo -> http://halo.example/v1  (elige con /model)
+  Modelos:        ~/.config/bond/config.toml  -> bond models list | probe | sync
   MCP:            context7, web  -> pi mcp list
   Comprobar todo: bond doctor
 
@@ -88,10 +90,34 @@ function installPi(withPi: boolean): void {
 	if (!isDryRun() && !which("pi")) die("pi sigue sin estar en el PATH tras la instalación; revisa PATH y reintenta.");
 }
 
+/** Dependencias de la CLI (smol-toml): node_modules del repo, desde package-lock.json. */
+function installDeps(): void {
+	if (existsSync(join(REPO_DIR, "node_modules", "smol-toml"))) return;
+	log("Instalando las dependencias de bond (npm ci, sin scripts)");
+	if (which("npm")) runAct("npm", ["ci", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: REPO_DIR });
+	else if (which("bun")) runAct("bun", ["install", "--frozen-lockfile", "--ignore-scripts"], { cwd: REPO_DIR });
+	else die("hace falta npm o bun para instalar las dependencias de bond");
+}
+
+/** Registro global de modelos: lo crea si falta (importando el models.json de pi) y sincroniza pi. */
+async function modelsStep(): Promise<void> {
+	if (isDryRun() && !existsSync(join(REPO_DIR, "node_modules", "smol-toml"))) {
+		console.log("    [dry-run] bond models init && bond models sync --agent pi");
+		return;
+	}
+	const m = await import("./models.mts");
+	log("Modelos globales");
+	m.init();
+	if (!isDryRun()) m.syncAgents({ agents: ["pi"] });
+	else console.log("    [dry-run] bond models sync --agent pi");
+	log("otros agentes (opencode, crush, codex): bond models sync");
+}
+
 function linkPiConfig(): void {
 	log(`Config de pi en ${AGENT_DIR}`);
 	act(`mkdir -p ${AGENT_DIR}/extensions`, () => mkdirSync(join(AGENT_DIR, "extensions"), { recursive: true }));
-	for (const f of ["settings.json", "models.json", "AGENTS.md", "mcp.json"]) {
+	// models.json no se enlaza: lo genera `bond models sync` desde ~/.config/bond/config.toml.
+	for (const f of ["settings.json", "AGENTS.md", "mcp.json"]) {
 		linkPath(join(REPO_DIR, "pi", "agent", f), join(AGENT_DIR, f));
 	}
 	// El repo es un paquete de pi; settings.json lo declara como "./pisetup", relativo a

@@ -129,9 +129,23 @@ pi lee la config al arrancar. Tras editar `settings.json` o `AGENTS.md`:
 Si editaste el repo pero el symlink apunta a otro sitio (o lo rompiste), `bond setup` lo
 repara. Los backups `.bak.<fecha>` de lo que había antes quedan en `~/.pi/agent`.
 
+## Un agente no ve los modelos del registro
+
+```bash
+bond models list           # qué agentes pueden usar cada proveedor
+bond models sync --dry-run # qué escribiría en cada agente
+```
+
+- Codex necesita que la pasarela sirva la API Responses; pi, opencode y Crush, la de chat.
+  `bond models probe` lo comprueba.
+- Crush: si en `crushrc` defines a mano un proveedor con el mismo id, bond no lo toca (lo
+  avisa en `sync`). Bórralo de tu `crushrc` para que lo gestione bond.
+- Claude Code y Gemini no pueden usar pasarelas compatibles con OpenAI.
+
 ## Los modelos de `halo` no aparecen en `/model`
 
-- `ls -l ~/.pi/agent/models.json` debe apuntar al repo. Roto o ausente: `bond setup`.
+- `bond models list` debe mostrar `halo` y su modelo; `bond models sync --check` dice si pi
+  está desfasado respecto a `~/.config/bond/config.toml` (arreglo: `bond models sync`).
 - `pi --list-models | grep halo` confirma que pi los ve sin arrancar la TUI.
 - `/model` recarga `models.json` al abrirse; en una sesión ya iniciada, `/reload`.
 
@@ -141,7 +155,8 @@ La pasarela lista más modelos de los que puede servir. `GET /v1/models` los mue
 al pedir un chat puede devolver `{"error": "Route not available"}` o `{"detail": "Not Found"}`:
 ese modelo no está montado ahora mismo.
 
-Quita de `pi/agent/models.json` lo que no responda y recarga. Declarar un modelo que no responde
+`bond models probe` enseña qué sirve la pasarela. Pon `enabled = false` al modelo en
+`~/.config/bond/config.toml`, `bond models sync` y recarga. Declarar un modelo que no responde
 solo produce fallos confusos desde `/model`.
 
 ## El primer `prompt` a un modelo local tarda mucho
@@ -152,7 +167,7 @@ a velocidad normal. Si `herdr agent prompt --wait` agota el timeout en esa prime
 
 ## La respuesta se corta a la mitad
 
-Mira `maxTokens` del modelo en `pi/agent/models.json`: `flash-halogen` está a 8192, y el bloque
+Mira `max_output` del modelo en `~/.config/bond/config.toml`: `flash-halogen` está a 8192, y el bloque
 comentado de `gufo-qwen38-27b` solo a 2048. Si reactas ese modelo y los diffs se truncan, el
 límite está ahí, no en `compaction.reserveTokens` de `settings.json`.
 

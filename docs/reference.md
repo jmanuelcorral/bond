@@ -10,7 +10,7 @@ Inventario completo: qué hay en el repo, dónde acaba cada cosa y cómo se toca
 | **Herdr** | Multiplexor de terminales consciente de agentes. Servidor en segundo plano que mantiene vivos los paneles. |
 | **Integración Herdr para pi** | Extensión de pi (`herdr-agent-state.ts`) que reporta a Herdr el estado real del agente. |
 | **Skill de Herdr** | Documento que se carga pi para saber controlar Herdr desde dentro de un panel. |
-| **`bond`** | CLI (`bin/bond`, `cli/`): `setup`, `doctor`, `dev`, `team`, `status`, `sessions`, `logo`. |
+| **`bond`** | CLI (`bin/bond`, `cli/`): `setup`, `doctor`, `models`, `run`, `dev`, `team`, `status`, `sessions`, `logo`. |
 | **`pidev`** | Lanzador del puesto de trabajo (`bond dev`). |
 | **`pistatus`** | Tabla de agentes vivos. |
 | **`piteam`** | Un agente por rama, cada uno en su worktree y workspace (`pidev --worktree` en bucle). |
@@ -26,10 +26,10 @@ El repo es la fuente de verdad; `~/.pi/agent` se enlaza a él.
 | En el repo | Destino | Contenido |
 |---|---|---|
 | `pi/agent/settings.json` | `~/.pi/agent/settings.json` | Ajustes de pi |
-| `pi/agent/models.json` | `~/.pi/agent/models.json` | Modelos locales (proveedor `halo`) |
 | `pi/agent/AGENTS.md` | `~/.pi/agent/AGENTS.md` | Instrucciones globales |
 | `pi/agent/mcp.json` | `~/.pi/agent/mcp.json` | Servidores MCP: `context7` y `web` |
 | raíz del repo (`package.json`) | `~/.pi/agent/pisetup` | Paquete de pi: `extensions/`, `skills/`, `prompts/` |
+| (generado) `bond models sync` | `~/.pi/agent/models.json` | Modelos, desde `~/.config/bond/config.toml` |
 | `herdr/config.snippet.toml` | se añade a `~/.config/herdr/config.toml` | Extras opcionales de Herdr |
 | (compartido) | `~/.agents/skills/herdr/SKILL.md` | Skill de Herdr; si no existe, se genera en `~/.pi/agent/skills/herdr/` |
 | (lo escribe Herdr) | `~/.pi/agent/extensions/herdr-agent-state.ts` | Integración |
@@ -109,64 +109,110 @@ En `pi/agent/settings.json`. Todos cambiables; esto es lo puesto y el por qué.
 Regla general de reintentos: dejar `retry.provider.maxRetries` en `0` salvo necesidad, para
 que pi gestione él mismo los errores de cuota.
 
-## Modelos locales (`models.json`)
+## Modelos globales (`bond models`)
 
-`pi/agent/models.json` declara el proveedor `halo` contra la pasarela de modelos locales
-(`llama-swap`, API OpenAI-compatible). Se enlaza a `~/.pi/agent/models.json` y se versiona:
-no lleva secretos, la `apiKey` es un dummy que la pasarela ignora.
+Los modelos se declaran **una vez** en `~/.config/bond/config.toml` (fuera del repo: son de
+tu máquina) y `bond models sync` genera la configuración de cada agente que puede usarlos.
 
-| Campo | Valor | Por qué |
-|---|---|---|
-| `baseUrl` | `http://halo.example/v1` | HTTP a pelo: el certificado de la host no cubre este nombre, con HTTPS falla `tls: unrecognized name` |
-| `api` | `openai-completions` | La pasarela expone `/v1/chat/completions` con streaming SSE |
-| `apiKey` | `halo` | Pi necesita una credencial para listar el modelo como disponible; manda `Authorization: Bearer halo` y la pasarela lo ignora |
+```toml
+[providers.halo]
+name = "Halo (local)"
+base_url = "http://halo.example/v1"
+free = true                       # coste 0: el pie de pi no simula gasto
+# api_key_env = "HALO_API_KEY"    # si la pasarela pide clave: el NOMBRE de la variable
 
-`compat` va puesto a mano porque pi autodedecta estas cosas por URL y esta host no la conoce:
+[[providers.halo.models]]
+id = "flash-halogen"
+context = 131072
+max_output = 8192
+reasoning = true
+# agents = ["pi", "opencode"]     # opcional: solo para esos agentes
+# enabled = false                 # apagado pero documentado
+
+[providers.halo.pi]               # ajustes que solo usa pi, copiados tal cual
+api = "openai-completions"
+[providers.halo.pi.compat]
+maxTokensField = "max_tokens"
+# ...
+```
+
+| Comando | Qué hace |
+|---|---|
+| `bond models init` | Crea `config.toml`. Si hay un `models.json` de pi, importa sus proveedores (y los modelos comentados con `//`, como `enabled = false`) |
+| `bond models list` | Proveedores, modelos, APIs y qué agentes pueden usar cada uno |
+| `bond models probe [id]` | Pregunta a la pasarela qué sirve: lista de modelos y las APIs `chat`, `responses` y `messages` (una petición tras otra; las pasarelas locales no atienden varias a la vez). Lo guarda en `~/.config/bond/state.json` |
+| `bond models sync` | Escribe la config de modelos de cada agente instalado. `--agent x`, `--dry-run` (enseña el diff), `--check` (sale con 1 si hay algo desfasado) |
+| `bond run copilot` | Lanza Copilot CLI contra un modelo del registro (ver abajo) |
+
+`bond setup` crea `config.toml` si falta y sincroniza pi; el resto de agentes, con
+`bond models sync`. `bond doctor` avisa si algún agente quedó desfasado.
+
+### Qué escribe en cada agente
+
+| Agente | Fichero | Cómo | Necesita de la pasarela |
+|---|---|---|---|
+| pi | `~/.pi/agent/models.json` | Sus proveedores dentro de `providers`; el resto del fichero, igual | API de chat |
+| opencode v2 | `~/.config/opencode/opencode.json(c)` | Ídem en `providers` (`settings.baseURL`, `limit.context/output`) | API de chat |
+| Crush | `~/.config/crush/crushrc` | Bloque `# >>> bond >>>` al final, con `provider add` / `model add` | API de chat |
+| Codex | `~/.codex/config.toml` | Bloque al final: `[model_providers.x]` con `wire_api = "responses"` y un perfil por modelo (`codex -p halo-flash-halogen`) | API Responses |
+| Copilot CLI | (nada) | `bond run copilot` pone `COPILOT_PROVIDER_BASE_URL`, `COPILOT_MODEL`, límites y API | chat o Responses |
+| Claude Code | — | No puede: solo habla la API de Anthropic (`/v1/messages`) | — |
+| Gemini CLI | — | No puede: solo habla la API de Gemini | — |
+
+Reglas para no pisar lo ajeno:
+
+- En los JSON, bond solo reescribe los proveedores que gestiona (los de ahora y los que
+  escribió la vez anterior, apuntados en `state.json`). Si quitas un proveedor del registro,
+  desaparece de los agentes; lo que añadiste tú a mano se queda.
+- En Crush y Codex, todo lo de bond va entre marcas; fuera de ellas no se toca nada. Si en
+  `crushrc` defines a mano un proveedor con el mismo id, bond no lo duplica y avisa: manda lo
+  tuyo. (Hoy pasa con `halo`, que tu `crushrc` define con la IP local `<IP-local>:18080`:
+  bórralo de ahí si quieres que lo gestione bond.)
+- La primera vez que bond toca un fichero, guarda una copia `.bak.<fecha>`.
+- Los JSON con comentarios los pierden al reescribirse; bond avisa antes.
+
+Comprobado de punta a punta con `flash-halogen`: pi (`pi -p`), opencode (`opencode run`),
+Crush (`crush models`) y Copilot (`bond run copilot -p`) responden a través de `halo`. Codex
+no está instalado: su bloque se genera pero no se ha probado con un Codex real.
+
+### `bond run copilot`
+
+```bash
+bond run copilot                                  # primer modelo usable
+bond run copilot --model halo/flash-halogen -p "explica este repo"
+```
+
+Copilot CLI admite un proveedor propio (BYOK) solo con variables de entorno, así que no hay
+fichero que generar: `bond run` las pone y lanza `copilot` con el resto de argumentos. No
+necesita cuenta de GitHub.
+
+### La pasarela `halo`
+
+`http://halo.example/v1` (llama-swap; la IP `<IP-local>:18080` es el mismo
+servicio detrás del proxy). HTTP a pelo: el certificado de la host no cubre este nombre y con
+HTTPS falla `tls: unrecognized name`. Sirve `/v1/chat/completions` y `/v1/responses`, no
+`/v1/messages`.
+
+Ajustes de pi (`[providers.halo.pi.compat]`), puestos a mano porque pi autodetecta estas cosas
+por URL y esta host no la conoce:
 
 | Clave | Valor | Verificado en la pasarela |
 |---|---|---|
-| `maxTokensField` | `max_tokens` | Acepta también `max_completion_tokens`; se fija `max_tokens` para no depender del autodetección |
+| `maxTokensField` | `max_tokens` | Acepta también `max_completion_tokens`; se fija `max_tokens` para no depender de la autodetección |
 | `thinkingFormat` | `openai` | El razonamiento vuelve en `reasoning_content` (también en streaming) |
-| `supportsReasoningEffort` | `true` | Acepta `reasoning_effort` sin quejarse |
-| `supportsUsageInStreaming` | `true` | Acepta `stream_options.include_usage` y devuelve `usage` al final del stream |
+| `supportsReasoningEffort` | `true` | Acepta `reasoning_effort` |
+| `supportsUsageInStreaming` | `true` | Acepta `stream_options.include_usage` y devuelve `usage` al final |
 | `supportsFinishReason` | `true` | Los chunks traen `finish_reason` |
 | `supportsDeveloperRole` | `true` | Acepta el rol `developer` |
-| `supportsStore` | `false` | `store` se acepta pero no significa nada aquí; mejor no mandarlo |
-
-Modelos declarados:
+| `supportsStore` | `false` | `store` se acepta pero no significa nada aquí |
 
 | Modelo | Estado | Contexto | Salida máx. | Razona | Herramientas |
 |---|---|---|---|---|---|
 | `flash-halogen` | activo | 131072 | 8192 | sí (`reasoning_content`) | sí, también en streaming |
-| `gufo-qwen38-27b` | comentado | 131072 | 2048 | no | sí (`auto` y `required`; no acepta `tool_choice` nombrado) |
+| `gufo-qwen38-27b` | `enabled = false` | 131072 | 2048 | no | sí (`auto` y `required`; no acepta `tool_choice` nombrado) |
 
-Solo `flash-halogen` está servido ahora en la pasarela, así que el bloque de `gufo` queda
-comentado con `//` para que no aparezca en `/model`. pi tolera comentarios `//` en
-`models.json` (los elimina antes del `JSON.parse`), así que el fichero puede guardar
-configuración apagada pero legible. Para reactivar: quitar los `//` y `/reload` en pi.
-
-Coste puesto a `0` en los cuatro campos: son modelos propios, el pie de sesión de pi no debe
-simular gasto.
-
-Comprobado end-to-end con `pi --model halo/flash-halogen --no-session -p "..."` y lo mismo con
-`gufo-qwen38-27b`: ambos usan herramientas (bash) y responden. `pi --list-models` los lista
-como `halo / flash-halogen` y `halo / gufo-qwen38-27b`.
-
-### Añadir o quitar modelos
-
-La lista viva de la pasarela:
-
-```bash
-python3 -c "import urllib.request,json;print([m['id'] for m in json.load(urllib.request.urlopen('http://halo.example/v1/models'))['data']])"
-```
-
-Cada modelo nuevo es una entrada en `providers.halo.models` con su `id` y, si la pasarela los
-reporta, `contextWindow` (de `context_window`) y `maxTokens` (de `meta.llamaswap.max_output_tokens`).
-`/model` recarga el fichero al abrirse; en una sesión ya abierta, `/reload`.
-
-`laya` y `winnow-12b-cpu` salen en `GET /v1/models` pero hoy devuelven 404 al pedirles un chat
-(`{"error": "Route not available"}` en winnow, `{"detail": "Not Found"}` en laya), así que no
-están declarados: en el picker solo conviene lo que responde.
+`laya` y `winnow-12b-cpu` salen en `GET /v1/models` pero devolvían 404 al pedirles un chat, así
+que no están declarados. `bond models probe` enseña qué lista la pasarela en cada momento.
 
 ### Gotchas de los modelos locales
 
@@ -180,7 +226,9 @@ están declarados: en el picker solo conviene lo que responde.
   confianza; no lo saques de ella.
 - **No uses el proveedor `llama.cpp` que trae pi** (`/login llama.cpp`, `LLAMA_BASE_URL`) para
   esto: está pensado para el router de llama.cpp en local, exige login interactivo y gestión de
-  carga con `/llama`. Con `models.json` el setup funciona headless en los paneles de Herdr.
+  carga con `/llama`. Con el registro de bond funciona headless en los paneles de Herdr.
+- **Varios agentes a la vez** contra la misma pasarela local dan errores 429: no atiende varias
+  peticiones en paralelo.
 
 ## Instrucciones globales (`AGENTS.md`)
 
@@ -289,8 +337,8 @@ opciones. Orden que sigue:
 2. Instala pi si falta: `bun add -g @earendil-works/pi-coding-agent`, o si no hay bun
    `npm install -g --ignore-scripts --prefix ~/.npm-global ...`.
 3. Crea `~/.pi/agent/extensions`.
-4. Enlaza `settings.json`, `models.json`, `AGENTS.md` y `mcp.json` (backup `.bak.<fecha>` de
-   lo previo).
+4. Instala las dependencias de la CLI (`npm ci --ignore-scripts`) si faltan.
+5. Enlaza `settings.json`, `AGENTS.md` y `mcp.json` (backup `.bak.<fecha>` de lo previo).
 5. Enlaza el repo como paquete en `~/.pi/agent/pisetup` y quita el symlink antiguo
    `~/.pi/agent/prompts` si apuntaba al repo.
 6. Deja un único skill de Herdr (ver arriba).
@@ -327,7 +375,8 @@ fuera, y sale con 1 si algo falla:
 | Filtro de git `pi-settings` | `bond setup` |
 | `rg`, `fd`, `ast-grep`, `uvx`, `jq` (aviso) | instalar la que falte |
 | Servidores MCP conectados (`pi mcp list`) | ver troubleshooting; `--quick` se lo salta |
-| La pasarela de cada proveedor de `models.json` sirve los modelos declarados | revisar la pasarela |
+| Dependencias (`node_modules`), `config.toml`, pi al día con el registro (otros agentes: aviso) | `bond setup`; `bond models sync` |
+| La pasarela de cada proveedor del registro sirve los modelos declarados | revisar la pasarela |
 | `bond` en el PATH y es el de este repo | `bond setup` |
 
 ## Snippet de Herdr
@@ -522,7 +571,8 @@ gestor de paquetes.
 
 ```bash
 # Desactivar la config versionada (solo los symlinks)
-rm ~/.pi/agent/settings.json ~/.pi/agent/models.json ~/.pi/agent/AGENTS.md ~/.pi/agent/mcp.json ~/.pi/agent/pisetup
+rm ~/.pi/agent/settings.json ~/.pi/agent/AGENTS.md ~/.pi/agent/mcp.json ~/.pi/agent/pisetup
+rm -r ~/.config/bond              # registro de modelos (los models.json generados se quedan)
 rm "$(command -v bond)"          # el enlace de bond en el PATH
 rm -rf ~/.pi/agent/skills/herdr   # solo si lo generó bond setup
 
