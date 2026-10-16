@@ -1,0 +1,22 @@
+# Prueba la instalación con Homebrew desde el tap (lanzar a mano tras actualizar la fórmula).
+name: brew
+
+on:
+  workflow_dispatch:
+
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-13, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Homebrew en el PATH (Linux)
+        if: runner.os == 'Linux'
+        run: echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
+      - run: brew install jmanuelcorral/tap/bond
+      - run: bond --version
+      - run: bond init --list
+        env:
+          BOND_HOME: ${{ runner.temp }}/bond-home
