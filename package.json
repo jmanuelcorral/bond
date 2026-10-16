@@ -1,6 +1,6 @@
 {
   "name": "bond",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "BOND: pi package and CLI for multi-agent work with Herdr",
   "keywords": [
@@ -21,5 +21,6 @@
   },
   "scripts": {
     "build": "bun scripts/build.mts"
-  }
+  },
+  "license": "MIT"
 }

@@ -23,6 +23,11 @@ const sums = Object.fromEntries(
 		.map((l) => l.trim().split(/\s+/))
 		.map(([hash, file]) => [file, hash]),
 );
+// La licencia (MIT) del tag, que Arch exige instalar con el paquete.
+const licenseRes = await fetch(`https://raw.githubusercontent.com/${REPO}/${tag}/LICENSE`);
+if (!licenseRes.ok) throw new Error(`no encuentro LICENSE en ${tag}`);
+const licenseSha = new Bun.CryptoHasher("sha256").update(await licenseRes.text()).digest("hex");
+
 const sha = (asset: string) => sums[asset] ?? (() => { throw new Error(`falta ${asset} en SHA256SUMS`); })();
 const url = (asset: string) => `https://github.com/${REPO}/releases/download/${tag}/${asset}`;
 
@@ -32,6 +37,7 @@ class Bond < Formula
   desc "${DESC}"
   homepage "https://github.com/${REPO}"
   version "${version}"
+  license "MIT"
 
   on_macos do
     on_arm do
@@ -75,18 +81,21 @@ pkgrel=1
 pkgdesc="${DESC}"
 arch=('x86_64' 'aarch64')
 url="https://github.com/${REPO}"
-license=('LicenseRef-unknown')
+license=('MIT')
 provides=('bond')
 conflicts=('bond')
 # Los binarios de Bun llevan su contenido al final del ejecutable: strip los rompe.
 options=('!strip' '!debug')
 source_x86_64=("bond-\${pkgver}-x86_64::${url("bond-linux-x64").replace(version, "${pkgver}")}")
 source_aarch64=("bond-\${pkgver}-aarch64::${url("bond-linux-arm64").replace(version, "${pkgver}")}")
+source=("LICENSE-\${pkgver}::https://raw.githubusercontent.com/${REPO}/v\${pkgver}/LICENSE")
+sha256sums=('${licenseSha}')
 sha256sums_x86_64=('${sha("bond-linux-x64")}')
 sha256sums_aarch64=('${sha("bond-linux-arm64")}')
 
 package() {
   install -Dm755 "\${srcdir}/bond-\${pkgver}-\${CARCH}" "\${pkgdir}/usr/bin/bond"
+  install -Dm644 "\${srcdir}/LICENSE-\${pkgver}" "\${pkgdir}/usr/share/licenses/\${pkgname}/LICENSE"
 }
 `;
 mkdirSync(join(ROOT, "packaging", "aur"), { recursive: true });

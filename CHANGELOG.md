@@ -1,5 +1,9 @@
 # Cambios
 
+## 1.0.1
+
+- Licencia MIT (`LICENSE`), declarada en npm, Homebrew y AUR.
+
 ## 1.0.0
 
 Primera versión instalable sin clonar el repo:

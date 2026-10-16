@@ -135,3 +135,8 @@ bond/
 
 `herdr/config.snippet.toml` lo aplica `bond setup --herdr-config`; `scripts/pi-resources` lista
 lo que pi carga de verdad en un directorio (para depurar).
+
+## Licencia
+
+[MIT](LICENSE). El pie de estado y `bond sessions` parten de ideas de
+[Jeyapaul/pi](https://github.com/Jeyapaul/pi) (MIT).
