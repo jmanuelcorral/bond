@@ -1,0 +1,47 @@
+# Al subir un tag vX.Y.Z: compila bond para todas las plataformas, genera SHA256SUMS y crea la
+# release de GitHub con las notas de esa versión del CHANGELOG. Los instaladores (install.sh,
+# install.ps1) y la fórmula de Homebrew descargan de aquí.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Versión del tag = versión de package.json
+        run: |
+          v="$(jq -r .version package.json)"
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "el tag $GITHUB_REF_NAME no coincide con package.json ($v)"; exit 1; }
+      - run: bun scripts/build.mts
+      - name: Prueba del binario
+        env:
+          BOND_HOME: ${{ runner.temp }}/bond-home
+        run: |
+          dist/bond-linux-x64 --version
+          repo="${{ runner.temp }}/repo" && mkdir -p "$repo" && cd "$repo" && git init -q
+          "$GITHUB_WORKSPACE/dist/bond-linux-x64" init --agents pi,claude
+          "$GITHUB_WORKSPACE/dist/bond-linux-x64" sync --check
+      - name: Paquete de npm y sumas
+        run: |
+          (cd dist/npm && npm pack --silent && mv ./*.tgz ../)
+          cd dist && sha256sum bond-* *.tgz > SHA256SUMS && cat SHA256SUMS
+      - name: Notas de la versión
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          awk -v v="$v" '$0 == "## " v {on=1; next} /^## / && on {exit} on' CHANGELOG.md > notes.md
+          printf '\n## Instalar\n\n```sh\ncurl -fsSL https://raw.githubusercontent.com/jmanuelcorral/bond/main/install.sh | sh\n```\n\nWindows: `irm https://raw.githubusercontent.com/jmanuelcorral/bond/main/install.ps1 | iex`\n' >> notes.md
+      - name: Crear la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "bond $GITHUB_REF_NAME" --notes-file notes.md dist/bond-* dist/*.tgz dist/SHA256SUMS

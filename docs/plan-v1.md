@@ -6,7 +6,9 @@ G2 hecha: `bond setup` interactivo (Herdr, endpoints, agentes, instrucciones), c
 `~/.bond/`. G3 hecha: `bond init` interactivo (agentes, agente por defecto, catálogo) y Bond
 Extensions por repo vía `~/.bond/pi`. G4 hecha: `bond` abre el puesto de trabajo; dev, team,
 status y sessions en TypeScript. G5 hecha: migración (`bond migrate`), fuera `pi/agent/`,
-`install.sh` y el filtro de git. Siguiente: G6 (distribución). Fecha: 2026-10-16.
+`install.sh` y el filtro de git. G6: releases (workflow con tag), instaladores sh y PowerShell,
+tap de Homebrew; npm y AUR preparados (`packaging/`, `dist/npm`), pendientes de publicar con
+tus cuentas. bond 1.0.0. Fecha: 2026-10-16.
 Sustituye la dirección de [plan-bond-cli.md](plan-bond-cli.md), que queda como historia.
 
 ## La idea en tres comandos

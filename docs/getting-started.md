@@ -17,16 +17,22 @@ De cero a trabajar con bond en una máquina nueva.
 |---|---|---|
 | Al menos un agente | pi, Claude Code, Codex, Copilot CLI, opencode, Crush o Gemini CLI | `bond setup` te dice cómo instalar cada uno |
 | `herdr` | abrir el puesto de trabajo | `herdr --version` |
-| Node 22.18 o más | bond desde el código (hasta la 1.0) | `node --version` |
 
 Herdr: https://herdr.dev/docs/install/
 
 ## 2. Instalar
 
+```sh
+curl -fsSL https://raw.githubusercontent.com/jmanuelcorral/bond/main/install.sh | sh   # Linux, macOS
+brew install jmanuelcorral/tap/bond                                                    # o Homebrew
+```
+
+En Windows: `powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/jmanuelcorral/bond/main/install.ps1 | iex"`.
+
+Luego:
+
 ```bash
-git clone https://github.com/jmanuelcorral/bond ~/gitrepos/bond
-cd ~/gitrepos/bond && npm ci --ignore-scripts
-bin/bond setup
+bond setup
 ```
 
 ## 3. `bond setup` (una vez por máquina)

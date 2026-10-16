@@ -1,5 +1,16 @@
 # Cambios
 
+## 1.0.0
+
+Primera versión instalable sin clonar el repo:
+
+- Binarios autocontenidos para Linux (x64, arm64), macOS (Intel, Apple silicon) y Windows (x64)
+  en cada release de GitHub, con `SHA256SUMS`.
+- Instaladores: `curl -fsSL https://raw.githubusercontent.com/jmanuelcorral/bond/main/install.sh | sh`
+  y, en Windows, `irm https://raw.githubusercontent.com/jmanuelcorral/bond/main/install.ps1 | iex`.
+- Homebrew: `brew install jmanuelcorral/tap/bond`.
+- `bond init --agents` puede preparar la config de agentes que no están instalados en la máquina.
+
 ## 0.11.0
 
 - Migración a la 1.0: la config de pi ya no se enlaza desde el repo de bond. `bond migrate` (y
