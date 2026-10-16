@@ -695,7 +695,11 @@ export async function init(args: string[]): Promise<void> {
 
 	// Agentes instalados, y lo elegido en bond setup como punto de partida.
 	const installed = SUPPORTED_AGENTS.filter((a) => which(a));
-	if (!installed.length) die("no hay ningún agente instalado (bond setup te dice cómo instalar uno)");
+	// Con --agents se puede preparar la config de agentes que aquí no están instalados (p. ej.
+	// para el resto del equipo, o en CI); sin él, se parte de los instalados.
+	const askedAgents = list("--agents");
+	if (!installed.length && !askedAgents) die("no hay ningún agente instalado (bond setup te dice cómo instalar uno; o usa --agents)");
+	for (const a of askedAgents ?? []) if (!installed.includes(a)) warn(`${a} no está instalado aquí: se genera su config igualmente`);
 	let global: { agents: string[]; default_agent?: string } = { agents: [] };
 	try {
 		const { configExists, loadConfig } = await import("./config.mts");
@@ -717,7 +721,7 @@ export async function init(args: string[]): Promise<void> {
 	const explicit = flags.some((f) => args.includes(f));
 	const interactive = !explicit && !args.includes("--yes") && !args.includes("-y") && process.stdin.isTTY === true;
 	let sel: Selection = {
-		agents: list("--agents") ?? current.agents,
+		agents: askedAgents ?? current.agents,
 		default_agent: opt("--default") ?? current.default_agent,
 		mcp: list("--mcp") ?? current.mcp,
 		skills: list("--skills") ?? current.skills,
