@@ -24,9 +24,14 @@ Si falta Herdr: https://herdr.dev/docs/install/
 
 ```bash
 cd ~/gitrepos/piSetup
-./install.sh --dry-run   # opcional: ver qué va a hacer
-./install.sh
+bin/bond setup --dry-run   # opcional: ver qué va a hacer
+bin/bond setup
+bond doctor                # comprueba la instalación
 ```
+
+Hace falta Node 22.18 o más (`node --version`): `bond` es TypeScript que Node ejecuta sin
+compilar. `bond setup` deja `bond` en el PATH, en `~/.local/bin`, `~/bin` o `~/.bun/bin`, el
+primero de ellos que esté en tu PATH.
 
 El instalador es idempotente y no pisa nada sin backup: si en `~/.pi/agent` ya existía algo
 de lo que él enlaza, lo guarda como `.bak.<fecha>` antes de crear el symlink.
@@ -35,19 +40,16 @@ Si además quieres los extras de Herdr (etiquetas de agente en los bordes de pan
 `new_cwd = "follow"`):
 
 ```bash
-./install.sh --herdr-config
+bond setup --herdr-config
 ```
 
-Conviene poner el bin del repo en el PATH:
-
-```bash
-export PATH="$HOME/gitrepos/piSetup/bin:$PATH"
-```
+Los scripts de `bin/` (`pidev`, `piteam`, `pistatus`, `pisessions`) también se usan como
+`bond dev`, `bond team`, `bond status` y `bond sessions`.
 
 ## 3. Primera sesión
 
 ```bash
-pidev ~/gitrepos/mi-proyecto --attach
+bond dev ~/gitrepos/mi-proyecto --attach
 ```
 
 Se abre Herdr con el workspace `pi:mi-proyecto`: pi a la izquierda, shell tuya a la

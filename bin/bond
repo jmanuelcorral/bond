@@ -1,0 +1,17 @@
+#!/usr/bin/env node
+// Punto de entrada de bond. Comprueba la versión de Node antes de cargar el código en
+// TypeScript (cli/*.mts), que Node ejecuta sin compilar desde la 22.18.
+"use strict";
+
+const [major, minor] = process.versions.node.split(".").map(Number);
+if (major < 22 || (major === 22 && minor < 18)) {
+	console.error(`error: bond necesita Node 22.18 o más (tienes ${process.versions.node})`);
+	process.exit(1);
+}
+
+const { pathToFileURL } = require("node:url");
+const { join } = require("node:path");
+import(pathToFileURL(join(__dirname, "..", "cli", "main.mts")).href).catch((e) => {
+	console.error(e);
+	process.exit(1);
+});

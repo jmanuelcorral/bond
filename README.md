@@ -73,11 +73,16 @@ comandos es pedirlo), nombres únicos, nada de merge, push ni limpieza automáti
 
 ## Instalación
 
+Requisitos: Node 22.18 o más, Herdr, y `bun` o `npm` para instalar pi.
+
 ```bash
 cd ~/gitrepos/piSetup
-./install.sh --dry-run   # opcional: ver qué va a hacer
-./install.sh
+bin/bond setup --dry-run   # opcional: ver qué va a hacer
+bin/bond setup             # deja además `bond` en el PATH
+bond doctor                # comprueba que todo está bien
 ```
+
+`./install.sh` sigue funcionando: es un atajo a `bond setup`.
 
 Qué hace: instala pi si falta (con `bun`, sin `sudo`), enlaza `settings.json`,
 `models.json` y `AGENTS.md` en `~/.pi/agent` (guardando backup de lo previo), registra el repo
@@ -92,8 +97,7 @@ opt-in porque tu `~/.config/herdr/config.toml` es tuyo).
 ## Arranque rápido
 
 ```bash
-export PATH="$HOME/gitrepos/piSetup/bin:$PATH"
-pidev ~/gitrepos/mi-proyecto --attach
+bond dev ~/gitrepos/mi-proyecto --attach
 ```
 
 Dentro de pi, una sola vez: `/login` (proveedor y credenciales, van a `~/.pi/agent/auth.json`)
@@ -104,11 +108,17 @@ los modelos locales de `halo.example` y no necesita credenciales: aparece en
 Para el día a día:
 
 ```bash
-pidev ~/gitrepos/mi-proyecto              # abre/enfoca su workspace
-pistatus                                  # agentes vivos, estado, panel
-pisessions                                # sesiones, quién las tiene abiertas, cómo retomarlas
+bond dev ~/gitrepos/mi-proyecto           # abre/enfoca su workspace
+bond status                               # agentes vivos, estado, panel
+bond sessions                             # sesiones, quién las tiene abiertas, cómo retomarlas
+bond doctor                               # ¿está todo bien?
 herdr agent prompt pi-mi-proyecto "revisa el diff" --wait
 ```
+
+`bond dev`, `team`, `status` y `sessions` son los scripts `pidev`, `piteam`, `pistatus` y
+`pisessions`, que siguen en `bin/` con las mismas opciones. Hacia dónde va `bond` (registro
+global de modelos, `bond init` por repo para todos los agentes):
+[docs/plan-bond-cli.md](docs/plan-bond-cli.md).
 
 ## Capa de contexto
 
@@ -137,8 +147,14 @@ piSetup/
 ├── skills/
 │   └── code-context/             # contexto: repo-map, ast-grep, context7, web
 ├── prompts/                      # /review /commit /handoff /delegate /team
-├── install.sh                    # instalador idempotente
+├── cli/                          # CLI bond (TypeScript, Node ≥ 22.18, sin compilar)
+│   ├── main.mts                  # subcomandos
+│   ├── setup.mts                 # bond setup (antes install.sh)
+│   ├── doctor.mts                # bond doctor
+│   └── util.mts
+├── install.sh                    # atajo a `bond setup`
 ├── bin/
+│   ├── bond                      # punto de entrada de la CLI
 │   ├── pidev                     # lanza el puesto de trabajo de un proyecto
 │   ├── piteam                    # un agente por rama, cada uno en su worktree
 │   ├── bond-logo                 # pinta el logo en la terminal

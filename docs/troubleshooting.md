@@ -2,7 +2,16 @@
 
 ## Diagnóstico rápido
 
-Tres comandos que responden casi todo:
+Primero:
+
+```bash
+bond doctor            # todo de una vez; --quick se salta los MCP
+```
+
+Comprueba Node, Herdr (servidor e integración), pi, los enlaces de `~/.pi/agent`, el paquete,
+el skill de Herdr, el filtro de git, las herramientas de contexto, los servidores MCP y que la
+pasarela de modelos sirve lo declarado. Cada fallo dice cómo arreglarlo (casi siempre
+`bond setup`). Si hace falta más detalle:
 
 ```bash
 herdr status                        # cliente, servidor, socket, compatibilidad
@@ -37,7 +46,7 @@ Un `unknown` no significa que el trabajo no haya terminado: lee el panel.
 |---|---|---|
 | `herdr no está en el PATH` | Herdr no instalado o no accesible | Instalar Herdr o arreglar PATH |
 | `jq no está en el PATH` | Falta `jq` | Instalar `jq`; `pidev` necesita leer JSON |
-| `pi no está en el PATH` | pi sin instalar | `./install.sh`, o `--no-agent` |
+| `pi no está en el PATH` | pi sin instalar | `bond setup`, o `--no-agent` |
 | `no pude leer los ids de 'workspace create'` | El servidor no devolvió lo esperado | `herdr status`; si el servidor está caído, `herdr` lo levanta y reintenta |
 | `aviso: Herdr aún no detecta pi` | Timeout o integración ausente | El workspace queda creado y útil: revisa con `herdr agent read <panel>` |
 | `--direction debe ser right o down` | Valor inválido | Herdr solo parte en esas dos direcciones |
@@ -63,7 +72,7 @@ Para el futuro, pasa la misma etiqueta: `pidev ~/otraruta/miapp -l pi:miapp`.
 - Comprueba que el paquete está enlazado: `ls -l ~/.pi/agent/pisetup` debe apuntar al repo y
   `pi list` debe mostrar `./pisetup`.
 - `scripts/pi-resources` lista lo que pi carga de verdad, con su origen y su ruta.
-- Symlink roto (moviste el repo): vuelve a correr `./install.sh`.
+- Symlink roto (moviste el repo): vuelve a correr `bond setup`.
 
 ## Un skill aparece duplicado o no es la versión que esperas
 
@@ -74,7 +83,7 @@ y de los paquetes. Si dos se llaman igual, pi se queda con el primero y avisa al
 scripts/pi-resources        # qué skill gana y desde qué ruta
 ```
 
-`install.sh` ya resuelve el caso de `herdr`: si existe `~/.agents/skills/herdr`, usa ese y
+`bond setup` ya resuelve el caso de `herdr`: si existe `~/.agents/skills/herdr`, usa ese y
 borra la copia que él mismo generaba en `~/.pi/agent/skills/herdr`.
 
 ## Un servidor MCP no conecta
@@ -117,12 +126,12 @@ pi lee la config al arrancar. Tras editar `settings.json` o `AGENTS.md`:
 /reload
 ```
 
-Si editaste el repo pero el symlink apunta a otro sitio (o lo rompiste), `./install.sh` lo
+Si editaste el repo pero el symlink apunta a otro sitio (o lo rompiste), `bond setup` lo
 repara. Los backups `.bak.<fecha>` de lo que había antes quedan en `~/.pi/agent`.
 
 ## Los modelos de `halo` no aparecen en `/model`
 
-- `ls -l ~/.pi/agent/models.json` debe apuntar al repo. Roto o ausente: `./install.sh`.
+- `ls -l ~/.pi/agent/models.json` debe apuntar al repo. Roto o ausente: `bond setup`.
 - `pi --list-models | grep halo` confirma que pi los ve sin arrancar la TUI.
 - `/model` recarga `models.json` al abrirse; en una sesión ya iniciada, `/reload`.
 

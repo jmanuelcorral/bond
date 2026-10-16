@@ -10,7 +10,8 @@ Inventario completo: qué hay en el repo, dónde acaba cada cosa y cómo se toca
 | **Herdr** | Multiplexor de terminales consciente de agentes. Servidor en segundo plano que mantiene vivos los paneles. |
 | **Integración Herdr para pi** | Extensión de pi (`herdr-agent-state.ts`) que reporta a Herdr el estado real del agente. |
 | **Skill de Herdr** | Documento que se carga pi para saber controlar Herdr desde dentro de un panel. |
-| **`pidev`** | Lanzador del puesto de trabajo. |
+| **`bond`** | CLI (`bin/bond`, `cli/`): `setup`, `doctor`, `dev`, `team`, `status`, `sessions`, `logo`. |
+| **`pidev`** | Lanzador del puesto de trabajo (`bond dev`). |
 | **`pistatus`** | Tabla de agentes vivos. |
 | **`piteam`** | Un agente por rama, cada uno en su worktree y workspace (`pidev --worktree` en bucle). |
 | **Cabecera BOND** | Extensión `extensions/bond-header.ts`: logo al arrancar pi, compacto en paneles estrechos. |
@@ -48,7 +49,7 @@ Al ser symlinks, editar el fichero en `~/.pi/agent` edita el repo, que está en 
 ```
 
 `settings.json` lo carga con `"packages": ["./pisetup"]`. Las rutas de paquetes en los
-ajustes de usuario se resuelven desde `~/.pi/agent`, así que `install.sh` crea el symlink
+ajustes de usuario se resuelven desde `~/.pi/agent`, así que `bond setup` crea el symlink
 `~/.pi/agent/pisetup -> <repo>`: el repo puede vivir en cualquier ruta y `settings.json` no
 cambia. Un paquete local se carga desde su sitio, sin copiarlo, así que editar el repo y hacer
 `/reload` basta.
@@ -63,7 +64,7 @@ también lo que guardes con `Ctrl+S` en `/model` o `/thinking`. Como el fichero 
 al repo, esos cambios caen en el repo:
 
 - `lastChangelogVersion` es estado de máquina. El filtro de git `pi-settings`
-  (`.gitattributes` + `scripts/git-clean-settings`, que registra `install.sh`) lo quita al
+  (`.gitattributes` + `scripts/git-clean-settings`, que registra `bond setup`) lo quita al
   hacer `git add`. El fichero de trabajo no se toca.
 - Modelo y thinking por defecto sí son configuración: aparecen en `git diff` y se versionan
   si los commiteas.
@@ -229,7 +230,7 @@ llegan bien. Se instala con `herdr integration install pi` y se quita con
 
 pi lee skills de `~/.pi/agent/skills/` y también de `~/.agents/skills/`, la ubicación
 compartida con otros agentes (Claude Code, opencode…), que es donde lo deja `npx skills add`.
-Dos skills con el mismo nombre colisionan, así que `install.sh` deja solo uno:
+Dos skills con el mismo nombre colisionan, así que `bond setup` deja solo uno:
 
 - Si existe `~/.agents/skills/herdr/SKILL.md`, usa ese y borra la copia de
   `~/.pi/agent/skills/herdr/` si es la que generaba él (si la editaste, avisa y no la toca).
@@ -279,22 +280,27 @@ lo limita la pasarela; con proveedores en la nube, la cuota.
 `reviewer` y tarea `revisa el diff` (`${@:2}`). Si el primer argumento no parece un rol
 (`/delegate revisa el diff`), el prompt le dice al agente que use `reviewer`.
 
-## `install.sh`
+## `bond setup` (antes `install.sh`)
 
-Orden que sigue y flags.
+`cli/setup.mts`. `./install.sh` es ahora un atajo que llama a `bond setup` con las mismas
+opciones. Orden que sigue:
 
 1. Comprueba `herdr` en el PATH.
 2. Instala pi si falta: `bun add -g @earendil-works/pi-coding-agent`, o si no hay bun
    `npm install -g --ignore-scripts --prefix ~/.npm-global ...`.
 3. Crea `~/.pi/agent/extensions`.
-4. Enlaza `settings.json`, `models.json` y `AGENTS.md` (backup `.bak.<fecha>` de lo previo).
+4. Enlaza `settings.json`, `models.json`, `AGENTS.md` y `mcp.json` (backup `.bak.<fecha>` de
+   lo previo).
 5. Enlaza el repo como paquete en `~/.pi/agent/pisetup` y quita el symlink antiguo
    `~/.pi/agent/prompts` si apuntaba al repo.
 6. Deja un único skill de Herdr (ver arriba).
 7. Registra el filtro de git `pi-settings` en el repo.
-8. Instala la integración de Herdr para pi si no está `current`.
-9. Con `--herdr-config`, añade el snippet a `~/.config/herdr/config.toml` entre marcas
-   `>>> piSetup >>>` y recarga el servidor.
+8. Avisa de las herramientas de contexto que falten (`rg`, `fd`, `ast-grep`, `uvx`, `jq`).
+9. Instala la integración de Herdr para pi si no está `current`.
+10. Con `--herdr-config`, añade el snippet a `~/.config/herdr/config.toml` entre marcas
+    `>>> piSetup >>>` y recarga el servidor.
+11. Enlaza `bond` en el primero de `~/.local/bin`, `~/bin` o `~/.bun/bin` que esté en el PATH.
+    Si ya hay otro `bond`, no lo toca.
 
 | Flag | Efecto |
 |---|---|
@@ -302,6 +308,27 @@ Orden que sigue y flags.
 | `--no-pi` | Se salta la instalación del CLI de pi |
 | `--herdr-config` | Aplica el snippet de Herdr (opt-in: tu `config.toml` es tuyo) |
 | `-h`, `--help` | Uso |
+
+Respeta `PI_CODING_AGENT_DIR`: con un directorio vacío hace una instalación desde cero sin
+tocar la tuya, que es como se prueba.
+
+## `bond doctor`
+
+`cli/doctor.mts`. Comprueba en unos segundos lo que deja `bond setup` y lo que depende de
+fuera, y sale con 1 si algo falla:
+
+| Comprobación | Fallo típico y arreglo |
+|---|---|
+| Node ≥ 22.18 | actualizar Node |
+| Herdr: binario, servidor, integración de pi | `herdr`; `bond setup` |
+| pi: binario, enlaces de `~/.pi/agent`, paquete `./pisetup` en `pi list` | `bond setup` |
+| Symlink antiguo `~/.pi/agent/prompts` (aviso) | `bond setup` |
+| Skill de Herdr: uno solo y al día con `herdr --skill` | `bond setup`; `npx skills update herdr` |
+| Filtro de git `pi-settings` | `bond setup` |
+| `rg`, `fd`, `ast-grep`, `uvx`, `jq` (aviso) | instalar la que falte |
+| Servidores MCP conectados (`pi mcp list`) | ver troubleshooting; `--quick` se lo salta |
+| La pasarela de cada proveedor de `models.json` sirve los modelos declarados | revisar la pasarela |
+| `bond` en el PATH y es el de este repo | `bond setup` |
 
 ## Snippet de Herdr
 
@@ -484,7 +511,7 @@ detector).
 ```bash
 herdr update                                    # Herdr
 bun add -g @earendil-works/pi-coding-agent@latest   # pi (si se instaló con bun)
-cd ~/gitrepos/piSetup && ./install.sh           # regenera skill de Herdr y revalida todo
+bond setup && bond doctor                       # revalida todo tras actualizar
 ```
 
 `pi update` solo aplica a instalaciones hechas con el instalador oficial
@@ -495,8 +522,9 @@ gestor de paquetes.
 
 ```bash
 # Desactivar la config versionada (solo los symlinks)
-rm ~/.pi/agent/settings.json ~/.pi/agent/models.json ~/.pi/agent/AGENTS.md ~/.pi/agent/pisetup
-rm -rf ~/.pi/agent/skills/herdr   # solo si lo generó install.sh
+rm ~/.pi/agent/settings.json ~/.pi/agent/models.json ~/.pi/agent/AGENTS.md ~/.pi/agent/mcp.json ~/.pi/agent/pisetup
+rm "$(command -v bond)"          # el enlace de bond en el PATH
+rm -rf ~/.pi/agent/skills/herdr   # solo si lo generó bond setup
 
 # Quitar la integración de Herdr
 herdr integration uninstall pi
@@ -505,5 +533,5 @@ herdr integration uninstall pi
 bun uninstall -g @earendil-works/pi-coding-agent    # o npm uninstall -g ...
 ```
 
-Los backups `.bak.<fecha>` que creó `install.sh` siguen en `~/.pi/agent`. Sesiones y
+Los backups `.bak.<fecha>` que creó `bond setup` siguen en `~/.pi/agent`. Sesiones y
 credenciales no se tocan.
