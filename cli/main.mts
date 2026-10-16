@@ -1,30 +1,22 @@
 // Punto de entrada de `bond`: interpreta el subcomando y delega.
 
-import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { randomStretch, renderLogo } from "../lib/bond-logo.mts";
 import { DOCTOR_HELP, doctor } from "./doctor.mts";
 import { SETUP_HELP, setup } from "./setup.mts";
-import { assetsDir, assetsPath, VERSION } from "./runtime.mts";
-import { die, setDryRun } from "./util.mts";
+import { assetsDir, VERSION } from "./runtime.mts";
+import { die, run, setDryRun } from "./util.mts";
 
 // Ancho de la terminal; si la salida no es una terminal, $COLUMNS o 80.
 const termWidth = () => process.stdout.columns || Number(process.env.COLUMNS) || 80;
 
 
-// Subcomandos que de momento son los scripts de bin/ (se migrarán a TypeScript más adelante).
-const SCRIPTS: Record<string, { script: string; summary: string }> = {
-	dev: { script: "pidev", summary: "Workspace de Herdr con un agente y tu shell (--kind, --worktree)" },
-	team: { script: "piteam", summary: "Un agente por rama, cada uno en su worktree" },
-	status: { script: "pistatus", summary: "Agentes vivos en Herdr" },
-	sessions: { script: "pisessions", summary: "Sesiones de pi y cómo retomarlas" },
-};
-
 function help(): void {
 	const logo = renderLogo({ width: Math.min(termWidth(), 72), version: `v${VERSION}`, stretch: randomStretch() });
 	console.log(`${logo.join("\n")}
 
-Uso: bond <comando> [opciones]   (bond <comando> --help para el detalle)
+Uso: bond [comando] [opciones]   (bond <comando> --help para el detalle)
 
 Máquina
   setup        Deja la máquina lista: pi, configuración, Herdr, bond en el PATH
@@ -36,10 +28,12 @@ Repo
   init         Prepara el repo para los agentes: .bond/bond.toml, AGENTS.md y su config
   sync         Regenera la config de cada agente desde .bond/bond.toml
 
-Herdr
-${Object.entries(SCRIPTS)
-	.map(([name, s]) => `  ${name.padEnd(12)} ${s.summary}`)
-	.join("\n")}
+Trabajo diario (Herdr)
+  (sin comando)  Dentro de un repo: abre su puesto de trabajo con el agente por defecto
+  dev [dir]      Lo mismo para otro directorio (--agent, --worktree…)
+  team           Un agente por rama, cada uno en su worktree
+  status         Agentes vivos en Herdr
+  sessions       Sesiones de pi y cómo retomarlas
 
 Otros
   logo         El logo de BOND
@@ -53,8 +47,16 @@ async function main(argv: string[]): Promise<void> {
 	// Desde el binario, los ficheros de bond se extraen la primera vez (salvo para la ayuda).
 	if (cmd && !["help", "-h", "--help", "version", "--version", "-v", "logo"].includes(cmd)) await assetsDir();
 
+	// `bond` a secas dentro de un repo: abre su puesto de trabajo (fuera de un repo, la ayuda).
+	if (cmd === undefined || (cmd.startsWith("-") && !["-h", "--help", "-v", "--version"].includes(cmd))) {
+		const inRepo = run("git", ["rev-parse", "--show-toplevel"]).status === 0 || existsSync(".bond/bond.toml");
+		if (!inRepo && cmd === undefined) return help();
+		await assetsDir();
+		const l = await import("./launch.mts");
+		return argv.includes("-h") || argv.includes("--help") ? console.log(l.LAUNCH_HELP) : l.launch(argv, { dev: false });
+	}
+
 	switch (cmd) {
-		case undefined:
 		case "help":
 		case "-h":
 		case "--help":
@@ -83,18 +85,22 @@ async function main(argv: string[]): Promise<void> {
 			if (wantsHelp) return console.log(cmd === "init" ? r.INIT_HELP : r.SYNC_HELP);
 			return cmd === "init" ? r.init(rest) : r.sync(rest);
 		}
+		case "dev":
+		case "team":
+		case "status": {
+			const l = await import("./launch.mts");
+			if (wantsHelp) return console.log(cmd === "team" ? "Uso: bond team <repo> <rama[:agente]>... [--agent <a>] [--base <ref>] [-- args]" : cmd === "status" ? "Uso: bond status [--json]" : l.LAUNCH_HELP);
+			if (cmd === "dev") return l.launch(rest, { dev: true });
+			return cmd === "team" ? l.team(rest) : l.status(rest);
+		}
+		case "sessions":
+			return (await import("./sessions.mts")).sessions(rest);
 		case "key":
 			return (await import("./keys.mts")).keyCommand(rest);
-		case "logo": {
+		case "logo":
 			return console.log(renderLogo({ width: termWidth(), version: `v${VERSION}`, stretch: randomStretch() }).join("\n"));
-		}
 	}
-
-	const script = SCRIPTS[cmd];
-	if (!script) die(`comando desconocido: ${cmd} (bond help)`, 2);
-	if (process.platform === "win32") die(`bond ${cmd} todavía no funciona en Windows (llega en la fase G4)`);
-	const r = spawnSync(assetsPath("bin", script.script), rest, { stdio: "inherit" });
-	process.exitCode = r.status ?? 1;
+	die(`comando desconocido: ${cmd} (bond help)`, 2);
 }
 
 await main(process.argv.slice(2));

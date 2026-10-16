@@ -22,11 +22,6 @@ const ASSET_PATHS = [
 	"lib",
 	"prompts",
 	"herdr/config.snippet.toml",
-	"bin/pidev",
-	"bin/piteam",
-	"bin/pistatus",
-	"bin/pisessions",
-	"bin/bond-logo",
 ];
 
 function walk(p: string): string[] {

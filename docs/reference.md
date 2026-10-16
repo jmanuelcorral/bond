@@ -11,11 +11,11 @@ Inventario completo: qué hay en el repo, dónde acaba cada cosa y cómo se toca
 | **Integración Herdr para pi** | Extensión de pi (`herdr-agent-state.ts`) que reporta a Herdr el estado real del agente. |
 | **Skill de Herdr** | Documento que se carga pi para saber controlar Herdr desde dentro de un panel. |
 | **`bond`** | CLI (`bin/bond`, `cli/`): `setup`, `doctor`, `models`, `run`, `init`, `sync`, `dev`, `team`, `status`, `sessions`, `logo`. |
-| **`pidev`** | Lanzador del puesto de trabajo (`bond dev`). |
-| **`pistatus`** | Tabla de agentes vivos. |
-| **`piteam`** | Un agente por rama, cada uno en su worktree y workspace (`pidev --worktree` en bucle). |
+| **`bond`** (sin comando) | Abre el puesto de trabajo del repo en Herdr ([puesto.md](puesto.md)); `bond dev <dir>` para otro directorio. |
+| **`bond status`** | Tabla de agentes vivos. |
+| **`bond team`** | Un agente por rama, cada uno en su worktree y workspace (`bond --worktree` en bucle). |
 | **Cabecera BOND** | Extensión `extensions/bond-header.ts`: logo al arrancar pi, compacto en paneles estrechos. |
-| **`pisessions`** | Sesiones de pi de todos los proyectos, con el comando para retomarlas y el agente de Herdr que las tiene abiertas. |
+| **`bond sessions`** | Sesiones de pi de todos los proyectos, con el comando para retomarlas y el agente de Herdr que las tiene abiertas. |
 | **Capa de contexto** | Tools `grep`/`find`/`ls`, tool `repo_map`, MCP `context7` y `duckduckgo`, `ast-grep`, skill `code-context`. |
 | **Pie de estado** | Extensión `extensions/status-line.ts`: agente de Herdr, rama, worktree, contexto, coste, peticiones. |
 
@@ -362,7 +362,7 @@ Ficheros Markdown en `prompts/` (parte del paquete); el nombre de fichero es el 
 | `/review [foco]` | foco, por defecto "los cambios sin commitear" | Revisión priorizada (bugs, seguridad, errores, rendimiento, estilo) con `fichero:línea`. No edita. |
 | `/commit [contexto]` | contexto extra | Propuesta de mensaje en inglés, muestra y espera OK. Nunca push. |
 | `/handoff [ruta]` | ruta, por defecto `.pi-handoff.md` | Estado escrito: objetivo, estado, ficheros, verificación, siguientes pasos. |
-| `/team <tarea...>` | tarea a repartir | Propone 2-3 subtareas independientes con su rama, espera tu OK, monta el equipo con `piteam`, reparte, espera, revisa cada rama y propone orden de integración. Sin merge ni push. |
+| `/team <tarea...>` | tarea a repartir | Propone 2-3 subtareas independientes con su rama, espera tu OK, monta el equipo con `bond team`, reparte, espera, revisa cada rama y propone orden de integración. Sin merge ni push. |
 | `/delegate [rol] [tarea...]` | rol `reviewer`; tarea por defecto, revisar los cambios sin commitear | Lanza otro pi con nombre único en un panel hermano, le pasa la tarea, espera, lee y resume. Ver [abajo](#herdr-skill-y-prompts). |
 
 Sustituciones disponibles en cualquier plantilla: `$1`, `$@` / `$ARGUMENTS`,
@@ -440,9 +440,9 @@ respeta, para que el agente no reciba instrucciones contradictorias:
 | Regla del skill | Cómo se cumple aquí |
 |---|---|
 | Solo se usa si el usuario lo pide, no porque algo tarde o se pueda paralelizar | `AGENTS.md` lo repite. Los skills `bond-delegate`/`bond-team` solo se activan a petición, y los prompts `/delegate` y `/team` empiezan con "Te pido expresamente que uses Herdr…": invocarlos es la petición explícita. |
-| Nada de workspaces, pestañas, worktrees ni otro directorio sin petición | `/delegate` trabaja en un panel hermano y en `$PWD`. Los worktrees los crean `pidev`/`piteam` (los lanzas tú) o `/team`, que lo pide expresamente y además espera tu OK al reparto antes de crear nada. |
-| Worktrees con `herdr worktree`, no `git worktree` a mano | `pidev --worktree` usa `worktree create`/`open` colgados del workspace `pi:<repo>`, así Herdr los agrupa y los sabe quitar. |
-| `--trust-repository` solo tras revisar el repo | `pidev`/`piteam` solo lo pasan si tú pones `--trust-repository`. |
+| Nada de workspaces, pestañas, worktrees ni otro directorio sin petición | `/delegate` trabaja en un panel hermano y en `$PWD`. Los worktrees los crean `bond`/`bond team` (los lanzas tú) o `/team`, que lo pide expresamente y además espera tu OK al reparto antes de crear nada. |
+| Worktrees con `herdr worktree`, no `git worktree` a mano | `bond --worktree` usa `worktree create`/`open` colgados del workspace `bond:<repo>`, así Herdr los agrupa y los sabe quitar. |
+| `--trust-repository` solo tras revisar el repo | `bond`/`bond team` solo lo pasan si tú pones `--trust-repository`. |
 | La CLI instalada manda sobre la memoria | Los prompts remiten al skill y a `herdr <grupo>`; solo fijan el procedimiento. |
 | Nombres de agente únicos | `/delegate` usa `<rol>-<n>` con el primer `n` libre en `herdr agent list`. |
 | Split según la forma del panel | `/delegate` lee su `rect` en `herdr pane layout`: `right` si `width >= 120` y `width >= 2*height`, si no `down`. |
@@ -456,7 +456,7 @@ a la derecha en un panel de 263×50 y 132×50 y hacia abajo en uno de 66×50, me
 autocontenido al delegado, lectura y verificación del resultado por el orquestador.
 
 `/team` también probado: en un repo de prueba repartió "función con test" y "README" en
-`team/discount` y `team/readme`, esperó el OK, montó el equipo con `piteam`, cada agente hizo
+`team/discount` y `team/readme`, esperó el OK, montó el equipo con `bond team`, cada agente hizo
 commit en su rama, y el orquestador revisó ambas ramas y propuso el orden de integración.
 
 **Paralelismo con el modelo local.** En esa prueba un agente recibió un 429 de la pasarela
@@ -638,7 +638,7 @@ porque el de Crush tiene licencia FSL.
 - `/header` vuelve a la cabecera de pi, con sus atajos de teclado.
 
 El logo vive en `lib/bond-logo.mts`, sin dependencias. Lo usan la cabecera, `bin/bond-logo`
-(para la terminal) y `pidev`/`piteam`, que imprimen la versión de una línea:
+(para la terminal) y `bond`/`bond team`, que imprimen la versión de una línea:
 
 ```bash
 bond-logo                       # al ancho de la terminal
@@ -647,7 +647,7 @@ bond-logo --small "texto"       # una línea: 007 BOND texto ╱╱╱
 ```
 
 Es `.mts` para que Node 22+ lo ejecute como módulo ES sin marcar todo el paquete como
-`"type": "module"` (que rompería `pisessions`, que usa `require`).
+`"type": "module"`.
 
 ## Pie de estado (`extensions/status-line.ts`)
 
@@ -674,14 +674,14 @@ un pie propio taparía si no. `/statusline` alterna entre este pie y el de pi.
 
 Adaptado de `status-line.ts` de [Jeyapaul/pi](https://github.com/Jeyapaul/pi) (MIT).
 
-## `pisessions`
+## `bond sessions`
 
 ```bash
-pisessions                 # las 20 más recientes de todos los proyectos
-pisessions fluzo           # filtra por nombre, directorio o id
-pisessions --here          # solo las del directorio actual
-pisessions --live          # solo las abiertas ahora en un agente de Herdr
-pisessions -n 0 --json     # todas, para scripts
+bond sessions                 # las 20 más recientes de todos los proyectos
+bond sessions fluzo           # filtra por nombre, directorio o id
+bond sessions --here          # solo las del directorio actual
+bond sessions --live          # solo las abiertas ahora en un agente de Herdr
+bond sessions -n 0 --json     # todas, para scripts
 ```
 
 Lee `~/.pi/agent/sessions/` (o `PI_CODING_AGENT_SESSION_DIR`). Para cada sesión muestra

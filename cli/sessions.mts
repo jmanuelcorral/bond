@@ -1,17 +1,16 @@
-#!/usr/bin/env node
-// Lista las sesiones de pi de todos los proyectos con el comando exacto para retomarlas,
-// y marca las que tiene abiertas ahora mismo un agente de Herdr.
-//
-// Idea tomada de pi-sessions de Jeyapaul/pi (MIT, https://github.com/Jeyapaul/pi).
+// `bond sessions`: sesiones de pi de todos los proyectos con el comando para retomarlas, y el
+// agente de Herdr que las tiene abiertas. Idea tomada de pi-sessions de Jeyapaul/pi (MIT).
 
-"use strict";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { execFileSync } from "node:child_process";
 
-const fs = require("node:fs");
-const os = require("node:os");
-const path = require("node:path");
-const { execFileSync } = require("node:child_process");
+export function sessions(args: string[]): void {
 
-const USAGE = `Uso: pisessions [texto] [opciones]
+
+
+const USAGE = `Uso: bond sessions [texto] [opciones]
 
 Lista las sesiones de pi, de la más reciente a la más antigua, con el comando para
 retomarlas. Las que están abiertas en un agente de Herdr muestran agente, estado y panel.
@@ -26,7 +25,7 @@ retomarlas. Las que están abiertas en un agente de Herdr muestran agente, estad
 Retomar: cd <directorio> && pi --session <id>. pi busca el id primero en las sesiones
 del directorio actual; por eso el comando hace cd antes.`;
 
-const args = process.argv.slice(2);
+
 let here = false;
 let live = false;
 let json = false;
@@ -36,7 +35,7 @@ for (let i = 0; i < args.length; i++) {
 	const a = args[i];
 	if (a === "-h" || a === "--help") {
 		console.log(USAGE);
-		process.exit(0);
+		return;
 	} else if (a === "--here") here = true;
 	else if (a === "--live") live = true;
 	else if (a === "--json") json = true;
@@ -178,12 +177,12 @@ if (limit > 0) rows = rows.slice(0, limit);
 
 if (json) {
 	console.log(JSON.stringify(rows.map(({ shortId, ...r }) => ({ ...r, short_id: shortId })), null, 2));
-	process.exit(0);
+	return;
 }
 
 if (rows.length === 0) {
 	console.log(all.length ? "Ninguna sesión coincide con el filtro." : `No hay sesiones en ${tilde(sessionsDir)}.`);
-	process.exit(0);
+	return;
 }
 
 const color = process.stdout.isTTY && !process.env.NO_COLOR;
@@ -212,3 +211,5 @@ table.forEach((row, i) => {
 	console.log(line);
 });
 if (total > rows.length) console.log(paint("2", `… ${total - rows.length} más (-n 0 para verlas todas)`));
+
+}

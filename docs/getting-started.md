@@ -1,95 +1,76 @@
 # Getting started
 
-De cero a trabajar con pi dentro de Herdr en una máquina nueva.
+De cero a trabajar con bond en una máquina nueva.
 
 ## Qué vas a obtener
 
-- **pi** como agente, con su config de usuario apuntando a este repo (instrucciones,
-  prompts y ajustes versionados).
-- **Herdr** como multiplexor: los paneles sobreviven a cerrar la terminal, y la barra lateral
-  te dice qué agente está `working`, `blocked` o `done` en cada proyecto.
-- Un lanzador (`pidev`) que monta el puesto de trabajo de cada proyecto en un comando.
+- Una CLI, `bond`, que configura tus agentes de código (pi, Claude Code, Codex, Copilot CLI,
+  opencode, Crush, Gemini CLI: los que tengas, con uno basta) y los abre en **Herdr**.
+- Herdr: los paneles sobreviven a cerrar la terminal y la barra lateral te dice qué agente
+  está `working`, `blocked` o `done` en cada proyecto.
+- Modelos propios (Ollama, LM Studio, una pasarela compatible con OpenAI) disponibles en los
+  agentes que pueden usarlos, declarados una sola vez.
 
 ## 1. Requisitos
 
 | Herramienta | Para qué | Comprobar |
 |---|---|---|
-| `herdr` | multiplexor | `herdr --version` |
-| `bun` o `npm` | instalar pi | `bun --version` / `npm --version` |
-| `jq` | leer los ids JSON de la API de Herdr | `echo '{}' \| jq .` |
+| Al menos un agente | pi, Claude Code, Codex, Copilot CLI, opencode, Crush o Gemini CLI | `bond setup` te dice cómo instalar cada uno |
+| `herdr` | abrir el puesto de trabajo | `herdr --version` |
+| Node 22.18 o más | bond desde el código (hasta la 1.0) | `node --version` |
 
-Si falta Herdr: https://herdr.dev/docs/install/
+Herdr: https://herdr.dev/docs/install/
 
 ## 2. Instalar
 
 ```bash
-cd ~/gitrepos/bond
-bin/bond setup --dry-run   # opcional: ver qué va a hacer
+git clone https://github.com/jmanuelcorral/bond ~/gitrepos/bond
+cd ~/gitrepos/bond && npm ci --ignore-scripts
 bin/bond setup
-bond doctor                # comprueba la instalación
 ```
 
-Hace falta Node 22.18 o más (`node --version`): `bond` es TypeScript que Node ejecuta sin
-compilar. `bond setup` deja `bond` en el PATH, en `~/.local/bin`, `~/bin` o `~/.bun/bin`, el
-primero de ellos que esté en tu PATH.
+## 3. `bond setup` (una vez por máquina)
 
-El instalador es idempotente y no pisa nada sin backup: si en `~/.pi/agent` ya existía algo
-de lo que él enlaza, lo guarda como `.bak.<fecha>` antes de crear el symlink.
+Te pregunta:
 
-Si además quieres los extras de Herdr (etiquetas de agente en los bordes de panel y
-`new_cwd = "follow"`):
+1. **Herdr**: si falta, cómo instalarlo.
+2. **Endpoints de modelos**: detecta Ollama y LM Studio; puedes añadir OpenAI o un endpoint
+   compatible (URL, clave si la pide). Comprueba qué sirve cada uno y te deja elegir modelos.
+3. **Agentes**: con cuáles trabajar y cuál es el de por defecto.
 
-```bash
-bond setup --herdr-config
-```
+Después lleva los modelos a cada agente que puede usarlos, instala las integraciones de Herdr y
+los skills de delegación, y copia tus instrucciones (`~/.bond/AGENTS.md`: idioma, estilo…) al
+fichero global de cada agente. Todo queda en `~/.bond/`; las claves, en `~/.bond/keys/` con
+permisos 600. Puedes repetirlo cuando quieras; `bond doctor` comprueba que todo está bien.
 
-Los scripts de `bin/` (`pidev`, `piteam`, `pistatus`, `pisessions`) también se usan como
-`bond dev`, `bond team`, `bond status` y `bond sessions`.
+La primera vez que abras cada agente, inicia sesión en él como siempre (`/login` en pi y
+Claude Code, etc.). Los modelos de tus endpoints no necesitan login.
 
-## 3. Primera sesión
-
-```bash
-bond dev ~/gitrepos/mi-proyecto --attach
-```
-
-Se abre Herdr con el workspace `pi:mi-proyecto`: pi a la izquierda, shell tuya a la
-derecha. Dentro de pi, una única vez:
-
-```
-/login
-```
-
-Elige proveedor y credenciales. Luego `/model` para elegir modelo (`Ctrl+S` lo guarda como
-defecto) y `/thinking` para el nivel de razonamiento. Las claves quedan en
-`~/.pi/agent/auth.json`, fuera de este repo.
-
-El modelo local del proveedor `halo` (`flash-halogen`) aparece en `/model` sin necesidad de
-login: apunta a `http://halo.example/v1` y se declara en
-`~/.bond/config.toml`, que `bond setup` crea la primera vez. Para usarlo también en
-opencode, Crush o Codex: `bond models sync`; en Copilot: `bond run copilot`.
-Detalle, verificación y cómo activar más modelos en [reference.md](reference.md).
-
-Prueba con algo pequeño:
-
-```
-explícame la estructura de este repo y cómo se ejecutan sus comprobaciones
-```
-
-## 4. Preparar un repo
-
-En cada proyecto, una vez:
+## 4. `bond init` (una vez por repo)
 
 ```bash
 cd ~/gitrepos/mi-proyecto
 bond init
 ```
 
-Crea `.bond/bond.toml`, un `AGENTS.md` para que lo completes y la configuración de cada agente
-instalado (pi, Claude Code, Copilot, opencode, Crush…): servidores MCP, skill `code-context` y
-comandos. Commitéalo todo. La primera vez
-que abras cada agente en el repo, te pedirá confiar en él.
+Te pregunta con qué agentes integrar el repo, cuál abre `bond` por defecto y qué herramientas
+del catálogo usar (servidores MCP de documentación y búsqueda, el skill `code-context`, los
+comandos `review`, `commit` y `handoff`). Crea `.bond/bond.toml`, un `AGENTS.md` para que lo
+completes y la config de cada agente. Commitéalo todo. La primera vez que abras cada agente en
+el repo, te pedirá confiar en él.
 
-## 5. El bucle de trabajo diario
+## 5. `bond` y el bucle de trabajo diario
+
+Dentro del repo:
+
+```bash
+bond
+```
+
+Abre Herdr con el agente por defecto en un panel y una shell en otro (si ya existe, lo enfoca).
+`bond --agent claude` abre otro de los agentes del repo; `bond --worktree feat/x`, en un worktree.
+Detalle en [puesto.md](puesto.md).
+
 
 **Trabajar en el panel.** Foco en el panel de pi y trabajar normal. Con el prefijo
 `ctrl+b` controlas Herdr: `prefix+v` parte a la derecha, `prefix+minus` parte abajo,
@@ -105,7 +86,7 @@ herdr pane run <panel-nuevo> "npm test"
 herdr pane wait-output <panel-nuevo> --match "test result" --timeout 120000
 ```
 
-**Conducir a pi desde otra terminal.** Desde cualquier shell de la máquina, sin tocar su
+**Conducir un agente desde otra terminal.** Desde cualquier shell de la máquina, sin tocar su
 panel:
 
 ```bash
@@ -116,22 +97,22 @@ herdr agent read pi-mi-proyecto --source recent-unwrapped --lines 200
 **Ver el estado global.**
 
 ```bash
-pistatus
+bond status
 ```
 
-Tabla con agente, kind, estado, cwd y panel. `pistatus --json` para scripts.
+Tabla con agente, kind, estado, cwd y panel. `bond status --json` para scripts.
 
 **Retomar una sesión.**
 
 ```bash
-pisessions
+bond sessions
 ```
 
 Sesiones de todos los proyectos, cuáles están abiertas ahora en Herdr y el comando exacto
 para retomar cada una. Dentro de pi, el pie de estado te dice qué agente eres, en qué rama
 y worktree, y cuánto contexto te queda.
 
-**Enchufar otro proyecto.** Otro `pidev` y otro workspace. La barra lateral de Herdr te
+**Enchufar otro proyecto.** `bond` dentro de ese otro repo: otro workspace. La barra lateral de Herdr te
 muestra todos los agentes de todos los proyectos a la vez: ves cuál está trabajando, cuál
 esperando y cuál terminado sin abrir nada.
 
@@ -147,19 +128,20 @@ pi --continue            # dentro de un panel, retomar la última sesión de pi 
 Para parar de verdad todo: `herdr server stop` (cierra todos los paneles; no lo hagas con
 trabajo en marcha).
 
-## 7. Comandos de pi que trae el setup
+## 7. Comandos que trae bond
 
-Plantillas versionadas en `prompts/` (llegan a pi por el paquete), disponibles en cualquier proyecto:
+En cada repo inicializado (Claude Code, opencode, Gemini; Copilot los lee como skills) y en pi
+con las Bond Extensions:
 
 | Comando | Uso |
 |---|---|
 | `/review [foco]` | Revisa los cambios sin commitear, solo hallazgos accionables |
 | `/commit [contexto]` | Redacta el mensaje en inglés y espera tu OK antes de commitear |
-| `/handoff [ruta]` | Deja el estado escrito en `.pi-handoff.md` para retomar luego |
-| `/team <tarea>` | Reparte la tarea entre 2-3 agentes (cualquier kind), cada uno en su worktree; espera tu OK y te resume cada rama |
-| `/delegate [rol[:kind]] [tarea...]` | Lanza otro agente (pi por defecto; `reviewer:claude` para Claude) en un panel hermano y te trae el informe |
+| `/handoff [ruta]` | Deja el estado escrito en `.handoff.md` para retomar luego |
 
-Tras editar a mano cualquier config del setup, aplica en caliente dentro de pi con `/reload`.
+Y en cualquier agente, los skills globales: `bond-delegate` (en pi, `/delegate rol[:agente]
+tarea`) para delegar en otro agente en un panel hermano, y `bond-team` (en pi, `/team tarea`)
+para repartir una tarea entre varios agentes en worktrees.
 
 ## Glosario mínimo
 
@@ -175,4 +157,4 @@ Tras editar a mano cualquier config del setup, aplica en caliente dentro de pi c
 | **working** | Está ejecutando. |
 | **unknown** | Hay agente pero Herdr no lo clasifica con seguridad. Léelo tú. |
 
-Siguiente parada: [reference.md](reference.md) para el inventario completo del setup.
+Siguiente parada: [reference.md](reference.md) para la referencia completa.

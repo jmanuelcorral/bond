@@ -769,3 +769,9 @@ ${sel.agents
 	.join("\n")}
   4. Abre el puesto de trabajo: bond`);
 }
+
+/** Agente por defecto del repo (default_agent de bond.toml, si es uno de sus agentes). */
+export function loadRepoDefault(root: string): string | undefined {
+	const cfg = loadRepoConfig(root);
+	return cfg.default_agent && cfg.agents.includes(cfg.default_agent) ? cfg.default_agent : cfg.agents[0];
+}

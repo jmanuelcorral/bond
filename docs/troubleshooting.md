@@ -16,7 +16,7 @@ pasarela de modelos sirve lo declarado. Cada fallo dice cómo arreglarlo (casi s
 ```bash
 herdr status                        # cliente, servidor, socket, compatibilidad
 herdr integration status | grep pi  # la integración de pi, current o no
-pistatus                            # qué agentes ve Herdr y en qué estado
+bond status                            # qué agentes ve Herdr y en qué estado
 ```
 
 ## pi no aparece como agente, o se queda en `unknown`
@@ -35,28 +35,28 @@ Causas habituales:
 - **Falta la integración.** `herdr integration status` debe decir `pi: current`. Si no:
   `herdr integration install pi` y reinicia el panel de pi.
 - **pi arrancó antes que la integración.** Sal de pi y vuelve a entrar en el panel.
-- **El panel no estaba en su prompt** cuando `agent start` lo lanzó. `pidev` necesita una
+- **El panel no estaba en su prompt** cuando `agent start` lo lanzó. `bond` necesita una
   shell interactiva libre; si no, arranca `pi` a mano en ese panel.
 
 Un `unknown` no significa que el trabajo no haya terminado: lee el panel.
 
-## `pidev` falla
+## `bond` falla al abrir el puesto
 
 | Mensaje | Causa | Solución |
 |---|---|---|
-| `herdr no está en el PATH` | Herdr no instalado o no accesible | Instalar Herdr o arreglar PATH |
-| `jq no está en el PATH` | Falta `jq` | Instalar `jq`; `pidev` necesita leer JSON |
-| `pi no está en el PATH` | pi sin instalar | `bond setup`, o `--no-agent` |
-| `no pude leer los ids de 'workspace create'` | El servidor no devolvió lo esperado | `herdr status`; si el servidor está caído, `herdr` lo levanta y reintenta |
-| `aviso: Herdr aún no detecta pi` | Timeout o integración ausente | El workspace queda creado y útil: revisa con `herdr agent read <panel>` |
+| `Herdr no está instalado` | Falta Herdr | https://herdr.dev/docs/install/ (o `bond setup`) |
+| `no hay ningún agente instalado` | Ningún agente en el PATH | `bond setup` te dice cómo instalar uno |
+| `Herdr no admite el agente 'x'` | No está en `herdr agent start --help` | Usa uno de la lista |
+| `el servidor de Herdr no arrancó` | `herdr server` no respondió | `herdr status`; arráncalo con `herdr` |
 | `--direction debe ser right o down` | Valor inválido | Herdr solo parte en esas dos direcciones |
 
-Recuerda: cuando `pidev` avisa, **no deshace nada**. Si quieres limpiar, cierra el workspace
-a mano: `herdr workspace close <id>`.
+Si el agente se queda esperando una respuesta (por ejemplo, Claude Code pidiendo confiar en la
+carpeta), bond lo dice y deja todo abierto: contesta en el panel. bond no deshace nada si algo
+falla; para limpiar, `herdr workspace close <id>`.
 
 ## Tengo dos workspaces para el mismo proyecto
 
-`pidev` reutiliza por **etiqueta**, no por ruta. Si lanzaste con `--label` distinto, o
+`bond` reutiliza por **etiqueta** (`bond:<repo>`), no por ruta. Si lanzaste con `--label` distinto, o
 renombraste la carpeta, hay dos.
 
 ```bash
@@ -64,7 +64,7 @@ herdr workspace list                 # ver ids y etiquetas
 herdr workspace close <el-sobrante>
 ```
 
-Para el futuro, pasa la misma etiqueta: `pidev ~/otraruta/miapp -l pi:miapp`.
+Para el futuro, pasa la misma etiqueta: `bond dev ~/otraruta/miapp -l bond:miapp`.
 
 ## Los comandos `/review` `/commit` etc. no aparecen
 
@@ -104,13 +104,13 @@ tail -50 ~/.pi/agent/mcp.log
 Con varios agentes sobre el mismo modelo local (`halo`), la pasarela puede responder 429 a
 alguno: no sirve tantas peticiones en paralelo. El pie de estado lo cuenta en `req ✗`. pi
 reintenta solo; si un agente se rinde, mándale la tarea otra vez cuando acabe otro. Para
-paralelismo real, reparte entre modelos o proveedores distintos (`pidev --kind`, o
-`-- --model …` en `piteam`).
+paralelismo real, reparte entre modelos o proveedores distintos (`bond --agent`, o
+`-- --model …` en `bond team`).
 
-## Un agente lanzado con `pidev` se queda en `blocked`
+## Un agente lanzado con `bond` se queda en `blocked`
 
 Típico de Claude Code (y otros) en una carpeta nueva, como un worktree recién creado:
-pregunta si confías en ella. `pidev` no contesta por ti.
+pregunta si confías en ella. `bond` no contesta por ti.
 
 ```bash
 herdr agent read <agente> --source visible   # qué pregunta

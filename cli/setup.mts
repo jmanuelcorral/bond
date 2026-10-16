@@ -187,7 +187,7 @@ export const CONTEXT_TOOLS: Array<[string, string]> = [
 	["fd", "tool find de pi"],
 	["ast-grep", "skill code-context: bun add -g @ast-grep/cli@0.45.3"],
 	["uvx", "uv: servidor MCP web"],
-	["jq", "pidev, pistatus, filtro de git"],
+	["jq", "bond dev, bond status, filtro de git"],
 ];
 
 function contextTools(): void {

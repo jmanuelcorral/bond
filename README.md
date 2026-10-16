@@ -13,129 +13,69 @@
 
 </details>
 
-**BOND** (*007 · licence to code*) es mi agente de desarrollo multiagente: el agente
-**[pi](https://pi.dev)** con harness, herramientas de contexto y skills propios, lanzado y
-coordinado con **[Herdr](https://herdr.dev)**. Todo versionado en un solo repo: la
-configuración vive aquí, se activa con symlinks y se puede reinstalar o mover de máquina sin
-perder nada.
+**BOND** (*007 · licence to code*) es una CLI para trabajar con varios agentes de código a la
+vez: pi, Claude Code, Codex, Copilot CLI, opencode, Crush y Gemini CLI, coordinados con
+**[Herdr](https://herdr.dev)**. Ninguno es obligatorio: basta con tener uno.
 
-Dos piezas:
+## En tres comandos
 
-- **pi** → el agente. Su config de usuario (`~/.pi/agent`) apunta a este repo.
-- **Herdr** → el multiplexor que mantiene los paneles vivos y sabe qué estado tiene cada
-  agente (`idle`, `working`, `blocked`, `done`) desde la barra lateral.
+```bash
+bond setup      # una vez por máquina: Herdr, endpoints de modelos, con qué agentes trabajas
+bond init       # una vez por repo: qué agentes integrar, cuál por defecto, qué herramientas
+bond            # cada día, dentro del repo: Herdr con el agente por defecto y una shell
+```
+
+- **`bond setup`** comprueba Herdr (y te dice cómo instalarlo si falta), detecta Ollama y LM
+  Studio, te deja añadir OpenAI o cualquier endpoint compatible (como una pasarela propia) y
+  lleva esos modelos a los agentes que pueden usarlos. Eliges tus agentes y uno por defecto;
+  tus instrucciones (`~/.bond/AGENTS.md`) llegan a todos. Todo queda en `~/.bond/`, las claves
+  con permisos 600.
+- **`bond init`** genera la config de cada agente elegido en el repo (instrucciones, servidores
+  MCP, skills, comandos) desde un único `.bond/bond.toml`, sin pisar lo que tengas a mano. Con pi,
+  además las **Bond Extensions** (pie de estado, cabecera, `repo_map`, `/delegate`, `/team`).
+- **`bond`** abre el puesto de trabajo en Herdr. Si ya existe, lo enfoca. `bond --agent claude`,
+  `bond --worktree feat/x` y `bond team . feat/a feat/b:claude` para más agentes a la vez.
 
 ## Documentación
 
 | Doc | Para qué |
 |---|---|
-| [docs/getting-started.md](docs/getting-started.md) | De cero a trabajar: requisitos, instalación, primer arranque, bucle diario, glosario |
-| [docs/pidev.md](docs/pidev.md) | `pidev` y `piteam` paso a paso: kinds de agente, worktrees, equipos, limpieza, casos de fallo |
-| [docs/reference.md](docs/reference.md) | Inventario completo: ficheros, cada ajuste y su porqué, integración, actualizar, desinstalar |
-| [docs/troubleshooting.md](docs/troubleshooting.md) | Diagnóstico rápido y errores habituales |
+| [docs/getting-started.md](docs/getting-started.md) | De cero a trabajar: instalación, setup, primer repo, bucle diario, glosario |
+| [docs/puesto.md](docs/puesto.md) | `bond`, `bond team`, `bond status`: workspaces, agentes, worktrees, equipos |
+| [docs/reference.md](docs/reference.md) | Referencia: cada comando, qué genera para cada agente y por qué |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Diagnóstico rápido (`bond doctor`) y errores habituales |
+| [docs/plan-v1.md](docs/plan-v1.md) | Hoja de ruta hasta la 1.0 |
 | [CHANGELOG.md](CHANGELOG.md) | Cambios por versión |
 
-## ¿Qué hace `pidev`?
+## Instalación
 
-Monta en Herdr el puesto de trabajo de un proyecto en un solo comando. Sin él serían cinco
-comandos de Herdr encadenados leyendo ids JSON a mano.
+Hasta la 1.0, desde el código (Node 22.18 o más):
 
-- Crea (o reutiliza) un **workspace** etiquetado `pi:<proyecto>` con el directorio del
-  proyecto puesto.
-- Parte el panel: **pi** en uno, **shell para ti** en el otro, con la proporción que pidas.
-- Lanza pi como **agente con nombre** (`pi-mi-proyecto`) y espera a que Herdr lo detecte
-  y lo vea listo para recibir entrada.
-- Te imprime los ids para conducirlo desde cualquier otra terminal.
-
-```
-workspace  pi:mi-proyecto
-└── tab
-    ├── panel w3:p5   pi            (60%)
-    └── panel w3:p6   shell         (40%)
+```bash
+git clone https://github.com/jmanuelcorral/bond ~/gitrepos/bond
+cd ~/gitrepos/bond && npm ci --ignore-scripts
+bin/bond setup     # deja además `bond` en el PATH
+bond doctor        # comprueba que todo está bien
 ```
 
-Es reutilizable por etiqueta: relánzalo y te lleva al workspace que ya existe en vez de
-crear otro. No cierra nada, no hace merge ni push y no responde por ti a los diálogos del
-agente.
+En la 1.0: binario autocontenido para Linux, macOS y Windows (Homebrew, AUR, `curl … | sh`,
+PowerShell) y `npm i -g @jmanuelcorral/bond`.
 
 ## Multiagente
 
 | Qué | Cómo |
 |---|---|
-| Otro agente en vez de pi | `pidev <dir> --kind claude` (cualquier kind de `herdr agent start`) |
-| Trabajar en un worktree | `pidev <dir> --worktree feat/x --base main` (usa `herdr worktree`) |
-| Un equipo, un agente por rama | `piteam <dir> feat/a feat/b:claude --base main` |
-| Delegar en otro agente (cualquier kind) en un panel hermano | Skill `bond-delegate`: en pi `/delegate reviewer:claude revisa el diff`; en Claude/Copilot `/bond-delegate …` |
-| Repartir una tarea entre worktrees | Skill `bond-team`: en pi `/team <tarea>`; propone el reparto (`rama:kind`), espera tu OK, monta el equipo y resume por rama |
+| Otro agente en vez del de por defecto | `bond --agent claude` |
+| Trabajar en un worktree | `bond --worktree feat/x --base main` (usa `herdr worktree`) |
+| Un equipo, un agente por rama | `bond team . feat/a feat/b:claude --base main` |
+| Ver qué hace cada uno | `bond status`; `bond sessions` para retomar sesiones de pi |
+| Delegar en otro agente desde un agente | Skill `bond-delegate`: en pi `/delegate reviewer:claude revisa el diff`; en Claude o Copilot `/bond-delegate …` |
+| Repartir una tarea entre worktrees desde un agente | Skill `bond-team`: en pi `/team <tarea>`; propone el reparto, espera tu OK y resume por rama |
 
-`bond-delegate` y `bond-team` son skills globales: los usa cualquier agente, así que un Claude
-puede delegar en un pi o un pi en un Copilot. Todo respeta las reglas del skill `herdr`: Herdr solo se usa cuando tú lo pides (lanzar estos
-comandos es pedirlo), nombres únicos, nada de merge, push ni limpieza automática. Detalle en
-[docs/pidev.md](docs/pidev.md) y [docs/reference.md](docs/reference.md#herdr-skill-y-prompts).
-
-## Instalación
-
-Requisitos: Node 22.18 o más, Herdr, y `bun` o `npm` para instalar pi.
-
-```bash
-git clone https://github.com/jmanuelcorral/bond ~/gitrepos/bond
-cd ~/gitrepos/bond
-bin/bond setup --dry-run   # opcional: ver qué va a hacer
-bin/bond setup             # deja además `bond` en el PATH
-bond doctor                # comprueba que todo está bien
-```
-
-`./install.sh` sigue funcionando: es un atajo a `bond setup`.
-
-Qué hace: instala pi si falta (con `bun`, sin `sudo`), enlaza `settings.json`,
-`AGENTS.md` y `mcp.json` en `~/.pi/agent` (guardando backup de lo previo), registra el repo
-como **paquete de pi** (`~/.pi/agent/bond`, de donde pi carga `extensions/`, `skills/` y
-`prompts/`), deja un único skill de Herdr visible para pi e instala la integración
-`~/.pi/agent/extensions/herdr-agent-state.ts`, que es lo que hace que los estados del
-agente sean reales y no adivinados por pantalla.
-
-Flags: `--dry-run`, `--no-pi`, `--herdr-config` (aplica los extras de Herdr, que son
-opt-in porque tu `~/.config/herdr/config.toml` es tuyo).
-
-## Arranque rápido
-
-```bash
-bond dev ~/gitrepos/mi-proyecto --attach
-```
-
-Dentro de pi, una sola vez: `/login` (proveedor y credenciales, van a `~/.pi/agent/auth.json`)
-y `/model` (`Ctrl+S` guarda el modelo por defecto). Los modelos propios (como `halo`, en
-`halo.example`) se declaran una vez en `~/.bond/config.toml` y
-`bond models sync` los lleva a pi, opencode, Crush y Codex; `bond run copilot` los usa en
-Copilot. Detalle en [docs/reference.md](docs/reference.md#modelos-globales-bond-models).
-
-Para el día a día:
-
-```bash
-bond dev ~/gitrepos/mi-proyecto           # abre/enfoca su workspace
-bond status                               # agentes vivos, estado, panel
-bond sessions                             # sesiones, quién las tiene abiertas, cómo retomarlas
-bond doctor                               # ¿está todo bien?
-herdr agent prompt pi-mi-proyecto "revisa el diff" --wait
-```
-
-`bond dev`, `team`, `status` y `sessions` son los scripts `pidev`, `piteam`, `pistatus` y
-`pisessions`, que siguen en `bin/` con las mismas opciones. Hacia dónde va `bond` (registro
-global de modelos, `bond init` por repo para todos los agentes):
-[docs/plan-bond-cli.md](docs/plan-bond-cli.md).
-
-## Por repo: `bond init`
-
-```bash
-cd ~/gitrepos/mi-proyecto
-bond init      # .bond/bond.toml + AGENTS.md + config de cada agente (MCP, skills, comandos)
-bond sync      # tras editar .bond/bond.toml
-```
-
-Instrucciones, servidores MCP, skills y comandos se declaran una vez en el repo y bond genera
-lo que lee cada agente (pi, Claude Code, Copilot, Codex, opencode, Crush, Gemini), sin pisar
-lo que tengas a mano. Detalle en
-[docs/reference.md](docs/reference.md#configuración-por-repo-bond-init-y-bond-sync).
+`bond-delegate` y `bond-team` son skills globales: cualquier agente puede delegar en cualquier
+otro. Todo respeta las reglas del skill `herdr`: Herdr solo se usa cuando lo pides, nombres
+únicos, nada de merge, push ni limpieza automática, y nadie responde por ti a las preguntas de
+un agente.
 
 ## Capa de contexto
 
@@ -164,56 +104,28 @@ prueba en Linux, macOS y Windows. Hoja de ruta: [docs/plan-v1.md](docs/plan-v1.m
 
 ```
 bond/
-├── package.json                  # el repo es un paquete de pi (manifiesto "pi")
-├── assets/
-│   └── bond-logo.png             # el logo para este README
-├── lib/
-│   └── bond-logo.mts             # logo de BOND: letras, degradado, campo de diagonales
-├── extensions/
-│   ├── bond-header.ts            # cabecera de pi con el logo de BOND
-│   ├── status-line.ts            # pie: agente de Herdr, rama/worktree, contexto, coste
-│   └── repo-map.ts               # tool repo_map: mapa compacto del repo
-├── catalog/                      # lo que bond init instala en un repo
-│   ├── mcp.json                  # servidores MCP: context7, web
-│   ├── skills/code-context/      # contexto: repo-map, ast-grep, context7, web
-│   └── commands/                 # review, commit, handoff (sintaxis común pi/Claude)
-├── global/skills/                # bond-delegate, bond-team (globales, para cualquier agente)
-├── prompts/                      # /delegate /team (atajos de pi a esos skills)
-├── cli/                          # CLI bond (TypeScript, Node ≥ 22.18, sin compilar)
+├── bin/bond                      # punto de entrada (comprueba Node y carga cli/)
+├── cli/                          # la CLI (TypeScript .mts, sin compilar desde el repo)
 │   ├── main.mts                  # subcomandos
-│   ├── setup.mts                 # bond setup (antes install.sh)
-│   ├── doctor.mts                # bond doctor
-│   ├── config.mts                # registro global de modelos (~/.bond/config.toml)
-│   ├── models.mts                # bond models: init, list, probe, sync
-│   ├── agents.mts                # generadores de modelos por agente
-│   ├── run.mts                   # bond run copilot
-│   ├── repo.mts                  # bond init, bond sync (config por repo)
-│   └── util.mts
-├── install.sh                    # atajo a `bond setup`
-├── bin/
-│   ├── bond                      # punto de entrada de la CLI
-│   ├── pidev                     # lanza el puesto de trabajo de un proyecto
-│   ├── piteam                    # un agente por rama, cada uno en su worktree
-│   ├── bond-logo                 # pinta el logo en la terminal
-│   ├── pistatus                  # tabla de agentes vivos
-│   └── pisessions                # sesiones de pi con comando para retomarlas
-├── scripts/
-│   ├── pi-resources              # qué carga pi de verdad (extensiones, prompts, skills)
-│   └── git-clean-settings        # filtro de git para settings.json
+│   ├── setup.mts, wizard.mts     # bond setup
+│   ├── repo.mts                  # bond init, bond sync
+│   ├── launch.mts, herdr.mts     # bond, bond dev, bond team, bond status
+│   ├── sessions.mts              # bond sessions
+│   ├── config.mts, keys.mts      # ~/.bond: config.toml, claves
+│   ├── endpoints.mts, models.mts, agents.mts, run.mts   # endpoints y modelos por agente
+│   ├── instructions.mts          # instrucciones globales de cada agente
+│   ├── catalog-agents.mts        # agentes conocidos y cómo instalarlos
+│   ├── doctor.mts, runtime.mts, util.mts
+├── catalog/                      # lo que bond init instala en un repo
+│   ├── mcp.json                  # servidores MCP: context7, duckduckgo
+│   ├── skills/code-context/
+│   └── commands/                 # review, commit, handoff (sintaxis común)
+├── global/skills/                # bond-delegate, bond-team (globales, para cualquier agente)
+├── extensions/, prompts/, lib/   # Bond Extensions de pi (paquete: package.json → "pi")
+├── scripts/build.mts             # binarios y paquete de npm
 ├── docs/
-│   ├── getting-started.md
-│   ├── pidev.md
-│   ├── reference.md
-│   └── troubleshooting.md
-├── pi/agent/                     # → symlinks desde ~/.pi/agent
-│   ├── settings.json             # ajustes de pi (declara el paquete ./bond)
-│   ├── AGENTS.md                 # instrucciones globales (español, estilo, git, Herdr)
-│   └── mcp.json                  # MCP: context7 (docs de librerías), web (DuckDuckGo)
-└── herdr/
-    └── config.snippet.toml       # extras de Herdr, opcionales
+└── .github/workflows/ci.yml      # compila y prueba en Linux, macOS y Windows
 ```
 
-El repo está en git: es la historia de la config de tu agente y lo que permite reconstruir
-el puesto de trabajo en otra máquina. pi escribe estado en `settings.json`
-(`lastChangelogVersion`); el filtro `pi-settings` (`.gitattributes`) lo quita al hacer
-`git add`, así que no ensucia los commits.
+Mientras dure la migración a la 1.0 (fase G5 del plan), `pi/agent/`, `install.sh`,
+`scripts/git-clean-settings` y `herdr/` siguen ahí para quien instale desde el código.

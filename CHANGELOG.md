@@ -1,5 +1,27 @@
 # Cambios
 
+## 0.10.0
+
+- `bond` a secas dentro de un repo abre su puesto de trabajo en Herdr con el agente por
+  defecto: arranca el servidor si hace falta, ofrece `bond init` si el repo no tiene bond y
+  regenera su config si está desfasada. `--agent`, `--worktree`, `--no-focus`, `--no-attach`.
+- `bond dev`, `bond team`, `bond status` y `bond sessions` pasan a TypeScript (funcionan en
+  Windows); se quitan los scripts bash `pidev`, `piteam`, `pistatus` y `pisessions`.
+- Etiquetas de workspace `bond:<repo>` (se reconocen las antiguas `pi:<repo>`).
+
+## 0.9.0
+
+- `bond init` interactivo: agentes del repo, agente por defecto y herramientas del catálogo; en
+  un repo ya inicializado cambia solo la selección. Bond Extensions de pi por repo vía
+  `~/.bond/pi`.
+
+## 0.8.0
+
+- `bond setup` interactivo: Herdr, endpoints (detecta Ollama y LM Studio; OpenAI y compatibles),
+  agentes elegidos y por defecto, instrucciones personales en cada agente. Config en `~/.bond/`,
+  claves en `~/.bond/keys/` (600).
+- bond se compila como binario autocontenido (Linux, macOS, Windows) y paquete de npm.
+
 ## 0.7.0
 
 - El proyecto pasa a llamarse **bond** y se publica en GitHub.
