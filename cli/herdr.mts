@@ -67,6 +67,19 @@ export function agents(timeout?: number): HerdrAgent[] {
 	}
 }
 
+/**
+ * Preguntas que un agente enseña sin que Herdr lo marque como blocked. pi pregunta si confía en
+ * la carpeta del proyecto (cada worktree es una carpeta nueva) y Herdr lo da por idle: el Enter
+ * del primer prompt elegiría "Trust" por ti y la tarea se perdería.
+ */
+const QUESTIONS: Array<[RegExp, string]> = [[/Trust project folder\?/, "confiar en la carpeta del proyecto"]];
+
+/** Pregunta que espera respuesta en la pantalla del agente, si la hay. */
+export function pendingQuestion(agent: string): string | undefined {
+	const r = run("herdr", ["agent", "read", agent, "--source", "visible", "--lines", "60"], { timeout: 5000 });
+	return r.status === 0 ? QUESTIONS.find(([re]) => re.test(r.stdout))?.[1] : undefined;
+}
+
 /** Kinds de agente que admite la versión instalada de Herdr. */
 export function supportedKinds(): string[] {
 	const help = run("herdr", ["agent", "start", "--help"]).stdout;

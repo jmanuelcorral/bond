@@ -4,7 +4,7 @@
 
 import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { agents, attach, ensureServer, focusWorkspace, herdr, insideHerdr, requireHerdr, slugify, supportedKinds, uniqueAgentName, workspaceByLabel } from "./herdr.mts";
+import { agents, attach, ensureServer, focusWorkspace, herdr, insideHerdr, pendingQuestion, requireHerdr, slugify, supportedKinds, uniqueAgentName, workspaceByLabel } from "./herdr.mts";
 import { caution, die, dim, log, ok, run, warn, which } from "./util.mts";
 
 export const LAUNCH_HELP = `Uso: bond [opciones] [-- argumentos del agente]
@@ -50,7 +50,7 @@ export interface Opened {
 	blocked?: boolean;
 }
 
-const gitRoot = (dir: string) => {
+export const gitRoot = (dir: string) => {
 	const r = run("git", ["-C", dir, "rev-parse", "--show-toplevel"]);
 	return r.status === 0 ? r.stdout.trim() : undefined;
 };
@@ -109,7 +109,7 @@ export function openWorkspace(o: OpenOptions): Opened {
 	const agentName = uniqueAgentName(slugify(`${o.agent}-${name}${o.worktree ? `-${o.worktree}` : ""}`));
 	try {
 		herdr(["agent", "start", agentName, "--kind", o.agent, "--pane", agentPane, "--timeout", "60000", ...(o.agentArgs.length ? ["--", ...o.agentArgs] : [])]);
-		return { ws, label, cwd, agentPane, shellPane, agentName, reused: false };
+		return { ws, label, cwd, agentPane, shellPane, agentName, reused: false, blocked: pendingQuestion(agentName) !== undefined };
 	} catch {
 		// Suele ser una pregunta del agente (confiar en la carpeta...): no se contesta por ti.
 		const blocked = agents().find((a) => a.name === agentName)?.agent_status === "blocked";
@@ -151,7 +151,7 @@ function parse(args: string[], withDir: boolean) {
 }
 
 /** Agente a lanzar: el pedido, el del repo, el de bond setup o el primero instalado. */
-async function chooseAgent(asked: string | undefined, repoDefault: string | undefined): Promise<string> {
+export async function chooseAgent(asked: string | undefined, repoDefault: string | undefined): Promise<string> {
 	let agent = asked ?? repoDefault;
 	if (!agent) {
 		try {
@@ -217,97 +217,6 @@ export async function launch(args: string[], opts: { dev: boolean }): Promise<vo
 	if (!inside && o.attach) attach();
 	if (inside) console.log(ok(o.focus ? "  listo" : "  listo (en segundo plano)"));
 	else console.log(dim("  herdr para engancharte"));
-}
-
-export const TEAM_HELP = `Uso: bond team [repo] <rama[:agente]>... [opciones] [-- argumentos de los agentes]
-
-Abre un worktree y un agente por rama, en segundo plano, y enseña los agentes del repo.
-Sin [repo], el repo del directorio actual. El agente de cada rama: el de rama:agente, si no
---agent, si no el agente por defecto del repo (.bond/bond.toml), si no el de bond setup.
-Los worktrees salen de lo commiteado: lo que no esté en un commit no lo verán.
-
-  -a, --agent <agente>   Agente para las ramas sin :agente
-  -b, --base <ref>       Ref de la que salen las ramas nuevas
-  --trust-repository     Se pasa a herdr worktree (solo en repos revisados)`;
-
-export interface TeamArgs {
-	dir?: string;
-	agent?: string;
-	base?: string;
-	trust: boolean;
-	specs: Array<{ branch: string; agent?: string }>;
-	agentArgs: string[];
-}
-
-/**
- * Argumentos de bond team. El primero es el repo solo si es una carpeta que existe; si no, es
- * ya una rama (bond team feat/a feat/b:claude, dentro del repo).
- */
-export function parseTeam(args: string[], isDir: (p: string) => boolean = existsSync): TeamArgs {
-	const o: TeamArgs = { trust: false, specs: [], agentArgs: [] };
-	const positional: string[] = [];
-	for (let i = 0; i < args.length; i++) {
-		const a = args[i];
-		const val = () => args[++i] ?? die(`${a} necesita un valor (bond team --help)`);
-		if (a === "-k" || a === "--kind" || a === "-a" || a === "--agent") o.agent = val();
-		else if (a === "-b" || a === "--base") o.base = val();
-		else if (a === "--trust-repository") o.trust = true;
-		else if (a === "--") {
-			o.agentArgs = args.slice(i + 1);
-			break;
-		} else if (a.startsWith("-")) die(`opción desconocida: ${a} (bond team --help)`);
-		else positional.push(a);
-	}
-	if (positional.length && isDir(positional[0])) o.dir = positional.shift();
-	const seen = new Set<string>();
-	for (const spec of positional) {
-		const [branch, agent, ...extra] = spec.split(":");
-		if (!branch || extra.length || agent === "") die(`rama mal escrita: ${spec} (rama o rama:agente)`);
-		if (seen.has(branch)) die(`rama repetida: ${branch}`);
-		seen.add(branch);
-		o.specs.push({ branch, agent });
-	}
-	if (!o.specs.length) die("faltan las ramas: bond team [repo] <rama[:agente]>... (bond team --help)", 2);
-	return o;
-}
-
-/** `bond team`: un agente por rama, cada uno en su worktree. */
-export async function team(args: string[]): Promise<void> {
-	requireHerdr();
-	const o = parseTeam(args);
-	const root = gitRoot(resolve(o.dir ?? ".")) ?? die(`no es un repo git: ${resolve(o.dir ?? ".")}`);
-	// Antes de tocar Herdr: un nombre de rama inválido dejaría un workspace a medias.
-	const bad = o.specs.filter((s) => run("git", ["-C", root, "check-ref-format", "--branch", s.branch]).status !== 0).map((s) => s.branch);
-	if (bad.length) die(`nombre de rama no válido para git: ${bad.map((b) => JSON.stringify(b)).join(", ")}`);
-
-	// Agentes del repo (bond.toml): el de por defecto, y para avisar de los que no tienen config.
-	let repoAgents: string[] | undefined;
-	let repoDefault: string | undefined;
-	if (existsSync(join(root, ".bond", "bond.toml"))) {
-		process.chdir(root);
-		const { loadRepoAgents } = await import("./repo.mts");
-		({ agents: repoAgents, default_agent: repoDefault } = loadRepoAgents(root));
-	}
-	const defaultAgent = await chooseAgent(o.agent, repoDefault);
-	const plan: Array<{ branch: string; agent: string }> = [];
-	for (const s of o.specs) plan.push({ branch: s.branch, agent: s.agent ? await chooseAgent(s.agent, undefined) : defaultAgent });
-	const foreign = [...new Set(plan.map((p) => p.agent))].filter((a) => repoAgents && !repoAgents.includes(a));
-	if (foreign.length) warn(`${foreign.join(", ")} no está entre los agentes del repo: sin su config (MCP, skills...). Añádelo con bond init`);
-	if (run("git", ["-C", root, "status", "--porcelain"]).stdout.trim()) warn("hay cambios sin commitear: los worktrees salen de lo commiteado y no los verán");
-
-	if (!insideHerdr()) await ensureServer();
-	for (const { branch, agent } of plan) {
-		try {
-			const r = openWorkspace({ dir: root, agent, worktree: branch, base: o.base, direction: "right", ratio: "0.6", focus: false, trust: o.trust, agentArgs: o.agentArgs });
-			console.log(`${ok("✓")} ${branch}  ${r.reused ? dim(`ya abierto (${r.ws})`) : `${r.agentName} (${agent}) en ${r.agentPane}${r.blocked ? caution(" · espera una respuesta tuya") : ""}`}`);
-		} catch (e) {
-			warn(`${branch}: ${(e as Error).message}`);
-		}
-	}
-	const { renderSmall } = await import("../lib/bond-logo.mts");
-	console.log(`\n  ${renderSmall(60, `equipo en ${basename(root)}`)}\n`);
-	status([], `/worktrees/${basename(root)}/`);
-	console.log(dim(`\n  Repartir trabajo: herdr agent prompt <agente> "la tarea" --wait\n  Quitar un worktree (borra la carpeta, no la rama): herdr worktree remove --workspace <id>`));
 }
 
 /** `bond status`: agentes vivos en Herdr. */
