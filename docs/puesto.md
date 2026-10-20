@@ -53,11 +53,14 @@ por ejemplo en un worktree), bond lo dice y no contesta por ti.
 ## `bond team`
 
 ```bash
-bond team <repo> <rama[:agente]>... [--agent <a>] [--base <ref>] [-- args de los agentes]
+bond team [repo] <rama[:agente]>... [--agent <a>] [--base <ref>] [-- args de los agentes]
 ```
 
 Abre un worktree y un agente por rama, en segundo plano, y enseña la tabla de agentes de ese
-repo. `rama:agente` cambia el agente de esa rama. El trabajo se reparte después: con
+repo. Sin `[repo]`, el del directorio actual. Cada rama lleva el agente de `rama:agente`; si no,
+el de `--agent`; si no, el agente por defecto del repo (`default_agent` de `.bond/bond.toml`) y,
+si no hay, el de `bond setup`. Avisa si un agente no está entre los del repo (no tendrá su
+config) y si hay cambios sin commitear, que los worktrees no verán. El trabajo se reparte después: con
 `herdr agent prompt <agente> "…"`, o desde cualquier agente con el skill `bond-team` (en pi,
 `/team`), que además propone el reparto y recoge los resultados.
 

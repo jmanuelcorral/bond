@@ -786,6 +786,11 @@ ${sel.agents
 
 /** Agente por defecto del repo (default_agent de bond.toml, si es uno de sus agentes). */
 export function loadRepoDefault(root: string): string | undefined {
+	return loadRepoAgents(root).default_agent;
+}
+
+/** Agentes del repo y el de por defecto, de bond.toml. */
+export function loadRepoAgents(root: string): { agents: string[]; default_agent?: string } {
 	const cfg = loadRepoConfig(root);
-	return cfg.default_agent && cfg.agents.includes(cfg.default_agent) ? cfg.default_agent : cfg.agents[0];
+	return { agents: cfg.agents, default_agent: cfg.default_agent && cfg.agents.includes(cfg.default_agent) ? cfg.default_agent : cfg.agents[0] };
 }

@@ -11,7 +11,8 @@ también ese skill y sigue sus reglas. Ejecuta los comandos con tu herramienta d
 ## Entrada
 
 La tarea a repartir. Opcionalmente, qué agente quiere el usuario para cada parte ("los tests
-con claude"): se indica por rama como `rama:kind`. Sin indicación, `pi`.
+con claude"): se indica por rama como `rama:kind`. Sin indicación, `bond team` usa el agente
+por defecto del repo (`default_agent` de `.bond/bond.toml`) o, si no hay, el de `bond setup`.
 
 ## Procedimiento
 

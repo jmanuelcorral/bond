@@ -59,3 +59,19 @@ jobs:
           PATH="$fake:$PATH" "$bin" init --yes
           grep -q '"claude"' .bond/bond.toml
           test -f .mcp.json
+      - name: Pasa a esta versión lo que usaba los ficheros de otra y borra los viejos
+        if: runner.os != 'Windows'
+        env:
+          BOND_HOME: ${{ runner.temp }}/bond-home-refresh
+          HOME: ${{ runner.temp }}/home-refresh
+        run: |
+          bin="$PWD/dist/bond-${{ matrix.target }}"
+          old="$BOND_HOME/runtime/0.9.0"
+          mkdir -p "$old/global/skills/bond-team" "$HOME/.agents/skills"
+          ln -s "$old/global/skills/bond-team" "$HOME/.agents/skills/bond-team"
+          ln -s "$old" "$BOND_HOME/pi"
+          "$bin" init --list > /dev/null
+          v="$("$bin" --version)"
+          [ "$(readlink "$BOND_HOME/pi")" = "$BOND_HOME/runtime/$v" ]
+          [ "$(readlink "$HOME/.agents/skills/bond-team")" = "$BOND_HOME/runtime/$v/global/skills/bond-team" ]
+          [ ! -e "$old" ]

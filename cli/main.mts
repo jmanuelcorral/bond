@@ -23,6 +23,7 @@ Máquina
   doctor       Comprueba la instalación y lo que depende de fuera
   models       Registro global de modelos y su configuración en cada agente
   run          Lanza un agente con su entorno de modelos (hoy: copilot)
+  update       Pone bond al día con la última release
 
 Repo
   init         Prepara el repo para los agentes: .bond/bond.toml, AGENTS.md y su config
@@ -40,18 +41,29 @@ Otros
   version      Versión de bond`);
 }
 
+/**
+ * Ficheros de bond en disco. Desde el binario se extraen la primera vez de cada versión, y lo
+ * que aún usa los de otra versión (tras bond update, brew upgrade...) pasa a estos.
+ */
+async function prepare(): Promise<void> {
+	await assetsDir();
+	const { cleanupOld, refreshRuntime } = await import("./update.mts");
+	cleanupOld();
+	await refreshRuntime();
+}
+
 async function main(argv: string[]): Promise<void> {
 	const [cmd, ...rest] = argv;
 	const wantsHelp = rest.includes("-h") || rest.includes("--help");
 	setDryRun(rest.includes("--dry-run"));
 	// Desde el binario, los ficheros de bond se extraen la primera vez (salvo para la ayuda).
-	if (cmd && !["help", "-h", "--help", "version", "--version", "-v", "logo"].includes(cmd)) await assetsDir();
+	if (cmd && !["help", "-h", "--help", "version", "--version", "-v", "logo"].includes(cmd)) await prepare();
 
 	// `bond` a secas dentro de un repo: abre su puesto de trabajo (fuera de un repo, la ayuda).
 	if (cmd === undefined || (cmd.startsWith("-") && !["-h", "--help", "-v", "--version"].includes(cmd))) {
 		const inRepo = run("git", ["rev-parse", "--show-toplevel"]).status === 0 || existsSync(".bond/bond.toml");
 		if (!inRepo && cmd === undefined) return help();
-		await assetsDir();
+		await prepare();
 		const l = await import("./launch.mts");
 		return argv.includes("-h") || argv.includes("--help") ? console.log(l.LAUNCH_HELP) : l.launch(argv, { dev: false });
 	}
@@ -89,7 +101,7 @@ async function main(argv: string[]): Promise<void> {
 		case "team":
 		case "status": {
 			const l = await import("./launch.mts");
-			if (wantsHelp) return console.log(cmd === "team" ? "Uso: bond team <repo> <rama[:agente]>... [--agent <a>] [--base <ref>] [-- args]" : cmd === "status" ? "Uso: bond status [--json]" : l.LAUNCH_HELP);
+			if (wantsHelp) return console.log(cmd === "team" ? l.TEAM_HELP : cmd === "status" ? "Uso: bond status [--json]" : l.LAUNCH_HELP);
 			if (cmd === "dev") return l.launch(rest, { dev: true });
 			return cmd === "team" ? l.team(rest) : l.status(rest);
 		}
@@ -107,6 +119,13 @@ async function main(argv: string[]): Promise<void> {
 			if (!r.actions.length) console.log("nada que migrar");
 			return;
 		}
+		case "update": {
+			const u = await import("./update.mts");
+			return wantsHelp ? console.log(u.UPDATE_HELP) : u.update(rest);
+		}
+		// Lo lanza bond update con el binario nuevo: extrae sus ficheros y limpia (lo hace prepare).
+		case "_runtime":
+			return;
 		case "key":
 			return (await import("./keys.mts")).keyCommand(rest);
 		case "logo":
