@@ -1,6 +1,6 @@
 ---
 name: git-conventional-commit
-description: Prepare and create a single Conventional Commit on an explicit commit request, including a verified autonomous grant covering this scoped commit. Modifying files alone does not authorize commits; a proposal or review request only allows drafting the message.
+description: Prepare and create a single Conventional Commit on an explicit commit request. Modifying files alone does not authorize commits; a proposal or review request only allows drafting the message.
 user-invocable: true
 ---
 
@@ -12,11 +12,9 @@ Record only authorized changes in a local commit, with a message explaining thei
 
 Follow higher-priority instructions, consumer project rules, and permissions. Invoking this skill grants no additional permissions. If the user only asks to draft a message, research, or plan, do not modify the index or create commits.
 
-## Execution mode
+## Scope of this skill
 
-Guided mode is the default. For an autonomous handoff, read the local [autonomous contract](references/autonomous.md) before touching the index. A verified grant must explicitly authorize `commit` for the current reviewed changes; implementation, YOLO and a generated checkpoint do not. With delegated message selection, use the first valid of the three reviewed alternatives supplied by the caller, or generate them under the message rules and record that selection. Without delegation, use the exact approved message or return `needs_approval`.
-
-Create only one local commit after applicable checks pass. Preserve unrelated and partially staged changes and all hook/signing gates. Return the verified SHA, actual scope and step result; only the initiating loop may continue to an installed delivery skill under separate `continue`, push and PR grants. This skill never pushes or queries GitHub. The guided closing menus and automatic-handoff prohibition below apply to guided mode; all local Git safety constraints apply in both modes. Respect empty-response rules by letting the caller verify state rather than requiring extra output.
+Create only one local commit after applicable checks pass. Preserve unrelated and partially staged changes and all hook/signing gates. This skill never pushes or queries GitHub, and never continues to another step on its own.
 
 ## Trust boundary
 
@@ -121,7 +119,7 @@ Check the message and recorded files against the approved scope. Report unexpect
 
 Do not push, fetch, pull, change configuration, reset, clean, restore, checkout, stash, or perform destructive operations as part of this workflow. Any additional operation requires a separate request and the corresponding permissions.
 
-## Guided Fluzo handoff
+## Guided handoff
 
 A request such as "commit with option 2" from a phase report selects the exact previously proposed message and reviewed scope. Confirm the mapping is unambiguous and recheck the diff; do not include later unrelated changes or treat the selection as phase acceptance. The calling skill must resolve this installed skill by name rather than copying its procedure or guessing a sibling path. If the scope changed materially, present the revised scope before committing.
 
@@ -129,10 +127,10 @@ End with the actual result and one recommended next step, its reason, and a shor
 
 After a successful commit for a GitHub delivery, recommend publishing the reviewed branch and preparing its PR, or updating the existing PR when the handoff context identifies one. This is a recommendation, not a push. Use locally verified branch/remotes and received issue/PR context without querying GitHub from this skill; mark remote status as unverified. If the destination is unknown, recommend checking it before publication. Offer a concrete reply such as "prepare push and PR for this branch". Pass the commit SHA, branch, known destination, issue/phase, evidence, and exact approvals to the installed `delivery-review-github` skill by name on the requested continuation. That skill must verify remote state and existing PRs, show the exact push destination and PR proposal, and obtain missing publication approval. Only if exact operations and content were already approved should the continuation recommend carrying out that approved publication instead of proposing it again.
 
-Without the delivery skill, provide the same context and identify the missing integration; do not download it or silently publish through another workflow. For local-only work, recommend the required local review or next eligible phase review, or finish if no work remains; do not require GitHub. Do not skip pending delivery/review to start another issue. Never push or publish in this skill. In guided mode, never advance automatically; a verified autonomous handoff can return to the initiating loop under the local contract.
+Without the delivery skill, provide the same context and identify the missing integration; do not download it or silently publish through another workflow. For local-only work, recommend the required local review or next eligible phase review, or finish if no work remains; do not require GitHub. Do not skip pending delivery/review to start another issue. Never push or publish in this skill, and never advance automatically.
 
-Where higher-priority response rules allow, use `Prepared with Fluzo skills` as a discreet response footer. Do not add a Fluzo trailer to commit messages or claim Fluzo is the runtime/model; attribution still follows the consumer and higher-priority instructions. If those instructions require an empty response, omit the footer and recommendation.
+Where higher-priority response rules allow, use `Prepared with bond skills` as a discreet response footer. Do not add a bond trailer to commit messages or claim bond is the runtime/model; attribution still follows the consumer and higher-priority instructions. If those instructions require an empty response, omit the footer and recommendation.
 
-## Maintenance validation
+Instructions reduce risks but do not replace agent isolation or a permission system.
 
-Before distributing changes to this skill, use the [validation scenarios](references/validation.md). These are maintainer checks, not steps to run in every consumer project. Instructions reduce risks but do not replace agent isolation or a permission system.
+Adapted from [fluzo-labs/common-skills](https://github.com/fluzo-labs/common-skills) (MIT); see [LICENSE](LICENSE).
