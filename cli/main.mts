@@ -19,7 +19,7 @@ function help(): void {
 Uso: bond [comando] [opciones]   (bond <comando> --help para el detalle)
 
 Máquina
-  setup        Deja la máquina lista: pi, configuración, Herdr, bond en el PATH
+  setup        Deja la máquina lista: Herdr, endpoints de modelos, agentes, instrucciones
   doctor       Comprueba la instalación y lo que depende de fuera
   models       Registro global de modelos y su configuración en cada agente
   run          Lanza un agente con su entorno de modelos (hoy: copilot)

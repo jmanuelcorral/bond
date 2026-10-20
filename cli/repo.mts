@@ -1,5 +1,6 @@
 // `bond init` y `bond sync`: configuración de agentes de un repo, declarada una vez en
-// .bond/bond.toml y generada para cada agente (pi, Claude Code).
+// .bond/bond.toml y generada para cada agente (pi, Claude Code, Copilot, Codex, opencode, Crush
+// y Gemini).
 //
 // Lo que bond escribe queda apuntado en .bond/manifest.json:
 // - ficheros propios (skills copiados, comandos): con su hash. Si alguien los edita a mano,
@@ -564,7 +565,7 @@ export function sync(args: string[]): void {
 function agentsMd(name: string): string {
 	return `# ${name}
 
-Instrucciones del proyecto para los agentes (pi, Claude Code y los que se añadan con bond).
+Instrucciones del proyecto para todos los agentes de código que lo usan (vía bond).
 Las personales de cada uno van en su configuración global; aquí, solo lo de este repo.
 
 ## Qué es
@@ -606,7 +607,7 @@ commands = ${tomlArr(cfg.commands)}      # comandos del catálogo
 }
 
 /** Cambia solo las líneas de la selección en un bond.toml existente: comentarios y mcp_servers se conservan. */
-function updateBondToml(text: string, cfg: Selection): string {
+export function updateBondToml(text: string, cfg: Selection): string {
 	const set = (t: string, key: string, value: string) => {
 		const re = new RegExp(`^${key}\\s*=.*$`, "m");
 		// Las claves de primer nivel van antes de cualquier tabla.

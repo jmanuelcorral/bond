@@ -97,14 +97,15 @@ pi mcp list            # comprobar los servidores MCP
 ## Desarrollo
 
 ```bash
-npm ci --ignore-scripts          # dependencias (smol-toml)
+npm ci --ignore-scripts          # dependencias (y TypeScript para comprobar tipos)
 bin/bond <comando>               # bond desde el código fuente (Node >= 22.18)
+npm run typecheck && bun test    # tipos y pruebas (test/)
 bun scripts/build.mts            # dist/: binarios de Linux, macOS y Windows + paquete de npm
 ```
 
 El binario lleva dentro el catálogo, los skills globales y las Bond Extensions, y los extrae
-la primera vez en `~/.bond/runtime/<versión>/`. CI (`.github/workflows/ci.yml`) lo compila y
-prueba en Linux, macOS y Windows. Hoja de ruta: [docs/plan-v1.md](docs/plan-v1.md).
+la primera vez en `~/.bond/runtime/<versión>/`. CI (`.github/workflows/ci.yml`) comprueba tipos,
+pasa las pruebas, lo compila y prueba el binario en Linux, macOS y Windows. Hoja de ruta: [docs/plan-v1.md](docs/plan-v1.md).
 
 ## Estructura
 
