@@ -28,6 +28,8 @@ jobs:
         with:
           bun-version: 1.4.3
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx tsc -p .
+      - run: bun test
       - run: bun scripts/build.mts --targets ${{ matrix.target }} --no-npm
       - name: Prueba del binario fuera del repo
         env:
@@ -43,3 +45,17 @@ jobs:
           "$bin" sync --check
           test -f .claude/skills/code-context/SKILL.md
           test -f .agents/skills/code-context/SKILL.md
+      - name: Detecta un agente instalado (en Windows, por su extensión)
+        env:
+          BOND_HOME: ${{ runner.temp }}/bond-home
+        run: |
+          bin="$PWD/dist/bond-${{ matrix.target }}"
+          [ -f "$bin.exe" ] && bin="$bin.exe"
+          fake="$PWD/.fake-agents" && mkdir -p "$fake"   # ruta POSIX también en Git Bash
+          if [ "$RUNNER_OS" = Windows ]; then printf '@echo off\r\n' > "$fake/claude.cmd"
+          else printf '#!/bin/sh\n' > "$fake/claude" && chmod +x "$fake/claude"; fi
+          repo="${{ runner.temp }}/repo-detect"
+          mkdir -p "$repo" && cd "$repo" && git init -q
+          PATH="$fake:$PATH" "$bin" init --yes
+          grep -q '"claude"' .bond/bond.toml
+          test -f .mcp.json

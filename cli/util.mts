@@ -1,9 +1,9 @@
 // Utilidades comunes de la CLI: salida, modo --dry-run, ejecución de comandos y symlinks.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync } from "node:fs";
+import { cpSync, existsSync, lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, delimiter, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const REPO_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -57,11 +57,19 @@ export function runAct(cmd: string, args: string[], opts: { cwd?: string } = {})
 	});
 }
 
-/** Ruta del ejecutable en el PATH, o undefined. */
-export function which(cmd: string): string | undefined {
-	for (const dir of (process.env.PATH ?? "").split(delimiter)) {
-		const p = join(dir, cmd);
-		if (dir && existsSync(p)) return p;
+/**
+ * Ruta del ejecutable en el PATH, o undefined. En Windows los ejecutables llevan extensión
+ * (claude.exe, codex.cmd...): se prueban las de PATHEXT.
+ */
+export function which(cmd: string, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string | undefined {
+	const win = platform === "win32";
+	const exts = win ? [...(env.PATHEXT || ".COM;.EXE;.BAT;.CMD").toLowerCase().split(";").filter(Boolean), ""] : [""];
+	for (const dir of (env.PATH ?? env.Path ?? "").split(win ? ";" : ":")) {
+		if (!dir) continue;
+		for (const ext of exts) {
+			const p = join(dir, cmd + ext);
+			if (existsSync(p) && !statSync(p).isDirectory()) return p;
+		}
 	}
 	return undefined;
 }
@@ -112,6 +120,47 @@ export function linkPath(src: string, dest: string): void {
 	}
 	act(`ln -s ${src} ${dest}`, () => symlinkSync(src, dest));
 	log(`enlazado: ${dest} -> ${src}`);
+}
+
+/** Marca de las carpetas que copia bond (donde no enlaza): se pueden sustituir sin copia .bak. */
+export const COPY_MARK = ".bond-copy";
+
+function files(dir: string): string[] {
+	return readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]));
+}
+
+/** ¿`dest` es una copia de bond con los mismos ficheros que `src`? */
+export function isCopyOf(src: string, dest: string): boolean {
+	if (!existsSync(join(dest, COPY_MARK))) return false;
+	try {
+		const want = files(src).map((f) => relative(src, f));
+		const have = files(dest).map((f) => relative(dest, f)).filter((f) => f !== COPY_MARK);
+		return want.length === have.length && want.every((f) => readFileSync(join(src, f)).equals(readFileSync(join(dest, f))));
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Deja en `dest` una copia de la carpeta `src`, para Windows, donde un symlink pide permisos
+ * especiales. Una copia anterior de bond se sustituye; cualquier otra cosa se guarda como .bak.<fecha>.
+ */
+export function copyPath(src: string, dest: string): void {
+	if (isCopyOf(src, dest)) {
+		log(`ya copiado: ${dest}`);
+		return;
+	}
+	if (brokenLink(dest) || existsSync(join(dest, COPY_MARK))) {
+		act(`rm -r ${dest}`, () => rmSync(dest, { recursive: true, force: true }));
+	} else if (exists(dest)) {
+		warn(`${dest} ya existe; lo guardo como ${basename(dest)}.bak.${STAMP}`);
+		act(`mv ${dest} ${dest}.bak.${STAMP}`, () => renameSync(dest, `${dest}.bak.${STAMP}`));
+	}
+	act(`cp -r ${src} ${dest}`, () => {
+		cpSync(src, dest, { recursive: true });
+		writeFileSync(join(dest, COPY_MARK), `copia de bond: ${src}\n`);
+	});
+	log(`copiado: ${dest} <- ${src}`);
 }
 
 /** Destino de un symlink, o undefined si no lo es. */

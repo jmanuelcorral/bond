@@ -241,7 +241,7 @@ export function initialConfig(piModelsPath?: string): string {
 			return !c || Object.values(c).every((x) => x === 0);
 		});
 		if (free) out += "free = true\n";
-		const models = [...(p.models ?? []).map((m) => ({ ...m, enabled: true })), ...disabled.map((d) => ({ ...d, enabled: false }))];
+		const models: Array<Record<string, any>> = [...(p.models ?? []).map((m) => ({ ...m, enabled: true })), ...disabled.map((d) => ({ ...d, enabled: false }))];
 		for (const m of models) {
 			out += `\n${m.enabled ? "" : "# Desactivado: no estaba activo en el models.json de pi.\n"}[[providers.${id}.models]]\n`;
 			out += `id = ${tomlValue(m.id)}\n`;

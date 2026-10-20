@@ -25,7 +25,7 @@ export function herdr<T = Record<string, unknown>>(args: string[], timeout = 120
 		// Salida no JSON.
 	}
 	if (r.status !== 0 || parsed.error) {
-		const err = new Error(parsed.error?.message ?? (r.stderr || r.stdout).trim() ?? `herdr ${args.join(" ")} falló`) as Error & { code?: string };
+		const err = new Error(parsed.error?.message ?? ((r.stderr || r.stdout).trim() || `herdr ${args.join(" ")} falló`)) as Error & { code?: string };
 		err.code = parsed.error?.code;
 		throw err;
 	}
@@ -59,9 +59,9 @@ export function workspaces(): Array<{ workspace_id: string; label?: string }> {
 
 export const workspaceByLabel = (...labels: string[]) => workspaces().find((w) => w.label && labels.includes(w.label))?.workspace_id;
 
-export function agents(): HerdrAgent[] {
+export function agents(timeout?: number): HerdrAgent[] {
 	try {
-		return herdr<{ agents?: HerdrAgent[] }>(["agent", "list"]).agents ?? [];
+		return herdr<{ agents?: HerdrAgent[] }>(["agent", "list"], timeout).agents ?? [];
 	} catch {
 		return [];
 	}

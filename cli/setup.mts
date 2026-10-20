@@ -1,5 +1,5 @@
-// `bond setup`: deja la máquina lista. Mismos pasos que hacía install.sh, más el enlace de
-// `bond` en el PATH. Idempotente: se puede relanzar tras cada cambio en el repo.
+// `bond setup`: deja la máquina lista: Herdr, endpoints de modelos, agentes elegidos, skills
+// globales e instrucciones personales en cada agente. Idempotente: se puede repetir.
 
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -20,6 +20,7 @@ import {
 	runAct,
 	samePath,
 	brokenLink,
+	copyPath,
 	warn,
 	which,
 } from "./util.mts";
@@ -149,8 +150,8 @@ export const CONTEXT_TOOLS: Array<[string, string]> = [
 	["rg", "ripgrep: tool grep de pi"],
 	["fd", "tool find de pi"],
 	["ast-grep", "skill code-context: bun add -g @ast-grep/cli@0.45.3"],
-	["uvx", "uv: servidor MCP web"],
-	["jq", "bond dev, bond status, filtro de git"],
+	["uvx", "uv: servidor MCP duckduckgo"],
+	["jq", "repo-map del skill code-context (opcional)"],
 ];
 
 function contextTools(): void {
@@ -175,7 +176,8 @@ function globalSkills(): void {
 	for (const name of readdirSync(globalSkillsDir())) {
 		for (const dest of globalSkillTargets(name)) {
 			act(`mkdir -p ${dirname(dest)}`, () => mkdirSync(dirname(dest), { recursive: true }));
-			linkPath(join(globalSkillsDir(), name), dest);
+			// En Windows, copia: los symlinks necesitan permisos especiales.
+			(process.platform === "win32" ? copyPath : linkPath)(join(globalSkillsDir(), name), dest);
 		}
 	}
 }

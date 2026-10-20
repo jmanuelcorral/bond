@@ -49,7 +49,7 @@ Interactivo, re-ejecutable (cada paso enseña lo que hay y pregunta si cambiarlo
    - cualquier endpoint compatible con OpenAI (como tu `halo`): URL y, si hace falta, variable
      con la clave.
    Para cada uno: lista sus modelos (`/v1/models`), prueba qué APIs sirve (chat, responses) y
-   deja elegir qué modelos registrar. Resultado: `~/.config/bond/config.toml`.
+   deja elegir qué modelos registrar. Resultado: `~/.bond/config.toml`.
 3. **Agentes.** Detecta cuáles hay instalados (pi, Claude Code, Codex, Copilot CLI, opencode,
    Crush, Gemini CLI). Si no hay ninguno, enseña cómo instalar cada uno con su enlace y para:
    hace falta al menos uno. Para los instalados:
@@ -90,10 +90,10 @@ si pi está instalado y elegido.
   (probado: incluye dependencias y ficheros incrustados, y compila para Linux, macOS y Windows
   desde una sola máquina). Lleva dentro el catálogo, los skills globales y el paquete de pi.
 - **Ficheros que necesitan estar en disco** (los skills, el paquete de pi, que los agentes leen
-  por ruta) se extraen en `~/.local/share/bond/<versión>/` (en Windows, `%LOCALAPPDATA%\bond`).
+  por ruta) se extraen en `~/.bond/runtime/<versión>/`.
   Así cada versión de bond trae los suyos y actualizar es reemplazar el binario.
-- **Configuración global**: `~/.config/bond/config.toml` (endpoints, agentes elegidos, agente por
-  defecto) y `state.json`. Instrucciones personales opcionales en `~/.config/bond/AGENTS.md`,
+- **Configuración global**: `~/.bond/config.toml` (endpoints, agentes elegidos, agente por
+  defecto) y `state.json`. Instrucciones personales opcionales en `~/.bond/AGENTS.md`,
   llevadas al fichero global de cada agente.
 - **Windows**: sin symlinks (necesitan permisos especiales); donde hoy se enlaza, se copia.
 - **Se reaprovecha**: generadores de modelos por agente (F2), `init`/`sync` con su registro de
@@ -118,7 +118,7 @@ El nombre `bond` está libre en Homebrew y AUR (comprobado 2026-10-16); en npm, 
 
 | Fase | Entrega | Verificación |
 |---|---|---|
-| **G1** Binario | `bond` compilado con todo dentro; extracción de ficheros a `~/.local/share/bond`; los subcomandos actuales funcionan desde el binario | El binario funciona en una máquina sin el repo ni Node |
+| **G1** Binario | `bond` compilado con todo dentro; extracción de ficheros a `~/.bond/runtime`; los subcomandos actuales funcionan desde el binario | El binario funciona en una máquina sin el repo ni Node |
 | **G2** `setup` interactivo | Herdr, endpoints (detección y alta), agentes (≥1, enlaces si faltan), integraciones, skills globales, agente por defecto; `--yes` | En contenedor limpio: sin Herdr, sin agentes, con Ollama y con un endpoint propio |
 | **G3** `init` interactivo | Agentes integrados y por defecto, catálogo, generación | Repo de prueba con 1 y con varios agentes |
 | **G4** `bond` lanza el puesto | Workspace de Herdr con el agente por defecto; `--agent`, `--worktree`; regenera si hace falta | Dentro y fuera de Herdr, con pi y con Claude |

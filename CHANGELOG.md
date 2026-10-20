@@ -1,5 +1,15 @@
 # Cambios
 
+## 1.0.2
+
+- Windows: bond encuentra los agentes instalados (`claude.cmd`, `codex.exe`...): `which` prueba
+  las extensiones de `PATHEXT`. Antes `bond init`, `bond` y `bond setup` no veían ninguno.
+- Windows: `bond setup` copia los skills globales en vez de enlazarlos (los symlinks piden
+  permisos especiales); `bond doctor` reconoce esas copias.
+- Los errores de Herdr sin mensaje ya no salen vacíos.
+- Pruebas (`bun test`) de `bond init`/`sync` y comprobación de tipos (`tsc`) en CI, en las tres
+  plataformas.
+
 ## 1.0.1
 
 - Licencia MIT (`LICENSE`), declarada en npm, Homebrew y AUR.

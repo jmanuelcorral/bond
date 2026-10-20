@@ -6,7 +6,10 @@ import { join } from "node:path";
 import { readdirSync, statSync } from "node:fs";
 import { assetsPath, BOND_HOME, FROM_SOURCE } from "./runtime.mts";
 import { CONTEXT_TOOLS, globalSkillsDir, globalSkillTargets, herdrIntegrationStatus, PI_HERDR_SKILL, SHARED_HERDR_SKILL } from "./setup.mts";
-import { AGENT_DIR, bad, caution, die, dim, linkTarget, ok, REPO_DIR, run, samePath, which } from "./util.mts";
+import { AGENT_DIR, bad, caution, die, dim, isCopyOf, linkTarget, ok, REPO_DIR, run, samePath, which } from "./util.mts";
+
+/** Skill global en su sitio: enlazado (o, en Windows, copiado) desde bond. */
+const installedSkill = (src: string, dest: string) => (process.platform === "win32" ? isCopyOf(src, dest) : !!linkTarget(dest) && samePath(dest, src));
 
 export const DOCTOR_HELP = `Uso: bond doctor [--quick]
 
@@ -28,7 +31,9 @@ interface Check {
 const results: Check[] = [];
 /** Agentes elegidos en `bond setup` (vacío: todavía no hay configuración). */
 let chosen: string[] = [];
-const add = (level: Level, name: string, detail: string, fix?: string) => results.push({ level, name, detail, fix });
+const add = (level: Level, name: string, detail: string, fix?: string): void => {
+	results.push({ level, name, detail, fix });
+};
 
 function checkConfig(): void {
 	if (!chosen.length) return add("warn", "agentes", "sin elegir todavía", "bond setup");
@@ -91,7 +96,7 @@ function checkHerdrSkill(): void {
 function checkGlobalSkills(): void {
 	const missing: string[] = [];
 	for (const name of readdirSync(globalSkillsDir())) {
-		for (const dest of globalSkillTargets(name)) if (!(linkTarget(dest) && samePath(dest, join(globalSkillsDir(), name)))) missing.push(dest.replace(process.env.HOME ?? "", "~"));
+		for (const dest of globalSkillTargets(name)) if (!installedSkill(join(globalSkillsDir(), name), dest)) missing.push(dest.replace(process.env.HOME ?? "", "~"));
 	}
 	if (missing.length) add("fail", "skills globales", `faltan: ${missing.join(", ")}`, "bond setup");
 	else add("ok", "skills globales", `${readdirSync(globalSkillsDir()).join(", ")} (~/.agents/skills, ~/.claude/skills)`);
