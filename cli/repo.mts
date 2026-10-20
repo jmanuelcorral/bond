@@ -12,7 +12,7 @@
 
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { parse } from "smol-toml";
 import { parseJsonc } from "./agents.mts";
 import { assetsPath, ensureBondLink } from "./runtime.mts";
@@ -94,8 +94,15 @@ interface RepoConfig {
 
 function repoRoot(): string {
 	const r = run("git", ["rev-parse", "--show-toplevel"]);
-	return r.status === 0 ? r.stdout.trim() : process.cwd();
+	// En Windows git responde C:/x/y: resolve() lo deja con las barras del sistema.
+	return r.status === 0 ? resolve(r.stdout.trim()) : process.cwd();
 }
+
+/**
+ * Ruta relativa al repo, siempre con /: el manifiesto se commitea y tiene que servir igual en
+ * Windows que en Linux y macOS (join en el disco las convierte al separador del sistema).
+ */
+const repoPath = (...parts: string[]) => join(...parts).split(sep).join("/");
 
 const bondDir = (root: string) => join(root, ".bond");
 
@@ -189,14 +196,14 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 	for (const name of cfg.skills) {
 		const src = catalogPath("skills", name);
 		for (const f of walk(src)) {
-			out.push({ kind: "file", path: join(".agents", "skills", name, relative(src, f)), content: readFileSync(f, "utf8"), mode: statSync(f).mode & 0o777 });
+			out.push({ kind: "file", path: repoPath(".agents", "skills", name, relative(src, f)), content: readFileSync(f, "utf8"), mode: statSync(f).mode & 0o777 });
 		}
 	}
 	// Todos los skills del repo, para enlazarlos a Claude: los del catálogo elegidos y los
 	// propios (carpetas con SKILL.md que no copió bond; las que copió y ya no se piden, se van).
 	const skillsDir = join(root, ".agents", "skills");
 	const own = existsSync(skillsDir)
-		? readdirSync(skillsDir).filter((d) => existsSync(join(skillsDir, d, "SKILL.md")) && !prev.files[join(".agents", "skills", d, "SKILL.md")])
+		? readdirSync(skillsDir).filter((d) => existsSync(join(skillsDir, d, "SKILL.md")) && !prev.files[repoPath(".agents", "skills", d, "SKILL.md")])
 		: [];
 	const allSkills = new Set([...cfg.skills, ...own]);
 
@@ -215,13 +222,13 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 				},
 			]),
 		);
-		out.push({ kind: "json", path: join(".pi", "mcp.json"), parent: "mcpServers", entries: piServers });
+		out.push({ kind: "json", path: repoPath(".pi", "mcp.json"), parent: "mcpServers", entries: piServers });
 		// Bond Extensions (pie de estado, cabecera, repo_map, /delegate, /team, comandos del
 		// catálogo): por ~/.bond/pi, un enlace estable a la versión instalada de bond, así la
 		// ruta sirve en cualquier máquina con bond.
-		out.push({ kind: "json", path: join(".pi", "settings.json"), parent: null, entries: { defaultTools: ["+grep", "+find", "+ls"], packages: ["~/.bond/pi"] } });
+		out.push({ kind: "json", path: repoPath(".pi", "settings.json"), parent: null, entries: { defaultTools: ["+grep", "+find", "+ls"], packages: ["~/.bond/pi"] } });
 		// Los comandos del catálogo le llegan a pi por el paquete global de bond; aquí, solo los propios.
-		for (const f of ownCommands) out.push({ kind: "file", path: join(".pi", "prompts", f), content: readFileSync(join(ownDir, f), "utf8") });
+		for (const f of ownCommands) out.push({ kind: "file", path: repoPath(".pi", "prompts", f), content: readFileSync(join(ownDir, f), "utf8") });
 	}
 
 	// Claude y Copilot leen el mismo .mcp.json (Copilot, solo si confías en la carpeta).
@@ -237,9 +244,9 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 		out.push({ kind: "json", path: ".mcp.json", parent: "mcpServers", entries: shared });
 		// Copilot también lee .claude/commands como skills: un solo sitio para los dos.
 		for (const name of cfg.commands) {
-			out.push({ kind: "file", path: join(".claude", "commands", `${name}.md`), content: readFileSync(catalogPath("commands", `${name}.md`), "utf8") });
+			out.push({ kind: "file", path: repoPath(".claude", "commands", `${name}.md`), content: readFileSync(catalogPath("commands", `${name}.md`), "utf8") });
 		}
-		for (const f of ownCommands) out.push({ kind: "file", path: join(".claude", "commands", f), content: readFileSync(join(ownDir, f), "utf8") });
+		for (const f of ownCommands) out.push({ kind: "file", path: repoPath(".claude", "commands", f), content: readFileSync(join(ownDir, f), "utf8") });
 	}
 
 	if (agents.has("claude")) {
@@ -248,12 +255,12 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 		// permisos especiales, así que se copian los ficheros (desde el catálogo o del repo).
 		for (const name of allSkills) {
 			if (process.platform !== "win32") {
-				out.push({ kind: "link", path: join(".claude", "skills", name), target: join("..", "..", ".agents", "skills", name) });
+				out.push({ kind: "link", path: repoPath(".claude", "skills", name), target: join("..", "..", ".agents", "skills", name) });
 				continue;
 			}
 			const src = cfg.skills.includes(name) ? catalogPath("skills", name) : join(skillsDir, name);
 			for (const f of walk(src)) {
-				out.push({ kind: "file", path: join(".claude", "skills", name, relative(src, f)), content: readFileSync(f, "utf8") });
+				out.push({ kind: "file", path: repoPath(".claude", "skills", name, relative(src, f)), content: readFileSync(f, "utf8") });
 			}
 		}
 	}
@@ -273,7 +280,7 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 			}
 			body += "\n";
 		}
-		out.push({ kind: "block", path: join(".codex", "config.toml"), body: body.trimEnd(), style: "hash" });
+		out.push({ kind: "block", path: repoPath(".codex", "config.toml"), body: body.trimEnd(), style: "hash" });
 	}
 
 	if (agents.has("opencode")) {
@@ -287,9 +294,9 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 		);
 		out.push({ kind: "json", path: "opencode.json", parent: "mcp.servers", entries: oc });
 		for (const name of cfg.commands) {
-			out.push({ kind: "file", path: join(".opencode", "commands", `${name}.md`), content: readFileSync(catalogPath("commands", `${name}.md`), "utf8") });
+			out.push({ kind: "file", path: repoPath(".opencode", "commands", `${name}.md`), content: readFileSync(catalogPath("commands", `${name}.md`), "utf8") });
 		}
-		for (const f of ownCommands) out.push({ kind: "file", path: join(".opencode", "commands", f), content: readFileSync(join(ownDir, f), "utf8") });
+		for (const f of ownCommands) out.push({ kind: "file", path: repoPath(".opencode", "commands", f), content: readFileSync(join(ownDir, f), "utf8") });
 	}
 
 	if (agents.has("crush")) {
@@ -307,7 +314,7 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 	}
 
 	if (agents.has("gemini")) {
-		const settings = join(".gemini", "settings.json");
+		const settings = repoPath(".gemini", "settings.json");
 		// Gemini lee GEMINI.md por defecto: se le añade AGENTS.md.
 		out.push({ kind: "json", path: settings, parent: "context", entries: { fileName: ["AGENTS.md", "GEMINI.md"] } });
 		const gm = Object.fromEntries(
@@ -323,7 +330,7 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 			...cfg.commands.map((n) => [n, readFileSync(catalogPath("commands", `${n}.md`), "utf8")] as const),
 			...ownCommands.map((f) => [f.slice(0, -3), readFileSync(join(ownDir, f), "utf8")] as const),
 		];
-		for (const [name, md] of commands) out.push({ kind: "file", path: join(".gemini", "commands", `${name}.toml`), content: geminiCommand(md) });
+		for (const [name, md] of commands) out.push({ kind: "file", path: repoPath(".gemini", "commands", `${name}.toml`), content: geminiCommand(md) });
 	}
 	return out;
 }
@@ -416,7 +423,9 @@ function loadManifest(root: string): Manifest {
 		// Registro de bond 0.4: json con un solo contenedor por fichero y blocks como lista.
 		const json = Object.fromEntries(Object.entries(m.json ?? {}).map(([p, v]) => [p, Array.isArray(v) ? v : [v]])) as Manifest["json"];
 		const blocks = Array.isArray(m.blocks) ? Object.fromEntries((m.blocks as string[]).map((p) => [p, "md"])) : (m.blocks ?? {});
-		return { files: m.files ?? {}, links: m.links ?? {}, json, blocks };
+		// Registro de bond <= 1.0.1 escrito en Windows: rutas con \.
+		const slashes = <T,>(o: Record<string, T>) => Object.fromEntries(Object.entries(o).map(([p, v]) => [p.replaceAll("\\", "/"), v])) as Record<string, T>;
+		return { files: slashes(m.files ?? {}), links: slashes(m.links ?? {}), json: slashes(json), blocks: slashes(blocks) };
 	} catch {
 		return { files: {}, links: {}, json: {}, blocks: {} };
 	}
