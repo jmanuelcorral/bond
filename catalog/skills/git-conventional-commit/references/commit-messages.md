@@ -35,7 +35,7 @@ Tests accompanying a fix do not make its commit a `test` commit. Avoid `chore` w
 ## Summary and body
 
 - Describe the effect in terms understandable to someone unfamiliar with internal code names.
-- Use an imperative action, a lowercase initial letter, and no final period. Follow the project's language; if unspecified, use the user's language.
+- Use an imperative action, a lowercase initial letter, and no final period. Follow the project's language; if unspecified, write in English.
 - Keep the heading below 72 characters, including type, scope, and separators, unless the project sets a stricter limit.
 - Add a body only to explain motivation, consequences, constraints, or migration. Separate it with a blank line and wrap its lines at 72 characters.
 - Do not claim passing tests, performance improvements, or security guarantees without evidence.
