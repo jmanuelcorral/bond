@@ -160,6 +160,20 @@ describe("syncRepo", () => {
 		expect(read(".claude/skills/mio/SKILL.md")).toContain("name: mio");
 	});
 
+	test("el registro usa / en cualquier sistema y entiende uno escrito en Windows con \\", () => {
+		bondToml({ agents: ["opencode"], commands: ["review"] });
+		sync();
+		const m = json(".bond/manifest.json");
+		expect(Object.keys(m.files)).toContain(".opencode/commands/review.md");
+		const files = Object.fromEntries(Object.entries(m.files).map(([p, h]) => [p.replaceAll("/", "\\"), h]));
+		write(".bond/manifest.json", JSON.stringify({ ...m, files }));
+		expect(sync({ check: true })).toEqual([]);
+		// Sigue siendo de bond: se borra al dejar de pedirlo.
+		bondToml({ agents: ["opencode"], commands: [] });
+		sync();
+		expect(existsSync(at(".opencode/commands/review.md"))).toBe(false);
+	});
+
 	test("entiende el registro de bond 0.4", () => {
 		bondToml({ agents: ["claude"], mcp: ["context7"], skills: [], commands: [] });
 		sync();

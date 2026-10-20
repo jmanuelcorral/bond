@@ -32,7 +32,8 @@ describe("which", () => {
 		expect(which("gemini", { Path: dir }, "win32")).toBe(join(dir, "gemini.cmd"));
 	});
 
-	test("fuera de Windows, el nombre tal cual y nunca una carpeta", () => {
+	// En Windows las rutas (C:\...) llevan ":", que aquí es el separador del PATH.
+	test.skipIf(process.platform === "win32")("fuera de Windows, el nombre tal cual y nunca una carpeta", () => {
 		touch(join(dir, "pi"));
 		mkdirSync(join(dir, "claude"));
 		touch(join(dir, "codex.exe"));

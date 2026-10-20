@@ -6,6 +6,9 @@
   las extensiones de `PATHEXT`. Antes `bond init`, `bond` y `bond setup` no veían ninguno.
 - Windows: `bond setup` copia los skills globales en vez de enlazarlos (los symlinks piden
   permisos especiales); `bond doctor` reconoce esas copias.
+- Windows: `.bond/manifest.json` guarda las rutas con `/`, como en Linux y macOS (antes, con
+  `\`, un repo sincronizado en otro sistema veía como ajenos los ficheros de bond). Se entienden
+  los registros antiguos. `bond sync` ya quita las carpetas que deja vacías.
 - Los errores de Herdr sin mensaje ya no salen vacíos.
 - Pruebas (`bun test`) de `bond init`/`sync` y comprobación de tipos (`tsc`) en CI, en las tres
   plataformas.
