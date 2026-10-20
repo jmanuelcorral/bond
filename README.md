@@ -34,7 +34,7 @@ bond            # cada día, dentro del repo: Herdr con el agente por defecto y 
   MCP, skills, comandos) desde un único `.bond/bond.toml`, sin pisar lo que tengas a mano. Con pi,
   además las **Bond Extensions** (pie de estado, cabecera, `repo_map`, `/delegate`, `/team`).
 - **`bond`** abre el puesto de trabajo en Herdr. Si ya existe, lo enfoca. `bond --agent claude`,
-  `bond --worktree feat/x` y `bond team . feat/a feat/b:claude` para más agentes a la vez.
+  `bond --worktree feat/x` y `bond team feat/a feat/b:claude` para más agentes a la vez.
 
 ## Documentación
 
@@ -63,7 +63,7 @@ powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/jma
 ```
 
 Los instaladores descargan el binario de la [última release](https://github.com/jmanuelcorral/bond/releases/latest)
-y comprueban su SHA-256. Después: `bond setup`.
+y comprueban su SHA-256. Después: `bond setup`. Para actualizar: `bond update`.
 
 Desde el código (Node 22.18 o más): `git clone https://github.com/jmanuelcorral/bond && cd bond && npm ci --ignore-scripts && bin/bond setup`.
 
@@ -73,7 +73,7 @@ Desde el código (Node 22.18 o más): `git clone https://github.com/jmanuelcorra
 |---|---|
 | Otro agente en vez del de por defecto | `bond --agent claude` |
 | Trabajar en un worktree | `bond --worktree feat/x --base main` (usa `herdr worktree`) |
-| Un equipo, un agente por rama | `bond team . feat/a feat/b:claude --base main` |
+| Un equipo, un agente por rama | `bond team feat/a feat/b:claude --base main` |
 | Ver qué hace cada uno | `bond status`; `bond sessions` para retomar sesiones de pi |
 | Delegar en otro agente desde un agente | Skill `bond-delegate`: en pi `/delegate reviewer:claude revisa el diff`; en Claude o Copilot `/bond-delegate …` |
 | Repartir una tarea entre worktrees desde un agente | Skill `bond-team`: en pi `/team <tarea>`; propone el reparto, espera tu OK y resume por rama |
@@ -118,6 +118,7 @@ bond/
 │   ├── repo.mts                  # bond init, bond sync
 │   ├── launch.mts, herdr.mts     # bond, bond dev, bond team, bond status
 │   ├── sessions.mts              # bond sessions
+│   ├── update.mts                # bond update
 │   ├── config.mts, keys.mts      # ~/.bond: config.toml, claves
 │   ├── endpoints.mts, models.mts, agents.mts, run.mts   # endpoints y modelos por agente
 │   ├── instructions.mts          # instrucciones globales de cada agente

@@ -10,7 +10,7 @@ Cada comando, qué escribe en cada sitio y por qué.
 | `bond init` | Una vez por repo: agentes, agente por defecto y herramientas; genera la config de cada agente ([abajo](#configuración-por-repo-bond-init-y-bond-sync)) |
 | `bond` | Dentro de un repo: abre su puesto de trabajo en Herdr ([puesto.md](puesto.md)) |
 | `bond dev <dir>` | Lo mismo para otro directorio |
-| `bond team` | Un agente por rama, cada uno en su worktree |
+| `bond team` | Un agente por rama, cada uno en su worktree ([puesto.md](puesto.md#bond-team)) |
 | `bond status` | Agentes vivos en Herdr |
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
 | `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
@@ -18,6 +18,7 @@ Cada comando, qué escribe en cada sitio y por qué.
 | `bond run copilot` | Copilot CLI contra un modelo propio (variables de entorno) |
 | `bond key <endpoint>` | Imprime una clave guardada (la usan los agentes) |
 | `bond doctor` | Comprueba la instalación (y el repo, si estás en uno) |
+| `bond update` | Pone bond al día con la última release ([abajo](#actualizar)) |
 | `bond migrate` | Convierte una instalación 0.7 (config de pi enlazada al repo); `setup` lo hace solo |
 | `bond logo` | El logo |
 
@@ -31,7 +32,7 @@ Cada comando, qué escribe en cada sitio y por qué.
 | `keys/<endpoint>` | Claves, una por fichero, permisos 600 |
 | `AGENTS.md` | Tus instrucciones para todos los agentes |
 | `state.json` | Lo que detectó la sonda y lo que bond gestiona en cada agente |
-| `runtime/<versión>/` | Ficheros que lleva dentro el binario, extraídos |
+| `runtime/<versión>/` | Ficheros que lleva dentro el binario, extraídos; solo se queda la versión en uso |
 | `pi` | Enlace a las Bond Extensions de la versión instalada |
 
 **En la config de cada agente** (siempre solo lo de bond; el resto del fichero no se toca):
@@ -664,10 +665,18 @@ detector).
 ## Actualizar
 
 ```bash
+bond update                                     # bond (--check: solo mirar)
 herdr update                                    # Herdr
 bun add -g @earendil-works/pi-coding-agent@latest   # pi (si se instaló con bun)
 bond setup && bond doctor                       # revalida todo tras actualizar
 ```
+
+`bond update` sustituye el binario si lo instalaste con `install.sh` o `install.ps1`: descarga
+el de la release, comprueba su SHA-256 contra `SHA256SUMS` y prueba que arranca antes de
+cambiarlo. Con Homebrew o npm te dice el comando (`brew upgrade jmanuelcorral/tap/bond`,
+`npm i -g @jmanuelcorral/bond@latest`). `--version vX.Y.Z` instala una concreta, también
+anterior. Venga de donde venga, la versión nueva pasa a sus ficheros `~/.bond/pi` y los skills
+globales que apuntaban a los de otra, y borra las versiones viejas de `~/.bond/runtime/`.
 
 `pi update` solo aplica a instalaciones hechas con el instalador oficial
 (`curl -fsSL https://pi.dev/install.sh | sh`); con bun o npm se actualiza desde el
