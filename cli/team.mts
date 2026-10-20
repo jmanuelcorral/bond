@@ -3,7 +3,7 @@
 // hacen falta (clean). Las ramas no se tocan: nada de merge, push ni borrado sin pedirlo.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, rmdirSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync, rmdirSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { chooseAgent, gitRoot, openWorkspace } from "./launch.mts";
 import { agents, ensureServer, herdr, type HerdrAgent, insideHerdr, pendingQuestion, requireHerdr, serverRunning, workspaces } from "./herdr.mts";
@@ -130,12 +130,23 @@ export function gitWorktrees(root: string): GitWorktree[] {
 		const path = /^worktree (.+)$/m.exec(block)?.[1];
 		if (!path) continue;
 		const branch = /^branch refs\/heads\/(.+)$/m.exec(block)?.[1];
-		out.push({ path: resolve(path), branch, main: out.length === 0 });
+		out.push({ path: canonical(path), branch, main: out.length === 0 });
 	}
 	return out;
 }
 
 const git = (cwd: string, args: string[]) => run("git", ["-C", cwd, ...args]);
+/**
+ * Ruta comparable: real y absoluta. Git, Herdr y el directorio actual pueden dar la misma
+ * carpeta de formas distintas (enlaces; en Windows, nombres cortos como RUNNER~1).
+ */
+export const canonical = (p: string) => {
+	try {
+		return realpathSync.native(p);
+	} catch {
+		return resolve(p);
+	}
+};
 /** ¿`p` es `dir` o está dentro? (sin confundir /x/t-a con /x/t-ab) */
 const within = (p: string, dir: string) => p === dir || p.startsWith(dir.endsWith(sep) ? dir : dir + sep);
 const lines = (s: string) => s.split("\n").filter(Boolean);
@@ -200,7 +211,7 @@ export function teamRows(root: string, base = defaultBase(root)): Row[] {
 	if (live) {
 		try {
 			const list = herdr<{ worktrees?: Array<{ path: string; open_workspace_id?: string | null }> }>(["worktree", "list", "--cwd", root]).worktrees ?? [];
-			for (const w of list) if (w.open_workspace_id) open.set(resolve(w.path), w.open_workspace_id);
+			for (const w of list) if (w.open_workspace_id) open.set(canonical(w.path), w.open_workspace_id);
 		} catch {
 			// Repo que Herdr no conoce: sin workspaces.
 		}
@@ -213,7 +224,7 @@ export function teamRows(root: string, base = defaultBase(root)): Row[] {
 			const branch = w.branch as string;
 			const info = branchInfo(root, base, branch, w.path);
 			const workspace = open.get(w.path);
-			const a = running.find((x) => x.agent && ((workspace && x.workspace_id === workspace) || within(resolve(x.cwd ?? x.foreground_cwd ?? "/"), w.path)));
+			const a = running.find((x) => x.agent && ((workspace && x.workspace_id === workspace) || within(canonical(x.cwd ?? x.foreground_cwd ?? "/"), w.path)));
 			// Herdr da por idle a un agente con una pregunta en pantalla (pi: confiar en la carpeta).
 			const question = a?.name && a.agent_status !== "working" && a.agent_status !== "blocked" ? pendingQuestion(a.name) : undefined;
 			return {
@@ -327,7 +338,7 @@ function clean(args: string[]): void {
 	}
 	if (!targets.length) return console.log(positional.length ? "Nada que quitar." : "Ninguna rama integrada que quitar (bond team status).");
 
-	const cwd = resolve(process.cwd());
+	const cwd = canonical(process.cwd());
 	let removed = 0;
 	for (const r of targets) {
 		const why =

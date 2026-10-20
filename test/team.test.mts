@@ -97,7 +97,7 @@ describe("branchInfo", () => {
 			expect(branchInfo(repo, "main", "feat/a", wt)).toMatchObject({ ahead: 0, dirty: 1 });
 			const list = gitWorktrees(repo);
 			expect(list.map((w) => [w.branch, w.main])).toEqual([["main", true], ["feat/a", false]]);
-			expect(list[1].path).toBe(realpathSync(wt));
+			expect(list[1].path).toBe(realpathSync.native(wt));
 		} finally {
 			rmSync(wt, { recursive: true, force: true });
 		}
