@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, macos-13, ubuntu-latest]
+        os: [macos-latest, macos-15-intel, ubuntu-latest]   # macos-15-intel: Homebrew en Intel
     runs-on: ${{ matrix.os }}
     steps:
       - name: Homebrew en el PATH (Linux)
