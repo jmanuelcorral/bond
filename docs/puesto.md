@@ -54,15 +54,42 @@ por ejemplo en un worktree), bond lo dice y no contesta por ti.
 
 ```bash
 bond team [repo] <rama[:agente]>... [--agent <a>] [--base <ref>] [-- args de los agentes]
+bond team status [repo] [--base <ref>] [--json]
+bond team prompt <rama> "la tarea" [--wait] [--timeout <ms>]
+bond team clean [repo] [rama...] [--force] [--delete-branch] [--dry-run]
 ```
 
-Abre un worktree y un agente por rama, en segundo plano, y enseña la tabla de agentes de ese
-repo. Sin `[repo]`, el del directorio actual. Cada rama lleva el agente de `rama:agente`; si no,
+Abre un worktree y un agente por rama, en segundo plano, y enseña cómo va cada rama
+(`status`). Sin `[repo]`, el del directorio actual. Cada rama lleva el agente de `rama:agente`; si no,
 el de `--agent`; si no, el agente por defecto del repo (`default_agent` de `.bond/bond.toml`) y,
 si no hay, el de `bond setup`. Avisa si un agente no está entre los del repo (no tendrá su
-config) y si hay cambios sin commitear, que los worktrees no verán. El trabajo se reparte después: con
-`herdr agent prompt <agente> "…"`, o desde cualquier agente con el skill `bond-team` (en pi,
-`/team`), que además propone el reparto y recoge los resultados.
+config) y si hay cambios sin commitear, que los worktrees no verán. El trabajo se reparte
+después con `bond team prompt`, o desde cualquier agente con el skill `bond-team` (en pi,
+`/team`), que además propone el reparto, espera tu OK y recoge los resultados.
+
+**`status`**: una fila por worktree del repo con su estado, su agente, los commits por delante
+de la base (por defecto, la rama del checkout principal) y los ficheros que toca:
+
+| Estado | Qué quiere decir |
+|---|---|
+| `trabajando` | El agente está en ello |
+| `bloqueado` | El agente espera una respuesta tuya (p. ej. confiar en la carpeta) |
+| `sin commitear` | Hay cambios en el worktree fuera de un commit |
+| `lista` | Tiene commits sin integrar: toca revisar |
+| `integrada` | Ya está en la base, también si entró por rebase o squash |
+| `sin commits` | Nada todavía (o se integró por fast-forward) |
+
+pi pregunta si confía en cada carpeta nueva, y cada worktree lo es. Herdr no lo ve como una
+pregunta, así que bond lee el panel: la rama sale `bloqueado`, y `prompt` no manda nada, porque
+su Enter elegiría "Trust" por ti y la tarea se perdería. Contesta tú en su panel; "Trust parent
+folder" una vez sirve para todos los worktrees de ese repo.
+
+**`prompt`**: manda una tarea al agente de una rama, sin tener que saber su nombre.
+
+**`clean`**: quita worktrees (carpeta, workspace y agente); las ramas se quedan. Sin ramas,
+solo los integrados que abrió Herdr; con ramas, esas. Nunca uno con el agente trabajando o
+esperando, con cambios sin commitear o en el que estás, salvo con `--force`. `--delete-branch`
+borra además las ramas integradas. El workspace del repo no lo cierra: te dice cómo.
 
 ## Conducir los agentes
 

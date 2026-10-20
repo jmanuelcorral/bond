@@ -74,6 +74,7 @@ Desde el código (Node 22.18 o más): `git clone https://github.com/jmanuelcorra
 | Otro agente en vez del de por defecto | `bond --agent claude` |
 | Trabajar en un worktree | `bond --worktree feat/x --base main` (usa `herdr worktree`) |
 | Un equipo, un agente por rama | `bond team feat/a feat/b:claude --base main` |
+| Cómo va cada rama, mandarle trabajo, recoger | `bond team status`, `bond team prompt feat/a "…"`, `bond team clean` |
 | Ver qué hace cada uno | `bond status`; `bond sessions` para retomar sesiones de pi |
 | Delegar en otro agente desde un agente | Skill `bond-delegate`: en pi `/delegate reviewer:claude revisa el diff`; en Claude o Copilot `/bond-delegate …` |
 | Repartir una tarea entre worktrees desde un agente | Skill `bond-team`: en pi `/team <tarea>`; propone el reparto, espera tu OK y resume por rama |
@@ -116,7 +117,8 @@ bond/
 │   ├── main.mts                  # subcomandos
 │   ├── setup.mts, wizard.mts     # bond setup
 │   ├── repo.mts                  # bond init, bond sync
-│   ├── launch.mts, herdr.mts     # bond, bond dev, bond team, bond status
+│   ├── launch.mts, herdr.mts     # bond, bond dev, bond status
+│   ├── team.mts                  # bond team (status, prompt, clean)
 │   ├── sessions.mts              # bond sessions
 │   ├── update.mts                # bond update
 │   ├── config.mts, keys.mts      # ~/.bond: config.toml, claves

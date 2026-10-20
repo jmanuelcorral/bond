@@ -32,7 +32,7 @@ Repo
 Trabajo diario (Herdr)
   (sin comando)  Dentro de un repo: abre su puesto de trabajo con el agente por defecto
   dev [dir]      Lo mismo para otro directorio (--agent, --worktree…)
-  team           Un agente por rama, cada uno en su worktree
+  team           Un agente por rama, cada uno en su worktree (status, prompt, clean)
   status         Agentes vivos en Herdr
   sessions       Sesiones de pi y cómo retomarlas
 
@@ -101,9 +101,13 @@ async function main(argv: string[]): Promise<void> {
 		case "team":
 		case "status": {
 			const l = await import("./launch.mts");
-			if (wantsHelp) return console.log(cmd === "team" ? l.TEAM_HELP : cmd === "status" ? "Uso: bond status [--json]" : l.LAUNCH_HELP);
+			if (cmd === "team") {
+				const t = await import("./team.mts");
+				return wantsHelp ? console.log(t.TEAM_HELP) : t.team(rest);
+			}
+			if (wantsHelp) return console.log(cmd === "status" ? "Uso: bond status [--json]" : l.LAUNCH_HELP);
 			if (cmd === "dev") return l.launch(rest, { dev: true });
-			return cmd === "team" ? l.team(rest) : l.status(rest);
+			return l.status(rest);
 		}
 		case "sessions":
 			return (await import("./sessions.mts")).sessions(rest);

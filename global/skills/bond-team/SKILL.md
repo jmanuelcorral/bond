@@ -26,25 +26,27 @@ por defecto del repo (`default_agent` de `.bond/bond.toml`) o, si no hay, el de 
    OK** del usuario antes de crear nada.
 4. Con el OK, monta el equipo desde la rama actual:
    `bond team "$(git rev-parse --show-toplevel)" team/a team/b:claude --base "$(git branch --show-current)"`
-   Cada agente se llama `<kind>-<repo>-<rama>` (en minúsculas y con guiones); confírmalo en la
-   tabla que imprime o con `herdr agent list`. Si alguno queda esperando una respuesta (por
-   ejemplo Claude Code pidiendo confiar en la carpeta del worktree), enséñaselo al usuario y
-   espera.
-5. Manda a cada agente su subtarea sin esperar, para que trabajen a la vez:
-   `herdr agent prompt <agente> "<mensaje>"`. El mensaje es autocontenido y dice qué hacer,
+   Imprime la tabla de `bond team status`. Si alguna rama sale `bloqueado` (Claude Code o pi
+   preguntando si confían en la carpeta del worktree), díselo al usuario y espera a que conteste
+   él: nunca respondas tú ni mandes un prompt, que su Enter contestaría la pregunta. En pi,
+   elegir "Trust parent folder" una vez sirve para todos los worktrees del repo.
+5. Manda a cada rama su subtarea sin esperar, para que trabajen a la vez:
+   `bond team prompt <rama> "<mensaje>"` (se niega si el agente espera una respuesta). El mensaje es autocontenido y dice qué hacer,
    qué ficheros tocar y cuáles no, cómo verificarlo, y que al terminar haga **commit en su
    rama** con un mensaje en inglés, **sin push**. Ese commit es parte de lo que pide el
    usuario al pedir el equipo.
-6. Espera a cada uno: `herdr agent wait <agente> --timeout 1800000`. Si alguno queda
+6. Espera a cada uno: `herdr agent wait <agente> --timeout 1800000` (el nombre del agente de
+   cada rama sale en `bond team status`). Si alguno queda
    `blocked`, lee su panel y pregunta al usuario antes de responder. Si hay `timeout`, mira
    `herdr agent get` y `herdr agent read` antes de decidir; no reenvíes a ciegas. Con un modelo
    local compartido puede haber errores 429: si un agente se rinde sin commits, reenvíale la
    tarea cuando acabe otro.
-7. Revisa cada rama sin cambiar de rama: `git log --oneline <base>..<rama>` y
-   `git diff --stat <base>...<rama>`; lee el informe de cada agente con
-   `herdr agent read <agente> --source recent-unwrapped --lines 120`.
+7. Revisa: `bond team status` da por rama el estado, los commits y los ficheros. Sin cambiar
+   de rama, mira `git log --oneline <base>..<rama>` y `git diff --stat <base>...<rama>`, y lee
+   el informe de cada agente con `herdr agent read <agente> --source recent-unwrapped --lines 120`.
 8. Resume por rama: qué hizo, commits, ficheros, verificación y conflictos probables entre
    ramas. Propón un orden de integración.
 
 No hagas merge, rebase ni push, ni quites worktrees o workspaces: eso lo decide el usuario.
-Para quitar uno: `herdr worktree remove --workspace <id>` (borra la carpeta, no la rama).
+Cuando él lo pida, `bond team clean` quita los worktrees de las ramas ya integradas (las ramas
+se quedan); `bond team clean <rama>` uno concreto. Nunca con `--force` sin que lo pida.

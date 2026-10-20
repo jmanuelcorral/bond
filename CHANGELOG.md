@@ -1,5 +1,19 @@
 # Cambios
 
+## Sin publicar
+
+- `bond team status`: por rama, estado (trabajando, bloqueado, sin commitear, lista, integrada,
+  sin commits), agente, commits por delante de la base y ficheros. Reconoce las ramas
+  integradas por fast-forward, rebase o squash.
+- `bond team prompt <rama> "tarea"`: manda trabajo al agente de una rama sin saber su nombre.
+- `bond team clean`: quita los worktrees de las ramas integradas (o los que nombres), con su
+  workspace, su agente y la carpeta vacía de Herdr; las ramas se quedan salvo con
+  `--delete-branch`. Nunca uno con el agente trabajando o esperando, o con cambios sin
+  commitear, salvo con `--force`.
+- pi en un worktree nuevo pregunta si confía en la carpeta y Herdr lo da por libre: el primer
+  prompt contestaba "Trust" por ti y la tarea se perdía. Ahora bond lee el panel: la rama sale
+  `bloqueado` (también en `bond`) y `bond team prompt` no manda nada hasta que contestes tú.
+
 ## 1.1.0
 
 - `bond update`: pone bond al día con la última release (o `--version vX.Y.Z`). Con el binario
