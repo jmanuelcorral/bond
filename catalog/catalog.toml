@@ -1,0 +1,18 @@
+# Catálogo de bond: lo que enseña `bond init` de cada skill (summary, en inglés) y si sale
+# marcada por defecto (default = false: aparece en la lista, pero hay que marcarla).
+
+[skills.code-context]
+summary = "Gather just enough repo and library context before editing"
+
+[skills.git-conventional-commit]
+summary = "Create one reviewed, scoped Conventional Commit"
+
+[skills.plan-create]
+summary = "Plan a task as verifiable phases in docs/plans"
+
+[skills.plan-execute]
+summary = "Implement one approved plan phase, with evidence"
+
+[skills.issue-refine-github]
+summary = "Refine a GitHub issue before work: keep, expand or split it"
+default = false

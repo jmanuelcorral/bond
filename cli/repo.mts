@@ -32,9 +32,9 @@ pi, además las Bond Extensions. En un repo ya inicializado, permite cambiar la 
   --agents <a,b>      Agentes, sin preguntar (${SUPPORTED_AGENTS.join(", ")})
   --default <a>       Agente por defecto
   --mcp <a,b>         Servidores MCP del catálogo (defecto: todos)
-  --skills <a,b>      Skills del catálogo (defecto: todos)
+  --skills <a,b>      Skills del catálogo (defecto: las marcadas por defecto, sin las opcionales)
   --commands <a,b>    Comandos del catálogo (defecto: todos)
-  --yes               Sin preguntas: lo elegido en bond setup y todo el catálogo
+  --yes               Sin preguntas: lo elegido en bond setup y el catálogo por defecto
   --list              Enseña el catálogo y sale
   --dry-run           Enseña lo que haría sin escribir`;
 
@@ -66,6 +66,34 @@ const catalog = {
 			.map((f) => f.slice(0, -3)),
 };
 
+interface CatalogEntry {
+	/** Resumen breve (en inglés) para bond init. */
+	summary?: string;
+	/** false: aparece en bond init sin marcar (p. ej. las que necesitan GitHub). */
+	default?: boolean;
+}
+
+/** catalog/catalog.toml: resumen y marca por defecto de cada skill. */
+function catalogMeta(): { skills: Record<string, CatalogEntry> } {
+	try {
+		const raw = parse(readFileSync(catalogPath("catalog.toml"), "utf8")) as { skills?: Record<string, CatalogEntry> };
+		return { skills: raw.skills ?? {} };
+	} catch {
+		return { skills: {} };
+	}
+}
+
+/** Skills del catálogo que salen marcadas por defecto. */
+const defaultSkills = () => {
+	const meta = catalogMeta().skills;
+	return catalog.skills().filter((n) => meta[n]?.default !== false);
+};
+
+/** Resumen de una skill: el de catalog.toml o, si no hay, el principio de su description. */
+function skillSummary(name: string, max: number): string {
+	return catalogMeta().skills[name]?.summary ?? describe(readFileSync(catalogPath("skills", name, "SKILL.md"), "utf8")).slice(0, max);
+}
+
 function describe(md: string): string {
 	return /^description:\s*(.+)$/m.exec(md)?.[1]?.replace(/^["']|["']$/g, "") ?? "";
 }
@@ -74,7 +102,9 @@ function printCatalog(): void {
 	console.log("Servidores MCP:");
 	for (const [name, s] of Object.entries(catalog.mcp())) console.log(`  ${name.padEnd(14)} ${dim(s.description ?? "")}`);
 	console.log("Skills:");
-	for (const name of catalog.skills()) console.log(`  ${name.padEnd(14)} ${dim(describe(readFileSync(catalogPath("skills", name, "SKILL.md"), "utf8")).slice(0, 90))}`);
+	const meta = catalogMeta().skills;
+	const width = Math.max(14, ...catalog.skills().map((n) => n.length + 1));
+	for (const name of catalog.skills()) console.log(`  ${name.padEnd(width)} ${dim(skillSummary(name, 90))}${meta[name]?.default === false ? dim(" (opcional)") : ""}`);
 	console.log("Comandos:");
 	for (const name of catalog.commands()) console.log(`  ${name.padEnd(14)} ${dim(describe(readFileSync(catalogPath("commands", `${name}.md`), "utf8")))}`);
 	console.log(`Agentes: ${SUPPORTED_AGENTS.join(", ")}`);
@@ -662,7 +692,7 @@ async function askSelection(current: Selection, installed: string[]): Promise<Se
 					}),
 				);
 	const describeOf = (kind: "skills" | "commands", n: string) =>
-		describe(readFileSync(kind === "skills" ? catalogPath("skills", n, "SKILL.md") : catalogPath("commands", `${n}.md`), "utf8")).slice(0, 60);
+		kind === "skills" ? skillSummary(n, 60) : describe(readFileSync(catalogPath("commands", `${n}.md`), "utf8")).slice(0, 60);
 	const tools = cancel(
 		await p.groupMultiselect({
 			message: "¿Qué herramientas del catálogo? (espacio para marcar o desmarcar)",
@@ -723,7 +753,7 @@ export async function init(args: string[]): Promise<void> {
 				agents: global.agents.filter((a) => installed.includes(a)).length ? global.agents.filter((a) => installed.includes(a)) : installed,
 				default_agent: global.default_agent,
 				mcp: Object.keys(catalog.mcp()),
-				skills: catalog.skills(),
+				skills: defaultSkills(),
 				commands: catalog.commands(),
 			};
 
