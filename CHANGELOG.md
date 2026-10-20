@@ -1,6 +1,6 @@
 # Cambios
 
-## Sin publicar
+## 1.1.0
 
 - `bond update`: pone bond al día con la última release (o `--version vX.Y.Z`). Con el binario
   de los instaladores lo descarga, comprueba su SHA-256, prueba que arranca y lo sustituye; con
@@ -10,9 +10,6 @@
 - `bond team`: usa el agente por defecto del repo (`bond.toml`) en vez del global; el repo es
   opcional (`bond team feat/a feat/b:claude`); avisa de agentes sin config en el repo y de
   cambios sin commitear; valida los nombres de rama antes de tocar Herdr.
-
-## 1.0.2
-
 - Windows: bond encuentra los agentes instalados (`claude.cmd`, `codex.exe`...): `which` prueba
   las extensiones de `PATHEXT`. Antes `bond init`, `bond` y `bond setup` no veían ninguno.
 - Windows: `bond setup` copia los skills globales en vez de enlazarlos (los symlinks piden
