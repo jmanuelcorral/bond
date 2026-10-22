@@ -73,7 +73,7 @@ Desde el código (Node 22.18 o más): `git clone https://github.com/jmanuelcorra
 |---|---|
 | Otro agente en vez del de por defecto | `bond --agent claude` |
 | Trabajar en un worktree | `bond --worktree feat/x --base main` (usa `herdr worktree`) |
-| Un equipo, un agente por rama | `bond team feat/a feat/b:claude --base main` |
+| Un equipo, un agente por rama | `bond team feat/a feat/b:claude --base main`: dentro de Herdr, minions en paneles de tu pestaña |
 | Cómo va cada rama, mandarle trabajo, recoger | `bond team status`, `bond team prompt feat/a "…"`, `bond team clean` |
 | Ver qué hace cada uno | `bond status`; `bond sessions` para retomar sesiones de pi |
 | Delegar en otro agente desde un agente | Skill `bond-delegate`: en pi `/delegate reviewer:claude revisa el diff`; en Claude o Copilot `/bond-delegate …` |

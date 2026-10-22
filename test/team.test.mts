@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { branchInfo, classify, gitWorktrees, parseTeam } from "../cli/team.mts";
+import { branchInfo, classify, gitWorktrees, MINIONS, minionName, parseTeam, tabLayout, tabWorktreePath } from "../cli/team.mts";
 
 const dirs = (...existing: string[]) => (p: string) => existing.includes(p);
 
@@ -113,5 +113,40 @@ describe("classify", () => {
 		expect(classify({ ...base, ahead: 2, integrated: false })).toBe("lista");
 		expect(classify({ ...base, ahead: 2 })).toBe("integrada");
 		expect(classify(base)).toBe("sin commits");
+	});
+});
+
+describe("equipo en la pestaña", () => {
+	test("minions: el primero libre; si están todos, minion-2...", () => {
+		expect(minionName(new Set())).toBe("kevin");
+		expect(minionName(new Set(["kevin", "gru"]))).toBe("stuart");
+		expect(minionName(new Set(MINIONS))).toBe("minion");
+		expect(minionName(new Set([...MINIONS, "minion"]))).toBe("minion-2");
+	});
+
+	test("worktree en la carpeta de Herdr, con la rama sin barras", () => {
+		expect(tabWorktreePath("/h", "fluzo", "plan/ui05-p1")).toBe(join("/h", ".herdr", "worktrees", "fluzo", "plan-ui05-p1"));
+	});
+
+	test("dos agentes: el primero debajo y el segundo a su derecha, mitad y mitad", () => {
+		expect(tabLayout(2)).toEqual([
+			{ from: "anchor", direction: "down", ratio: 0.5 },
+			{ from: 0, direction: "right", ratio: 0.5 },
+		]);
+	});
+
+	test("cuatro en fila con el mismo ancho; el quinto, debajo del primero", () => {
+		const l = tabLayout(5);
+		expect(l.slice(1, 4).map((s) => [s.from, s.direction, s.ratio])).toEqual([
+			[0, "right", 0.25],
+			[1, "right", 0.3333],
+			[2, "right", 0.5],
+		]);
+		expect(l[4]).toEqual({ from: 0, direction: "down", ratio: 0.5 });
+	});
+
+	test("--workspaces vuelve al modo de un workspace por rama", () => {
+		expect(parseTeam(["feat/a", "--workspaces"], dirs()).workspaces).toBe(true);
+		expect(parseTeam(["feat/a"], dirs()).workspaces).toBe(false);
 	});
 });

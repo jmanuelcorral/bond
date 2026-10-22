@@ -4,9 +4,10 @@
 
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, realpathSync, rmdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { chooseAgent, gitRoot, openWorkspace } from "./launch.mts";
-import { agents, ensureServer, herdr, type HerdrAgent, insideHerdr, pendingQuestion, requireHerdr, serverRunning, workspaces } from "./herdr.mts";
+import { agents, ensureServer, firstFreeName, herdr, type HerdrAgent, insideHerdr, pendingQuestion, requireHerdr, serverRunning, workspaces } from "./herdr.mts";
 import { act, bad, caution, die, dim, isDryRun, ok, run, warn } from "./util.mts";
 
 export const TEAM_HELP = `Uso: bond team [repo] <rama[:agente]>... [opciones] [-- argumentos de los agentes]
@@ -14,13 +15,18 @@ export const TEAM_HELP = `Uso: bond team [repo] <rama[:agente]>... [opciones] [-
        bond team prompt <rama> <tarea> [--wait] [--timeout <ms>]
        bond team clean [repo] [rama...] [--base <ref>] [--force] [--delete-branch] [--dry-run]
 
-Abre un worktree y un agente por rama, en segundo plano. Sin [repo], el repo del directorio
-actual. El agente de cada rama: el de rama:agente, si no --agent, si no el agente por defecto
-del repo (.bond/bond.toml), si no el de bond setup. Los worktrees salen de lo commiteado.
+Abre un worktree y un agente por rama. Sin [repo], el repo del directorio actual. El agente de
+cada rama: el de rama:agente, si no --agent, si no el agente por defecto del repo
+(.bond/bond.toml), si no el de bond setup. Los worktrees salen de lo commiteado.
+
+Dentro de Herdr, cada agente va en un panel de tu pestaña, debajo del tuyo (en fila, 4 como
+mucho; los siguientes, debajo), con nombre de minion (kevin, stuart, bob...). Fuera de Herdr o
+con --workspaces, un workspace por rama.
 
   -a, --agent <agente>   Agente para las ramas sin :agente
   -b, --base <ref>       Ref de la que salen las ramas nuevas
-  --trust-repository     Se pasa a herdr worktree (solo en repos revisados)
+  --workspaces           Un workspace por rama (herdr worktree) en vez de paneles
+  --trust-repository     Con --workspaces: se pasa a herdr worktree (solo en repos revisados)
 
 status   Cada worktree del repo: estado, agente, commits por delante de la base y ficheros.
          Estados: trabajando, bloqueado, sin commitear, lista (commits por revisar),
@@ -38,6 +44,8 @@ export interface TeamArgs {
 	agent?: string;
 	base?: string;
 	trust: boolean;
+	/** Un workspace por rama (herdr worktree) en vez de paneles en la pestaña. */
+	workspaces: boolean;
 	specs: Array<{ branch: string; agent?: string }>;
 	agentArgs: string[];
 }
@@ -47,7 +55,7 @@ export interface TeamArgs {
  * ya una rama (bond team feat/a feat/b:claude, dentro del repo).
  */
 export function parseTeam(args: string[], isDir: (p: string) => boolean = existsSync): TeamArgs {
-	const o: TeamArgs = { trust: false, specs: [], agentArgs: [] };
+	const o: TeamArgs = { trust: false, workspaces: false, specs: [], agentArgs: [] };
 	const positional: string[] = [];
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
@@ -55,6 +63,7 @@ export function parseTeam(args: string[], isDir: (p: string) => boolean = exists
 		if (a === "-k" || a === "--kind" || a === "-a" || a === "--agent") o.agent = val();
 		else if (a === "-b" || a === "--base") o.base = val();
 		else if (a === "--trust-repository") o.trust = true;
+		else if (a === "--workspaces") o.workspaces = true;
 		else if (a === "--") {
 			o.agentArgs = args.slice(i + 1);
 			break;
@@ -100,7 +109,10 @@ async function create(args: string[]): Promise<void> {
 	if (run("git", ["-C", root, "status", "--porcelain"]).stdout.trim()) warn("hay cambios sin commitear: los worktrees salen de lo commiteado y no los verán");
 
 	if (!insideHerdr()) await ensureServer();
-	for (const { branch, agent } of plan) {
+	const anchor = process.env.HERDR_PANE_ID;
+	if (insideHerdr() && anchor && !o.workspaces) {
+		openInTab(root, anchor, plan, o);
+	} else for (const { branch, agent } of plan) {
 		try {
 			const r = openWorkspace({ dir: root, agent, worktree: branch, base: o.base, shell: false, direction: "right", ratio: "0.6", focus: false, trust: o.trust, agentArgs: o.agentArgs });
 			console.log(`${ok("✓")} ${branch}  ${r.reused ? dim(`ya abierto (${r.ws})`) : `${r.agentName} (${agent}) en ${r.agentPane}${r.blocked ? caution(" · espera una respuesta tuya") : ""}`}`);
@@ -112,6 +124,94 @@ async function create(args: string[]): Promise<void> {
 	console.log(`\n  ${renderSmall(60, `equipo en ${basename(root)}`)}\n`);
 	printStatus(teamRows(root, o.base));
 	console.log(dim(`\n  Repartir trabajo: bond team prompt <rama> "la tarea"\n  Cómo va: bond team status · Al acabar: bond team clean`));
+}
+
+// --- equipo en la pestaña -------------------------------------------------------------------
+
+/** Nombres de los minions, en orden: cada agente de bond team coge el primero libre en Herdr. */
+export const MINIONS = ["kevin", "stuart", "bob", "dave", "jerry", "carl", "phil", "tim", "mark", "jorge", "otto", "norbert", "mel", "tom", "steve", "donnie", "lance", "john", "paul", "mike"];
+
+/** Primer minion libre; si están todos, minion-2, minion-3... */
+export function minionName(live: Set<string>): string {
+	return MINIONS.find((m) => !live.has(m)) ?? firstFreeName("minion", live);
+}
+
+/** Carpeta del worktree de una rama, la misma que usa herdr worktree: ~/.herdr/worktrees/<repo>/<rama>. */
+export const tabWorktreePath = (home: string, repo: string, branch: string) => join(home, ".herdr", "worktrees", repo, branch.replace(/[/\\]+/g, "-"));
+
+export interface Split {
+	/** Panel que se parte: "anchor" (el del que llama) o el índice de un panel ya creado. */
+	from: "anchor" | number;
+	direction: "down" | "right";
+	/** Fracción que conserva el panel que se parte. */
+	ratio: number;
+}
+
+/**
+ * Cómo colocar n agentes debajo del panel del que llama: el primero debajo (mitad y mitad), los
+ * siguientes a su derecha hasta 4 por fila, con el mismo ancho; del quinto en adelante, cada uno
+ * debajo del de su columna en la fila anterior.
+ */
+export function tabLayout(n: number, perRow = 4): Split[] {
+	const cols = Math.min(n, perRow);
+	return Array.from({ length: n }, (_, i): Split => {
+		if (i === 0) return { from: "anchor", direction: "down", ratio: 0.5 };
+		if (i < perRow) return { from: i - 1, direction: "right", ratio: Number((1 / (cols - i + 1)).toFixed(4)) };
+		return { from: i - perRow, direction: "down", ratio: 0.5 };
+	});
+}
+
+/** Un worktree, un panel de la pestaña y un minion por rama. */
+function openInTab(root: string, anchor: string, plan: Array<{ branch: string; agent: string }>, o: TeamArgs): void {
+	const existing = gitWorktrees(root);
+	const running = agents(5000);
+	const live = new Set(running.map((a) => a.name).filter((n): n is string => !!n));
+	const todo: Array<{ branch: string; agent: string; path: string }> = [];
+	for (const { branch, agent } of plan) {
+		const wt = existing.find((w) => w.branch === branch);
+		if (wt && running.some((a) => a.agent && within(canonical(a.cwd ?? a.foreground_cwd ?? "/"), wt.path))) {
+			console.log(`${ok("✓")} ${branch}  ${dim(`ya tiene agente (${wt.path})`)}`);
+			continue;
+		}
+		let path = wt?.path;
+		if (!path) {
+			path = tabWorktreePath(homedir(), basename(root), branch);
+			const isNew = git(root, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).status !== 0;
+			const args = isNew ? ["worktree", "add", "-b", branch, path, o.base ?? "HEAD"] : ["worktree", "add", path, branch];
+			const g = git(root, args);
+			if (g.status !== 0) {
+				warn(`${branch}: git ${args.join(" ")}: ${g.stderr.trim()}`);
+				continue;
+			}
+		}
+		todo.push({ branch, agent, path });
+	}
+	const panes: string[] = [];
+	tabLayout(todo.length).forEach((split, i) => {
+		const { branch, agent, path } = todo[i];
+		try {
+			const from = split.from === "anchor" ? anchor : panes[split.from];
+			const pane = herdr<{ pane?: { pane_id: string } }>(["pane", "split", "--pane", from, "--direction", split.direction, "--ratio", String(split.ratio), "--cwd", path, "--no-focus"]).pane?.pane_id;
+			if (!pane) throw new Error("no pude leer el panel nuevo de la respuesta de Herdr");
+			panes.push(pane);
+			const name = minionName(live);
+			live.add(name);
+			run("herdr", ["pane", "rename", pane, `${name} · ${branch}`]);
+			let blocked = false;
+			try {
+				herdr(["agent", "start", name, "--kind", agent, "--pane", pane, "--timeout", "60000", ...(o.agentArgs.length ? ["--", ...o.agentArgs] : [])]);
+				blocked = pendingQuestion(name) !== undefined;
+			} catch {
+				// Suele ser una pregunta del agente (confiar en la carpeta...): no se contesta por ti.
+				blocked = agents().find((a) => a.name === name)?.agent_status === "blocked";
+			}
+			console.log(`${ok("✓")} ${branch}  ${name} (${agent}) en ${pane}${blocked ? caution(" · espera una respuesta tuya") : ""}`);
+		} catch (e) {
+			// El panel de este no se creó: los que cuelgan de él salen del panel del que llama.
+			panes.push(anchor);
+			warn(`${branch}: ${(e as Error).message}`);
+		}
+	});
 }
 
 // --- estado de cada rama ------------------------------------------------------------------
@@ -191,7 +291,7 @@ export interface Row extends BranchInfo {
 	path: string;
 	state: State;
 	workspace?: string;
-	agent?: { name?: string; kind?: string; status?: string; question?: string };
+	agent?: { name?: string; kind?: string; status?: string; question?: string; pane?: string };
 	/** Lo abrió Herdr (tiene workspace o está en su carpeta de worktrees): clean puede quitarlo solo. */
 	managed: boolean;
 }
@@ -232,7 +332,7 @@ export function teamRows(root: string, base = defaultBase(root)): Row[] {
 				branch,
 				path: w.path,
 				workspace,
-				agent: a ? { name: a.name, kind: a.agent, status: a.agent_status, question } : undefined,
+				agent: a ? { name: a.name, kind: a.agent, status: a.agent_status, question, pane: a.pane_id } : undefined,
 				state: classify({ agentStatus: question ? "blocked" : a?.agent_status, ...info }),
 				managed: !!workspace || w.path.includes(herdrDir),
 			};
@@ -250,14 +350,14 @@ const STATE_COLOR: Record<State, (s: string) => string> = {
 
 function printStatus(rows: Row[]): void {
 	if (!rows.length) return console.log("Sin worktrees en este repo. Crea un equipo con: bond team <rama>...");
-	const head = ["RAMA", "ESTADO", "AGENTE", "COMMITS", "FICHEROS", "WORKSPACE"];
+	const head = ["RAMA", "ESTADO", "AGENTE", "COMMITS", "FICHEROS", "DÓNDE"];
 	const table = rows.map((r) => [
 		r.branch,
 		r.state + (r.agent?.question ? `: ${r.agent.question}` : "") + (r.dirty && r.state !== "sin commitear" ? ` (+${r.dirty} sin commitear)` : ""),
 		r.agent ? `${r.agent.name ?? "?"} (${r.agent.kind})` : "-",
 		r.ahead ? `+${r.ahead}` : "-",
 		r.files.length ? String(r.files.length) : "-",
-		r.workspace ?? dim("cerrado"),
+		r.workspace ?? (r.agent?.pane ? `panel ${r.agent.pane}` : dim("cerrado")),
 	]);
 	const w = head.map((h, i) => Math.max(h.length, ...table.map((t) => t[i].replace(/\x1b\[[0-9;]*m/g, "").length)));
 	const fmt = (t: string[]) => t.map((c, i) => (i === t.length - 1 ? c : c + " ".repeat(Math.max(0, w[i] - c.replace(/\x1b\[[0-9;]*m/g, "").length)))).join("  ");
@@ -268,7 +368,7 @@ function printStatus(rows: Row[]): void {
 		console.log(fmt(t));
 	});
 	if (rows.some((r) => r.agent?.question)) {
-		console.log(caution("\n  Contesta tú en su panel (herdr workspace focus <workspace>): bond no responde por ti."));
+		console.log(caution("\n  Contesta tú en su panel: bond no responde por ti."));
 		console.log(dim('  En pi, "Trust parent folder" una vez basta para todos los worktrees de este repo.'));
 	}
 }
@@ -340,6 +440,7 @@ function clean(args: string[]): void {
 
 	const cwd = canonical(process.cwd());
 	let removed = 0;
+	let removedWorkspace = false;
 	for (const r of targets) {
 		const why =
 			r.state === "trabajando" ? "el agente está trabajando" : r.state === "sin commitear" || r.dirty ? `${r.dirty} cambio(s) sin commitear` : within(cwd, r.path) ? "estás dentro" : r.state === "bloqueado" ? "el agente espera una respuesta" : undefined;
@@ -347,9 +448,12 @@ function clean(args: string[]): void {
 			warn(`${r.branch}: no lo quito, ${why} (--force para quitarlo igualmente)`);
 			continue;
 		}
-		const what = r.workspace ? `herdr worktree remove --workspace ${r.workspace}${force ? " --force" : ""}` : `git worktree remove ${force ? "--force " : ""}${r.path}`;
+		// En modo pestaña el agente vive en un panel suelto: se cierra con él.
+		const pane = !r.workspace && r.managed ? r.agent?.pane : undefined;
+		const what = r.workspace ? `herdr worktree remove --workspace ${r.workspace}${force ? " --force" : ""}` : `${pane ? `herdr pane close ${pane}; ` : ""}git worktree remove ${force ? "--force " : ""}${r.path}`;
 		try {
 			act(what, () => {
+				if (pane) herdr(["pane", "close", pane]);
 				if (r.workspace) herdr(["worktree", "remove", "--workspace", r.workspace, ...(force ? ["--force"] : [])]);
 				else {
 					const g = git(root, ["worktree", "remove", ...(force ? ["--force"] : []), r.path]);
@@ -364,6 +468,7 @@ function clean(args: string[]): void {
 			continue;
 		}
 		removed++;
+		if (r.workspace) removedWorkspace = true;
 		let branchNote = "rama conservada";
 		if (opts["--delete-branch"]) {
 			if (r.integrated || force) {
@@ -377,7 +482,7 @@ function clean(args: string[]): void {
 		console.log(`${ok("-")} ${r.branch}  ${dim(`${r.path} · ${branchNote}`)}`);
 	}
 	if (!isDryRun()) git(root, ["worktree", "prune"]);
-	if (!removed) return;
+	if (!removedWorkspace) return;
 
 	// El workspace del repo que abrió bond team para colgar los worktrees: se avisa, no se cierra.
 	if (serverRunning() && !rows.some((r) => r.workspace && !targets.includes(r))) {
