@@ -25,8 +25,9 @@
 - Skill `plan-team` en el catálogo (opcional): ejecuta en paralelo las fases independientes de
   un plan de `docs/plans/`, una rama, worktree y agente por fase con `bond team`. Cada agente
   implementa solo su fase con `plan-execute` y hace commit en su rama si la verificación pasa,
-  sin push; al integrar cada rama, actualiza el plan. `plan-create` y `bond-team` la ofrecen
-  cuando toca.
+  sin push; al integrar cada rama, actualiza el plan. Antes de crear el equipo anuncia dónde
+  se abre cada agente y cuáles arrancan con la confianza heredada, y remite a la tabla en vivo
+  para seguirlo. `plan-create` y `bond-team` la ofrecen cuando toca.
 
 ## 1.2.1
 
