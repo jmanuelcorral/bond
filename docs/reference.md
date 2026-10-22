@@ -64,7 +64,7 @@ Codex, opencode, Crush y Gemini CLI.
 ```bash
 cd ~/gitrepos/mi-proyecto
 bond init                        # con preguntas: agentes, agente por defecto, herramientas
-bond init --yes                  # sin preguntas: lo elegido en bond setup y todo el catálogo
+bond init --yes                  # sin preguntas: lo elegido en bond setup y el catálogo por defecto
 bond init --agents claude,codex --default claude --skills "" --commands review,commit
 bond init --list                 # catálogo: MCP, skills, comandos
 bond sync                        # tras editar .bond/bond.toml
@@ -73,7 +73,7 @@ bond sync --check                # en CI: falla si algo está desfasado
 
 `bond init` pregunta con qué agentes integrar el repo (de los instalados; marcados de partida
 los que elegiste en `bond setup`), cuál abre `bond` por defecto y qué herramientas del catálogo
-usar (todas marcadas). En un repo ya inicializado permite cambiar la selección: solo reescribe
+usar (marcado lo de por defecto; las skills opcionales salen sin marcar). En un repo ya inicializado permite cambiar la selección: solo reescribe
 las líneas `agents`, `default_agent`, `mcp`, `skills` y `commands` de `bond.toml`, así que tus
 comentarios y tus `[mcp_servers]` se conservan, y `sync` quita lo que ya no se pide.
 
@@ -292,6 +292,30 @@ lo que no creaste ni ejecutar `herdr` sin subcomando; nada privado a búsquedas 
 
 Las instrucciones **del proyecto** van en el `AGENTS.md` del repo (lo crea `bond init`).
 
+## Skills del catálogo
+
+Carpetas en `catalog/skills/`; `catalog/catalog.toml` da el resumen que enseña `bond init` y si
+salen marcadas. Juntas llevan una tarea de la issue a la release: refinar → planificar →
+ejecutar una fase → commit → PR → release. Cada skill cierra con un siguiente paso recomendado,
+y nada que escriba fuera del repo o publique (push, PR, comentario, tag, release) se hace sin
+tu OK explícito. Una skill que falta corta solo ese paso; no se descarga.
+
+| Skill | Para qué | En `bond init` |
+|---|---|---|
+| `code-context` | Reunir el contexto justo del repo y de las librerías antes de editar | marcada |
+| `git-conventional-commit` | Un commit revisado con Conventional Commits, en inglés salvo que el proyecto diga otra cosa; la usa `/commit` | marcada |
+| `plan-create` | Plan por fases verificables en `docs/plans/`; las fases independientes pueden ir en paralelo con `bond team` | marcada |
+| `plan-execute` | Implementar una fase aprobada, con evidencia, y proponer su commit | marcada |
+| `issue-refine-github` | Revisar una issue antes de empezar: dejarla, ampliarla o partirla | opcional |
+| `delivery-review-github` | Revisar la fase, hacer push y abrir su PR; tras el merge, recomendar lo siguiente (y `bond team clean` si venía de un worktree) | opcional |
+| `release-prepare-github` | Changelog, versión con evidencia y release aprobada; si un workflow publica al empujar el tag, ese push es la publicación | opcional |
+| `convention-document` | Convertir un acuerdo confirmado en una convención documentada e indexada en `AGENTS.md` | opcional |
+
+Todas menos `code-context` están adaptadas de
+[fluzo-labs/common-skills](https://github.com/fluzo-labs/common-skills) (MIT, con su `LICENSE`
+en cada carpeta): solo modo guiado (sin el autónomo), con la marca de bond y ajustadas a sus
+comandos.
+
 ## Comandos del catálogo
 
 Ficheros Markdown en `catalog/commands/`, con la sintaxis común a todos los agentes
@@ -300,7 +324,7 @@ Ficheros Markdown en `catalog/commands/`, con la sintaxis común a todos los age
 | Comando | Argumentos | Resultado |
 |---|---|---|
 | `/review [foco]` | foco opcional | Revisión priorizada (bugs, seguridad, errores, rendimiento, estilo) con `fichero:línea`. No edita. |
-| `/commit [contexto]` | contexto extra | Propuesta de mensaje en inglés, muestra y espera OK. Nunca push. |
+| `/commit [contexto]` | contexto extra | Commit con la skill `git-conventional-commit`: enseña alcance y mensaje y espera OK. Nunca push. |
 | `/handoff [ruta]` | ruta, por defecto `.handoff.md` | Estado escrito: objetivo, estado, ficheros, verificación, siguientes pasos. |
 
 En pi, además, `/delegate` y `/team`, atajos a los skills `bond-delegate` y `bond-team`

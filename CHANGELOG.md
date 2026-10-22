@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+- Catálogo: skills para llevar una tarea de la issue a la release, adaptadas de
+  [fluzo-labs/common-skills](https://github.com/fluzo-labs/common-skills) (MIT), solo en modo
+  guiado: `git-conventional-commit` (la usa `/commit`), `plan-create` (planes en `docs/plans/`;
+  las fases independientes, en paralelo con `bond team`) y `plan-execute`. Opcionales:
+  `issue-refine-github`, `delivery-review-github` (tras el merge sugiere `bond team clean`),
+  `release-prepare-github` (si un workflow publica al empujar el tag, ese push es la
+  publicación) y `convention-document`.
+- `bond init`: las skills opcionales salen sin marcar y `--yes` instala solo las de por defecto.
 - `bond team status`: por rama, estado (trabajando, bloqueado, sin commitear, lista, integrada,
   sin commits), agente, commits por delante de la base y ficheros. Reconoce las ramas
   integradas por fast-forward, rebase o squash.
