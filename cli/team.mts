@@ -20,10 +20,14 @@ Abre un worktree y un agente por rama. Sin [repo], el repo del directorio actual
 cada rama: el de rama:agente, si no --agent, si no el agente por defecto del repo
 (.bond/bond.toml), si no el de bond setup. Los worktrees salen de lo commiteado.
 
-Dentro de Herdr, cada agente va en un panel de tu pestaña, debajo del tuyo (en fila, 4 como
-mucho; los siguientes, debajo), con nombre de minion (kevin, stuart, bob...). Fuera de Herdr o
-con --workspaces, un workspace por rama. En la pestaña, además, un panel estrecho a la derecha
-del tuyo con la tabla en vivo (bond team status --watch), o el que ya haya.
+Dentro de Herdr, cada agente va en un panel de tu pestaña, debajo del tuyo (en fila, con el
+mismo ancho), con nombre de minion (kevin, stuart, bob...). Tu pestaña admite 6 paneles: el
+tuyo, la tabla y 4 minions; los que no caben van a pestañas nuevas "equipo · <repo>", 4 por
+pestaña. Si no caben, bond team pregunta antes de crear nada: 1) pestañas nuevas (por
+defecto), 2) todo en tu pestaña (filas de 4, aunque se apriete) o 3) un workspace por rama.
+--tabs, --same-tab y --workspaces eligen sin preguntar; sin terminal o con --yes, la 1. Fuera
+de Herdr, un workspace por rama. Dentro, además, un panel estrecho a la derecha del tuyo con la
+tabla en vivo de todas las ramas (bond team status --watch), o el que ya haya.
 
 En paneles, si confías en el checkout principal en pi o en Claude Code, cada worktree hereda esa
 confianza (trust.json de pi, ~/.claude.json) y su agente arranca sin preguntar; sin ella, o con
@@ -31,7 +35,10 @@ otros agentes, pregunta como siempre.
 
   -a, --agent <agente>   Agente para las ramas sin :agente
   -b, --base <ref>       Ref de la que salen las ramas nuevas
+  --tabs                 Si no caben en tu pestaña, el resto en pestañas nuevas (por defecto)
+  --same-tab             Todos en tu pestaña, en filas de 4, aunque no quepan
   --workspaces           Un workspace por rama (herdr worktree) en vez de paneles
+  -y, --yes              Sin preguntar: si no caben, pestañas nuevas
   --no-trust             En paneles: no heredar la confianza del checkout principal
   --trust-repository     Con --workspaces: se pasa a herdr worktree (solo en repos revisados)
 
@@ -53,8 +60,10 @@ export interface TeamArgs {
 	agent?: string;
 	base?: string;
 	trust: boolean;
-	/** Un workspace por rama (herdr worktree) en vez de paneles en la pestaña. */
-	workspaces: boolean;
+	/** Dónde van los agentes si no caben en la pestaña; sin él, se pregunta (o pestañas nuevas). */
+	layout?: Layout;
+	/** No preguntar: sin layout, pestañas nuevas. */
+	yes: boolean;
 	/** En paneles: el worktree hereda la confianza del checkout principal (pi, Claude). */
 	inheritTrust: boolean;
 	specs: Array<{ branch: string; agent?: string }>;
@@ -66,7 +75,11 @@ export interface TeamArgs {
  * ya una rama (bond team feat/a feat/b:claude, dentro del repo).
  */
 export function parseTeam(args: string[], isDir: (p: string) => boolean = existsSync): TeamArgs {
-	const o: TeamArgs = { trust: false, workspaces: false, inheritTrust: true, specs: [], agentArgs: [] };
+	const o: TeamArgs = { trust: false, yes: false, inheritTrust: true, specs: [], agentArgs: [] };
+	const pick = (flag: string, layout: Layout) => {
+		if (o.layout && o.layout !== layout) die(`${flag} no va con --${o.layout} (bond team --help)`);
+		o.layout = layout;
+	};
 	const positional: string[] = [];
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
@@ -74,7 +87,10 @@ export function parseTeam(args: string[], isDir: (p: string) => boolean = exists
 		if (a === "-k" || a === "--kind" || a === "-a" || a === "--agent") o.agent = val();
 		else if (a === "-b" || a === "--base") o.base = val();
 		else if (a === "--trust-repository") o.trust = true;
-		else if (a === "--workspaces") o.workspaces = true;
+		else if (a === "--workspaces") pick(a, "workspaces");
+		else if (a === "--tabs") pick(a, "tabs");
+		else if (a === "--same-tab") pick(a, "same-tab");
+		else if (a === "-y" || a === "--yes") o.yes = true;
 		else if (a === "--no-trust") o.inheritTrust = false;
 		else if (a === "--") {
 			o.agentArgs = args.slice(i + 1);
@@ -121,11 +137,26 @@ async function create(args: string[]): Promise<void> {
 	if (run("git", ["-C", root, "status", "--porcelain"]).stdout.trim()) warn("hay cambios sin commitear: los worktrees salen de lo commiteado y no los verán");
 
 	if (!insideHerdr()) await ensureServer();
-	const anchor = process.env.HERDR_PANE_ID;
-	if (insideHerdr() && anchor && !o.workspaces) {
-		openInTab(root, anchor, plan, o);
+	const anchor = insideHerdr() ? process.env.HERDR_PANE_ID : undefined;
+	if (anchor) {
+		// Antes de crear nada: si no caben en la pestaña, se elige dónde van.
+		const tab = callerTab(root, anchor);
+		const pending = pendingInTab(root, plan);
+		let layout = o.layout ?? "tabs";
+		if (!o.layout && pending.todo.length > tab.room && !o.yes && process.stdin.isTTY && process.stdout.isTTY) layout = await askLayout(pending.todo.length, tab.room, basename(root));
+		if (layout === "workspaces") openWorkspaces(root, plan, o);
+		else openInTab(root, anchor, tab, layout === "same-tab" ? Number.POSITIVE_INFINITY : tab.room, pending, o);
 		openWatch(root, anchor, o.base);
-	} else for (const { branch, agent } of plan) {
+	} else openWorkspaces(root, plan, o);
+	const { renderSmall } = await import("../lib/bond-logo.mts");
+	console.log(`\n  ${renderSmall(60, `equipo en ${basename(root)}`)}\n`);
+	printStatus(teamRows(root, o.base));
+	console.log(dim(`\n  Repartir trabajo: bond team prompt <rama> "la tarea"\n  Cómo va: bond team status · Al acabar: bond team clean`));
+}
+
+/** Un workspace por rama con herdr worktree (fuera de Herdr, o con --workspaces). */
+function openWorkspaces(root: string, plan: Array<{ branch: string; agent: string }>, o: TeamArgs): void {
+	for (const { branch, agent } of plan) {
 		try {
 			const r = openWorkspace({ dir: root, agent, worktree: branch, base: o.base, shell: false, direction: "right", ratio: "0.6", focus: false, trust: o.trust, agentArgs: o.agentArgs });
 			console.log(`${ok("✓")} ${branch}  ${r.reused ? dim(`ya abierto (${r.ws})`) : `${r.agentName} (${agent}) en ${r.agentPane}${r.blocked ? caution(" · espera una respuesta tuya") : ""}`}`);
@@ -133,13 +164,74 @@ async function create(args: string[]): Promise<void> {
 			warn(`${branch}: ${(e as Error).message}`);
 		}
 	}
-	const { renderSmall } = await import("../lib/bond-logo.mts");
-	console.log(`\n  ${renderSmall(60, `equipo en ${basename(root)}`)}\n`);
-	printStatus(teamRows(root, o.base));
-	console.log(dim(`\n  Repartir trabajo: bond team prompt <rama> "la tarea"\n  Cómo va: bond team status · Al acabar: bond team clean`));
 }
 
 // --- equipo en la pestaña -------------------------------------------------------------------
+
+/** Dónde van los agentes que no caben en la pestaña del que llama. */
+export type Layout = "tabs" | "same-tab" | "workspaces";
+
+/** Paneles que admite la pestaña del que llama: el suyo, el de la tabla y 4 minions. */
+export const TAB_CAP = 6;
+
+/** Minions que caben aún en la pestaña: el tope menos los paneles que ya tiene y el de la tabla si falta. */
+export const tabRoom = (panes: number, hasWatch: boolean, cap = TAB_CAP) => Math.max(0, cap - panes - (hasWatch ? 0 : 1));
+
+/** Título de la n-ésima pestaña nueva del equipo (desde 1). */
+export const teamTabLabel = (repo: string, n: number) => `equipo · ${repo}${n > 1 ? ` · ${n}` : ""}`;
+
+interface CallerTab {
+	workspace?: string;
+	/** Minions que caben aún en la pestaña. */
+	room: number;
+}
+
+/** La pestaña del que llama y cuántos minions le caben; si Herdr no responde, los 4 de una pestaña con solo el tuyo. */
+function callerTab(root: string, anchor: string): CallerTab {
+	try {
+		const me = herdr<{ pane?: HerdrPane }>(["pane", "get", anchor]).pane;
+		const panes = (herdr<{ panes?: HerdrPane[] }>(["pane", "list", ...(me?.workspace_id ? ["--workspace", me.workspace_id] : [])]).panes ?? []).filter((p) => p.tab_id === me?.tab_id);
+		return { workspace: me?.workspace_id, room: tabRoom(panes.length, !!findWatchPane(panes, me?.tab_id, basename(root))) };
+	} catch {
+		return { room: tabRoom(1, false) };
+	}
+}
+
+const LAYOUT_CHOICES: Array<{ layout: Layout; text: (room: number, repo: string) => string }> = [
+	{ layout: "tabs", text: (room, repo) => `Pestañas nuevas (por defecto): ${room ? `${room} en la tuya y el resto` : "todos"} en "${teamTabLabel(repo, 1)}", 4 por pestaña` },
+	{ layout: "same-tab", text: () => "Todo en mi pestaña: en filas de 4, aunque se apriete" },
+	{ layout: "workspaces", text: () => "Workspaces aparte: un workspace por rama (--workspaces)" },
+];
+
+/** Pregunta dónde van los agentes que no caben; Intro elige la 1. */
+async function askLayout(n: number, room: number, repo: string): Promise<Layout> {
+	const { createInterface } = await import("node:readline/promises");
+	const rl = createInterface({ input: process.stdin, output: process.stdout });
+	let answered = false;
+	const cancel = () => {
+		if (answered) return;
+		console.log(dim("\n  Cancelado: no he creado nada."));
+		process.exit(130);
+	};
+	rl.on("SIGINT", cancel);
+	rl.on("close", cancel);
+	console.log(`\n${n} agentes y en tu pestaña ${room === 1 ? "cabe 1" : `caben ${room}`} (${TAB_CAP} paneles como mucho: el tuyo, la tabla y 4 minions). ¿Dónde van?`);
+	LAYOUT_CHOICES.forEach((c, i) => console.log(`  ${i + 1}) ${c.text(room, repo)}`));
+	try {
+		for (;;) {
+			const a = (await rl.question("Elige [1]: ")).trim() || "1";
+			const choice = /^[1-9]$/.test(a) ? LAYOUT_CHOICES[Number(a) - 1] : undefined;
+			if (choice) {
+				answered = true;
+				return choice.layout;
+			}
+			console.log(`  ${LAYOUT_CHOICES.map((_, i) => i + 1).join(", ")} o Intro`);
+		}
+	} finally {
+		answered = true;
+		rl.close();
+	}
+}
 
 /** Nombres de los minions, en orden: cada agente de bond team coge el primero libre en Herdr. */
 export const MINIONS = ["kevin", "stuart", "bob", "dave", "jerry", "carl", "phil", "tim", "mark", "jorge", "otto", "norbert", "mel", "tom", "steve", "donnie", "lance", "john", "paul", "mike"];
@@ -152,41 +244,66 @@ export function minionName(live: Set<string>): string {
 /** Carpeta del worktree de una rama, la misma que usa herdr worktree: ~/.herdr/worktrees/<repo>/<rama>. */
 export const tabWorktreePath = (home: string, repo: string, branch: string) => join(home, ".herdr", "worktrees", repo, branch.replace(/[/\\]+/g, "-"));
 
-export interface Split {
-	/** Panel que se parte: "anchor" (el del que llama) o el índice de un panel ya creado. */
-	from: "anchor" | number;
-	direction: "down" | "right";
-	/** Fracción que conserva el panel que se parte. */
-	ratio: number;
-}
+/**
+ * Dónde va cada agente. `tab`: 0 es la pestaña del que llama; 1, 2... las pestañas nuevas.
+ * `from`: "tab" es el panel con el que nace una pestaña nueva; si no, el panel que se parte,
+ * "anchor" (el del que llama) o el índice de un panel ya creado.
+ */
+export type Split = { tab: number; from: "tab" } | { tab: number; from: "anchor" | number; direction: "down" | "right"; /** Fracción que conserva el panel que se parte. */ ratio: number };
+
+const share = (n: number) => Number((1 / n).toFixed(4));
 
 /**
- * Cómo colocar n agentes debajo del panel del que llama: el primero debajo (mitad y mitad), los
- * siguientes a su derecha hasta 4 por fila, con el mismo ancho; del quinto en adelante, cada uno
- * debajo del de su columna en la fila anterior.
+ * Cómo colocar n agentes con `room` huecos en la pestaña del que llama. En ella, el primero
+ * debajo (mitad y mitad) y los siguientes a su derecha hasta `perRow` por fila, con el mismo
+ * ancho; de ahí en adelante, cada uno debajo del de su columna en la fila anterior. Los que no
+ * caben van a pestañas nuevas, `perRow` por pestaña y en fila, con el mismo ancho.
  */
-export function tabLayout(n: number, perRow = 4): Split[] {
-	const cols = Math.min(n, perRow);
+export function tabLayout(n: number, room = Number.POSITIVE_INFINITY, perRow = 4): Split[] {
+	const here = Math.min(n, room);
+	const cols = Math.min(here, perRow);
 	return Array.from({ length: n }, (_, i): Split => {
-		if (i === 0) return { from: "anchor", direction: "down", ratio: 0.5 };
-		if (i < perRow) return { from: i - 1, direction: "right", ratio: Number((1 / (cols - i + 1)).toFixed(4)) };
-		return { from: i - perRow, direction: "down", ratio: 0.5 };
+		if (i < here) {
+			if (i === 0) return { tab: 0, from: "anchor", direction: "down", ratio: 0.5 };
+			if (i < perRow) return { tab: 0, from: i - 1, direction: "right", ratio: share(cols - i + 1) };
+			return { tab: 0, from: i - perRow, direction: "down", ratio: 0.5 };
+		}
+		const j = (i - here) % perRow;
+		const tab = Math.floor((i - here) / perRow) + 1;
+		if (j === 0) return { tab, from: "tab" };
+		return { tab, from: i - 1, direction: "right", ratio: share(Math.min(perRow, n - (i - j)) - j + 1) };
 	});
 }
 
-/** Un worktree, un panel de la pestaña y un minion por rama. */
-function openInTab(root: string, anchor: string, plan: Array<{ branch: string; agent: string }>, o: TeamArgs): void {
+interface Pending {
+	/** Ramas sin agente en marcha, con su worktree si ya existe. */
+	todo: Array<{ branch: string; agent: string; path?: string }>;
+	/** Ramas que ya tienen agente, con la carpeta de su worktree. */
+	skipped: Array<{ branch: string; path: string }>;
+	/** Nombres de agente en uso en Herdr. */
+	live: Set<string>;
+}
+
+/** Qué ramas necesitan agente (sin crear nada todavía). */
+function pendingInTab(root: string, plan: Array<{ branch: string; agent: string }>): Pending {
 	const existing = gitWorktrees(root);
 	const running = agents(5000);
-	const live = new Set(running.map((a) => a.name).filter((n): n is string => !!n));
-	const todo: Array<{ branch: string; agent: string; path: string }> = [];
+	const out: Pending = { todo: [], skipped: [], live: new Set(running.map((a) => a.name).filter((n): n is string => !!n)) };
 	for (const { branch, agent } of plan) {
 		const wt = existing.find((w) => w.branch === branch);
-		if (wt && running.some((a) => a.agent && within(canonical(a.cwd ?? a.foreground_cwd ?? "/"), wt.path))) {
-			console.log(`${ok("✓")} ${branch}  ${dim(`ya tiene agente (${wt.path})`)}`);
-			continue;
-		}
-		let path = wt?.path;
+		if (wt && running.some((a) => a.agent && within(canonical(a.cwd ?? a.foreground_cwd ?? "/"), wt.path))) out.skipped.push({ branch, path: wt.path });
+		else out.todo.push({ branch, agent, path: wt?.path });
+	}
+	return out;
+}
+
+/** Un worktree, un panel y un minion por rama: en la pestaña del que llama hasta `room`, el resto en pestañas nuevas. */
+function openInTab(root: string, anchor: string, here: CallerTab, room: number, pending: Pending, o: TeamArgs): void {
+	const { live } = pending;
+	for (const s of pending.skipped) console.log(`${ok("✓")} ${s.branch}  ${dim(`ya tiene agente (${s.path})`)}`);
+	const todo: Array<{ branch: string; agent: string; path: string }> = [];
+	for (const { branch, agent, path: wtPath } of pending.todo) {
+		let path = wtPath;
 		if (!path) {
 			path = tabWorktreePath(homedir(), basename(root), branch);
 			const isNew = git(root, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).status !== 0;
@@ -199,12 +316,20 @@ function openInTab(root: string, anchor: string, plan: Array<{ branch: string; a
 		}
 		todo.push({ branch, agent, path });
 	}
-	const panes: string[] = [];
-	tabLayout(todo.length).forEach((split, i) => {
+	const repo = basename(root);
+	const panes: Array<string | undefined> = [];
+	/** Panel con el que nació cada pestaña nueva. */
+	const roots: Array<string | undefined> = [];
+	tabLayout(todo.length, room).forEach((split, i) => {
 		const { branch, agent, path } = todo[i];
 		try {
-			const from = split.from === "anchor" ? anchor : panes[split.from];
-			const pane = herdr<{ pane?: { pane_id: string } }>(["pane", "split", "--pane", from, "--direction", split.direction, "--ratio", String(split.ratio), "--cwd", path, "--no-focus"]).pane?.pane_id;
+			let pane: string | undefined;
+			const from = split.from === "tab" ? undefined : split.from === "anchor" ? anchor : panes[split.from];
+			if (split.from === "tab" || !from) {
+				// Pestaña nueva (o la anterior no llegó a crearse): su panel es el del agente.
+				pane = herdr<{ root_pane?: { pane_id: string } }>(["tab", "create", ...(here.workspace ? ["--workspace", here.workspace] : []), "--cwd", path, "--label", teamTabLabel(repo, split.tab), "--no-focus"]).root_pane?.pane_id;
+				roots[split.tab] = pane;
+			} else if ("direction" in split) pane = herdr<{ pane?: { pane_id: string } }>(["pane", "split", "--pane", from, "--direction", split.direction, "--ratio", String(split.ratio), "--cwd", path, "--no-focus"]).pane?.pane_id;
 			if (!pane) throw new Error("no pude leer el panel nuevo de la respuesta de Herdr");
 			panes.push(pane);
 			const name = minionName(live);
@@ -226,10 +351,11 @@ function openInTab(root: string, anchor: string, plan: Array<{ branch: string; a
 				// Suele ser una pregunta del agente (confiar en la carpeta...): no se contesta por ti.
 				blocked = agents().find((a) => a.name === name)?.agent_status === "blocked";
 			}
-			console.log(`${ok("✓")} ${branch}  ${name} (${agent}) en ${pane}${trusted ? dim(" · confianza heredada") : ""}${blocked ? caution(" · espera una respuesta tuya") : ""}`);
+			console.log(`${ok("✓")} ${branch}  ${name} (${agent}) en ${pane}${split.tab ? dim(` · ${teamTabLabel(repo, split.tab)}`) : ""}${trusted ? dim(" · confianza heredada") : ""}${blocked ? caution(" · espera una respuesta tuya") : ""}`);
 		} catch (e) {
-			// El panel de este no se creó: los que cuelgan de él salen del panel del que llama.
-			panes.push(anchor);
+			// El panel de este no se creó: los que cuelgan de él salen del panel del que llama, o
+			// del primero de su pestaña nueva (si tampoco está, se crea la pestaña con el siguiente).
+			panes.push(split.tab ? roots[split.tab] : anchor);
 			warn(`${branch}: ${(e as Error).message}`);
 		}
 	});

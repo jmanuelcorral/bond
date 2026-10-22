@@ -55,20 +55,33 @@ por ejemplo en un worktree), bond lo dice y no contesta por ti.
 ## `bond team`
 
 ```bash
-bond team [repo] <rama[:agente]>... [--agent <a>] [--base <ref>] [--workspaces] [--no-trust] [-- args de los agentes]
+bond team [repo] <rama[:agente]>... [--agent <a>] [--base <ref>] [--tabs | --same-tab | --workspaces] [--yes] [--no-trust] [-- args de los agentes]
 bond team status [repo] [--base <ref>] [--json | --watch]
 bond team prompt <rama> "la tarea" [--wait] [--timeout <ms>]
 bond team clean [repo] [rama...] [--force] [--delete-branch] [--dry-run]
 ```
 
 Abre un worktree y un agente por rama y enseña cómo va cada rama (`status`). Dentro de Herdr,
-cada agente va en un panel de tu pestaña, debajo del tuyo: en fila, con el mismo ancho, 4 como
-mucho (del quinto en adelante, debajo del de su columna). Cada uno se llama como un minion, el
-primero libre (`kevin`, `stuart`, `bob`, `dave`...), y su panel se titula `kevin · <rama>`. El
-worktree va en `~/.herdr/worktrees/<repo>/<rama>`. A la derecha del tuyo se abre un panel
-estrecho, `tabla · <repo>`, con la tabla en vivo (`bond team status --watch`); si ya está, se
-reutiliza en vez de abrir otro. Fuera de Herdr, o con `--workspaces`, un
-workspace por rama con `herdr worktree`, como antes. Sin `[repo]`, el del directorio actual. Cada rama lleva el agente de `rama:agente`; si no,
+cada agente va en un panel de tu pestaña, debajo del tuyo: en fila, con el mismo ancho. Cada uno
+se llama como un minion, el primero libre (`kevin`, `stuart`, `bob`, `dave`...), y su panel se
+titula `kevin · <rama>`. El worktree va en `~/.herdr/worktrees/<repo>/<rama>`. A la derecha del
+tuyo se abre un panel estrecho, `tabla · <repo>`, con la tabla en vivo (`bond team status
+--watch`) de todas las ramas, estén donde estén; si ya está, se reutiliza en vez de abrir otro.
+
+Tu pestaña admite 6 paneles: el tuyo, la tabla y 4 minions (cuenta los que ya tiene). Si los
+agentes nuevos no caben, `bond team` pregunta antes de crear nada:
+
+1. `Pestañas nuevas` (por defecto): los que caben en la tuya y el resto en pestañas nuevas
+   `equipo · <repo>` (`equipo · <repo> · 2`...), 4 por pestaña y en fila.
+2. `Todo en mi pestaña`: filas de 4 (del quinto en adelante, debajo del de su columna), aunque
+   se apriete.
+3. `Workspaces aparte`: un workspace por rama, como con `--workspaces`.
+
+`--tabs`, `--same-tab` y `--workspaces` eligen sin preguntar. Sin terminal (entrada o salida
+redirigidas) o con `--yes`, no pregunta y aplica la 1. Con los que caben, nunca pregunta.
+`status` y `clean` ven y cierran los paneles estén en la pestaña que estén; al cerrar el último
+de una pestaña nueva, Herdr la quita. Fuera de Herdr, un workspace por rama con `herdr
+worktree`, como antes. Sin `[repo]`, el del directorio actual. Cada rama lleva el agente de `rama:agente`; si no,
 el de `--agent`; si no, el agente por defecto del repo (`default_agent` de `.bond/bond.toml`) y,
 si no hay, el de `bond setup`. Avisa si un agente no está entre los del repo (no tendrá su
 config) y si hay cambios sin commitear, que los worktrees no verán. El trabajo se reparte
