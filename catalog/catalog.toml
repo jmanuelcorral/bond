@@ -16,3 +16,7 @@ summary = "Implement one approved plan phase, with evidence"
 [skills.issue-refine-github]
 summary = "Refine a GitHub issue before work: keep, expand or split it"
 default = false
+
+[skills.delivery-review-github]
+summary = "Review a phase, then push and open its PR; after merge, pick what's next"
+default = false

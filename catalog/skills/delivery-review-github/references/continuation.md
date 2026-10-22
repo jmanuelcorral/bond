@@ -2,10 +2,6 @@
 
 Read this reference when the user requests a PR status check or asks what to work on after a merge. Run any commands from the consumer repository root. Resolve the actual host, repository, and PR from trusted task context and validate them before querying. This procedure reads state and recommends work; it never merges, assigns issues, edits Projects, creates branches, or starts implementation.
 
-## Autonomous resumption
-
-For a resumed autonomous run, first read the local [autonomous contract](autonomous.md). This reference still performs read-only verification and selection, not implementation or merge. Limit executable candidates to the original finite `work_items`; a newly discovered backlog item is a recommendation requiring a new grant. Return the verified result to the initiating loop. It may invoke an installed execution skill only with current `continue` and `implement_phase` authorization, satisfied human/integration gates, and unexpired shared limits. A user saying "merged" does not restart a stopped run; require an explicit resume and verify approval evidence rather than treating the checkpoint as authority. No background polling is introduced.
-
 ## Verify the outcome first
 
 Use the installed CLI's help to confirm available fields. For validated `repo` in `[HOST/]OWNER/REPO` format and `pr_number`:
@@ -44,27 +40,3 @@ End with the verified result and one recommended next step, the reason, and a sh
 Recommend the installed `issue-refine-github` skill by name for unclear scope or unresolved contracts; recommend `plan-execute` for one ready, approved phase. The user still authorizes the proposed refinement or execution. A concise reply is sufficient only when its operation, issue, phase, and scope are unambiguous. An acknowledgment such as "merged" alone does not authorize implementation.
 
 On continuation, revalidate the candidate's state, source revision, prerequisites, and approvals. Pass the verified PR/merge revision, plan/source revision, selected issue and phase, scope, contracts, criteria, dependencies, evidence, rationale, and exact existing authorizations as data. Never transfer a self-authored approval field as authority. If the next skill is unavailable, preserve this handoff and explain the missing integration without downloading or loading sibling paths. Offer "stop" as a secondary alternative. Honor higher-priority response restrictions, including empty responses.
-
-## Maintenance scenarios
-
-| Scenario | Expected recommendation and boundary |
-| --- | --- |
-| PR merged, next dependent phase ready | Name its real issue/title/URL and phase, explain satisfied prerequisites, and offer single-phase execution without starting it. |
-| User says merged, PR remains open or auto-merge is scheduled | Report actual state and the pending review/check/merge gate; do not recommend dependent execution. |
-| PR closed without merge | Recommend reconciling the delivery, not advancing the plan. |
-| Merged into a branch that does not satisfy integration requirements | Recommend the missing integration step under consumer rules, without merging or switching branches. |
-| Child or parent remains open after expected closure | Report actual states and propose reconciliation without closing either or claiming completion. |
-| Next phase blocked or acceptance missing | Name the blocker or required review; do not skip to unrelated work. |
-| Current plan finished, ready backlog issue exists | Recommend one scoped issue based on discovered priorities and dependencies, without assignment or status changes. |
-| Standalone merged PR without a plan or issue | Inspect only authorized backlog scope; do not invent a parent, phase, or issue closure requirement. |
-| Candidate already has a PR or another owner implementing it | Do not duplicate implementation; inspect the existing delivery or choose another eligible candidate. |
-| Equal or absent priorities | Label the candidate and rationale as a proposal, not an established team priority. |
-| Candidate needs refinement | Recommend refinement of that issue, not execution or automatic decomposition. |
-| Incomplete pagination or inaccessible dependencies/Project | State the limitation; do not declare the backlog empty or readiness proven. |
-| No eligible issue in verified scope | Recommend applicable release preparation, scoped backlog review, or finishing; do not invent work. |
-| Release PR merged | Recommend refreshed release evidence and approval, never automatic tagging or publication. |
-| Missing next skill or read-only/no-write permissions | Return useful handoff context; no installation or mutation. |
-| Candidate changes before continuation | Reconcile scope and authorization before acting; the previous recommendation is not permanent approval. |
-| Empty-response rule | Omit recommendation/footer rather than violating higher-priority formatting. |
-
-Exercise command arguments with a network-free mock returning synthetic PR and issue states. Separately evaluate agent recommendations against the scenarios above. Text review, help checks, and mocks do not prove agent decisions, remote permissions, or GitHub closure behavior. Record which scenarios were actually exercised and which were only reviewed; never test against a real backlog without specific authorization.
