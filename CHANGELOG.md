@@ -1,6 +1,6 @@
 # Cambios
 
-## Sin publicar
+## 1.3.0
 
 - Quitado el pie `Prepared with bond skills` de las skills del catálogo: los agentes ya no cierran
   sus respuestas con esa marca. Se mantiene la prohibición de atribuirse a bond como agente o de
