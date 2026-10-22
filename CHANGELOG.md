@@ -1,6 +1,6 @@
 # Cambios
 
-## Sin publicar
+## 1.2.0
 
 - Catálogo: skills para llevar una tarea de la issue a la release, adaptadas de
   [fluzo-labs/common-skills](https://github.com/fluzo-labs/common-skills) (MIT), solo en modo
@@ -9,6 +9,8 @@
   `issue-refine-github`, `delivery-review-github` (tras el merge sugiere `bond team clean`),
   `release-prepare-github` (si un workflow publica al empujar el tag, ese push es la
   publicación) y `convention-document`.
+- `/commit` usa `git-conventional-commit` si el repo la tiene; si no, la forma de commitear del
+  agente.
 - `bond init`: las skills opcionales salen sin marcar y `--yes` instala solo las de por defecto.
 - `bond team status`: por rama, estado (trabajando, bloqueado, sin commitear, lista, integrada,
   sin commits), agente, commits por delante de la base y ficheros. Reconoce las ramas
@@ -21,6 +23,7 @@
 - pi en un worktree nuevo pregunta si confía en la carpeta y Herdr lo da por libre: el primer
   prompt contestaba "Trust" por ti y la tarea se perdía. Ahora bond lee el panel: la rama sale
   `bloqueado` (también en `bond`) y `bond team prompt` no manda nada hasta que contestes tú.
+- El skill `bond-team` usa `bond team status` y `bond team prompt`.
 
 ## 1.1.0
 
