@@ -1,5 +1,6 @@
 // Punto de entrada de `bond`: interpreta el subcomando y delega.
 
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { randomStretch, renderLogo } from "../lib/bond-logo.mts";
@@ -44,26 +45,33 @@ Otros
 /**
  * Ficheros de bond en disco. Desde el binario se extraen la primera vez de cada versión, y lo
  * que aún usa los de otra versión (tras bond update, brew upgrade...) pasa a estos.
+ * Con `offer` (al abrir el puesto de trabajo), ofrece la versión nueva si la hay.
  */
-async function prepare(): Promise<void> {
+async function prepare(opts: { offer?: boolean } = {}): Promise<void> {
 	await assetsDir();
-	const { cleanupOld, refreshRuntime } = await import("./update.mts");
+	const { cleanupOld, offerUpdate, refreshRuntime } = await import("./update.mts");
 	cleanupOld();
 	await refreshRuntime();
+	// Actualizado: los ficheros de esta versión ya no están, así que sigue el binario nuevo.
+	if (opts.offer && (await offerUpdate()) === "updated") {
+		process.exit(spawnSync(process.execPath, process.argv.slice(2), { stdio: "inherit" }).status ?? 1);
+	}
 }
 
 async function main(argv: string[]): Promise<void> {
 	const [cmd, ...rest] = argv;
 	const wantsHelp = rest.includes("-h") || rest.includes("--help");
 	setDryRun(rest.includes("--dry-run"));
+	// bond dev y bond team (no sus subcomandos) abren el puesto de trabajo: ahí se ofrece actualizar.
+	const workstation = !wantsHelp && (cmd === "dev" || (cmd === "team" && !["status", "prompt", "clean"].includes(rest[0] ?? "")));
 	// Desde el binario, los ficheros de bond se extraen la primera vez (salvo para la ayuda).
-	if (cmd && !["help", "-h", "--help", "version", "--version", "-v", "logo"].includes(cmd)) await prepare();
+	if (cmd && !["help", "-h", "--help", "version", "--version", "-v", "logo"].includes(cmd)) await prepare({ offer: workstation });
 
 	// `bond` a secas dentro de un repo: abre su puesto de trabajo (fuera de un repo, la ayuda).
 	if (cmd === undefined || (cmd.startsWith("-") && !["-h", "--help", "-v", "--version"].includes(cmd))) {
 		const inRepo = run("git", ["rev-parse", "--show-toplevel"]).status === 0 || existsSync(".bond/bond.toml");
 		if (!inRepo && cmd === undefined) return help();
-		await prepare();
+		await prepare({ offer: !argv.includes("-h") && !argv.includes("--help") });
 		const l = await import("./launch.mts");
 		return argv.includes("-h") || argv.includes("--help") ? console.log(l.LAUNCH_HELP) : l.launch(argv, { dev: false });
 	}

@@ -28,10 +28,10 @@ Cada comando, qué escribe en cada sitio y por qué.
 
 | Ruta | Qué |
 |---|---|
-| `config.toml` | Agentes elegidos, agente por defecto, endpoints y modelos |
+| `config.toml` | Agentes elegidos, agente por defecto, endpoints y modelos; `[update] auto` |
 | `keys/<endpoint>` | Claves, una por fichero, permisos 600 |
 | `AGENTS.md` | Tus instrucciones para todos los agentes |
-| `state.json` | Lo que detectó la sonda y lo que bond gestiona en cada agente |
+| `state.json` | Lo que detectó la sonda, lo que bond gestiona en cada agente y la última comprobación de versión |
 | `runtime/<versión>/` | Ficheros que lleva dentro el binario, extraídos; solo se queda la versión en uso |
 | `pi` | Enlace a las Bond Extensions de la versión instalada |
 
@@ -702,6 +702,22 @@ cambiarlo. Con Homebrew o npm te dice el comando (`brew upgrade jmanuelcorral/ta
 `npm i -g @jmanuelcorral/bond@latest`). `--version vX.Y.Z` instala una concreta, también
 anterior. Venga de donde venga, la versión nueva pasa a sus ficheros `~/.bond/pi` y los skills
 globales que apuntaban a los de otra, y borra las versiones viejas de `~/.bond/runtime/`.
+
+Al abrir el puesto de trabajo (`bond`, `bond dev`, `bond team`; no sus subcomandos ni la
+ayuda), bond mira si hay release nueva una vez cada 24 h (la marca va en `~/.bond/state.json`).
+La consulta tiene un tope de ~2 s: sin red o sin respuesta, el arranque sigue sin decir nada.
+Si hay versión nueva, pregunta:
+
+1. **Actualizar ahora**: con el binario de `install.sh`/`install.ps1` hace lo mismo que
+   `bond update` y sigue con la versión nueva; si el binario descargado no arranca, se queda
+   el actual y avisa. Con Homebrew, npm o desde el código dice el comando.
+2. **Omitir esa versión**: no la vuelve a nombrar; la siguiente release sí se ofrece.
+3. **No volver a preguntar**: escribe `[update] auto = false` en `~/.bond/config.toml` (sin
+   tocar el resto del fichero). Para recuperarlo, `auto = true` o borra la tabla.
+
+Intro, o cualquier otra respuesta, deja la pregunta para la próxima comprobación. Sin terminal
+(entrada o salida redirigidas) no pregunta: solo avisa por stderr. `BOND_NO_UPDATE=1` desactiva
+la comprobación del todo; `BOND_RELEASES_URL` cambia de dónde se leen las releases.
 
 `pi update` solo aplica a instalaciones hechas con el instalador oficial
 (`curl -fsSL https://pi.dev/install.sh | sh`); con bun o npm se actualiza desde el

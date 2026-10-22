@@ -77,6 +77,18 @@ export interface Config {
 	/** Agente que se propone por defecto en `bond init`. */
 	default_agent?: string;
 	providers: Provider[];
+	/** [update] auto = false: bond no pregunta al arrancar si hay versión nueva. */
+	update?: { auto?: boolean };
+}
+
+/** Lo que recuerda el aviso de versión nueva al arrancar (ver offerUpdate en update.mts). */
+export interface UpdateState {
+	/** Última consulta a las releases (ISO); la siguiente, pasadas 24 h. */
+	checkedAt?: string;
+	/** Última release vista (vX.Y.Z). */
+	latest?: string;
+	/** Versión que se pidió omitir: no se vuelve a nombrar hasta que salga otra. */
+	skipped?: string;
 }
 
 export interface State {
@@ -85,6 +97,7 @@ export interface State {
 	managed: Record<string, string[]>;
 	/** Ficheros de los que ya se guardó copia antes de tocarlos por primera vez. */
 	backedUp: string[];
+	update?: UpdateState;
 }
 
 export function loadConfig(): Config {
@@ -127,6 +140,7 @@ export function saveConfig(cfg: Config): void {
 	const data: Record<string, unknown> = { agents: cfg.agents };
 	if (cfg.default_agent) data.default_agent = cfg.default_agent;
 	data.providers = providers;
+	if (cfg.update) data.update = cfg.update;
 	writeFileSync(CONFIG_FILE, `${SAVED_HEADER}\n${stringify(data)}\n`);
 }
 
@@ -142,7 +156,7 @@ export function loadState(): State {
 	migrateLegacy();
 	try {
 		const s = JSON.parse(readFileSync(STATE_FILE, "utf8"));
-		return { probes: s.probes ?? {}, managed: s.managed ?? {}, backedUp: s.backedUp ?? [] };
+		return { probes: s.probes ?? {}, managed: s.managed ?? {}, backedUp: s.backedUp ?? [], ...(s.update && { update: s.update }) };
 	} catch {
 		return { probes: {}, managed: {}, backedUp: [] };
 	}
@@ -151,6 +165,38 @@ export function loadState(): State {
 export function saveState(state: State): void {
 	mkdirSync(CONFIG_DIR, { recursive: true });
 	writeFileSync(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`);
+}
+
+/** ¿Pregunta bond al arrancar si hay versión nueva? ([update] auto; por defecto, sí). */
+export function updateAuto(): boolean {
+	if (!configExists()) return true;
+	try {
+		return (parse(readFileSync(CONFIG_FILE, "utf8")) as { update?: { auto?: unknown } }).update?.auto !== false;
+	} catch {
+		// Un config.toml roto lo señalan los comandos que lo usan; el arranque no se para aquí.
+		return true;
+	}
+}
+
+/**
+ * Pone `auto` en la tabla [update] de config.toml editando solo esas líneas: el resto del
+ * fichero, comentarios incluidos, se queda como está. Si no hay config, la crea con esa tabla.
+ */
+export function setUpdateAuto(auto: boolean): void {
+	migrateLegacy();
+	mkdirSync(CONFIG_DIR, { recursive: true });
+	const text = existsSync(CONFIG_FILE) ? readFileSync(CONFIG_FILE, "utf8") : "";
+	const lines = text.split("\n");
+	const start = lines.findIndex((l) => /^\s*\[update\]\s*(#.*)?$/.test(l));
+	if (start < 0) {
+		const body = text.trimEnd();
+		writeFileSync(CONFIG_FILE, `${body ? `${body}\n\n` : ""}[update]\nauto = ${auto}\n`);
+		return;
+	}
+	let end = lines.findIndex((l, i) => i > start && /^\s*\[/.test(l));
+	if (end < 0) end = lines.length;
+	const table = lines.slice(start + 1, end).filter((l) => !/^\s*auto\s*=/.test(l));
+	writeFileSync(CONFIG_FILE, [...lines.slice(0, start + 1), `auto = ${auto}`, ...table, ...lines.slice(end)].join("\n"));
 }
 
 /** APIs de un proveedor: las declaradas, si no las detectadas, si no "chat". */
