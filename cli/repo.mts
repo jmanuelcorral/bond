@@ -59,11 +59,17 @@ interface McpServer {
 
 const catalog = {
 	mcp: () => JSON.parse(readFileSync(catalogPath("mcp.json"), "utf8")) as Record<string, McpServer>,
-	skills: () => readdirSync(catalogPath("skills")).filter((d) => existsSync(catalogPath("skills", d, "SKILL.md"))),
+	/** En el orden de catalog.toml; las que no estén ahí, al final por nombre. */
+	skills: () => {
+		const found = readdirSync(catalogPath("skills")).filter((d) => existsSync(catalogPath("skills", d, "SKILL.md")));
+		const order = Object.keys(catalogMeta().skills).filter((n) => found.includes(n));
+		return [...order, ...found.filter((n) => !order.includes(n)).sort()];
+	},
 	commands: () =>
 		readdirSync(catalogPath("commands"))
 			.filter((f) => f.endsWith(".md"))
-			.map((f) => f.slice(0, -3)),
+			.map((f) => f.slice(0, -3))
+			.sort(),
 };
 
 interface CatalogEntry {
@@ -691,15 +697,26 @@ async function askSelection(current: Selection, installed: string[]): Promise<Se
 						initialValue: current.default_agent && agents.includes(current.default_agent) ? current.default_agent : agents[0],
 					}),
 				);
-	const describeOf = (kind: "skills" | "commands", n: string) =>
-		kind === "skills" ? skillSummary(n, 60) : describe(readFileSync(catalogPath("commands", `${n}.md`), "utf8")).slice(0, 60);
+	// Qué hace cada herramienta, antes de elegir: clack solo enseña el hint de las marcadas y de
+	// la que tiene el cursor, y al confirmar junta las etiquetas, así que estas van sin texto.
+	const describeCommand = (n: string) => describe(readFileSync(catalogPath("commands", `${n}.md`), "utf8"));
+	const meta = catalogMeta().skills;
+	const groups: Array<[string, Array<[string, string]>]> = [
+		["Servidores MCP", Object.entries(catalog.mcp()).map(([n, s]) => [n, s.description ?? ""])],
+		["Skills", catalog.skills().map((n) => [n, skillSummary(n, 200) + (meta[n]?.default === false ? " (opcional)" : "")])],
+		["Comandos", catalog.commands().map((n) => [`/${n}`, describeCommand(n)])],
+	];
+	const width = Math.max(...groups.flatMap(([, rows]) => rows.map(([n]) => n.length))) + 2;
+	const room = Math.max(20, (process.stdout.columns || 100) - width - 8);
+	const fit = (t: string) => (t.length > room ? `${t.slice(0, room - 1)}…` : t);
+	p.note(groups.map(([g, rows]) => [g, ...rows.map(([n, t]) => `  ${n.padEnd(width)}${dim(fit(t))}`)].join("\n")).join("\n\n"), "Catálogo");
 	const tools = cancel(
 		await p.groupMultiselect({
 			message: "¿Qué herramientas del catálogo? (espacio para marcar o desmarcar)",
 			options: {
-				"Servidores MCP": Object.entries(catalog.mcp()).map(([n, s]) => ({ value: `mcp:${n}`, label: n, hint: s.description?.slice(0, 60) })),
-				Skills: catalog.skills().map((n) => ({ value: `skills:${n}`, label: n, hint: describeOf("skills", n) })),
-				Comandos: catalog.commands().map((n) => ({ value: `commands:${n}`, label: n, hint: describeOf("commands", n) })),
+				"Servidores MCP": Object.keys(catalog.mcp()).map((n) => ({ value: `mcp:${n}`, label: n })),
+				Skills: catalog.skills().map((n) => ({ value: `skills:${n}`, label: n })),
+				Comandos: catalog.commands().map((n) => ({ value: `commands:${n}`, label: n })),
 			},
 			initialValues: [...current.mcp.map((n) => `mcp:${n}`), ...current.skills.map((n) => `skills:${n}`), ...current.commands.map((n) => `commands:${n}`)],
 			required: false,

@@ -1,5 +1,11 @@
 # Cambios
 
+## Sin publicar
+
+- `bond init`: antes de elegir herramientas enseña qué hace cada una (servidores MCP, skills y
+  comandos), con las opcionales señaladas. Antes la explicación solo salía en las marcadas y en
+  la del cursor. Las skills salen en el orden de `catalog/catalog.toml`.
+
 ## 1.2.0
 
 - Catálogo: skills para llevar una tarea de la issue a la release, adaptadas de
