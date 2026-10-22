@@ -116,10 +116,34 @@ por ti y la tarea se perdería. Contesta tú en su panel; en pi, "Trust parent f
 sirve para todos los worktrees de ese repo.
 
 Con `--watch`, la tabla en vivo: ocupa la pantalla, se refresca cada 2 s y sale con `q` o
-Ctrl+C dejando el terminal como estaba. Una fila por rama con el minion, la rama, el estado (en
-color: amarillo si se mueve, rojo si te espera, verde si toca revisar), los commits, los ficheros
-y la última línea del panel de su agente (o la pregunta que espera). En un panel estrecho, esa
-última línea va debajo de la fila. En el panel de la tabla (`tabla · <repo>`), cuando ninguna
+Ctrl+C dejando el terminal como estaba. Las ramas van agrupadas por estado, primero lo que te
+espera, y los grupos vacíos no salen:
+
+```text
+   MINION  RAMA    COMMITS  FICHEROS
+
+⛔ Necesita tu respuesta
+⛔ stuart  feat/b  -        -
+   └ pregunta: confiar en la carpeta del proyecto
+
+🔄 Trabajando
+🔄 kevin   feat/a  +2       3
+
+✏️ Sin commitear
+✏️ bob     feat/e  -        1
+
+📦 Por revisar
+📦 -       feat/c  +1       1
+
+✅ Integradas / sin empezar
+✅ -       feat/d  +1       -
+```
+
+Cada fila lleva el icono de su estado (en color: rojo si te espera, amarillo si se mueve, verde
+si toca revisar, tenue si no hay nada), el minion, la rama, los commits y los ficheros; bajo una
+rama bloqueada, la pregunta que espera. El título de cada grupo dice el estado con palabras, así
+que se entiende aunque el terminal no pinte bien los emoji, y las columnas se alinean contando
+cada emoji como dos. En el panel de la tabla (`tabla · <repo>`), cuando ninguna
 rama tiene trabajo pendiente (ni `trabajando`, `bloqueado`, `sin commitear` ni `lista`, ni un
 agente abierto que aún no ha hecho commits; una rama a la que la tabla ya vio commits y vuelve a
 `sin commits` se ha integrado por merge), muestra `sin trabajo pendiente`, espera unos
