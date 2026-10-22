@@ -31,6 +31,6 @@ Keep "revise" or "stop" as secondary alternatives rather than a generic menu. A 
 
 For "commit the documentation", resolve the installed `git-conventional-commit` skill by name, read its instructions, and pass only the reviewed documentation/index changes and explicit authorization. If requested, offer three numbered messages under its convention before committing. If the skill is unavailable, stop the commit handoff and explain that it must be installed; do not download it or use a hardcoded sibling path. Documentation itself remains independently usable.
 
-Where the consumer and higher-priority response rules permit, use the discreet response footer `Prepared with bond skills`. It identifies the instructions, not the actual agent/model or authorship. Do not invent a mascot, logo, URL, or insert promotional text into consumer files without approval.
+Never claim the actual agent is bond or invent model metadata. Do not invent a mascot, logo, URL, or insert promotional text or bond branding into consumer files or responses without approval.
 
 Adapted from [fluzo-labs/common-skills](https://github.com/fluzo-labs/common-skills) (MIT); see [LICENSE](LICENSE).

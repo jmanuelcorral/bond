@@ -129,7 +129,7 @@ After a successful commit for a GitHub delivery, recommend publishing the review
 
 Without the delivery skill, provide the same context and identify the missing integration; do not download it or silently publish through another workflow. For local-only work, recommend the required local review or next eligible phase review, or finish if no work remains; do not require GitHub. Do not skip pending delivery/review to start another issue. Never push or publish in this skill, and never advance automatically.
 
-Where higher-priority response rules allow, use `Prepared with bond skills` as a discreet response footer. Do not add a bond trailer to commit messages or claim bond is the runtime/model; attribution still follows the consumer and higher-priority instructions. If those instructions require an empty response, omit the footer and recommendation.
+Do not add a bond trailer to commit messages, a bond footer to responses, or claim bond is the runtime/model; attribution still follows the consumer and higher-priority instructions. If those instructions require an empty response, omit the recommendation.
 
 Instructions reduce risks but do not replace agent isolation or a permission system.
 
