@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { chooseAgent, gitRoot, openWorkspace } from "./launch.mts";
 import { agents, ensureServer, firstFreeName, herdr, type HerdrAgent, insideHerdr, pendingQuestion, requireHerdr, serverRunning, workspaces } from "./herdr.mts";
+import { inheritTrust, TRUST_KINDS } from "./trust.mts";
 import { act, caution, die, dim, isDryRun, ok, run, warn } from "./util.mts";
 
 export const TEAM_HELP = `Uso: bond team [repo] <rama[:agente]>... [opciones] [-- argumentos de los agentes]
@@ -24,9 +25,14 @@ mucho; los siguientes, debajo), con nombre de minion (kevin, stuart, bob...). Fu
 con --workspaces, un workspace por rama. En la pestaña, además, un panel estrecho a la derecha
 del tuyo con la tabla en vivo (bond team status --watch), o el que ya haya.
 
+En paneles, si confías en el checkout principal en pi o en Claude Code, cada worktree hereda esa
+confianza (trust.json de pi, ~/.claude.json) y su agente arranca sin preguntar; sin ella, o con
+otros agentes, pregunta como siempre.
+
   -a, --agent <agente>   Agente para las ramas sin :agente
   -b, --base <ref>       Ref de la que salen las ramas nuevas
   --workspaces           Un workspace por rama (herdr worktree) en vez de paneles
+  --no-trust             En paneles: no heredar la confianza del checkout principal
   --trust-repository     Con --workspaces: se pasa a herdr worktree (solo en repos revisados)
 
 status   Cada worktree del repo: estado, agente, commits por delante de la base y ficheros.
@@ -49,6 +55,8 @@ export interface TeamArgs {
 	trust: boolean;
 	/** Un workspace por rama (herdr worktree) en vez de paneles en la pestaña. */
 	workspaces: boolean;
+	/** En paneles: el worktree hereda la confianza del checkout principal (pi, Claude). */
+	inheritTrust: boolean;
 	specs: Array<{ branch: string; agent?: string }>;
 	agentArgs: string[];
 }
@@ -58,7 +66,7 @@ export interface TeamArgs {
  * ya una rama (bond team feat/a feat/b:claude, dentro del repo).
  */
 export function parseTeam(args: string[], isDir: (p: string) => boolean = existsSync): TeamArgs {
-	const o: TeamArgs = { trust: false, workspaces: false, specs: [], agentArgs: [] };
+	const o: TeamArgs = { trust: false, workspaces: false, inheritTrust: true, specs: [], agentArgs: [] };
 	const positional: string[] = [];
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
@@ -67,6 +75,7 @@ export function parseTeam(args: string[], isDir: (p: string) => boolean = exists
 		else if (a === "-b" || a === "--base") o.base = val();
 		else if (a === "--trust-repository") o.trust = true;
 		else if (a === "--workspaces") o.workspaces = true;
+		else if (a === "--no-trust") o.inheritTrust = false;
 		else if (a === "--") {
 			o.agentArgs = args.slice(i + 1);
 			break;
@@ -201,6 +210,14 @@ function openInTab(root: string, anchor: string, plan: Array<{ branch: string; a
 			const name = minionName(live);
 			live.add(name);
 			run("herdr", ["pane", "rename", pane, `${name} · ${branch}`]);
+			let trusted = false;
+			if (o.inheritTrust && TRUST_KINDS.includes(agent)) {
+				try {
+					trusted = inheritTrust(agent, canonical(root), canonical(path)) === "heredada";
+				} catch (e) {
+					warn(`${branch}: no pude heredar la confianza (${(e as Error).message}); ${agent} preguntará`);
+				}
+			}
 			let blocked = false;
 			try {
 				herdr(["agent", "start", name, "--kind", agent, "--pane", pane, "--timeout", "60000", ...(o.agentArgs.length ? ["--", ...o.agentArgs] : [])]);
@@ -209,7 +226,7 @@ function openInTab(root: string, anchor: string, plan: Array<{ branch: string; a
 				// Suele ser una pregunta del agente (confiar en la carpeta...): no se contesta por ti.
 				blocked = agents().find((a) => a.name === name)?.agent_status === "blocked";
 			}
-			console.log(`${ok("✓")} ${branch}  ${name} (${agent}) en ${pane}${blocked ? caution(" · espera una respuesta tuya") : ""}`);
+			console.log(`${ok("✓")} ${branch}  ${name} (${agent}) en ${pane}${trusted ? dim(" · confianza heredada") : ""}${blocked ? caution(" · espera una respuesta tuya") : ""}`);
 		} catch (e) {
 			// El panel de este no se creó: los que cuelgan de él salen del panel del que llama.
 			panes.push(anchor);

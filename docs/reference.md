@@ -405,7 +405,7 @@ respeta, para que el agente no reciba instrucciones contradictorias:
 | Solo se usa si el usuario lo pide, no porque algo tarde o se pueda paralelizar | `AGENTS.md` lo repite. Los skills `bond-delegate`/`bond-team` solo se activan a petición, y los prompts `/delegate` y `/team` empiezan con "Te pido expresamente que uses Herdr…": invocarlos es la petición explícita. |
 | Nada de workspaces, pestañas, worktrees ni otro directorio sin petición | `/delegate` trabaja en un panel hermano y en `$PWD`. Los worktrees los crean `bond`/`bond team` (los lanzas tú) o `/team`, que lo pide expresamente y además espera tu OK al reparto antes de crear nada. |
 | Worktrees con `herdr worktree`, no `git worktree` a mano | `bond --worktree` usa `worktree create`/`open` colgados del workspace `bond:<repo>`, así Herdr los agrupa y los sabe quitar. |
-| `--trust-repository` solo tras revisar el repo | `bond`/`bond team` solo lo pasan si tú pones `--trust-repository`. |
+| `--trust-repository` solo tras revisar el repo | `bond`/`bond team` solo lo pasan si tú pones `--trust-repository`. En paneles, `bond team` da a cada worktree la confianza de pi o Claude Code que ya tenía el checkout principal, nunca otra (`--no-trust` lo desactiva). |
 | La CLI instalada manda sobre la memoria | Los prompts remiten al skill y a `herdr <grupo>`; solo fijan el procedimiento. |
 | Nombres de agente únicos | `/delegate` usa `<rol>-<n>` con el primer `n` libre en `herdr agent list`. |
 | Split según la forma del panel | `/delegate` lee su `rect` en `herdr pane layout`: `right` si `width >= 120` y `width >= 2*height`, si no `down`. |

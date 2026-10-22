@@ -29,6 +29,11 @@ describe("parseTeam", () => {
 		expect(o).toMatchObject({ agent: "codex", base: "main", trust: true, agentArgs: ["--model", "x"] });
 		expect(o.specs).toEqual([{ branch: "feat/a", agent: undefined }]);
 	});
+
+	test("--no-trust: sin heredar la confianza (por defecto, sí)", () => {
+		expect(parseTeam(["feat/a"], dirs()).inheritTrust).toBe(true);
+		expect(parseTeam(["feat/a", "--no-trust"], dirs()).inheritTrust).toBe(false);
+	});
 });
 
 // --- estado de las ramas (solo git) ---------------------------------------------------------

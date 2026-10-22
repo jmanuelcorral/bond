@@ -55,7 +55,7 @@ por ejemplo en un worktree), bond lo dice y no contesta por ti.
 ## `bond team`
 
 ```bash
-bond team [repo] <rama[:agente]>... [--agent <a>] [--base <ref>] [--workspaces] [-- args de los agentes]
+bond team [repo] <rama[:agente]>... [--agent <a>] [--base <ref>] [--workspaces] [--no-trust] [-- args de los agentes]
 bond team status [repo] [--base <ref>] [--json | --watch]
 bond team prompt <rama> "la tarea" [--wait] [--timeout <ms>]
 bond team clean [repo] [rama...] [--force] [--delete-branch] [--dry-run]
@@ -90,10 +90,17 @@ de la base (por defecto, la rama del checkout principal) y los ficheros que toca
 | `integrada` | Ya está en la base, también si entró por rebase o squash |
 | `sin commits` | Nada todavía (o se integró por fast-forward) |
 
-pi pregunta si confía en cada carpeta nueva, y cada worktree lo es. Herdr no lo ve como una
-pregunta, así que bond lee el panel: la rama sale `bloqueado`, y `prompt` no manda nada, porque
-su Enter elegiría "Trust" por ti y la tarea se perdería. Contesta tú en su panel; "Trust parent
-folder" una vez sirve para todos los worktrees de ese repo.
+pi y Claude Code preguntan si confías en cada carpeta nueva, y cada worktree lo es. En paneles,
+si ya confías en el checkout principal (en pi, su entrada más cercana en
+`~/.pi/agent/trust.json` es `true`; en Claude, él o una carpeta superior tiene
+`hasTrustDialogAccepted` en `~/.claude.json`), bond da la misma confianza al worktree antes de
+lanzar su agente, y arranca sin preguntar (`confianza heredada`). No toca nada más de esos
+ficheros, respeta el cerrojo de pi y escribe de forma atómica; una carpeta en la que dijiste que
+no confías se queda así. `--no-trust` lo desactiva. Sin esa confianza, con otros agentes o con
+`--workspaces`, pregunta como siempre. Herdr no siempre lo ve como una pregunta, así que bond lee
+el panel: la rama sale `bloqueado`, y `prompt` no manda nada, porque su Enter elegiría "Trust"
+por ti y la tarea se perdería. Contesta tú en su panel; en pi, "Trust parent folder" una vez
+sirve para todos los worktrees de ese repo.
 
 Con `--watch`, la tabla en vivo: ocupa la pantalla, se refresca cada 2 s y sale con `q` o
 Ctrl+C dejando el terminal como estaba. Una fila por rama con el minion, la rama, el estado (en
@@ -129,4 +136,5 @@ git branch -d <rama>                     # la rama, cuando ya no la quieras
 ```
 
 bond no hace merge, rebase ni push, no borra ramas ni cierra workspaces, y no responde por ti a
-los diálogos de los agentes.
+los diálogos de los agentes: la confianza heredada de `bond team` solo repite la que ya diste al
+checkout principal.
