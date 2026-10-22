@@ -18,6 +18,19 @@ Check capabilities against installed CLI help. Paginate API lists when a limited
 
 If an existing release pipeline owns publication, do not run a competing manual publisher. Prepare its inputs and use its separately authorized, reviewed dispatch procedure, or stop at the handoff. Do not install or rewrite CI as part of releasing.
 
+## Tag-triggered release workflows
+
+Many repositories publish from a workflow triggered by pushing a tag (`on: push: tags`). There, pushing the tag is the publication: the workflow builds the artifacts and creates the release, and may also publish packages or update other channels. Read the workflow first and list everything it publishes. Do not create a draft, upload assets, or edit its release with `gh` alongside it.
+
+Prepare the version and changelog, and commit them through the installed commit skill when requested. Then present the exact tag, full candidate SHA, notes source, and what the workflow will publish, and obtain explicit approval of that tag push as the final publication. Create and push only that tag following the next section, then follow the run for that commit read-only:
+
+```bash
+gh run list --repo "$repo" --workflow "$workflow_file" --commit "$candidate_sha" --json databaseId,status,conclusion,url
+gh run watch "$run_id" --repo "$repo" --exit-status
+```
+
+Read back the release, its assets, and the published checksums against the manifest. A failed or partial run is reported with what it did publish; do not delete the tag, retag, rerun, or finish the release by hand without a separate decision.
+
 ## Verify the remote tag and exact commit
 
 ```bash
