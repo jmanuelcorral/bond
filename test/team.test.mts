@@ -244,24 +244,24 @@ describe("tabla en vivo", () => {
 		expect(out).toEqual([
 			`${"bond team · fluzo · base main".padEnd(72)}10:00:00`,
 			"",
-			"   MINION  RAMA    COMMITS  FICHEROS",
+			"MINION  RAMA    COMMITS  FICHEROS",
 			"",
 			"⛔ Necesita tu respuesta",
-			"⛔ stuart  feat/b  -        -",
+			"stuart  feat/b  -        -",
 			"   └ pregunta: confiar en la carpeta del proyecto",
 			"",
 			"🔄 Trabajando",
-			"🔄 kevin   feat/a  +2       3",
+			"kevin   feat/a  +2       3",
 			"",
 			"✏️ Sin commitear",
-			"✏️ bob     feat/e  -        1",
+			"bob     feat/e  -        1",
 			"",
 			"📦 Por revisar",
-			"📦 -       feat/c  +1       1",
+			"-       feat/c  +1       1",
 			"",
 			"✅ Integradas / sin empezar",
-			"✅ -       feat/d  +1       -",
-			"✅ -       feat/f  -        -",
+			"-       feat/d  +1       -",
+			"-       feat/f  -        -",
 			"",
 			"q o Ctrl+C para salir · se actualiza cada 2 s",
 		]);
@@ -279,10 +279,10 @@ describe("tabla en vivo", () => {
 			const out = renderWatch(rows, { ...opts, width, color: true }).map(plain);
 			expect(out.every((l) => textWidth(l) <= width)).toBe(true);
 			// Cada columna empieza en la misma posición visual en la cabecera y en todas las filas.
-			const lines = [out[2], ...out.filter((l) => /^\S+ \S/.test(l) && /feat\//.test(l))];
+			const lines = [out[2], ...out.filter((l) => /feat\//.test(l))];
 			expect(lines).toHaveLength(7);
 			const starts = (l: string) => [...l.matchAll(/(?<=^|\s)\S+/g)].map((m) => textWidth(l.slice(0, m.index)));
-			for (const l of lines.slice(1)) expect(starts(l).slice(1)).toEqual(starts(out[2]));
+			for (const l of lines.slice(1)) expect(starts(l)).toEqual(starts(out[2]));
 		}
 		expect(renderWatch(rows, { ...opts, width: 40 })[6]).toBe("   └ pregunta: confiar en la carpeta de…");
 		expect(renderWatch(rows, { ...opts, width: 20 }).every((l) => textWidth(l) <= 20)).toBe(true);
@@ -290,21 +290,21 @@ describe("tabla en vivo", () => {
 
 	test("muy estrecha: cabeceras cortas y la rama recortada para que quepan las columnas", () => {
 		const out = renderWatch(rows, { ...opts, width: 26 });
-		expect(out[2]).toBe("   MINION  RAMA  COM  FICH");
-		expect(out[9]).toBe("🔄 kevin   fea…  +2   3");
+		expect(out[2]).toBe("MINION  RAMA   COM  FICH");
+		expect(out[9]).toBe("kevin   feat…  +2   3");
 	});
 
-	test("título e icono en el color de su estado; sin color, los iconos siguen diciendo el estado", () => {
+	test("el título del grupo va en el color de su estado y las filas también; sin color, el título dice el estado", () => {
 		const out = renderWatch(rows, { ...opts, color: true });
 		expect(out[4]).toBe("\x1b[31m⛔ Necesita tu respuesta\x1b[0m");
-		expect(out[5]).toBe("\x1b[31m⛔\x1b[0m stuart  feat/b  -        -");
-		expect(out[9]).toStartWith("\x1b[33m🔄\x1b[0m");
-		expect(out[15]).toStartWith("\x1b[32m📦\x1b[0m");
+		expect(out[5]).toBe("\x1b[31mstuart  feat/b  -        -\x1b[0m");
+		expect(out[9]).toStartWith("\x1b[33mkevin");
+		expect(out[15]).toStartWith("\x1b[32m-");
 		expect(out.map(plain)).toEqual(renderWatch(rows, opts));
 		const bare = renderWatch(rows, opts);
 		expect(bare.join("\n")).not.toContain("\x1b[");
-		expect(bare[5]).toStartWith("⛔ ");
-		expect(bare[9]).toStartWith("🔄 ");
+		expect(bare[4]).toStartWith("⛔ ");
+		expect(bare[8]).toStartWith("🔄 ");
 	});
 
 	test("colores por estado: rojo si te espera, verde si toca revisar, tenue si no hay nada", () => {
@@ -315,7 +315,7 @@ describe("tabla en vivo", () => {
 
 	test("bloqueada sin pregunta en pantalla: sin línea de pregunta", () => {
 		const out = renderWatch([row("feat/b", "bloqueado", { agent: { name: "stuart", kind: "pi", status: "blocked" } })], opts);
-		expect(out.slice(4, 7)).toEqual(["⛔ Necesita tu respuesta", "⛔ stuart  feat/b  -        -", ""]);
+		expect(out.slice(4, 7)).toEqual(["⛔ Necesita tu respuesta", "stuart  feat/b  -        -", ""]);
 	});
 
 	test("sin worktrees", () => {

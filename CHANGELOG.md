@@ -31,8 +31,8 @@
   está enfocado ni con `--keep-open`.
 - `bond team status --watch` agrupa las ramas por estado, primero lo que te espera: ⛔ necesita
   tu respuesta (con la pregunta debajo), 🔄 trabajando, ✏️ sin commitear, 📦 por revisar y
-  ✅ integradas / sin empezar; los grupos vacíos no salen. Cada fila lleva el icono de su
-  estado, en su color; sin columna con la última línea del panel del agente.
+  ✅ integradas / sin empezar; los grupos vacíos no salen. El icono del estado va solo en el
+  título del grupo, en su color; sin columna con la última línea del panel del agente.
 - Skill `plan-team` en el catálogo (opcional): ejecuta en paralelo las fases independientes de
   un plan de `docs/plans/`, una rama, worktree y agente por fase con `bond team`. Cada agente
   implementa solo su fase con `plan-execute` y hace commit en su rama si la verificación pasa,

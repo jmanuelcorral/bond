@@ -48,8 +48,8 @@ status   Cada worktree del repo: estado, agente, commits por delante de la base 
          La base, por defecto, es la rama del checkout principal.
          --watch: tabla en vivo (cada 2 s) agrupada por estado, en este orden: ⛔ necesita tu
          respuesta (con la pregunta debajo), 🔄 trabajando, ✏️ sin commitear, 📦 por revisar
-         y ✅ integradas / sin empezar; los grupos vacíos no salen. Cada fila: el icono, el
-         minion, la rama, los commits y los ficheros. Sale con q o Ctrl+C. En el
+         y ✅ integradas / sin empezar; los grupos vacíos no salen. El icono del estado va en
+         el título del grupo; cada fila: minion, rama, commits y ficheros. Sale con q o Ctrl+C. En el
          panel de la tabla, si ninguna rama tiene trabajo pendiente (trabajando, bloqueado,
          sin commitear, lista, o un agente abierto sin commits aún), avisa y se cierra sola;
          no si es el panel enfocado ni con --keep-open.
@@ -605,8 +605,8 @@ export const WATCH_GROUPS: Array<{ icon: string; title: string; states: State[] 
 
 /**
  * Las líneas de la tabla en vivo, recortadas a `width`: las ramas agrupadas por estado (sin los
- * grupos vacíos), cada grupo con su título y cada fila con el icono de su estado, el minion, la
- * rama, los commits y los ficheros; bajo una rama bloqueada, la pregunta que espera.
+ * grupos vacíos), cada grupo con su título —que lleva el icono del estado— y cada fila con el
+ * minion, la rama, los commits y los ficheros; bajo una rama bloqueada, la pregunta que espera.
  */
 export function renderWatch(rows: Row[], o: { width: number; color: boolean; repo: string; base: string; time: string; notice?: string }): string[] {
 	const dimmed = (s: string) => (o.color ? `\x1b[2m${s}\x1b[0m` : s);
@@ -615,21 +615,20 @@ export function renderWatch(rows: Row[], o: { width: number; color: boolean; rep
 	else {
 		const cells = rows.map((r) => [r.agent?.name ?? "-", r.branch, r.ahead ? `+${r.ahead}` : "-", r.files.length ? String(r.files.length) : "-"]);
 		const widths = (h: string[]) => h.map((x, i) => Math.max(textWidth(x), ...cells.map((c) => textWidth(c[i]))));
-		// El icono y su espacio van delante de cada fila.
-		const room = (w: number[]) => w.reduce((a, b) => a + b + 2, 1);
+		const room = (w: number[]) => w.reduce((a, b) => a + b + 2, 0);
 		// En un panel estrecho, cabeceras cortas y, si aun así no cabe, la rama recortada.
 		let head = ["MINION", "RAMA", "COMMITS", "FICHEROS"];
 		let w = widths(head);
 		if (room(w) > o.width) w = widths((head = ["MINION", "RAMA", "COM", "FICH"]));
 		w[1] = Math.max(4, w[1] - Math.max(0, room(w) - o.width));
 		const fmt = (c: string[]) => c.map((x, i) => pad(clip(x, w[i]), w[i])).join("  ").trimEnd();
-		out.push("", clip(`   ${fmt(head)}`, o.width));
+		out.push("", clip(fmt(head), o.width));
 		for (const g of WATCH_GROUPS) {
 			const group = rows.flatMap((r, i) => (g.states.includes(r.state) ? [[r, cells[i]] as const] : []));
 			if (!group.length) continue;
 			out.push("", paintState(group[0][0].state, clip(`${g.icon} ${g.title}`, o.width), o.color));
 			for (const [r, c] of group) {
-				out.push(paintState(r.state, g.icon, o.color) + clip(` ${fmt(c)}`, o.width - textWidth(g.icon)));
+				out.push(paintState(r.state, clip(fmt(c), o.width), o.color));
 				if (r.agent?.question) out.push(clip(`   └ pregunta: ${r.agent.question}`, o.width));
 			}
 		}
