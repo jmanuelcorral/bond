@@ -1,7 +1,7 @@
 # El puesto de trabajo: `bond`, `bond team`, `bond status`
 
 Dentro de un repo, `bond` a secas abre su puesto de trabajo en Herdr: el agente por defecto del
-repo en un panel y una shell en otro.
+repo, llamado `gru`, solo en su panel. Con `--shell`, una shell al lado.
 
 ```bash
 cd ~/gitrepos/mi-proyecto
@@ -26,8 +26,9 @@ bond status                       # agentes vivos
    otro.
 5. **Workspace** con etiqueta `bond:<repo>` (o `bond:<repo>/<rama>` con `--worktree`). Si ya
    existe, lo enfoca y termina (también reconoce las etiquetas antiguas `pi:<repo>`).
-6. **Paneles:** el agente en el panel raíz y una shell al lado (60 % / 40 %, a la derecha).
-   El agente se llama `<agente>-<repo>[-<rama>]`, con `-2`, `-3`… si el nombre está en uso.
+6. **Paneles:** el agente solo, en el panel raíz; con `--shell`, una shell al lado (60 % / 40 %,
+   a la derecha). El agente del checkout principal se llama `gru`, el que orquesta (`gru-2`,
+   `gru-3`… si ya hay otro en Herdr); con `--worktree`, `<agente>-<repo>-<rama>`.
 7. **Fuera de Herdr**, engancha su interfaz al terminar. Con `--no-attach` no; con `--no-focus`
    lo deja en segundo plano sin cambiar de workspace.
 
@@ -41,10 +42,11 @@ por ejemplo en un worktree), bond lo dice y no contesta por ti.
 | `-a`, `--agent <agente>` | Otro agente en vez del de por defecto |
 | `-w`, `--worktree <rama>` | Worktree para esa rama con `herdr worktree` (lo crea, o lo abre si existe), colgado del workspace `bond:<repo>` |
 | `-b`, `--base <ref>` | Con `--worktree`: de dónde sale una rama nueva |
-| `-d`, `--direction <right\|down>` | Dónde va la shell (defecto: `right`) |
-| `-r`, `--ratio <0.1-0.9>` | Fracción del panel del agente (defecto: 0.6) |
+| `--shell` | Una shell en otro panel, junto al agente |
+| `-d`, `--direction <right\|down>` | Con `--shell`: dónde va la shell (defecto: `right`) |
+| `-r`, `--ratio <0.1-0.9>` | Con `--shell`: fracción del panel del agente (defecto: 0.6) |
 | `-l`, `--label <texto>` | Etiqueta del workspace |
-| `--no-agent` | Solo paneles de shell |
+| `--no-agent` | Una shell en vez del agente |
 | `--no-attach` | No enganchar la interfaz de Herdr |
 | `--no-focus` | En segundo plano: ni enfoca ni engancha |
 | `--trust-repository` | Se pasa a `herdr worktree` (solo en repos que hayas revisado) |
@@ -97,10 +99,10 @@ borra además las ramas integradas. El workspace del repo no lo cierra: te dice 
 ## Conducir los agentes
 
 ```bash
-herdr agent prompt pi-mi-proyecto "revisa el diff actual" --wait --timeout 300000
-herdr agent read pi-mi-proyecto --source recent-unwrapped --lines 200
-herdr agent wait pi-mi-proyecto --until blocked --timeout 120000
-herdr agent send-keys pi-mi-proyecto ctrl+c
+herdr agent prompt gru "revisa el diff actual" --wait --timeout 300000
+herdr agent read gru --source recent-unwrapped --lines 200
+herdr agent wait gru --until blocked --timeout 120000
+herdr agent send-keys gru ctrl+c
 ```
 
 Estados: `idle` y `done` listo para entrada, `blocked` esperando una respuesta tuya,

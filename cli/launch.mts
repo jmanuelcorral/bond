@@ -11,17 +11,19 @@ export const LAUNCH_HELP = `Uso: bond [opciones] [-- argumentos del agente]
        bond dev [directorio] [opciones] [-- argumentos del agente]
 
 Dentro de un repo, abre su puesto de trabajo en Herdr: el agente por defecto del repo
-(.bond/bond.toml) en un panel y una shell en otro. Si el workspace ya existe, lo enfoca.
+(.bond/bond.toml), llamado gru (gru-2... si ya hay otro), solo en su panel; con --shell, una
+shell al lado. Si el workspace ya existe, lo enfoca.
 Fuera de Herdr arranca su servidor y engancha la interfaz. Si el repo no tiene bond, ofrece
 bond init; si su config está desfasada, la regenera antes.
 
   -a, --agent <agente>          Otro agente en vez del de por defecto (pi, claude, codex...)
   -w, --worktree <rama>         En un worktree de git para <rama> (herdr worktree)
   -b, --base <ref>              Con --worktree: ref de la que sale una rama nueva
-  -d, --direction <right|down>  Dónde va la shell (defecto: right)
-  -r, --ratio <0.1-0.9>         Fracción del panel del agente (defecto: 0.6)
+  --shell                       Una shell en otro panel, junto al agente
+  -d, --direction <right|down>  Con --shell: dónde va la shell (defecto: right)
+  -r, --ratio <0.1-0.9>         Con --shell: fracción del panel del agente (defecto: 0.6)
   -l, --label <texto>           Etiqueta del workspace (defecto: bond:<repo>[/<rama>])
-  --no-agent                    Solo paneles de shell
+  --no-agent                    Una shell en vez del agente
   --no-attach                   No enganchar la interfaz de Herdr al terminar
   --no-focus                    Abrirlo en segundo plano (sin cambiar de workspace ni enganchar)
   --trust-repository            Se pasa a herdr worktree (solo en repos revisados)`;
@@ -32,6 +34,8 @@ export interface OpenOptions {
 	worktree?: string;
 	base?: string;
 	label?: string;
+	/** Una shell en otro panel, junto al agente (direction, ratio). */
+	shell: boolean;
 	direction: string;
 	ratio: string;
 	focus: boolean;
@@ -102,11 +106,13 @@ export function openWorkspace(o: OpenOptions): Opened {
 	const cwd = created.root_pane?.cwd || project;
 	if (!ws || !agentPane) die("no pude leer los ids de la respuesta de Herdr");
 
-	const split = herdr<{ pane?: { pane_id: string } }>(["pane", "split", "--pane", agentPane, "--direction", o.direction, "--ratio", o.ratio, "--cwd", cwd, "--no-focus"]);
-	const shellPane = split.pane?.pane_id;
+	const shellPane = o.shell
+		? herdr<{ pane?: { pane_id: string } }>(["pane", "split", "--pane", agentPane, "--direction", o.direction, "--ratio", o.ratio, "--cwd", cwd, "--no-focus"]).pane?.pane_id
+		: undefined;
 
 	if (!o.agent) return { ws, label, cwd, agentPane, shellPane, reused: false };
-	const agentName = uniqueAgentName(slugify(`${o.agent}-${name}${o.worktree ? `-${o.worktree}` : ""}`));
+	// El del checkout principal es gru, el que orquesta; los de worktrees, por agente y rama.
+	const agentName = uniqueAgentName(o.worktree ? slugify(`${o.agent}-${name}-${o.worktree}`) : "gru");
 	try {
 		herdr(["agent", "start", agentName, "--kind", o.agent, "--pane", agentPane, "--timeout", "60000", ...(o.agentArgs.length ? ["--", ...o.agentArgs] : [])]);
 		return { ws, label, cwd, agentPane, shellPane, agentName, reused: false, blocked: pendingQuestion(agentName) !== undefined };
@@ -117,8 +123,8 @@ export function openWorkspace(o: OpenOptions): Opened {
 	}
 }
 
-function parse(args: string[], withDir: boolean) {
-	const o = { dir: process.cwd(), dirGiven: false, agent: undefined as string | undefined, worktree: undefined as string | undefined, base: undefined as string | undefined, label: undefined as string | undefined, direction: "right", ratio: "0.6", noAgent: false, attach: true, focus: true, trust: false, agentArgs: [] as string[] };
+export function parseLaunch(args: string[], withDir: boolean) {
+	const o = { dir: process.cwd(), dirGiven: false, agent: undefined as string | undefined, worktree: undefined as string | undefined, base: undefined as string | undefined, label: undefined as string | undefined, shell: false, direction: "right", ratio: "0.6", noAgent: false, attach: true, focus: true, trust: false, agentArgs: [] as string[] };
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
 		const val = () => args[++i] ?? die(`${a} necesita un valor`);
@@ -128,6 +134,7 @@ function parse(args: string[], withDir: boolean) {
 		else if (a === "-d" || a === "--direction") o.direction = val();
 		else if (a === "-r" || a === "--ratio") o.ratio = val();
 		else if (a === "-l" || a === "--label") o.label = val();
+		else if (a === "--shell") o.shell = true;
 		else if (a === "--no-agent") o.noAgent = true;
 		else if (a === "--no-attach") o.attach = false;
 		else if (a === "--no-focus") {
@@ -171,7 +178,7 @@ export async function chooseAgent(asked: string | undefined, repoDefault: string
 
 export async function launch(args: string[], opts: { dev: boolean }): Promise<void> {
 	requireHerdr();
-	const o = parse(args, opts.dev);
+	const o = parseLaunch(args, opts.dev);
 	const root = gitRoot(o.dir) ?? o.dir;
 	const hasBond = existsSync(join(root, ".bond", "bond.toml"));
 
@@ -203,7 +210,7 @@ export async function launch(args: string[], opts: { dev: boolean }): Promise<vo
 
 	const inside = insideHerdr();
 	if (!inside) await ensureServer();
-	const r = openWorkspace({ dir: root, agent, worktree: o.worktree, base: o.base, label: o.label, direction: o.direction, ratio: o.ratio, focus: o.focus, trust: o.trust, agentArgs: o.agentArgs });
+	const r = openWorkspace({ dir: root, agent, worktree: o.worktree, base: o.base, label: o.label, shell: o.shell, direction: o.direction, ratio: o.ratio, focus: o.focus, trust: o.trust, agentArgs: o.agentArgs });
 
 	const { renderSmall } = await import("../lib/bond-logo.mts");
 	console.log(`\n  ${renderSmall(60, r.reused ? `workspace ${r.label}` : `${agent ?? "shell"} · ${r.label}`)}`);
@@ -211,7 +218,7 @@ export async function launch(args: string[], opts: { dev: boolean }): Promise<vo
 	else {
 		console.log(`  workspace ${r.ws}  ${dim(r.cwd)}`);
 		if (r.agentName) console.log(`  agente    ${r.agentName} (${agent}) en ${r.agentPane}${r.blocked ? caution("  · espera una respuesta tuya (p. ej. confiar en la carpeta)") : ""}`);
-		console.log(`  shell     ${r.shellPane}`);
+		if (r.shellPane) console.log(`  shell     ${r.shellPane}`);
 		if (o.worktree) console.log(dim(`  al terminar con el worktree: herdr worktree remove --workspace ${r.ws}`));
 	}
 	if (!inside && o.attach) attach();

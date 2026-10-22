@@ -103,9 +103,13 @@ export const slugify = (s: string) =>
 		.replace(/[^a-z0-9_-]+/g, "-")
 		.replace(/^-+|-+$/g, "");
 
-/** Primer nombre libre: base, base-2, base-3... */
+/** Primer nombre libre entre los agentes vivos: base, base-2, base-3... */
 export function uniqueAgentName(base: string): string {
-	const live = new Set(agents().map((a) => a.name).filter(Boolean));
+	return firstFreeName(base, new Set(agents().map((a) => a.name).filter((n): n is string => !!n)));
+}
+
+/** Primer nombre que no está en `live`: base, base-2, base-3... (válido para Herdr). */
+export function firstFreeName(base: string, live: Set<string>): string {
 	let name = base.slice(0, 29).replace(/-+$/, "");
 	if (!/^[a-z]/.test(name)) name = `a-${name}`.slice(0, 29);
 	const root = name;

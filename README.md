@@ -22,7 +22,7 @@ vez: pi, Claude Code, Codex, Copilot CLI, opencode, Crush y Gemini CLI, coordina
 ```bash
 bond setup      # una vez por máquina: Herdr, endpoints de modelos, con qué agentes trabajas
 bond init       # una vez por repo: qué agentes integrar, cuál por defecto, qué herramientas
-bond            # cada día, dentro del repo: Herdr con el agente por defecto y una shell
+bond            # cada día, dentro del repo: Herdr con el agente por defecto (gru)
 ```
 
 - **`bond setup`** comprueba Herdr (y te dice cómo instalarlo si falta), detecta Ollama y LM

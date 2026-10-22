@@ -2,6 +2,9 @@
 
 ## Sin publicar
 
+- `bond` abre solo el agente, sin la shell de al lado; `bond --shell` la recupera (`-d` y `-r`
+  ahora se aplican a ella). El agente del checkout principal se llama `gru` (`gru-2`... si ya
+  hay otro en Herdr), en vez de `<agente>-<repo>`.
 - Skill `plan-team` en el catálogo (opcional): ejecuta en paralelo las fases independientes de
   un plan de `docs/plans/`, una rama, worktree y agente por fase con `bond team`. Cada agente
   implementa solo su fase con `plan-execute` y hace commit en su rama si la verificación pasa,
