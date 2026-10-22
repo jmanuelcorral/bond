@@ -12,9 +12,9 @@ import { inheritTrust, TRUST_KINDS } from "./trust.mts";
 import { act, caution, die, dim, isDryRun, ok, run, warn } from "./util.mts";
 
 export const TEAM_HELP = `Uso: bond team [repo] <rama[:agente]>... [opciones] [-- argumentos de los agentes]
-       bond team status [repo] [--base <ref>] [--json | --watch]
+       bond team status [repo] [--base <ref>] [--json | --watch [--keep-open]]
        bond team prompt <rama> <tarea> [--wait] [--timeout <ms>]
-       bond team clean [repo] [rama...] [--base <ref>] [--force] [--delete-branch] [--dry-run]
+       bond team clean [repo] [rama...] [--base <ref>] [--force] [--delete-branch] [--keep-table] [--dry-run]
 
 Abre un worktree y un agente por rama. Sin [repo], el repo del directorio actual. El agente de
 cada rama: el de rama:agente, si no --agent, si no el agente por defecto del repo
@@ -47,11 +47,16 @@ status   Cada worktree del repo: estado, agente, commits por delante de la base 
          integrada (ya está en la base, también por rebase o squash), sin commits.
          La base, por defecto, es la rama del checkout principal.
          --watch: tabla en vivo (cada 2 s) con el minion, la rama, el estado, los commits, los
-         ficheros y la última línea del panel de cada agente; sale con q o Ctrl+C.
+         ficheros y la última línea del panel de cada agente; sale con q o Ctrl+C. En el
+         panel de la tabla, si ninguna rama tiene trabajo pendiente (trabajando, bloqueado,
+         sin commitear, lista, o un agente abierto sin commits aún), avisa y se cierra sola;
+         no si es el panel enfocado ni con --keep-open.
 prompt   Manda una tarea al agente de esa rama (herdr agent prompt); --wait espera a que acabe.
 clean    Quita worktrees (carpeta, workspace y agente); las ramas se quedan. Sin ramas, solo
          los integrados que abrió Herdr. Nunca uno con el agente trabajando o con cambios sin
-         commitear, salvo con --force. --delete-branch borra además las ramas integradas.`;
+         commitear, salvo con --force. --delete-branch borra además las ramas integradas.
+         Si al acabar no queda ningún agente del equipo, cierra también el panel de la tabla
+         en vivo; --keep-table lo deja abierto.`;
 
 // --- crear el equipo ----------------------------------------------------------------------
 
@@ -539,14 +544,15 @@ function parseCommon(args: string[], flags: string[], valued: string[]): { posit
 }
 
 function status(args: string[]): void | Promise<void> {
-	const { positional, opts } = parseCommon(args, ["--json", "-j", "--watch", "-w"], ["--base", "-b"]);
-	if (positional.length > 1) die("uso: bond team status [repo] [--base <ref>] [--json | --watch]");
+	const { positional, opts } = parseCommon(args, ["--json", "-j", "--watch", "-w", "--keep-open"], ["--base", "-b"]);
+	if (positional.length > 1) die("uso: bond team status [repo] [--base <ref>] [--json | --watch [--keep-open]]");
 	const root = repoOf(positional[0]);
 	const base = (opts["--base"] ?? opts["-b"]) as string | undefined;
 	if (opts["--watch"] || opts["-w"]) {
 		if (opts["--json"] || opts["-j"]) die("--watch y --json no van juntos");
-		return watch(root, base ?? defaultBase(root));
+		return watch(root, base ?? defaultBase(root), !!opts["--keep-open"]);
 	}
+	if (opts["--keep-open"]) die("--keep-open va con --watch");
 	const rows = teamRows(root, base);
 	if (opts["--json"] || opts["-j"]) return console.log(JSON.stringify(rows, null, 2));
 	printStatus(rows);
@@ -565,7 +571,7 @@ const MIN_LAST = 20;
  * rama, el estado (con su color), los commits, los ficheros y la última línea de su panel; si
  * no cabe, esa última línea va debajo.
  */
-export function renderWatch(rows: WatchRow[], o: { width: number; color: boolean; repo: string; base: string; time: string }): string[] {
+export function renderWatch(rows: WatchRow[], o: { width: number; color: boolean; repo: string; base: string; time: string; notice?: string }): string[] {
 	const dimmed = (s: string) => (o.color ? `\x1b[2m${s}\x1b[0m` : s);
 	const out = [clip(`bond team · ${o.repo} · base ${o.base}`, o.width - o.time.length - 1).padEnd(o.width - o.time.length) + o.time, ""];
 	if (!rows.length) out.push(clip("Sin worktrees en este repo.", o.width));
@@ -590,9 +596,32 @@ export function renderWatch(rows: WatchRow[], o: { width: number; color: boolean
 			if (!inline && last) out.push(dimmed(clip(`  ${last}`, o.width)));
 		});
 	}
+	if (o.notice) out.push("", ...o.notice.split("\n").map((l) => clip(l, o.width)));
 	out.push("", dimmed(clip("q o Ctrl+C para salir · se actualiza cada 2 s", o.width)));
 	return out;
 }
+
+/** Estados con trabajo pendiente: mientras una rama esté en alguno, la tabla tiene algo que enseñar. */
+const BUSY: State[] = ["trabajando", "bloqueado", "sin commitear", "lista"];
+
+/**
+ * ¿Le queda trabajo al equipo? Una rama en un estado con trabajo, o con su agente abierto y sin
+ * commits aún (recién creada, le toca empezar). Integradas o sin agente, no. `worked`: ramas que
+ * ya tuvieron commits; si vuelven a `sin commits`, es que se integraron por merge o fast-forward.
+ */
+export const pendingWork = (rows: Row[], worked: Set<string> = new Set()) => rows.some((r) => BUSY.includes(r.state) || (r.state === "sin commits" && !!r.agent && !worked.has(r.branch)));
+
+/**
+ * Qué hace la tabla en vivo en un refresco: `busy` si hay trabajo; si no, `close` cuando corre
+ * en el panel de la tabla de ese repo, sin el foco y sin --keep-open, o `idle` (solo avisa).
+ */
+export function watchIdle(rows: Row[], pane: { label?: string; focused?: boolean } | undefined, repo: string, keepOpen: boolean, worked?: Set<string>): "busy" | "idle" | "close" {
+	if (pendingWork(rows, worked)) return "busy";
+	return !keepOpen && pane?.label === watchLabel(repo) && !pane.focused ? "close" : "idle";
+}
+
+/** Refrescos seguidos sin trabajo antes de cerrar el panel de la tabla (para que se vea el aviso). */
+const CLOSE_TICKS = 3;
 
 /** Última línea con texto de la salida de un panel (sin los bordes de las interfaces de los agentes). */
 export function lastLine(text: string): string | undefined {
@@ -613,16 +642,26 @@ function paneLastLine(pane: string): string | undefined {
 	return r.status === 0 ? lastLine(r.stdout) : undefined;
 }
 
-/** `bond team status --watch`: la tabla en la pantalla alternativa, cada 2 s, hasta q o Ctrl+C. */
-async function watch(root: string, base: string): Promise<void> {
+/**
+ * `bond team status --watch`: la tabla en la pantalla alternativa, cada 2 s, hasta q o Ctrl+C.
+ * En el panel de la tabla, sin trabajo pendiente, avisa y lo cierra (salvo enfocado o `keepOpen`).
+ */
+async function watch(root: string, base: string, keepOpen = false): Promise<void> {
 	const out = process.stdout;
 	const stdin = process.stdin;
 	if (!out.isTTY) die("--watch necesita una terminal (sin ella: bond team status --json)");
 	teamRows(root, base); // Que una base que no existe falle aquí, fuera de la pantalla alternativa.
 	const color = !process.env.NO_COLOR;
 	const repo = basename(root);
+	const self = insideHerdr() ? process.env.HERDR_PANE_ID : undefined;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let stopped = false;
+	/** Refrescos seguidos listos para cerrar, y si toca cerrar ya. */
+	let idleTicks = 0;
+	let closing = false;
+	let notice: string | undefined;
+	/** Ramas que han tenido commits mientras corre la tabla. */
+	const worked = new Set<string>();
 	const restore = () => {
 		if (stopped) return;
 		stopped = true;
@@ -631,12 +670,28 @@ async function watch(root: string, base: string): Promise<void> {
 		stdin.pause();
 		out.write("\x1b[?25h\x1b[?1049l");
 	};
-	const draw = () => {
+	/** `tick`: un refresco de los de cada 2 s (no el de cambiar el tamaño), que cuenta para cerrar. */
+	const draw = (tick = false) => {
 		let lines: string[];
 		try {
 			const rows = teamRows(root, base).map((r): WatchRow => ({ ...r, last: r.agent?.pane ? paneLastLine(r.agent.pane) : undefined }));
+			if (tick) {
+				for (const r of rows) if (r.ahead) worked.add(r.branch);
+				let pane: HerdrPane | undefined;
+				if (self && !keepOpen && !pendingWork(rows, worked)) {
+					try {
+						pane = herdr<{ pane?: HerdrPane }>(["pane", "get", self]).pane;
+					} catch {
+						// Sin respuesta de Herdr: no se cierra.
+					}
+				}
+				const next = watchIdle(rows, pane, repo, keepOpen, worked);
+				idleTicks = next === "close" ? idleTicks + 1 : 0;
+				closing = idleTicks >= CLOSE_TICKS;
+				notice = next === "busy" ? undefined : next === "close" ? `sin trabajo pendiente\nel panel se cierra en ${(CLOSE_TICKS - idleTicks) * 2} s` : "sin trabajo pendiente";
+			}
 			// Sin la última columna: escribir en ella y borrar el resto de la línea se come esa letra.
-			lines = renderWatch(rows, { width: (out.columns || 80) - 1, color, repo, base, time: new Date().toTimeString().slice(0, 8) });
+			lines = renderWatch(rows, { width: (out.columns || 80) - 1, color, repo, base, time: new Date().toTimeString().slice(0, 8), notice });
 		} catch (e) {
 			lines = [`bond team · ${repo}`, "", clip(`error: ${(e as Error).message}`, out.columns || 80)];
 		}
@@ -647,9 +702,10 @@ async function watch(root: string, base: string): Promise<void> {
 	process.on("exit", restore);
 	out.write("\x1b[?1049h\x1b[?25l\x1b[2J");
 	await new Promise<void>((done) => {
+		const redraw = () => draw();
 		const quit = () => {
 			restore();
-			out.off("resize", draw);
+			out.off("resize", redraw);
 			for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.off(sig, quit);
 			done();
 		};
@@ -660,10 +716,14 @@ async function watch(root: string, base: string): Promise<void> {
 			if (/[qQ\x03]/.test(s)) quit();
 		});
 		for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.on(sig, quit);
-		out.on("resize", draw);
+		out.on("resize", redraw);
 		const tick = () => {
-			draw();
-			if (!stopped) timer = setTimeout(tick, 2000);
+			draw(true);
+			if (closing) {
+				quit();
+				// Cerrar el panel termina también este proceso.
+				if (self) run("herdr", ["pane", "close", self]);
+			} else if (!stopped) timer = setTimeout(tick, 2000);
 		};
 		tick();
 	});
@@ -690,6 +750,7 @@ interface HerdrPane {
 	tab_id?: string;
 	workspace_id?: string;
 	label?: string;
+	focused?: boolean;
 }
 
 /** El panel de la tabla de ese repo en la pestaña, si ya está. */
@@ -753,7 +814,7 @@ function prompt(args: string[]): void {
 // --- quitar worktrees -----------------------------------------------------------------------
 
 function clean(args: string[]): void {
-	const { positional, opts } = parseCommon(args, ["--force", "--delete-branch", "--dry-run"], ["--base", "-b"]);
+	const { positional, opts } = parseCommon(args, ["--force", "--delete-branch", "--keep-table", "--dry-run"], ["--base", "-b"]);
 	const force = !!opts["--force"];
 	const dir = positional.length && existsSync(positional[0]) ? positional.shift() : undefined;
 	const root = repoOf(dir);
@@ -766,10 +827,15 @@ function clean(args: string[]): void {
 		const outside = rows.filter((r) => r.state === "integrada" && !r.managed);
 		for (const r of outside) console.log(dim(`  ${r.branch}: integrada, pero no la abrió Herdr (${r.path}); nómbrala para quitarla`));
 	}
-	if (!targets.length) return console.log(positional.length ? "Nada que quitar." : "Ninguna rama integrada que quitar (bond team status).");
+	const removed = new Set<Row>();
+	// Al acabar, sin agentes del equipo, la tabla en vivo sobra.
+	const tableLeft = () => (opts["--keep-table"] ? undefined : closeIdleTable(root, rows.filter((r) => !removed.has(r))));
+	if (!targets.length) {
+		console.log(positional.length ? "Nada que quitar." : "Ninguna rama integrada que quitar (bond team status).");
+		return tableLeft();
+	}
 
 	const cwd = canonical(process.cwd());
-	let removed = 0;
 	let removedWorkspace = false;
 	for (const r of targets) {
 		const why =
@@ -797,7 +863,7 @@ function clean(args: string[]): void {
 			warn(`${r.branch}: ${(e as Error).message}`);
 			continue;
 		}
-		removed++;
+		removed.add(r);
 		if (r.workspace) removedWorkspace = true;
 		let branchNote = "rama conservada";
 		if (opts["--delete-branch"]) {
@@ -812,6 +878,7 @@ function clean(args: string[]): void {
 		console.log(`${ok("-")} ${r.branch}  ${dim(`${r.path} · ${branchNote}`)}`);
 	}
 	if (!isDryRun()) git(root, ["worktree", "prune"]);
+	tableLeft();
 	if (!removedWorkspace) return;
 
 	// El workspace del repo que abrió bond team para colgar los worktrees: se avisa, no se cierra.
@@ -819,6 +886,35 @@ function clean(args: string[]): void {
 		const name = basename(root);
 		const ws = workspaces().find((w) => w.label === `bond:${name}` || w.label === `pi:${name}`);
 		if (ws) console.log(dim(`  El workspace del repo (${ws.label}) sigue abierto; si ya no lo usas: herdr workspace close ${ws.workspace_id}`));
+	}
+}
+
+/**
+ * Paneles de la tabla en vivo de ese repo que ya no tienen nada que enseñar: si ninguna de las
+ * ramas que quedan tiene su agente abierto, todos los `tabla · <repo>` del servidor, salvo el del
+ * que llama.
+ */
+export function idleTables(left: Row[], panes: HerdrPane[], repo: string, self?: string): string[] {
+	if (left.some((r) => r.agent)) return [];
+	return panes.filter((p) => p.label === watchLabel(repo) && p.pane_id !== self).map((p) => p.pane_id);
+}
+
+/** Cierra el panel de la tabla en vivo si no queda ningún agente del equipo (bond team clean). */
+function closeIdleTable(root: string, left: Row[]): void {
+	if (!serverRunning()) return;
+	let panes: HerdrPane[];
+	try {
+		panes = herdr<{ panes?: HerdrPane[] }>(["pane", "list"]).panes ?? [];
+	} catch {
+		return;
+	}
+	for (const pane of idleTables(left, panes, basename(root), insideHerdr() ? process.env.HERDR_PANE_ID : undefined)) {
+		try {
+			act(`herdr pane close ${pane}`, () => herdr(["pane", "close", pane]));
+			console.log(`${ok("-")} tabla en vivo  ${dim(`${pane} · no queda ningún agente del equipo (--keep-table para dejarla)`)}`);
+		} catch (e) {
+			warn(`tabla en vivo: ${(e as Error).message}`);
+		}
 	}
 }
 
