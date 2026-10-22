@@ -20,3 +20,7 @@ default = false
 [skills.delivery-review-github]
 summary = "Review a phase, then push and open its PR; after merge, pick what's next"
 default = false
+
+[skills.convention-document]
+summary = "Turn a confirmed team agreement into a documented convention"
+default = false
