@@ -1,5 +1,15 @@
 # Cambios
 
+## Sin publicar
+
+- Al abrir el puesto de trabajo (`bond`, `bond dev`, `bond team`), bond mira una vez al día si
+  hay release nueva (tope de ~2 s; sin red, sigue sin más) y pregunta: 1) actualizar ahora,
+  2) omitir esa versión hasta que salga otra o 3) no volver a preguntar (`[update] auto =
+  false` en `~/.bond/config.toml`). Con «1» y el binario de `install.sh`/`install.ps1`,
+  descarga, comprueba el SHA-256 y que arranca, sustituye el binario y sigue con la versión
+  nueva; con Homebrew, npm o desde el código dice el comando. Sin terminal solo avisa.
+  `BOND_NO_UPDATE=1` lo desactiva.
+
 ## 1.3.0
 
 - Quitado el pie `Prepared with bond skills` de las skills del catálogo: los agentes ya no cierran
