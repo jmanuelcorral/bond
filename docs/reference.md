@@ -324,7 +324,7 @@ Ficheros Markdown en `catalog/commands/`, con la sintaxis común a todos los age
 | Comando | Argumentos | Resultado |
 |---|---|---|
 | `/review [foco]` | foco opcional | Revisión priorizada (bugs, seguridad, errores, rendimiento, estilo) con `fichero:línea`. No edita. |
-| `/commit [contexto]` | contexto extra | Commit con la skill `git-conventional-commit`: enseña alcance y mensaje y espera OK. Nunca push. |
+| `/commit [contexto]` | contexto extra | Commit con la skill `git-conventional-commit` (sin ella, con la que tenga el agente): enseña alcance y mensaje y espera OK. Nunca push. |
 | `/handoff [ruta]` | ruta, por defecto `.handoff.md` | Estado escrito: objetivo, estado, ficheros, verificación, siguientes pasos. |
 
 En pi, además, `/delegate` y `/team`, atajos a los skills `bond-delegate` y `bond-team`
