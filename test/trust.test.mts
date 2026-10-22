@@ -60,12 +60,14 @@ describe("Claude Code", () => {
 	const config = (projects: Record<string, unknown>) => ({ numStartups: 3, oauthAccount: { x: 1 }, projects });
 
 	test("checkout principal aceptado: añade el worktree y conserva el resto", () => {
-		writeFileSync(files.claude, JSON.stringify(config({ [main]: { hasTrustDialogAccepted: true, history: ["a"] } }), null, 2), { mode: 0o600 });
+		// Claude Code guarda las rutas con / también en Windows (C:/...).
+		const mainKey = main.replace(/\\/g, "/");
+		writeFileSync(files.claude, JSON.stringify(config({ [mainKey]: { hasTrustDialogAccepted: true, history: ["a"] } }), null, 2), { mode: 0o600 });
 		expect(inheritClaudeTrust(main, wt, files.claude)).toBe("heredada");
 		const after = read(files.claude);
 		expect(after.numStartups).toBe(3);
 		expect(after.oauthAccount).toEqual({ x: 1 });
-		expect(after.projects[main]).toEqual({ hasTrustDialogAccepted: true, history: ["a"] });
+		expect(after.projects[mainKey]).toEqual({ hasTrustDialogAccepted: true, history: ["a"] });
 		expect(after.projects[wt.replace(/\\/g, "/")]).toMatchObject({ hasTrustDialogAccepted: true, allowedTools: [] });
 		if (process.platform !== "win32") expect(statSync(files.claude).mode & 0o777).toBe(0o600);
 		expect(inheritClaudeTrust(main, wt, files.claude)).toBe("ya la tenía");
