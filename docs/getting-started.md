@@ -73,7 +73,8 @@ Dentro del repo:
 bond
 ```
 
-Abre Herdr con el agente por defecto en un panel y una shell en otro (si ya existe, lo enfoca).
+Abre Herdr con el agente por defecto, llamado `gru`, en su panel (si ya existe, lo enfoca;
+`bond --shell` añade una shell al lado).
 `bond --agent claude` abre otro de los agentes del repo; `bond --worktree feat/x`, en un worktree.
 Detalle en [puesto.md](puesto.md).
 
@@ -96,8 +97,8 @@ herdr pane wait-output <panel-nuevo> --match "test result" --timeout 120000
 panel:
 
 ```bash
-herdr agent prompt pi-mi-proyecto "revisa el diff actual" --wait --timeout 300000
-herdr agent read pi-mi-proyecto --source recent-unwrapped --lines 200
+herdr agent prompt gru "revisa el diff actual" --wait --timeout 300000
+herdr agent read gru --source recent-unwrapped --lines 200
 ```
 
 **Ver el estado global.**

@@ -102,7 +102,7 @@ async function create(args: string[]): Promise<void> {
 	if (!insideHerdr()) await ensureServer();
 	for (const { branch, agent } of plan) {
 		try {
-			const r = openWorkspace({ dir: root, agent, worktree: branch, base: o.base, direction: "right", ratio: "0.6", focus: false, trust: o.trust, agentArgs: o.agentArgs });
+			const r = openWorkspace({ dir: root, agent, worktree: branch, base: o.base, shell: false, direction: "right", ratio: "0.6", focus: false, trust: o.trust, agentArgs: o.agentArgs });
 			console.log(`${ok("✓")} ${branch}  ${r.reused ? dim(`ya abierto (${r.ws})`) : `${r.agentName} (${agent}) en ${r.agentPane}${r.blocked ? caution(" · espera una respuesta tuya") : ""}`}`);
 		} catch (e) {
 			warn(`${branch}: ${(e as Error).message}`);
