@@ -56,7 +56,7 @@ por ejemplo en un worktree), bond lo dice y no contesta por ti.
 
 ```bash
 bond team [repo] <rama[:agente]>... [--agent <a>] [--base <ref>] [--workspaces] [-- args de los agentes]
-bond team status [repo] [--base <ref>] [--json]
+bond team status [repo] [--base <ref>] [--json | --watch]
 bond team prompt <rama> "la tarea" [--wait] [--timeout <ms>]
 bond team clean [repo] [rama...] [--force] [--delete-branch] [--dry-run]
 ```
@@ -65,7 +65,9 @@ Abre un worktree y un agente por rama y enseña cómo va cada rama (`status`). D
 cada agente va en un panel de tu pestaña, debajo del tuyo: en fila, con el mismo ancho, 4 como
 mucho (del quinto en adelante, debajo del de su columna). Cada uno se llama como un minion, el
 primero libre (`kevin`, `stuart`, `bob`, `dave`...), y su panel se titula `kevin · <rama>`. El
-worktree va en `~/.herdr/worktrees/<repo>/<rama>`. Fuera de Herdr, o con `--workspaces`, un
+worktree va en `~/.herdr/worktrees/<repo>/<rama>`. A la derecha del tuyo se abre un panel
+estrecho, `tabla · <repo>`, con la tabla en vivo (`bond team status --watch`); si ya está, se
+reutiliza en vez de abrir otro. Fuera de Herdr, o con `--workspaces`, un
 workspace por rama con `herdr worktree`, como antes. Sin `[repo]`, el del directorio actual. Cada rama lleva el agente de `rama:agente`; si no,
 el de `--agent`; si no, el agente por defecto del repo (`default_agent` de `.bond/bond.toml`) y,
 si no hay, el de `bond setup`. Avisa si un agente no está entre los del repo (no tendrá su
@@ -92,6 +94,12 @@ pi pregunta si confía en cada carpeta nueva, y cada worktree lo es. Herdr no lo
 pregunta, así que bond lee el panel: la rama sale `bloqueado`, y `prompt` no manda nada, porque
 su Enter elegiría "Trust" por ti y la tarea se perdería. Contesta tú en su panel; "Trust parent
 folder" una vez sirve para todos los worktrees de ese repo.
+
+Con `--watch`, la tabla en vivo: ocupa la pantalla, se refresca cada 2 s y sale con `q` o
+Ctrl+C dejando el terminal como estaba. Una fila por rama con el minion, la rama, el estado (en
+color: amarillo si se mueve, rojo si te espera, verde si toca revisar), los commits, los ficheros
+y la última línea del panel de su agente (o la pregunta que espera). En un panel estrecho, esa
+última línea va debajo de la fila.
 
 **`prompt`**: manda una tarea al agente de una rama, sin tener que saber su nombre.
 

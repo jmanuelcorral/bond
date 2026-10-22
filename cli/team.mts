@@ -8,10 +8,10 @@ import { homedir } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { chooseAgent, gitRoot, openWorkspace } from "./launch.mts";
 import { agents, ensureServer, firstFreeName, herdr, type HerdrAgent, insideHerdr, pendingQuestion, requireHerdr, serverRunning, workspaces } from "./herdr.mts";
-import { act, bad, caution, die, dim, isDryRun, ok, run, warn } from "./util.mts";
+import { act, caution, die, dim, isDryRun, ok, run, warn } from "./util.mts";
 
 export const TEAM_HELP = `Uso: bond team [repo] <rama[:agente]>... [opciones] [-- argumentos de los agentes]
-       bond team status [repo] [--base <ref>] [--json]
+       bond team status [repo] [--base <ref>] [--json | --watch]
        bond team prompt <rama> <tarea> [--wait] [--timeout <ms>]
        bond team clean [repo] [rama...] [--base <ref>] [--force] [--delete-branch] [--dry-run]
 
@@ -21,7 +21,8 @@ cada rama: el de rama:agente, si no --agent, si no el agente por defecto del rep
 
 Dentro de Herdr, cada agente va en un panel de tu pestaña, debajo del tuyo (en fila, 4 como
 mucho; los siguientes, debajo), con nombre de minion (kevin, stuart, bob...). Fuera de Herdr o
-con --workspaces, un workspace por rama.
+con --workspaces, un workspace por rama. En la pestaña, además, un panel estrecho a la derecha
+del tuyo con la tabla en vivo (bond team status --watch), o el que ya haya.
 
   -a, --agent <agente>   Agente para las ramas sin :agente
   -b, --base <ref>       Ref de la que salen las ramas nuevas
@@ -32,6 +33,8 @@ status   Cada worktree del repo: estado, agente, commits por delante de la base 
          Estados: trabajando, bloqueado, sin commitear, lista (commits por revisar),
          integrada (ya está en la base, también por rebase o squash), sin commits.
          La base, por defecto, es la rama del checkout principal.
+         --watch: tabla en vivo (cada 2 s) con el minion, la rama, el estado, los commits, los
+         ficheros y la última línea del panel de cada agente; sale con q o Ctrl+C.
 prompt   Manda una tarea al agente de esa rama (herdr agent prompt); --wait espera a que acabe.
 clean    Quita worktrees (carpeta, workspace y agente); las ramas se quedan. Sin ramas, solo
          los integrados que abrió Herdr. Nunca uno con el agente trabajando o con cambios sin
@@ -112,6 +115,7 @@ async function create(args: string[]): Promise<void> {
 	const anchor = process.env.HERDR_PANE_ID;
 	if (insideHerdr() && anchor && !o.workspaces) {
 		openInTab(root, anchor, plan, o);
+		openWatch(root, anchor, o.base);
 	} else for (const { branch, agent } of plan) {
 		try {
 			const r = openWorkspace({ dir: root, agent, worktree: branch, base: o.base, shell: false, direction: "right", ratio: "0.6", focus: false, trust: o.trust, agentArgs: o.agentArgs });
@@ -339,14 +343,19 @@ export function teamRows(root: string, base = defaultBase(root)): Row[] {
 		});
 }
 
-const STATE_COLOR: Record<State, (s: string) => string> = {
-	trabajando: caution,
-	bloqueado: bad,
-	"sin commitear": caution,
-	lista: ok,
-	integrada: dim,
-	"sin commits": dim,
+/** Color de cada estado (código SGR): amarillo si hay movimiento, rojo si te espera, verde si toca revisar. */
+export const STATE_CODE: Record<State, string> = {
+	trabajando: "33",
+	bloqueado: "31",
+	"sin commitear": "33",
+	lista: "32",
+	integrada: "2",
+	"sin commits": "2",
 };
+
+const useColor = () => !!process.stdout.isTTY && !process.env.NO_COLOR;
+export const paintState = (state: State, s: string, color = useColor()) => (color ? `\x1b[${STATE_CODE[state]}m${s}\x1b[0m` : s);
+const visible = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "").length;
 
 function printStatus(rows: Row[]): void {
 	if (!rows.length) return console.log("Sin worktrees en este repo. Crea un equipo con: bond team <rama>...");
@@ -359,12 +368,12 @@ function printStatus(rows: Row[]): void {
 		r.files.length ? String(r.files.length) : "-",
 		r.workspace ?? (r.agent?.pane ? `panel ${r.agent.pane}` : dim("cerrado")),
 	]);
-	const w = head.map((h, i) => Math.max(h.length, ...table.map((t) => t[i].replace(/\x1b\[[0-9;]*m/g, "").length)));
-	const fmt = (t: string[]) => t.map((c, i) => (i === t.length - 1 ? c : c + " ".repeat(Math.max(0, w[i] - c.replace(/\x1b\[[0-9;]*m/g, "").length)))).join("  ");
+	const w = head.map((h, i) => Math.max(h.length, ...table.map((t) => visible(t[i]))));
+	const fmt = (t: string[]) => t.map((c, i) => (i === t.length - 1 ? c : c + " ".repeat(Math.max(0, w[i] - visible(c))))).join("  ");
 	console.log(fmt(head));
 	rows.forEach((r, i) => {
 		const t = [...table[i]];
-		t[1] = STATE_COLOR[r.state](t[1]);
+		t[1] = paintState(r.state, t[1]);
 		console.log(fmt(t));
 	});
 	if (rows.some((r) => r.agent?.question)) {
@@ -386,13 +395,191 @@ function parseCommon(args: string[], flags: string[], valued: string[]): { posit
 	return { positional, opts };
 }
 
-function status(args: string[]): void {
-	const { positional, opts } = parseCommon(args, ["--json", "-j"], ["--base", "-b"]);
-	if (positional.length > 1) die("uso: bond team status [repo] [--base <ref>] [--json]");
+function status(args: string[]): void | Promise<void> {
+	const { positional, opts } = parseCommon(args, ["--json", "-j", "--watch", "-w"], ["--base", "-b"]);
+	if (positional.length > 1) die("uso: bond team status [repo] [--base <ref>] [--json | --watch]");
 	const root = repoOf(positional[0]);
-	const rows = teamRows(root, (opts["--base"] ?? opts["-b"]) as string | undefined);
+	const base = (opts["--base"] ?? opts["-b"]) as string | undefined;
+	if (opts["--watch"] || opts["-w"]) {
+		if (opts["--json"] || opts["-j"]) die("--watch y --json no van juntos");
+		return watch(root, base ?? defaultBase(root));
+	}
+	const rows = teamRows(root, base);
 	if (opts["--json"] || opts["-j"]) return console.log(JSON.stringify(rows, null, 2));
 	printStatus(rows);
+}
+
+// --- tabla en vivo -------------------------------------------------------------------------
+
+export type WatchRow = Row & { last?: string };
+
+const clip = (s: string, n: number) => (n <= 0 ? "" : s.length > n ? `${s.slice(0, n - 1)}…` : s);
+/** Por debajo de este ancho, la última línea del panel va en su propia línea, bajo la fila. */
+const MIN_LAST = 20;
+
+/**
+ * Las líneas de la tabla en vivo, recortadas a `width`: una fila por rama con el minion, la
+ * rama, el estado (con su color), los commits, los ficheros y la última línea de su panel; si
+ * no cabe, esa última línea va debajo.
+ */
+export function renderWatch(rows: WatchRow[], o: { width: number; color: boolean; repo: string; base: string; time: string }): string[] {
+	const dimmed = (s: string) => (o.color ? `\x1b[2m${s}\x1b[0m` : s);
+	const out = [clip(`bond team · ${o.repo} · base ${o.base}`, o.width - o.time.length - 1).padEnd(o.width - o.time.length) + o.time, ""];
+	if (!rows.length) out.push(clip("Sin worktrees en este repo.", o.width));
+	else {
+		const cells = rows.map((r) => [r.agent?.name ?? "-", r.branch, r.state, r.ahead ? `+${r.ahead}` : "-", r.files.length ? String(r.files.length) : "-"]);
+		const widths = (h: string[]) => h.map((x, i) => Math.max(x.length, ...cells.map((c) => c[i].length)));
+		const room = (w: number[]) => w.reduce((a, b) => a + b + 2, -2);
+		// En un panel estrecho, cabeceras cortas y, si aun así no cabe, la rama recortada.
+		let head = ["MINION", "RAMA", "ESTADO", "COMMITS", "FICHEROS"];
+		let w = widths(head);
+		if (room(w) > o.width) w = widths((head = ["MINION", "RAMA", "ESTADO", "COM", "FICH"]));
+		w[1] = Math.max(4, w[1] - Math.max(0, room(w) - o.width));
+		const inline = o.width - room(w) - 2 >= MIN_LAST;
+		const fmt = (c: string[]) => c.map((x, i) => clip(x, w[i]).padEnd(w[i])).join("  ");
+		out.push(clip(inline ? `${fmt(head)}  ÚLTIMA LÍNEA` : fmt(head).trimEnd(), o.width));
+		const at = w[0] + w[1] + 4;
+		rows.forEach((r, i) => {
+			const last = r.agent?.question ? `pregunta: ${r.agent.question}` : (r.last ?? "");
+			const line = clip((inline ? `${fmt(cells[i])}  ${last}` : fmt(cells[i])).trimEnd(), o.width);
+			const state = line.slice(at, at + r.state.length);
+			out.push(line.slice(0, at) + (state ? paintState(r.state, state, o.color) : "") + line.slice(at + state.length));
+			if (!inline && last) out.push(dimmed(clip(`  ${last}`, o.width)));
+		});
+	}
+	out.push("", dimmed(clip("q o Ctrl+C para salir · se actualiza cada 2 s", o.width)));
+	return out;
+}
+
+/** Última línea con texto de la salida de un panel (sin los bordes de las interfaces de los agentes). */
+export function lastLine(text: string): string | undefined {
+	return text
+		.split(/\r?\n/)
+		.map((l) =>
+			l
+				.replace(/[\s│┃|╭╮╰╯─━┌┐└┘]+$/u, "")
+				.replace(/^[\s│┃|╭╮╰╯─━┌┐└┘>❯]+/u, "")
+				.replace(/\s+/g, " "),
+		)
+		.filter((l) => /[\p{L}\p{N}]/u.test(l))
+		.pop();
+}
+
+function paneLastLine(pane: string): string | undefined {
+	const r = run("herdr", ["pane", "read", pane, "--source", "recent", "--lines", "40"], { timeout: 5000 });
+	return r.status === 0 ? lastLine(r.stdout) : undefined;
+}
+
+/** `bond team status --watch`: la tabla en la pantalla alternativa, cada 2 s, hasta q o Ctrl+C. */
+async function watch(root: string, base: string): Promise<void> {
+	const out = process.stdout;
+	const stdin = process.stdin;
+	if (!out.isTTY) die("--watch necesita una terminal (sin ella: bond team status --json)");
+	teamRows(root, base); // Que una base que no existe falle aquí, fuera de la pantalla alternativa.
+	const color = !process.env.NO_COLOR;
+	const repo = basename(root);
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	let stopped = false;
+	const restore = () => {
+		if (stopped) return;
+		stopped = true;
+		clearTimeout(timer);
+		if (stdin.isTTY) stdin.setRawMode(false);
+		stdin.pause();
+		out.write("\x1b[?25h\x1b[?1049l");
+	};
+	const draw = () => {
+		let lines: string[];
+		try {
+			const rows = teamRows(root, base).map((r): WatchRow => ({ ...r, last: r.agent?.pane ? paneLastLine(r.agent.pane) : undefined }));
+			// Sin la última columna: escribir en ella y borrar el resto de la línea se come esa letra.
+			lines = renderWatch(rows, { width: (out.columns || 80) - 1, color, repo, base, time: new Date().toTimeString().slice(0, 8) });
+		} catch (e) {
+			lines = [`bond team · ${repo}`, "", clip(`error: ${(e as Error).message}`, out.columns || 80)];
+		}
+		if (stopped) return;
+		out.write(`\x1b[H${lines.slice(0, out.rows || lines.length).map((l) => `${l}\x1b[K`).join("\r\n")}\x1b[J`);
+	};
+	// Si algo termina el proceso a medias, el terminal no se queda en la pantalla alternativa.
+	process.on("exit", restore);
+	out.write("\x1b[?1049h\x1b[?25l\x1b[2J");
+	await new Promise<void>((done) => {
+		const quit = () => {
+			restore();
+			out.off("resize", draw);
+			for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.off(sig, quit);
+			done();
+		};
+		if (stdin.isTTY) stdin.setRawMode(true);
+		stdin.resume();
+		stdin.on("data", (d) => {
+			const s = d.toString();
+			if (/[qQ\x03]/.test(s)) quit();
+		});
+		for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.on(sig, quit);
+		out.on("resize", draw);
+		const tick = () => {
+			draw();
+			if (!stopped) timer = setTimeout(tick, 2000);
+		};
+		tick();
+	});
+	process.off("exit", restore);
+}
+
+/** Título del panel de la tabla en vivo de un repo. */
+export const watchLabel = (repo: string) => `tabla · ${repo}`;
+
+/** Cómo volver a lanzar este bond: el binario, o node/bun con su script (desde el código o npm). */
+export function selfCommand(execPath = process.execPath, script = process.argv[1]): string[] {
+	return /^(node|bun)(\.exe)?$/i.test(basename(execPath)) && script ? [execPath, script] : [execPath];
+}
+
+const shellQuote = (s: string) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
+
+/** La orden que muestra la tabla en vivo, lista para escribirla en la shell de un panel. */
+export function watchCommand(root: string, base?: string, self = selfCommand()): string {
+	return [...self, "team", "status", root, "--watch", ...(base ? ["--base", base] : [])].map(shellQuote).join(" ");
+}
+
+interface HerdrPane {
+	pane_id: string;
+	tab_id?: string;
+	workspace_id?: string;
+	label?: string;
+}
+
+/** El panel de la tabla de ese repo en la pestaña, si ya está. */
+export const findWatchPane = (panes: HerdrPane[], tab: string | undefined, repo: string) => panes.find((p) => p.tab_id === tab && p.label === watchLabel(repo))?.pane_id;
+
+/** ¿Ese panel está mostrando ya la tabla? (si se salió con q, queda su shell) */
+function watching(pane: string): boolean {
+	try {
+		const info = herdr<{ process_info?: { foreground_processes?: Array<{ argv?: string[] }> } }>(["pane", "process-info", "--pane", pane]).process_info;
+		return (info?.foreground_processes ?? []).some((p) => p.argv?.includes("--watch") && p.argv.includes("status"));
+	} catch {
+		return false;
+	}
+}
+
+/** Abre (o reutiliza) a la derecha del panel del que llama un panel estrecho con la tabla en vivo. */
+function openWatch(root: string, anchor: string, base?: string): void {
+	const repo = basename(root);
+	try {
+		const me = herdr<{ pane?: HerdrPane }>(["pane", "get", anchor]).pane;
+		const panes = herdr<{ panes?: HerdrPane[] }>(["pane", "list", ...(me?.workspace_id ? ["--workspace", me.workspace_id] : [])]).panes ?? [];
+		let pane = findWatchPane(panes, me?.tab_id, repo);
+		if (pane && watching(pane)) return console.log(`${ok("✓")} tabla en vivo  ${dim(`ya abierta en ${pane}`)}`);
+		if (!pane) {
+			pane = herdr<{ pane?: { pane_id: string } }>(["pane", "split", "--pane", anchor, "--direction", "right", "--ratio", "0.6", "--cwd", root, "--no-focus"]).pane?.pane_id;
+			if (!pane) throw new Error("no pude leer el panel nuevo de la respuesta de Herdr");
+			run("herdr", ["pane", "rename", pane, watchLabel(repo)]);
+		}
+		herdr(["pane", "run", pane, watchCommand(root, base)]);
+		console.log(`${ok("✓")} tabla en vivo  en ${pane}`);
+	} catch (e) {
+		warn(`tabla en vivo: ${(e as Error).message} (ábrela a mano: bond team status --watch)`);
+	}
 }
 
 // --- mandar trabajo -------------------------------------------------------------------------
