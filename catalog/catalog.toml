@@ -24,3 +24,7 @@ default = false
 [skills.convention-document]
 summary = "Turn a confirmed team agreement into a documented convention"
 default = false
+
+[skills.release-prepare-github]
+summary = "Write the changelog, prepare a version and publish an approved release"
+default = false
