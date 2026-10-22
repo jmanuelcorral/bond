@@ -1,0 +1,77 @@
+{
+  "files": {
+    ".agents/skills/code-context/SKILL.md": "4789650da602b192fe18703c79b347be12904aaca4a77f871ff922aacac9ca75",
+    ".agents/skills/code-context/scripts/repo-map": "842ca1770466fd0e70af560a21e99cd24e96a3484e16e04a933812c5cc8fea5f",
+    ".agents/skills/git-conventional-commit/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
+    ".agents/skills/git-conventional-commit/SKILL.md": "a49388c9ad53cfe997001c364f460cc314d605cee2a3386d1416f186fd6619b2",
+    ".agents/skills/git-conventional-commit/references/commit-messages.md": "3de328fa21de1a6a686ba08de163eac166b6bb1ff73ebcbb085e60b9dee3a4d8",
+    ".agents/skills/plan-create/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
+    ".agents/skills/plan-create/SKILL.md": "ebca8b9ab1c8f291a8c18ca51775bc12754529709bbaf5f09af6fda33ffc0e2a",
+    ".agents/skills/plan-create/references/plan-template.md": "e7b07f422fbd75d4a1e7380388ad6001a62ad1cdde776ca6fbb6849afb4d974a",
+    ".agents/skills/plan-execute/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
+    ".agents/skills/plan-execute/SKILL.md": "e0336a046a2676f4adc45738d0cacebd84eff8ec8f6c8ea37773ff22b78c3ab6",
+    ".agents/skills/plan-execute/references/execution.md": "9b2d0bd91bbc55a7afa46663d647daaeaf8e880a405bcd055867d227df355c66",
+    ".agents/skills/plan-execute/references/progress.md": "c5cb1bd53d122e91ca8b720a99b8cf1f612d8bffd216b1a67927f37e27b969c9",
+    ".agents/skills/issue-refine-github/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
+    ".agents/skills/issue-refine-github/SKILL.md": "b2cbb3c5dddb76d664315f382aca0914c2806d2fe8b941713b01223b2c1ab07e",
+    ".agents/skills/issue-refine-github/references/refinement.md": "7218143e7fd18f10446e2ff6a9680b207145c99fbc9d12a18d993c5c44a65279",
+    ".agents/skills/delivery-review-github/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
+    ".agents/skills/delivery-review-github/SKILL.md": "5fe4151fb381e1929518e74ce2a084af5f07bb47bb42a25896afb94356a27cc6",
+    ".agents/skills/delivery-review-github/references/continuation.md": "59700304552964fa45370754f600532c91ac93b7678fa88065d09761970cfbe8",
+    ".agents/skills/delivery-review-github/references/delivery-template.md": "27a8c329ca10fcc95936228163622818d94e3fe285e6369b2f0a897e5b2d6455",
+    ".agents/skills/delivery-review-github/references/publication.md": "089dfa63f3ecb250127e3609f6aa49bd212b18cd7a932ef427a67836e8f6a59d",
+    ".agents/skills/release-prepare-github/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
+    ".agents/skills/release-prepare-github/SKILL.md": "0c3951ad0384036a4614e1da862e082e61628a43edf5fce345a0706497d369b9",
+    ".agents/skills/release-prepare-github/references/changelog.md": "58b8e1a01e589d522d109ab0b7f684aab86fcc2be6fedb0387b4662e8a382dc4",
+    ".agents/skills/release-prepare-github/references/publication.md": "ee228179772e7ab7aabbe25d5859ee8f180c5fe77bf5ad7c03ba2a7c77674cce",
+    ".agents/skills/release-prepare-github/references/release-manifest.md": "a28827a05315e3cc00056902154286e68ebc6295e18da42653c720ade043b47e",
+    ".agents/skills/convention-document/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
+    ".agents/skills/convention-document/SKILL.md": "53932dd2750d6d824c82e71388ce5a5fc5b02deb8b3ec79e1651a578776dc36a",
+    ".agents/skills/convention-document/references/document-template.md": "15352b1fe1755c550a147a10cf62b394d75888c5847e6ec6c5af66f9ff0a9cd7",
+    ".claude/commands/commit.md": "242baf393b4748ebd266962b44e40813c35d4ffdd89558f0d34fe7c9db0321ae",
+    ".claude/commands/handoff.md": "a89d6969aba465aa31ffef540afeb7344c3e06a24ea25a609c98c4d1cdddfecd",
+    ".claude/commands/review.md": "22bcec81ce5c048d207f7d0d9005cc38c967197907b69cb27b4c5e28686089a4"
+  },
+  "links": {
+    ".claude/skills/code-context": "../../.agents/skills/code-context",
+    ".claude/skills/git-conventional-commit": "../../.agents/skills/git-conventional-commit",
+    ".claude/skills/plan-create": "../../.agents/skills/plan-create",
+    ".claude/skills/plan-execute": "../../.agents/skills/plan-execute",
+    ".claude/skills/issue-refine-github": "../../.agents/skills/issue-refine-github",
+    ".claude/skills/delivery-review-github": "../../.agents/skills/delivery-review-github",
+    ".claude/skills/release-prepare-github": "../../.agents/skills/release-prepare-github",
+    ".claude/skills/convention-document": "../../.agents/skills/convention-document"
+  },
+  "json": {
+    ".pi/mcp.json": [
+      {
+        "parent": "mcpServers",
+        "keys": [
+          "context7",
+          "duckduckgo"
+        ]
+      }
+    ],
+    ".pi/settings.json": [
+      {
+        "parent": null,
+        "keys": [
+          "defaultTools",
+          "packages"
+        ]
+      }
+    ],
+    ".mcp.json": [
+      {
+        "parent": "mcpServers",
+        "keys": [
+          "context7",
+          "duckduckgo"
+        ]
+      }
+    ]
+  },
+  "blocks": {
+    "CLAUDE.md": "md"
+  }
+}

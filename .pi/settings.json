@@ -1,0 +1,10 @@
+{
+  "defaultTools": [
+    "+grep",
+    "+find",
+    "+ls"
+  ],
+  "packages": [
+    "~/.bond/pi"
+  ]
+}
