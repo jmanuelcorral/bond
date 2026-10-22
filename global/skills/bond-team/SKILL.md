@@ -14,6 +14,10 @@ La tarea a repartir. Opcionalmente, qué agente quiere el usuario para cada part
 con claude"): se indica por rama como `rama:kind`. Sin indicación, `bond team` usa el agente
 por defecto del repo (`default_agent` de `.bond/bond.toml`) o, si no hay, el de `bond setup`.
 
+Si lo que se reparte son fases de un plan local (`docs/plans/`) y el repo tiene el skill
+`plan-team`, usa ese: comprueba qué fases pueden ir a la vez, manda cada una con `plan-execute`
+y lleva el progreso del plan al integrar cada rama.
+
 ## Procedimiento
 
 1. Comprueba `test "${HERDR_ENV:-}" = 1`, que estás en un repo git

@@ -6,7 +6,7 @@
     ".agents/skills/git-conventional-commit/SKILL.md": "a49388c9ad53cfe997001c364f460cc314d605cee2a3386d1416f186fd6619b2",
     ".agents/skills/git-conventional-commit/references/commit-messages.md": "3de328fa21de1a6a686ba08de163eac166b6bb1ff73ebcbb085e60b9dee3a4d8",
     ".agents/skills/plan-create/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
-    ".agents/skills/plan-create/SKILL.md": "ebca8b9ab1c8f291a8c18ca51775bc12754529709bbaf5f09af6fda33ffc0e2a",
+    ".agents/skills/plan-create/SKILL.md": "a5f94132f7c35afab408e26ef52221541935ca1e0778558cda16110ead098d36",
     ".agents/skills/plan-create/references/plan-template.md": "e7b07f422fbd75d4a1e7380388ad6001a62ad1cdde776ca6fbb6849afb4d974a",
     ".agents/skills/plan-execute/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
     ".agents/skills/plan-execute/SKILL.md": "e0336a046a2676f4adc45738d0cacebd84eff8ec8f6c8ea37773ff22b78c3ab6",
@@ -28,6 +28,7 @@
     ".agents/skills/convention-document/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
     ".agents/skills/convention-document/SKILL.md": "53932dd2750d6d824c82e71388ce5a5fc5b02deb8b3ec79e1651a578776dc36a",
     ".agents/skills/convention-document/references/document-template.md": "15352b1fe1755c550a147a10cf62b394d75888c5847e6ec6c5af66f9ff0a9cd7",
+    ".agents/skills/plan-team/SKILL.md": "394d733e09291b0befb666a45279849aafe839b9cb9fd074b53f41ed3306e2b3",
     ".claude/commands/commit.md": "242baf393b4748ebd266962b44e40813c35d4ffdd89558f0d34fe7c9db0321ae",
     ".claude/commands/handoff.md": "a89d6969aba465aa31ffef540afeb7344c3e06a24ea25a609c98c4d1cdddfecd",
     ".claude/commands/review.md": "22bcec81ce5c048d207f7d0d9005cc38c967197907b69cb27b4c5e28686089a4"
@@ -40,7 +41,8 @@
     ".claude/skills/issue-refine-github": "../../.agents/skills/issue-refine-github",
     ".claude/skills/delivery-review-github": "../../.agents/skills/delivery-review-github",
     ".claude/skills/release-prepare-github": "../../.agents/skills/release-prepare-github",
-    ".claude/skills/convention-document": "../../.agents/skills/convention-document"
+    ".claude/skills/convention-document": "../../.agents/skills/convention-document",
+    ".claude/skills/plan-team": "../../.agents/skills/plan-team"
   },
   "json": {
     ".pi/mcp.json": [

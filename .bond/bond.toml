@@ -4,7 +4,7 @@
 agents = ["pi", "claude"]          # pi, claude, copilot, codex, opencode, crush, gemini
 default_agent = "pi"   # el que abre `bond`
 mcp = ["context7", "duckduckgo"]                # servidores MCP del catálogo
-skills = ["code-context", "git-conventional-commit", "plan-create", "plan-execute", "issue-refine-github", "delivery-review-github", "release-prepare-github", "convention-document"]          # se copian a .agents/skills/
+skills = ["code-context", "git-conventional-commit", "plan-create", "plan-execute", "issue-refine-github", "delivery-review-github", "release-prepare-github", "convention-document", "plan-team"]          # se copian a .agents/skills/
 commands = ["commit", "handoff", "review"]      # comandos del catálogo
 
 # Servidores MCP propios del repo (claves: command/args/env, o url/headers). Usa ${VAR}

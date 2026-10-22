@@ -310,8 +310,9 @@ tu OK explícito. Una skill que falta corta solo ese paso; no se descarga.
 | `delivery-review-github` | Revisar la fase, hacer push y abrir su PR; tras el merge, recomendar lo siguiente (y `bond team clean` si venía de un worktree) | opcional |
 | `release-prepare-github` | Changelog, versión con evidencia y release aprobada; si un workflow publica al empujar el tag, ese push es la publicación | opcional |
 | `convention-document` | Convertir un acuerdo confirmado en una convención documentada e indexada en `AGENTS.md` | opcional |
+| `plan-team` | Ejecutar en paralelo las fases independientes de un plan: una rama, worktree y agente por fase con `bond team`, cada uno con `plan-execute` y su commit; al integrar cada rama, actualiza el plan | opcional |
 
-Todas menos `code-context` están adaptadas de
+Todas menos `code-context` y `plan-team` están adaptadas de
 [fluzo-labs/common-skills](https://github.com/fluzo-labs/common-skills) (MIT, con su `LICENSE`
 en cada carpeta): solo modo guiado (sin el autónomo), con la marca de bond y ajustadas a sus
 comandos.

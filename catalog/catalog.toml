@@ -28,3 +28,7 @@ default = false
 [skills.release-prepare-github]
 summary = "Write the changelog, prepare a version and publish an approved release"
 default = false
+
+[skills.plan-team]
+summary = "Run a plan's independent phases in parallel, one bond team branch each"
+default = false
