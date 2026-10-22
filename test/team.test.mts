@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { branchInfo, classify, findWatchPane, gitWorktrees, lastLine, MINIONS, minionName, paintState, parseTeam, renderWatch, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, type WatchRow, watchCommand } from "../cli/team.mts";
+import { branchInfo, classify, findWatchPane, gitWorktrees, idleTables, lastLine, MINIONS, minionName, paintState, parseTeam, pendingWork, renderWatch, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, type WatchRow, watchCommand, watchIdle } from "../cli/team.mts";
 
 const dirs = (...existing: string[]) => (p: string) => existing.includes(p);
 
@@ -294,5 +294,56 @@ describe("tabla en vivo", () => {
 		expect(selfCommand("/usr/local/bin/bond", "/$bunfs/root/bond")).toEqual(["/usr/local/bin/bond"]);
 		expect(watchCommand("/home/j/mi repo", "main", ["/usr/local/bin/bond"])).toBe("/usr/local/bin/bond team status '/home/j/mi repo' --watch --base main");
 		expect(watchCommand("/r", undefined, ["bond"])).toBe("bond team status /r --watch");
+	});
+});
+
+describe("cerrar al terminar", () => {
+	const row = (branch: string, state: State, extra: Partial<WatchRow> = {}): WatchRow => ({ branch, state, path: `/w/${branch}`, ahead: 0, files: [], dirty: 0, integrated: false, managed: true, ...extra });
+	const kevin = { name: "kevin", kind: "pi", status: "idle", pane: "w1:p2" };
+	const table = { label: "tabla · fluzo", focused: false };
+
+	test("trabajo pendiente: trabajando, bloqueado, sin commitear, lista, o un agente que aún no ha empezado", () => {
+		for (const s of ["trabajando", "bloqueado", "sin commitear", "lista"] as State[]) expect(pendingWork([row("a", "integrada"), row("b", s)])).toBe(true);
+		expect(pendingWork([row("a", "sin commits", { agent: kevin })])).toBe(true);
+		expect(pendingWork([row("a", "integrada", { agent: kevin }), row("b", "sin commits")])).toBe(false);
+		expect(pendingWork([])).toBe(false);
+		// Tuvo commits y vuelve a sin commits: se integró por merge o fast-forward.
+		expect(pendingWork([row("a", "sin commits", { agent: kevin })], new Set(["a"]))).toBe(false);
+		expect(watchIdle([row("a", "sin commits", { agent: kevin })], table, "fluzo", false, new Set(["a"]))).toBe("close");
+	});
+
+	test("la tabla con todas las ramas integradas se cierra; con trabajo pendiente, no", () => {
+		expect(watchIdle([row("a", "integrada"), row("b", "integrada")], table, "fluzo", false)).toBe("close");
+		expect(watchIdle([row("a", "integrada"), row("b", "lista", { ahead: 1 })], table, "fluzo", false)).toBe("busy");
+		expect(watchIdle([row("a", "trabajando", { agent: kevin })], table, "fluzo", false)).toBe("busy");
+	});
+
+	test("enfocada, con --keep-open o fuera del panel de la tabla, solo avisa", () => {
+		const done = [row("a", "integrada")];
+		expect(watchIdle(done, { ...table, focused: true }, "fluzo", false)).toBe("idle");
+		expect(watchIdle(done, table, "fluzo", true)).toBe("idle");
+		expect(watchIdle(done, { label: "gru", focused: false }, "fluzo", false)).toBe("idle");
+		expect(watchIdle(done, { label: "tabla · otro", focused: false }, "fluzo", false)).toBe("idle");
+		expect(watchIdle(done, undefined, "fluzo", false)).toBe("idle");
+	});
+
+	test("el aviso va encima del pie de la tabla", () => {
+		const out = renderWatch([row("a", "integrada")], { width: 80, color: false, repo: "fluzo", base: "main", time: "10:00:00", notice: "sin trabajo pendiente" });
+		expect(out.slice(-3)).toEqual(["sin trabajo pendiente", "", expect.stringContaining("q o Ctrl+C")]);
+		expect(renderWatch([], { width: 30, color: false, repo: "fluzo", base: "main", time: "10:00:00", notice: "sin trabajo pendiente\nel panel se cierra en 4 s" }).slice(-4, -2)).toEqual(["sin trabajo pendiente", "el panel se cierra en 4 s"]);
+		expect(renderWatch([], { width: 80, color: false, repo: "fluzo", base: "main", time: "10:00:00" })).not.toContain("sin trabajo pendiente");
+	});
+
+	test("clean de la última rama: se cierra la tabla de ese repo, la del que llama no", () => {
+		const panes = [
+			{ pane_id: "w1:p1", tab_id: "w1:t1", label: "gru" },
+			{ pane_id: "w1:p3", tab_id: "w1:t1", label: "tabla · fluzo" },
+			{ pane_id: "w1:p4", tab_id: "w1:t1", label: "tabla · otro" },
+			{ pane_id: "w2:p1", tab_id: "w2:t1", label: "tabla · fluzo" },
+		];
+		expect(idleTables([], panes, "fluzo", "w1:p1")).toEqual(["w1:p3", "w2:p1"]);
+		expect(idleTables([row("a", "integrada")], panes, "fluzo", "w2:p1")).toEqual(["w1:p3"]);
+		// Queda un minion abierto: la tabla sigue.
+		expect(idleTables([row("b", "lista", { agent: kevin })], panes, "fluzo", "w1:p1")).toEqual([]);
 	});
 });

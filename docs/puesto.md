@@ -56,9 +56,9 @@ por ejemplo en un worktree), bond lo dice y no contesta por ti.
 
 ```bash
 bond team [repo] <rama[:agente]>... [--agent <a>] [--base <ref>] [--tabs | --same-tab | --workspaces] [--yes] [--no-trust] [-- args de los agentes]
-bond team status [repo] [--base <ref>] [--json | --watch]
+bond team status [repo] [--base <ref>] [--json | --watch [--keep-open]]
 bond team prompt <rama> "la tarea" [--wait] [--timeout <ms>]
-bond team clean [repo] [rama...] [--force] [--delete-branch] [--dry-run]
+bond team clean [repo] [rama...] [--force] [--delete-branch] [--keep-table] [--dry-run]
 ```
 
 Abre un worktree y un agente por rama y enseña cómo va cada rama (`status`). Dentro de Herdr,
@@ -119,14 +119,22 @@ Con `--watch`, la tabla en vivo: ocupa la pantalla, se refresca cada 2 s y sale 
 Ctrl+C dejando el terminal como estaba. Una fila por rama con el minion, la rama, el estado (en
 color: amarillo si se mueve, rojo si te espera, verde si toca revisar), los commits, los ficheros
 y la última línea del panel de su agente (o la pregunta que espera). En un panel estrecho, esa
-última línea va debajo de la fila.
+última línea va debajo de la fila. En el panel de la tabla (`tabla · <repo>`), cuando ninguna
+rama tiene trabajo pendiente (ni `trabajando`, `bloqueado`, `sin commitear` ni `lista`, ni un
+agente abierto que aún no ha hecho commits; una rama a la que la tabla ya vio commits y vuelve a
+`sin commits` se ha integrado por merge), muestra `sin trabajo pendiente`, espera unos
+segundos a que se vea y cierra el panel; si vuelve a haber trabajo antes, sigue. No se cierra
+si es el panel enfocado, ni con `--keep-open`, ni ejecutada a mano en otro panel: ahí solo avisa.
 
 **`prompt`**: manda una tarea al agente de una rama, sin tener que saber su nombre.
 
 **`clean`**: quita worktrees (carpeta, y su panel o workspace con el agente); las ramas se quedan. Sin ramas,
 solo los integrados que abrió Herdr; con ramas, esas. Nunca uno con el agente trabajando o
 esperando, con cambios sin commitear o en el que estás, salvo con `--force`. `--delete-branch`
-borra además las ramas integradas. El workspace del repo no lo cierra: te dice cómo.
+borra además las ramas integradas. Si al acabar no queda ningún agente del equipo, cierra también
+el panel de la tabla en vivo, y tu pestaña queda como estaba; `--keep-table` lo deja abierto (si
+la tabla no tiene nada pendiente, luego se cierra ella sola salvo con `--keep-open`). El
+workspace del repo no lo cierra: te dice cómo.
 
 ## Conducir los agentes
 

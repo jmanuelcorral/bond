@@ -22,12 +22,18 @@
   pestaña (por defecto), 2) todo en tu pestaña, en filas de 4, o 3) un workspace por rama.
   `--tabs`, `--same-tab` y `--workspaces` eligen sin preguntar; sin terminal o con `--yes`,
   la 1. La tabla en vivo se abre también con `--workspaces` y muestra todas las ramas.
+- `bond team clean`: si al acabar no queda ningún agente del equipo, cierra también el panel de
+  la tabla en vivo (`--keep-table` lo deja). `bond team status --watch`, en su panel, cuando
+  ninguna rama tiene trabajo pendiente avisa `sin trabajo pendiente` y cierra el panel; no si
+  está enfocado ni con `--keep-open`.
 - Skill `plan-team` en el catálogo (opcional): ejecuta en paralelo las fases independientes de
   un plan de `docs/plans/`, una rama, worktree y agente por fase con `bond team`. Cada agente
   implementa solo su fase con `plan-execute` y hace commit en su rama si la verificación pasa,
   sin push; al integrar cada rama, actualiza el plan. Antes de crear el equipo anuncia dónde
   se abre cada agente y cuáles arrancan con la confianza heredada, y remite a la tabla en vivo
-  para seguirlo. `plan-create` y `bond-team` la ofrecen cuando toca.
+  para seguirlo. Al confirmar que una rama está integrada, cierra su panel con
+  `bond team clean <rama>` (la rama se queda), y al terminar el plan tu pestaña queda sin
+  paneles del equipo. `plan-create` y `bond-team` la ofrecen cuando toca.
 
 ## 1.2.1
 
