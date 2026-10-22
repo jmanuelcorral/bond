@@ -1,0 +1,17 @@
+# bond: configuración de los agentes de este repo. Tras editarla: bond sync
+# Catálogo disponible: bond init --list
+
+agents = ["pi", "claude"]          # pi, claude, copilot, codex, opencode, crush, gemini
+default_agent = "pi"   # el que abre `bond`
+mcp = ["context7", "duckduckgo"]                # servidores MCP del catálogo
+skills = ["code-context", "git-conventional-commit", "plan-create", "plan-execute", "issue-refine-github", "delivery-review-github", "release-prepare-github", "convention-document"]          # se copian a .agents/skills/
+commands = ["commit", "handoff", "review"]      # comandos del catálogo
+
+# Servidores MCP propios del repo (claves: command/args/env, o url/headers). Usa ${VAR}
+# para secretos, nunca el valor:
+# [mcp_servers.postgres]
+# command = "npx"
+# args = ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
+
+# Comandos propios: ficheros Markdown en .bond/commands/ ($ARGUMENTS, $1, $2...).
+# Skills propios: carpetas con SKILL.md en .agents/skills/ (bond los enlaza para Claude).
