@@ -65,7 +65,10 @@ el de `--agent`; si no, el agente por defecto del repo (`default_agent` de `.bon
 si no hay, el de `bond setup`. Avisa si un agente no está entre los del repo (no tendrá su
 config) y si hay cambios sin commitear, que los worktrees no verán. El trabajo se reparte
 después con `bond team prompt`, o desde cualquier agente con el skill `bond-team` (en pi,
-`/team`), que además propone el reparto, espera tu OK y recoge los resultados.
+`/team`), que además propone el reparto, espera tu OK y recoge los resultados. Para las fases
+de un plan (`docs/plans/`), el skill del catálogo `plan-team` hace lo mismo por fases: comprueba
+cuáles pueden ir a la vez, manda cada una con `plan-execute` (con commit en su rama, sin push) y
+actualiza el plan al integrar cada rama.
 
 **`status`**: una fila por worktree del repo con su estado, su agente, los commits por delante
 de la base (por defecto, la rama del checkout principal) y los ficheros que toca:

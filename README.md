@@ -93,7 +93,8 @@ refinar la issue → planificar por fases → ejecutar una fase → commit → P
 
 Salen marcadas `code-context`, `git-conventional-commit` (la usa `/commit`), `plan-create` y
 `plan-execute`; son opcionales `issue-refine-github`, `delivery-review-github`,
-`release-prepare-github` (las tres necesitan GitHub) y `convention-document`. Detalle en
+`release-prepare-github` (las tres necesitan GitHub), `convention-document` y `plan-team`, que
+ejecuta en paralelo las fases independientes de un plan, una rama de `bond team` por fase. Detalle en
 [docs/reference.md](docs/reference.md#skills-del-catálogo).
 
 ## Capa de contexto
