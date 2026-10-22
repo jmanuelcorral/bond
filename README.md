@@ -84,6 +84,18 @@ otro. Todo respeta las reglas del skill `herdr`: Herdr solo se usa cuando lo pid
 únicos, nada de merge, push ni limpieza automática, y nadie responde por ti a las preguntas de
 un agente.
 
+## Flujo de trabajo con skills
+
+`bond init` puede instalar en el repo skills que llevan una tarea de la issue a la release. Cada
+paso enseña lo que va a escribir o publicar y espera tu OK:
+
+refinar la issue → planificar por fases → ejecutar una fase → commit → PR → release
+
+Salen marcadas `code-context`, `git-conventional-commit` (la usa `/commit`), `plan-create` y
+`plan-execute`; son opcionales `issue-refine-github`, `delivery-review-github`,
+`release-prepare-github` (las tres necesitan GitHub) y `convention-document`. Detalle en
+[docs/reference.md](docs/reference.md#skills-del-catálogo).
+
 ## Capa de contexto
 
 Para que el agente entienda un repo leyendo lo mínimo: tools de búsqueda nativas de pi
@@ -128,7 +140,8 @@ bond/
 │   ├── doctor.mts, runtime.mts, util.mts
 ├── catalog/                      # lo que bond init instala en un repo
 │   ├── mcp.json                  # servidores MCP: context7, duckduckgo
-│   ├── skills/code-context/
+│   ├── catalog.toml              # resumen de cada skill y si sale marcada
+│   ├── skills/                   # code-context, plan-create, plan-execute...
 │   └── commands/                 # review, commit, handoff (sintaxis común)
 ├── global/skills/                # bond-delegate, bond-team (globales, para cualquier agente)
 ├── extensions/, prompts/, lib/   # Bond Extensions de pi (paquete: package.json → "pi")

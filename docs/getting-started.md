@@ -60,8 +60,8 @@ bond init
 ```
 
 Te pregunta con qué agentes integrar el repo, cuál abre `bond` por defecto y qué herramientas
-del catálogo usar (servidores MCP de documentación y búsqueda, el skill `code-context`, los
-comandos `review`, `commit` y `handoff`). Crea `.bond/bond.toml`, un `AGENTS.md` para que lo
+del catálogo usar (servidores MCP de documentación y búsqueda, skills como `code-context` o
+`plan-create`, los comandos `review`, `commit` y `handoff`). Crea `.bond/bond.toml`, un `AGENTS.md` para que lo
 completes y la config de cada agente. Commitéalo todo. La primera vez que abras cada agente en
 el repo, te pedirá confiar en él.
 
