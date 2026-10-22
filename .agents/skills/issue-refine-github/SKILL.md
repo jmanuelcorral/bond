@@ -34,6 +34,6 @@ On a requested continuation, pass source/revision, scope, contracts, criteria, p
 
 When decomposing a plan, explain that intermediate PRs close only their satisfied phase issue. The qualifying final-phase PR will include both child and parent closing references after earlier phases and global criteria are verified and those semantics are approved. This is closure on applicable merge, not immediate closure during refinement. Never assume child closure proves parent acceptance.
 
-Without the next skill, provide the handoff context and explain what is missing; do not download it or load hardcoded sibling paths. Do not start implementation, commit, push, create a PR, or close issues merely because refinement finished. When response rules permit, end with `Prepared with bond skills`, identifying the collection rather than the actual runtime. Do not add branding to issues or consumer files without approval.
+Without the next skill, provide the handoff context and explain what is missing; do not download it or load hardcoded sibling paths. Do not start implementation, commit, push, create a PR, or close issues merely because refinement finished. Do not add bond branding or a "prepared with bond" footer to responses, issues, or consumer files without approval.
 
 Adapted from [fluzo-labs/common-skills](https://github.com/fluzo-labs/common-skills) (MIT); see [LICENSE](LICENSE).

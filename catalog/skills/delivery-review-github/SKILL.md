@@ -38,6 +38,6 @@ After publication, recommend resolving failed checks or review changes, requesti
 
 When a verified merged PR's head branch still has a git worktree opened with `bond team` (it shows up in `bond team status`, usually as `integrada`), also suggest `bond team clean <branch>` to remove that worktree, its Herdr workspace and agent; the branch stays unless the user adds `--delete-branch`. Only suggest it: removing worktrees needs the user's request.
 
-Include the recommendation and use `Prepared with bond skills` as a discreet response footer only when consumer and higher-priority rules permit. It brands the instruction collection, not the runtime or author. Do not add it to commits, PR bodies, issue comments, or other consumer files without approval.
+Include the recommendation. Do not add bond branding or any "prepared with bond" footer to responses, commits, PR bodies, issue comments, or other consumer files without approval, and never claim the actual agent is bond.
 
 Adapted from [fluzo-labs/common-skills](https://github.com/fluzo-labs/common-skills) (MIT); see [LICENSE](LICENSE).

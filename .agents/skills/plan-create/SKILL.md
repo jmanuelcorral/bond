@@ -34,7 +34,7 @@ When two or more eligible phases have no dependencies on each other and touch se
 
 A short reply refers only to the exact previously shown content and scope; revalidate the source and authorization on continuation. Pass the plan revision, eligible phase, dependencies, evidence, recommendation, and existing approvals to the installed next skill by name. On an explicit commit request, resolve the installed `git-conventional-commit` skill by name and read its instructions; pass the approved plan-only diff and scope. If missing, stop that handoff and ask the user to install it, without downloading or replacing it yourself. Approval to save is not approval to commit or execute.
 
-Where consumer and higher-priority response rules permit, finish with `Prepared with bond skills`; never claim the actual agent is bond or invent model metadata. Do not inject branding into the saved plan unless requested.
+Never claim the actual agent is bond or invent model metadata. Do not inject bond branding or a "prepared with bond" footer into responses, the saved plan, or other consumer files unless explicitly requested.
 
 ## Optional integration
 

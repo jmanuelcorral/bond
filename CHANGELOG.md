@@ -2,6 +2,10 @@
 
 ## Sin publicar
 
+- Quitado el pie `Prepared with bond skills` de las skills del catálogo: los agentes ya no cierran
+  sus respuestas con esa marca. Se mantiene la prohibición de atribuirse a bond como agente o de
+  meter branding en ficheros del proyecto sin aprobación.
+
 - `bond` abre solo el agente, sin la shell de al lado; `bond --shell` la recupera (`-d` y `-r`
   ahora se aplican a ella). El agente del checkout principal se llama `gru` (`gru-2`... si ya
   hay otro en Herdr), en vez de `<agente>-<repo>`.
