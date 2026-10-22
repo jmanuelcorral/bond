@@ -18,8 +18,7 @@
   o en Claude Code (`~/.claude.json`), cada worktree hereda esa confianza y su agente arranca
   sin preguntar. Sin ella, o con otros agentes, pregunta como antes; `--no-trust` lo desactiva.
 - `bond team status --watch`: tabla en vivo, refrescada cada 2 s, con el minion, la rama, el
-  estado en color, los commits, los ficheros y la última línea del panel de cada agente; sale
-  con `q` o Ctrl+C. `bond team` dentro de Herdr la abre en un panel estrecho a la derecha del
+  estado, los commits y los ficheros de cada agente; sale con `q` o Ctrl+C. `bond team` dentro de Herdr la abre en un panel estrecho a la derecha del
   tuyo (`tabla · <repo>`), o reutiliza el que ya hay.
 - `bond team` en paneles: tu pestaña admite 6 paneles (el tuyo, la tabla y 4 minions). Si los
   agentes no caben, pregunta antes de crear nada: 1) pestañas nuevas `equipo · <repo>`, 4 por
@@ -30,6 +29,10 @@
   la tabla en vivo (`--keep-table` lo deja). `bond team status --watch`, en su panel, cuando
   ninguna rama tiene trabajo pendiente avisa `sin trabajo pendiente` y cierra el panel; no si
   está enfocado ni con `--keep-open`.
+- `bond team status --watch` agrupa las ramas por estado, primero lo que te espera: ⛔ necesita
+  tu respuesta (con la pregunta debajo), 🔄 trabajando, ✏️ sin commitear, 📦 por revisar y
+  ✅ integradas / sin empezar; los grupos vacíos no salen. Cada fila lleva el icono de su
+  estado, en su color; sin columna con la última línea del panel del agente.
 - Skill `plan-team` en el catálogo (opcional): ejecuta en paralelo las fases independientes de
   un plan de `docs/plans/`, una rama, worktree y agente por fase con `bond team`. Cada agente
   implementa solo su fase con `plan-execute` y hace commit en su rama si la verificación pasa,

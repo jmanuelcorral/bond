@@ -46,8 +46,10 @@ status   Cada worktree del repo: estado, agente, commits por delante de la base 
          Estados: trabajando, bloqueado, sin commitear, lista (commits por revisar),
          integrada (ya está en la base, también por rebase o squash), sin commits.
          La base, por defecto, es la rama del checkout principal.
-         --watch: tabla en vivo (cada 2 s) con el minion, la rama, el estado, los commits, los
-         ficheros y la última línea del panel de cada agente; sale con q o Ctrl+C. En el
+         --watch: tabla en vivo (cada 2 s) agrupada por estado, en este orden: ⛔ necesita tu
+         respuesta (con la pregunta debajo), 🔄 trabajando, ✏️ sin commitear, 📦 por revisar
+         y ✅ integradas / sin empezar; los grupos vacíos no salen. Cada fila: el icono, el
+         minion, la rama, los commits y los ficheros. Sale con q o Ctrl+C. En el
          panel de la tabla, si ninguna rama tiene trabajo pendiente (trabajando, bloqueado,
          sin commitear, lista, o un agente abierto sin commits aún), avisa y se cierra sola;
          no si es el panel enfocado ni con --keep-open.
@@ -560,41 +562,77 @@ function status(args: string[]): void | Promise<void> {
 
 // --- tabla en vivo -------------------------------------------------------------------------
 
-export type WatchRow = Row & { last?: string };
+/**
+ * Columnas que ocupa `s` en el terminal: sin las secuencias de color, con los emoji y los
+ * caracteres anchos a 2 y los que se combinan con el anterior (selectores de variante, ZWJ,
+ * acentos sueltos) a 0. Un selector de emoji (U+FE0F) ensancha el carácter que lo precede.
+ */
+export function textWidth(s: string): number {
+	let n = 0;
+	let prev = 0;
+	for (const ch of s.replace(/\x1b\[[0-9;]*m/g, "")) {
+		if (ch === "\ufe0f") {
+			n += 2 - prev;
+			prev = 2;
+		} else if (/[\u200d\ufe0e]|\p{M}/u.test(ch)) prev = 0;
+		else n += prev = WIDE.test(ch) ? 2 : 1;
+	}
+	return n;
+}
+const WIDE = /\p{Emoji_Presentation}|[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/u;
 
-const clip = (s: string, n: number) => (n <= 0 ? "" : s.length > n ? `${s.slice(0, n - 1)}…` : s);
-/** Por debajo de este ancho, la última línea del panel va en su propia línea, bajo la fila. */
-const MIN_LAST = 20;
+/** `s` recortado a `n` columnas, con … si no cabe. */
+function clip(s: string, n: number): string {
+	if (n <= 0) return "";
+	if (textWidth(s) <= n) return s;
+	let out = "";
+	for (const ch of s) {
+		if (textWidth(`${out}${ch}`) > n - 1) break;
+		out += ch;
+	}
+	return `${out}…`;
+}
+const pad = (s: string, n: number) => s + " ".repeat(Math.max(0, n - textWidth(s)));
+
+/** Grupos de la tabla en vivo, en el orden en que salen: primero lo que te espera. */
+export const WATCH_GROUPS: Array<{ icon: string; title: string; states: State[] }> = [
+	{ icon: "⛔", title: "Necesita tu respuesta", states: ["bloqueado"] },
+	{ icon: "🔄", title: "Trabajando", states: ["trabajando"] },
+	{ icon: "✏️", title: "Sin commitear", states: ["sin commitear"] },
+	{ icon: "📦", title: "Por revisar", states: ["lista"] },
+	{ icon: "✅", title: "Integradas / sin empezar", states: ["integrada", "sin commits"] },
+];
 
 /**
- * Las líneas de la tabla en vivo, recortadas a `width`: una fila por rama con el minion, la
- * rama, el estado (con su color), los commits, los ficheros y la última línea de su panel; si
- * no cabe, esa última línea va debajo.
+ * Las líneas de la tabla en vivo, recortadas a `width`: las ramas agrupadas por estado (sin los
+ * grupos vacíos), cada grupo con su título y cada fila con el icono de su estado, el minion, la
+ * rama, los commits y los ficheros; bajo una rama bloqueada, la pregunta que espera.
  */
-export function renderWatch(rows: WatchRow[], o: { width: number; color: boolean; repo: string; base: string; time: string; notice?: string }): string[] {
+export function renderWatch(rows: Row[], o: { width: number; color: boolean; repo: string; base: string; time: string; notice?: string }): string[] {
 	const dimmed = (s: string) => (o.color ? `\x1b[2m${s}\x1b[0m` : s);
-	const out = [clip(`bond team · ${o.repo} · base ${o.base}`, o.width - o.time.length - 1).padEnd(o.width - o.time.length) + o.time, ""];
-	if (!rows.length) out.push(clip("Sin worktrees en este repo.", o.width));
+	const out = [pad(clip(`bond team · ${o.repo} · base ${o.base}`, o.width - o.time.length - 1), o.width - o.time.length) + o.time];
+	if (!rows.length) out.push("", clip("Sin worktrees en este repo.", o.width));
 	else {
-		const cells = rows.map((r) => [r.agent?.name ?? "-", r.branch, r.state, r.ahead ? `+${r.ahead}` : "-", r.files.length ? String(r.files.length) : "-"]);
-		const widths = (h: string[]) => h.map((x, i) => Math.max(x.length, ...cells.map((c) => c[i].length)));
-		const room = (w: number[]) => w.reduce((a, b) => a + b + 2, -2);
+		const cells = rows.map((r) => [r.agent?.name ?? "-", r.branch, r.ahead ? `+${r.ahead}` : "-", r.files.length ? String(r.files.length) : "-"]);
+		const widths = (h: string[]) => h.map((x, i) => Math.max(textWidth(x), ...cells.map((c) => textWidth(c[i]))));
+		// El icono y su espacio van delante de cada fila.
+		const room = (w: number[]) => w.reduce((a, b) => a + b + 2, 1);
 		// En un panel estrecho, cabeceras cortas y, si aun así no cabe, la rama recortada.
-		let head = ["MINION", "RAMA", "ESTADO", "COMMITS", "FICHEROS"];
+		let head = ["MINION", "RAMA", "COMMITS", "FICHEROS"];
 		let w = widths(head);
-		if (room(w) > o.width) w = widths((head = ["MINION", "RAMA", "ESTADO", "COM", "FICH"]));
+		if (room(w) > o.width) w = widths((head = ["MINION", "RAMA", "COM", "FICH"]));
 		w[1] = Math.max(4, w[1] - Math.max(0, room(w) - o.width));
-		const inline = o.width - room(w) - 2 >= MIN_LAST;
-		const fmt = (c: string[]) => c.map((x, i) => clip(x, w[i]).padEnd(w[i])).join("  ");
-		out.push(clip(inline ? `${fmt(head)}  ÚLTIMA LÍNEA` : fmt(head).trimEnd(), o.width));
-		const at = w[0] + w[1] + 4;
-		rows.forEach((r, i) => {
-			const last = r.agent?.question ? `pregunta: ${r.agent.question}` : (r.last ?? "");
-			const line = clip((inline ? `${fmt(cells[i])}  ${last}` : fmt(cells[i])).trimEnd(), o.width);
-			const state = line.slice(at, at + r.state.length);
-			out.push(line.slice(0, at) + (state ? paintState(r.state, state, o.color) : "") + line.slice(at + state.length));
-			if (!inline && last) out.push(dimmed(clip(`  ${last}`, o.width)));
-		});
+		const fmt = (c: string[]) => c.map((x, i) => pad(clip(x, w[i]), w[i])).join("  ").trimEnd();
+		out.push("", clip(`   ${fmt(head)}`, o.width));
+		for (const g of WATCH_GROUPS) {
+			const group = rows.flatMap((r, i) => (g.states.includes(r.state) ? [[r, cells[i]] as const] : []));
+			if (!group.length) continue;
+			out.push("", paintState(group[0][0].state, clip(`${g.icon} ${g.title}`, o.width), o.color));
+			for (const [r, c] of group) {
+				out.push(paintState(r.state, g.icon, o.color) + clip(` ${fmt(c)}`, o.width - textWidth(g.icon)));
+				if (r.agent?.question) out.push(clip(`   └ pregunta: ${r.agent.question}`, o.width));
+			}
+		}
 	}
 	if (o.notice) out.push("", ...o.notice.split("\n").map((l) => clip(l, o.width)));
 	out.push("", dimmed(clip("q o Ctrl+C para salir · se actualiza cada 2 s", o.width)));
@@ -622,25 +660,6 @@ export function watchIdle(rows: Row[], pane: { label?: string; focused?: boolean
 
 /** Refrescos seguidos sin trabajo antes de cerrar el panel de la tabla (para que se vea el aviso). */
 const CLOSE_TICKS = 3;
-
-/** Última línea con texto de la salida de un panel (sin los bordes de las interfaces de los agentes). */
-export function lastLine(text: string): string | undefined {
-	return text
-		.split(/\r?\n/)
-		.map((l) =>
-			l
-				.replace(/[\s│┃|╭╮╰╯─━┌┐└┘]+$/u, "")
-				.replace(/^[\s│┃|╭╮╰╯─━┌┐└┘>❯]+/u, "")
-				.replace(/\s+/g, " "),
-		)
-		.filter((l) => /[\p{L}\p{N}]/u.test(l))
-		.pop();
-}
-
-function paneLastLine(pane: string): string | undefined {
-	const r = run("herdr", ["pane", "read", pane, "--source", "recent", "--lines", "40"], { timeout: 5000 });
-	return r.status === 0 ? lastLine(r.stdout) : undefined;
-}
 
 /**
  * `bond team status --watch`: la tabla en la pantalla alternativa, cada 2 s, hasta q o Ctrl+C.
@@ -674,7 +693,7 @@ async function watch(root: string, base: string, keepOpen = false): Promise<void
 	const draw = (tick = false) => {
 		let lines: string[];
 		try {
-			const rows = teamRows(root, base).map((r): WatchRow => ({ ...r, last: r.agent?.pane ? paneLastLine(r.agent.pane) : undefined }));
+			const rows = teamRows(root, base);
 			if (tick) {
 				for (const r of rows) if (r.ahead) worked.add(r.branch);
 				let pane: HerdrPane | undefined;

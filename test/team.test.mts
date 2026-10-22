@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { branchInfo, classify, findWatchPane, gitWorktrees, idleTables, lastLine, MINIONS, minionName, paintState, parseTeam, pendingWork, renderWatch, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, type WatchRow, watchCommand, watchIdle } from "../cli/team.mts";
+import { branchInfo, classify, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, renderWatch, type Row, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle } from "../cli/team.mts";
 
 const dirs = (...existing: string[]) => (p: string) => existing.includes(p);
 
@@ -217,48 +217,94 @@ describe("equipo en la pestaña", () => {
 });
 
 describe("tabla en vivo", () => {
-	const row = (branch: string, state: State, extra: Partial<WatchRow> = {}): WatchRow => ({ branch, state, path: `/w/${branch}`, ahead: 0, files: [], dirty: 0, integrated: false, managed: true, ...extra });
+	const row = (branch: string, state: State, extra: Partial<Row> = {}): Row => ({ branch, state, path: `/w/${branch}`, ahead: 0, files: [], dirty: 0, integrated: false, managed: true, ...extra });
 	const rows = [
-		row("feat/a", "trabajando", { agent: { name: "kevin", kind: "pi", status: "working", pane: "w1:p2" }, ahead: 2, files: ["a", "b", "c"], last: "Editando cli/team.mts" }),
-		row("feat/b", "bloqueado", { agent: { name: "stuart", kind: "pi", status: "idle", question: "confiar en la carpeta del proyecto", pane: "w1:p3" }, last: "Trust project folder?" }),
+		row("feat/a", "trabajando", { agent: { name: "kevin", kind: "pi", status: "working", pane: "w1:p2" }, ahead: 2, files: ["a", "b", "c"] }),
+		row("feat/b", "bloqueado", { agent: { name: "stuart", kind: "pi", status: "idle", question: "confiar en la carpeta del proyecto", pane: "w1:p3" } }),
 		row("feat/c", "lista", { ahead: 1, files: ["x"] }),
+		row("feat/d", "integrada", { ahead: 1 }),
+		row("feat/e", "sin commitear", { agent: { name: "bob", kind: "claude", status: "idle" }, dirty: 1, files: ["y"] }),
+		row("feat/f", "sin commits"),
 	];
-	const opts = { width: 100, color: false, repo: "fluzo", base: "main", time: "10:00:00" };
+	const opts = { width: 80, color: false, repo: "fluzo", base: "main", time: "10:00:00" };
+	const plain = (l: string) => l.replace(/\x1b\[[0-9;]*m/g, "");
 
-	test("una fila por rama: minion, rama, estado, commits, ficheros y última línea", () => {
-		const out = renderWatch(rows, opts);
-		expect(out[0]).toBe(`${"bond team · fluzo · base main".padEnd(92)}10:00:00`);
-		expect(out[2]).toBe("MINION  RAMA    ESTADO      COMMITS  FICHEROS  ÚLTIMA LÍNEA");
-		expect(out[3]).toBe("kevin   feat/a  trabajando  +2       3         Editando cli/team.mts");
-		// Con una pregunta en pantalla, la pregunta en vez de la última línea.
-		expect(out[4]).toBe("stuart  feat/b  bloqueado   -        -         pregunta: confiar en la carpeta del proyecto");
-		expect(out[5]).toBe("-       feat/c  lista       +1       1");
-		expect(out.at(-1)).toContain("q o Ctrl+C");
-		expect(out.every((l) => l.length <= 100)).toBe(true);
+	test("ancho visual: emoji a 2 columnas, sin contar el color ni lo que se combina", () => {
+		expect(textWidth("abc")).toBe(3);
+		expect(textWidth("⛔🔄📦✅")).toBe(8);
+		expect(textWidth("✏️")).toBe(2);
+		expect(textWidth("\x1b[31m⛔\x1b[0m x")).toBe(4);
+		expect(textWidth("é")).toBe(1);
+		expect(textWidth("e\u0301")).toBe(1);
+		expect(textWidth("…└")).toBe(2);
 	});
 
-	test("estrecha: la última línea va debajo de la fila y nada pasa del ancho", () => {
-		const out = renderWatch(rows, { ...opts, width: 50 });
-		expect(out[2]).toBe("MINION  RAMA    ESTADO      COMMITS  FICHEROS");
-		expect(out[3]).toBe("kevin   feat/a  trabajando  +2       3");
-		expect(out[4]).toBe("  Editando cli/team.mts");
-		expect(out[6]).toBe("  pregunta: confiar en la carpeta del proyecto");
-		expect(out.every((l) => l.length <= 50)).toBe(true);
-		expect(renderWatch(rows, { ...opts, width: 20 }).every((l) => l.length <= 20)).toBe(true);
+	test("grupos por estado, en orden: lo que te espera primero, y sin la última línea del panel", () => {
+		const out = renderWatch(rows, opts);
+		expect(out).toEqual([
+			`${"bond team · fluzo · base main".padEnd(72)}10:00:00`,
+			"",
+			"   MINION  RAMA    COMMITS  FICHEROS",
+			"",
+			"⛔ Necesita tu respuesta",
+			"⛔ stuart  feat/b  -        -",
+			"   └ pregunta: confiar en la carpeta del proyecto",
+			"",
+			"🔄 Trabajando",
+			"🔄 kevin   feat/a  +2       3",
+			"",
+			"✏️ Sin commitear",
+			"✏️ bob     feat/e  -        1",
+			"",
+			"📦 Por revisar",
+			"📦 -       feat/c  +1       1",
+			"",
+			"✅ Integradas / sin empezar",
+			"✅ -       feat/d  +1       -",
+			"✅ -       feat/f  -        -",
+			"",
+			"q o Ctrl+C para salir · se actualiza cada 2 s",
+		]);
+		expect(out.join("\n")).not.toContain("ÚLTIMA");
+	});
+
+	test("los grupos vacíos no salen", () => {
+		const out = renderWatch([row("feat/c", "lista", { ahead: 1 }), row("feat/a", "trabajando")], opts);
+		expect(out.filter((l) => WATCH_GROUPS.some((g) => l === `${g.icon} ${g.title}`))).toEqual(["🔄 Trabajando", "📦 Por revisar"]);
+		expect(WATCH_GROUPS.map((g) => g.states)).toEqual([["bloqueado"], ["trabajando"], ["sin commitear"], ["lista"], ["integrada", "sin commits"]]);
+	});
+
+	test("a 40, 60 y 80 columnas nada pasa del ancho y las columnas quedan alineadas con los emoji", () => {
+		for (const width of [40, 60, 80]) {
+			const out = renderWatch(rows, { ...opts, width, color: true }).map(plain);
+			expect(out.every((l) => textWidth(l) <= width)).toBe(true);
+			// Cada columna empieza en la misma posición visual en la cabecera y en todas las filas.
+			const lines = [out[2], ...out.filter((l) => /^\S+ \S/.test(l) && /feat\//.test(l))];
+			expect(lines).toHaveLength(7);
+			const starts = (l: string) => [...l.matchAll(/(?<=^|\s)\S+/g)].map((m) => textWidth(l.slice(0, m.index)));
+			for (const l of lines.slice(1)) expect(starts(l).slice(1)).toEqual(starts(out[2]));
+		}
+		expect(renderWatch(rows, { ...opts, width: 40 })[6]).toBe("   └ pregunta: confiar en la carpeta de…");
+		expect(renderWatch(rows, { ...opts, width: 20 }).every((l) => textWidth(l) <= 20)).toBe(true);
 	});
 
 	test("muy estrecha: cabeceras cortas y la rama recortada para que quepan las columnas", () => {
-		const out = renderWatch(rows, { ...opts, width: 35 });
-		expect(out[2]).toBe("MINION  RAMA  ESTADO      COM  FICH");
-		expect(out[3]).toBe("kevin   fea…  trabajando  +2   3");
+		const out = renderWatch(rows, { ...opts, width: 26 });
+		expect(out[2]).toBe("   MINION  RAMA  COM  FICH");
+		expect(out[9]).toBe("🔄 kevin   fea…  +2   3");
 	});
 
-	test("el estado lleva el color de su estado y nada más", () => {
+	test("título e icono en el color de su estado; sin color, los iconos siguen diciendo el estado", () => {
 		const out = renderWatch(rows, { ...opts, color: true });
-		expect(out[3]).toContain(`\x1b[33mtrabajando\x1b[0m`);
-		expect(out[4]).toContain(`\x1b[31mbloqueado\x1b[0m`);
-		expect(out[5]).toContain(`\x1b[32mlista\x1b[0m`);
-		expect(out[3].replace(/\x1b\[[0-9;]*m/g, "")).toBe(renderWatch(rows, opts)[3]);
+		expect(out[4]).toBe("\x1b[31m⛔ Necesita tu respuesta\x1b[0m");
+		expect(out[5]).toBe("\x1b[31m⛔\x1b[0m stuart  feat/b  -        -");
+		expect(out[9]).toStartWith("\x1b[33m🔄\x1b[0m");
+		expect(out[15]).toStartWith("\x1b[32m📦\x1b[0m");
+		expect(out.map(plain)).toEqual(renderWatch(rows, opts));
+		const bare = renderWatch(rows, opts);
+		expect(bare.join("\n")).not.toContain("\x1b[");
+		expect(bare[5]).toStartWith("⛔ ");
+		expect(bare[9]).toStartWith("🔄 ");
 	});
 
 	test("colores por estado: rojo si te espera, verde si toca revisar, tenue si no hay nada", () => {
@@ -267,15 +313,13 @@ describe("tabla en vivo", () => {
 		expect(paintState("lista", "x", false)).toBe("x");
 	});
 
-	test("sin worktrees", () => {
-		expect(renderWatch([], opts)[2]).toBe("Sin worktrees en este repo.");
+	test("bloqueada sin pregunta en pantalla: sin línea de pregunta", () => {
+		const out = renderWatch([row("feat/b", "bloqueado", { agent: { name: "stuart", kind: "pi", status: "blocked" } })], opts);
+		expect(out.slice(4, 7)).toEqual(["⛔ Necesita tu respuesta", "⛔ stuart  feat/b  -        -", ""]);
 	});
 
-	test("última línea con texto del panel, sin bordes ni líneas vacías", () => {
-		expect(lastLine("hola\n● Leyendo cli/team.mts\n╰──────╯\n│ > │\n\n")).toBe("● Leyendo cli/team.mts");
-		expect(lastLine("│ Pensando… │\n")).toBe("Pensando…");
-		expect(lastLine("\n───\n")).toBeUndefined();
-		expect(lastLine("  0.0%/131k (auto)          pi\n")).toBe("0.0%/131k (auto) pi");
+	test("sin worktrees", () => {
+		expect(renderWatch([], opts)[2]).toBe("Sin worktrees en este repo.");
 	});
 
 	test("el panel de la tabla se reutiliza: el de la misma pestaña y el mismo repo", () => {
@@ -298,7 +342,7 @@ describe("tabla en vivo", () => {
 });
 
 describe("cerrar al terminar", () => {
-	const row = (branch: string, state: State, extra: Partial<WatchRow> = {}): WatchRow => ({ branch, state, path: `/w/${branch}`, ahead: 0, files: [], dirty: 0, integrated: false, managed: true, ...extra });
+	const row = (branch: string, state: State, extra: Partial<Row> = {}): Row => ({ branch, state, path: `/w/${branch}`, ahead: 0, files: [], dirty: 0, integrated: false, managed: true, ...extra });
 	const kevin = { name: "kevin", kind: "pi", status: "idle", pane: "w1:p2" };
 	const table = { label: "tabla · fluzo", focused: false };
 
@@ -316,6 +360,13 @@ describe("cerrar al terminar", () => {
 		expect(watchIdle([row("a", "integrada"), row("b", "integrada")], table, "fluzo", false)).toBe("close");
 		expect(watchIdle([row("a", "integrada"), row("b", "lista", { ahead: 1 })], table, "fluzo", false)).toBe("busy");
 		expect(watchIdle([row("a", "trabajando", { agent: kevin })], table, "fluzo", false)).toBe("busy");
+	});
+
+	test("si solo queda el grupo ✅, no hay trabajo pendiente y la tabla se cierra", () => {
+		const done = [row("a", "integrada", { ahead: 1 }), row("b", "sin commits", { agent: kevin })];
+		const out = renderWatch(done, { width: 60, color: false, repo: "fluzo", base: "main", time: "10:00:00" });
+		expect(out.filter((l) => WATCH_GROUPS.some((g) => l === `${g.icon} ${g.title}`))).toEqual(["✅ Integradas / sin empezar"]);
+		expect(watchIdle(done, table, "fluzo", false, new Set(["b"]))).toBe("close");
 	});
 
 	test("enfocada, con --keep-open o fuera del panel de la tabla, solo avisa", () => {
