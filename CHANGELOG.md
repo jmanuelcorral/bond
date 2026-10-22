@@ -1,6 +1,6 @@
 # Cambios
 
-## Sin publicar
+## 1.2.1
 
 - `bond init`: antes de elegir herramientas enseña qué hace cada una (servidores MCP, skills y
   comandos), con las opcionales señaladas. Antes la explicación solo salía en las marcadas y en
