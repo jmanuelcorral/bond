@@ -10,6 +10,10 @@
   `minion · rama`, en vez de un workspace por rama. `--workspaces` mantiene el modo anterior,
   que sigue siendo el de fuera de Herdr. `bond team status` enseña el panel de cada agente y
   `bond team clean` lo cierra al quitar su worktree.
+- `bond team status --watch`: tabla en vivo, refrescada cada 2 s, con el minion, la rama, el
+  estado en color, los commits, los ficheros y la última línea del panel de cada agente; sale
+  con `q` o Ctrl+C. `bond team` dentro de Herdr la abre en un panel estrecho a la derecha del
+  tuyo (`tabla · <repo>`), o reutiliza el que ya hay.
 - Skill `plan-team` en el catálogo (opcional): ejecuta en paralelo las fases independientes de
   un plan de `docs/plans/`, una rama, worktree y agente por fase con `bond team`. Cada agente
   implementa solo su fase con `plan-execute` y hace commit en su rama si la verificación pasa,

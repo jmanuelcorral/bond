@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { branchInfo, classify, gitWorktrees, MINIONS, minionName, parseTeam, tabLayout, tabWorktreePath } from "../cli/team.mts";
+import { branchInfo, classify, findWatchPane, gitWorktrees, lastLine, MINIONS, minionName, paintState, parseTeam, renderWatch, type State, STATE_CODE, selfCommand, tabLayout, tabWorktreePath, type WatchRow, watchCommand } from "../cli/team.mts";
 
 const dirs = (...existing: string[]) => (p: string) => existing.includes(p);
 
@@ -148,5 +148,86 @@ describe("equipo en la pestaña", () => {
 	test("--workspaces vuelve al modo de un workspace por rama", () => {
 		expect(parseTeam(["feat/a", "--workspaces"], dirs()).workspaces).toBe(true);
 		expect(parseTeam(["feat/a"], dirs()).workspaces).toBe(false);
+	});
+});
+
+describe("tabla en vivo", () => {
+	const row = (branch: string, state: State, extra: Partial<WatchRow> = {}): WatchRow => ({ branch, state, path: `/w/${branch}`, ahead: 0, files: [], dirty: 0, integrated: false, managed: true, ...extra });
+	const rows = [
+		row("feat/a", "trabajando", { agent: { name: "kevin", kind: "pi", status: "working", pane: "w1:p2" }, ahead: 2, files: ["a", "b", "c"], last: "Editando cli/team.mts" }),
+		row("feat/b", "bloqueado", { agent: { name: "stuart", kind: "pi", status: "idle", question: "confiar en la carpeta del proyecto", pane: "w1:p3" }, last: "Trust project folder?" }),
+		row("feat/c", "lista", { ahead: 1, files: ["x"] }),
+	];
+	const opts = { width: 100, color: false, repo: "fluzo", base: "main", time: "10:00:00" };
+
+	test("una fila por rama: minion, rama, estado, commits, ficheros y última línea", () => {
+		const out = renderWatch(rows, opts);
+		expect(out[0]).toBe(`${"bond team · fluzo · base main".padEnd(92)}10:00:00`);
+		expect(out[2]).toBe("MINION  RAMA    ESTADO      COMMITS  FICHEROS  ÚLTIMA LÍNEA");
+		expect(out[3]).toBe("kevin   feat/a  trabajando  +2       3         Editando cli/team.mts");
+		// Con una pregunta en pantalla, la pregunta en vez de la última línea.
+		expect(out[4]).toBe("stuart  feat/b  bloqueado   -        -         pregunta: confiar en la carpeta del proyecto");
+		expect(out[5]).toBe("-       feat/c  lista       +1       1");
+		expect(out.at(-1)).toContain("q o Ctrl+C");
+		expect(out.every((l) => l.length <= 100)).toBe(true);
+	});
+
+	test("estrecha: la última línea va debajo de la fila y nada pasa del ancho", () => {
+		const out = renderWatch(rows, { ...opts, width: 50 });
+		expect(out[2]).toBe("MINION  RAMA    ESTADO      COMMITS  FICHEROS");
+		expect(out[3]).toBe("kevin   feat/a  trabajando  +2       3");
+		expect(out[4]).toBe("  Editando cli/team.mts");
+		expect(out[6]).toBe("  pregunta: confiar en la carpeta del proyecto");
+		expect(out.every((l) => l.length <= 50)).toBe(true);
+		expect(renderWatch(rows, { ...opts, width: 20 }).every((l) => l.length <= 20)).toBe(true);
+	});
+
+	test("muy estrecha: cabeceras cortas y la rama recortada para que quepan las columnas", () => {
+		const out = renderWatch(rows, { ...opts, width: 35 });
+		expect(out[2]).toBe("MINION  RAMA  ESTADO      COM  FICH");
+		expect(out[3]).toBe("kevin   fea…  trabajando  +2   3");
+	});
+
+	test("el estado lleva el color de su estado y nada más", () => {
+		const out = renderWatch(rows, { ...opts, color: true });
+		expect(out[3]).toContain(`\x1b[33mtrabajando\x1b[0m`);
+		expect(out[4]).toContain(`\x1b[31mbloqueado\x1b[0m`);
+		expect(out[5]).toContain(`\x1b[32mlista\x1b[0m`);
+		expect(out[3].replace(/\x1b\[[0-9;]*m/g, "")).toBe(renderWatch(rows, opts)[3]);
+	});
+
+	test("colores por estado: rojo si te espera, verde si toca revisar, tenue si no hay nada", () => {
+		expect(STATE_CODE).toEqual({ trabajando: "33", bloqueado: "31", "sin commitear": "33", lista: "32", integrada: "2", "sin commits": "2" });
+		expect(paintState("lista", "x", true)).toBe("\x1b[32mx\x1b[0m");
+		expect(paintState("lista", "x", false)).toBe("x");
+	});
+
+	test("sin worktrees", () => {
+		expect(renderWatch([], opts)[2]).toBe("Sin worktrees en este repo.");
+	});
+
+	test("última línea con texto del panel, sin bordes ni líneas vacías", () => {
+		expect(lastLine("hola\n● Leyendo cli/team.mts\n╰──────╯\n│ > │\n\n")).toBe("● Leyendo cli/team.mts");
+		expect(lastLine("│ Pensando… │\n")).toBe("Pensando…");
+		expect(lastLine("\n───\n")).toBeUndefined();
+		expect(lastLine("  0.0%/131k (auto)          pi\n")).toBe("0.0%/131k (auto) pi");
+	});
+
+	test("el panel de la tabla se reutiliza: el de la misma pestaña y el mismo repo", () => {
+		const panes = [
+			{ pane_id: "w1:p1", tab_id: "w1:t1" },
+			{ pane_id: "w1:p4", tab_id: "w1:t2", label: "tabla · fluzo" },
+			{ pane_id: "w1:p5", tab_id: "w1:t1", label: "tabla · otro" },
+			{ pane_id: "w1:p6", tab_id: "w1:t1", label: "tabla · fluzo" },
+		];
+		expect(findWatchPane(panes, "w1:t1", "fluzo")).toBe("w1:p6");
+		expect(findWatchPane(panes, "w1:t3", "fluzo")).toBeUndefined();
+	});
+
+	test("la orden del panel vuelve a lanzar este bond", () => {
+		expect(selfCommand("/usr/bin/node", "/r/bin/bond")).toEqual(["/usr/bin/node", "/r/bin/bond"]);
+		expect(selfCommand("/usr/local/bin/bond", "/$bunfs/root/bond")).toEqual(["/usr/local/bin/bond"]);
+		expect(watchCommand("/home/j/mi repo", "main", ["/usr/local/bin/bond"])).toBe("/usr/local/bin/bond team status '/home/j/mi repo' --watch --base main");
+		expect(watchCommand("/r", undefined, ["bond"])).toBe("bond team status /r --watch");
 	});
 });
