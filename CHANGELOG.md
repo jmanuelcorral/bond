@@ -10,6 +10,9 @@
   `minion · rama`, en vez de un workspace por rama. `--workspaces` mantiene el modo anterior,
   que sigue siendo el de fuera de Herdr. `bond team status` enseña el panel de cada agente y
   `bond team clean` lo cierra al quitar su worktree.
+- `bond team` en paneles: si confías en el checkout principal en pi (`~/.pi/agent/trust.json`)
+  o en Claude Code (`~/.claude.json`), cada worktree hereda esa confianza y su agente arranca
+  sin preguntar. Sin ella, o con otros agentes, pregunta como antes; `--no-trust` lo desactiva.
 - `bond team status --watch`: tabla en vivo, refrescada cada 2 s, con el minion, la rama, el
   estado en color, los commits, los ficheros y la última línea del panel de cada agente; sale
   con `q` o Ctrl+C. `bond team` dentro de Herdr la abre en un panel estrecho a la derecha del
