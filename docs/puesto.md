@@ -120,30 +120,30 @@ Ctrl+C dejando el terminal como estaba. Las ramas van agrupadas por estado, prim
 espera, y los grupos vacíos no salen:
 
 ```text
-   MINION  RAMA    COMMITS  FICHEROS
+MINION  RAMA    COMMITS  FICHEROS
 
 ⛔ Necesita tu respuesta
-⛔ stuart  feat/b  -        -
+stuart  feat/b  -        -
    └ pregunta: confiar en la carpeta del proyecto
 
 🔄 Trabajando
-🔄 kevin   feat/a  +2       3
+kevin   feat/a  +2       3
 
 ✏️ Sin commitear
-✏️ bob     feat/e  -        1
+bob     feat/e  -        1
 
 📦 Por revisar
-📦 -       feat/c  +1       1
+-       feat/c  +1       1
 
 ✅ Integradas / sin empezar
-✅ -       feat/d  +1       -
+-       feat/d  +1       -
 ```
 
-Cada fila lleva el icono de su estado (en color: rojo si te espera, amarillo si se mueve, verde
-si toca revisar, tenue si no hay nada), el minion, la rama, los commits y los ficheros; bajo una
-rama bloqueada, la pregunta que espera. El título de cada grupo dice el estado con palabras, así
-que se entiende aunque el terminal no pinte bien los emoji, y las columnas se alinean contando
-cada emoji como dos. En el panel de la tabla (`tabla · <repo>`), cuando ninguna
+El icono va solo en el título de cada grupo, en el color de su estado (rojo si te espera,
+amarillo si se mueve, verde si toca revisar, tenue si no hay nada); las filas llevan el minion,
+la rama, los commits y los ficheros, y bajo una rama bloqueada la pregunta que espera. El
+título de cada grupo dice el estado con palabras, así que se entiende aunque el terminal no pinte
+bien los emoji, y las columnas se alinean contando cada emoji como dos. En el panel de la tabla (`tabla · <repo>`), cuando ninguna
 rama tiene trabajo pendiente (ni `trabajando`, `bloqueado`, `sin commitear` ni `lista`, ni un
 agente abierto que aún no ha hecho commits; una rama a la que la tabla ya vio commits y vuelve a
 `sin commits` se ha integrado por merge), muestra `sin trabajo pendiente`, espera unos
