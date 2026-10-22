@@ -31,6 +31,13 @@ jobs:
       - run: npx tsc -p .
       - run: bun test
       - run: bun scripts/build.mts --targets ${{ matrix.target }} --no-npm
+      # Este repo usa bond: .agents/skills/ y demás deben seguir al catálogo (tras cambiarlo, bond
+      # sync). Solo en Linux: en Windows sync copia en vez de enlazar.
+      - name: La config de bond del repo está al día
+        if: matrix.target == 'linux-x64'
+        env:
+          BOND_HOME: ${{ runner.temp }}/bond-home-sync
+        run: dist/bond-linux-x64 sync --check
       - name: Prueba del binario fuera del repo
         env:
           BOND_HOME: ${{ runner.temp }}/bond-home
