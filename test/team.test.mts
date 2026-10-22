@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { branchInfo, classify, findWatchPane, gitWorktrees, lastLine, MINIONS, minionName, paintState, parseTeam, renderWatch, type State, STATE_CODE, selfCommand, tabLayout, tabWorktreePath, type WatchRow, watchCommand } from "../cli/team.mts";
+import { branchInfo, classify, findWatchPane, gitWorktrees, lastLine, MINIONS, minionName, paintState, parseTeam, renderWatch, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, type WatchRow, watchCommand } from "../cli/team.mts";
 
 const dirs = (...existing: string[]) => (p: string) => existing.includes(p);
 
@@ -135,24 +135,84 @@ describe("equipo en la pestaña", () => {
 
 	test("dos agentes: el primero debajo y el segundo a su derecha, mitad y mitad", () => {
 		expect(tabLayout(2)).toEqual([
-			{ from: "anchor", direction: "down", ratio: 0.5 },
-			{ from: 0, direction: "right", ratio: 0.5 },
+			{ tab: 0, from: "anchor", direction: "down", ratio: 0.5 },
+			{ tab: 0, from: 0, direction: "right", ratio: 0.5 },
 		]);
 	});
 
-	test("cuatro en fila con el mismo ancho; el quinto, debajo del primero", () => {
+	const where = (l: Split[]) => l.map((s) => ("direction" in s ? [s.tab, s.from, s.direction, s.ratio] : [s.tab, s.from]));
+
+	test("cuatro, con sitio para cuatro: todos en fila en tu pestaña, con el mismo ancho", () => {
+		expect(where(tabLayout(4, 4))).toEqual([
+			[0, "anchor", "down", 0.5],
+			[0, 0, "right", 0.25],
+			[0, 1, "right", 0.3333],
+			[0, 2, "right", 0.5],
+		]);
+	});
+
+	test("en tu pestaña (sin tope): cuatro en fila y el quinto debajo del primero", () => {
 		const l = tabLayout(5);
-		expect(l.slice(1, 4).map((s) => [s.from, s.direction, s.ratio])).toEqual([
-			[0, "right", 0.25],
-			[1, "right", 0.3333],
-			[2, "right", 0.5],
+		expect(l.every((s) => s.tab === 0)).toBe(true);
+		expect(where(l.slice(1, 4))).toEqual([
+			[0, 0, "right", 0.25],
+			[0, 1, "right", 0.3333],
+			[0, 2, "right", 0.5],
 		]);
-		expect(l[4]).toEqual({ from: 0, direction: "down", ratio: 0.5 });
+		expect(l[4]).toEqual({ tab: 0, from: 0, direction: "down", ratio: 0.5 });
 	});
 
-	test("--workspaces vuelve al modo de un workspace por rama", () => {
-		expect(parseTeam(["feat/a", "--workspaces"], dirs()).workspaces).toBe(true);
-		expect(parseTeam(["feat/a"], dirs()).workspaces).toBe(false);
+	test("cinco con sitio para cuatro: el quinto, solo en una pestaña nueva", () => {
+		const l = tabLayout(5, 4);
+		expect(where(l.slice(0, 4))).toEqual(where(tabLayout(4, 4)));
+		expect(l[4]).toEqual({ tab: 1, from: "tab" });
+	});
+
+	test("nueve con sitio para cuatro: 4 en tu pestaña, 4 en la primera nueva y 1 en la segunda", () => {
+		const l = tabLayout(9, 4);
+		expect(l.map((s) => s.tab)).toEqual([0, 0, 0, 0, 1, 1, 1, 1, 2]);
+		expect(where(l.slice(4))).toEqual([
+			[1, "tab"],
+			[1, 4, "right", 0.25],
+			[1, 5, "right", 0.3333],
+			[1, 6, "right", 0.5],
+			[2, "tab"],
+		]);
+	});
+
+	test("con la pestaña llena, todos a pestañas nuevas; con sitio para dos, la fila de dos a mitades", () => {
+		expect(where(tabLayout(2, 0))).toEqual([
+			[1, "tab"],
+			[1, 0, "right", 0.5],
+		]);
+		expect(where(tabLayout(3, 2))).toEqual([
+			[0, "anchor", "down", 0.5],
+			[0, 0, "right", 0.5],
+			[1, "tab"],
+		]);
+	});
+
+	test("tope de 6 paneles: el tuyo, la tabla y 4 minions", () => {
+		expect(tabRoom(1, false)).toBe(4);
+		expect(tabRoom(2, true)).toBe(4);
+		expect(tabRoom(4, true)).toBe(2);
+		expect(tabRoom(7, true)).toBe(0);
+	});
+
+	test("pestañas nuevas: equipo · <repo>, numeradas desde la segunda", () => {
+		expect(teamTabLabel("fluzo", 1)).toBe("equipo · fluzo");
+		expect(teamTabLabel("fluzo", 2)).toBe("equipo · fluzo · 2");
+	});
+
+	test("--tabs, --same-tab y --workspaces fijan el reparto; --yes no pregunta", () => {
+		expect(parseTeam(["feat/a"], dirs()).layout).toBeUndefined();
+		expect(parseTeam(["feat/a", "--workspaces"], dirs()).layout).toBe("workspaces");
+		expect(parseTeam(["feat/a", "--tabs"], dirs()).layout).toBe("tabs");
+		expect(parseTeam(["feat/a", "--same-tab"], dirs()).layout).toBe("same-tab");
+		expect(parseTeam(["feat/a", "--tabs", "--tabs"], dirs()).layout).toBe("tabs");
+		expect(parseTeam(["feat/a"], dirs()).yes).toBe(false);
+		expect(parseTeam(["feat/a", "--yes"], dirs()).yes).toBe(true);
+		expect(parseTeam(["-y", "feat/a"], dirs()).yes).toBe(true);
 	});
 });
 

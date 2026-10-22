@@ -17,6 +17,11 @@
   estado en color, los commits, los ficheros y la última línea del panel de cada agente; sale
   con `q` o Ctrl+C. `bond team` dentro de Herdr la abre en un panel estrecho a la derecha del
   tuyo (`tabla · <repo>`), o reutiliza el que ya hay.
+- `bond team` en paneles: tu pestaña admite 6 paneles (el tuyo, la tabla y 4 minions). Si los
+  agentes no caben, pregunta antes de crear nada: 1) pestañas nuevas `equipo · <repo>`, 4 por
+  pestaña (por defecto), 2) todo en tu pestaña, en filas de 4, o 3) un workspace por rama.
+  `--tabs`, `--same-tab` y `--workspaces` eligen sin preguntar; sin terminal o con `--yes`,
+  la 1. La tabla en vivo se abre también con `--workspaces` y muestra todas las ramas.
 - Skill `plan-team` en el catálogo (opcional): ejecuta en paralelo las fases independientes de
   un plan de `docs/plans/`, una rama, worktree y agente por fase con `bond team`. Cada agente
   implementa solo su fase con `plan-execute` y hace commit en su rama si la verificación pasa,
