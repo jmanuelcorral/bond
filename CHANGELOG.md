@@ -5,6 +5,11 @@
 - `bond` abre solo el agente, sin la shell de al lado; `bond --shell` la recupera (`-d` y `-r`
   ahora se aplican a ella). El agente del checkout principal se llama `gru` (`gru-2`... si ya
   hay otro en Herdr), en vez de `<agente>-<repo>`.
+- `bond team` dentro de Herdr abre cada agente en un panel de tu pestaña, debajo del tuyo (en
+  fila, hasta 4), con nombre de minion (`kevin`, `stuart`, `bob`...) y el panel titulado
+  `minion · rama`, en vez de un workspace por rama. `--workspaces` mantiene el modo anterior,
+  que sigue siendo el de fuera de Herdr. `bond team status` enseña el panel de cada agente y
+  `bond team clean` lo cierra al quitar su worktree.
 - Skill `plan-team` en el catálogo (opcional): ejecuta en paralelo las fases independientes de
   un plan de `docs/plans/`, una rama, worktree y agente por fase con `bond team`. Cada agente
   implementa solo su fase con `plan-execute` y hace commit en su rama si la verificación pasa,

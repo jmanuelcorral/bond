@@ -55,14 +55,18 @@ por ejemplo en un worktree), bond lo dice y no contesta por ti.
 ## `bond team`
 
 ```bash
-bond team [repo] <rama[:agente]>... [--agent <a>] [--base <ref>] [-- args de los agentes]
+bond team [repo] <rama[:agente]>... [--agent <a>] [--base <ref>] [--workspaces] [-- args de los agentes]
 bond team status [repo] [--base <ref>] [--json]
 bond team prompt <rama> "la tarea" [--wait] [--timeout <ms>]
 bond team clean [repo] [rama...] [--force] [--delete-branch] [--dry-run]
 ```
 
-Abre un worktree y un agente por rama, en segundo plano, y enseña cómo va cada rama
-(`status`). Sin `[repo]`, el del directorio actual. Cada rama lleva el agente de `rama:agente`; si no,
+Abre un worktree y un agente por rama y enseña cómo va cada rama (`status`). Dentro de Herdr,
+cada agente va en un panel de tu pestaña, debajo del tuyo: en fila, con el mismo ancho, 4 como
+mucho (del quinto en adelante, debajo del de su columna). Cada uno se llama como un minion, el
+primero libre (`kevin`, `stuart`, `bob`, `dave`...), y su panel se titula `kevin · <rama>`. El
+worktree va en `~/.herdr/worktrees/<repo>/<rama>`. Fuera de Herdr, o con `--workspaces`, un
+workspace por rama con `herdr worktree`, como antes. Sin `[repo]`, el del directorio actual. Cada rama lleva el agente de `rama:agente`; si no,
 el de `--agent`; si no, el agente por defecto del repo (`default_agent` de `.bond/bond.toml`) y,
 si no hay, el de `bond setup`. Avisa si un agente no está entre los del repo (no tendrá su
 config) y si hay cambios sin commitear, que los worktrees no verán. El trabajo se reparte
@@ -91,7 +95,7 @@ folder" una vez sirve para todos los worktrees de ese repo.
 
 **`prompt`**: manda una tarea al agente de una rama, sin tener que saber su nombre.
 
-**`clean`**: quita worktrees (carpeta, workspace y agente); las ramas se quedan. Sin ramas,
+**`clean`**: quita worktrees (carpeta, y su panel o workspace con el agente); las ramas se quedan. Sin ramas,
 solo los integrados que abrió Herdr; con ramas, esas. Nunca uno con el agente trabajando o
 esperando, con cambios sin commitear o en el que estás, salvo con `--force`. `--delete-branch`
 borra además las ramas integradas. El workspace del repo no lo cierra: te dice cómo.
