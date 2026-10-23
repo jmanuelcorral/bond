@@ -505,6 +505,7 @@ fuera, y sale con 1 si algo falla:
 | Dependencias (`node_modules`), `config.toml`, pi al día con el registro (otros agentes: aviso) | `bond setup`; `bond models sync` |
 | La pasarela de cada proveedor del registro sirve los modelos declarados | revisar la pasarela |
 | `bond` en el PATH y es el de este repo | `bond setup` |
+| Actualizaciones: método de instalación, última comprobación, versión pendiente, omitida y si se pregunta al arrancar (informativa; aviso si hay una pendiente sin omitir; no haber mirado nunca no falla) | `bond update`; `bond update --skip vX.Y.Z` |
 
 ## Snippet de Herdr
 
@@ -719,13 +720,18 @@ Si hay versión nueva, pregunta:
    `$(brew --prefix bond)/bin/bond`. Si brew falla (lock, sin red, tap caído) o aún no trae esa
    versión, se ve el error, no cambia nada y el arranque sigue con la versión que tenías. Con
    npm o desde el código dice el comando.
-2. **Omitir esa versión**: no la vuelve a nombrar; la siguiente release sí se ofrece.
+2. **Omitir esa versión**: no la vuelve a nombrar; la siguiente release sí se ofrece. Lo mismo
+   a mano: `bond update --skip vX.Y.Z` (sin tocar la red); `bond update --skip-reset` quita la
+   omisión y la versión vuelve a ofrecerse.
 3. **No volver a preguntar**: escribe `[update] auto = false` en `~/.bond/config.toml` (sin
    tocar el resto del fichero). Para recuperarlo, `auto = true` o borra la tabla.
 
 Intro, o cualquier otra respuesta, deja la pregunta para la próxima comprobación. Sin terminal
 (entrada o salida redirigidas) no pregunta: solo avisa por stderr. `BOND_NO_UPDATE=1` desactiva
 la comprobación del todo; `BOND_RELEASES_URL` cambia de dónde se leen las releases.
+
+`bond doctor` enseña cómo está: método de instalación, última comprobación, versión pendiente,
+versión omitida y si se pregunta al arrancar.
 
 `pi update` solo aplica a instalaciones hechas con el instalador oficial
 (`curl -fsSL https://pi.dev/install.sh | sh`); con bun o npm se actualiza desde el

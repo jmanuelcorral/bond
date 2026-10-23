@@ -14,6 +14,11 @@
   vista; si brew falla, se ve su error y sigues con la versión que tenías.
 - En una instalación por npm, bond ya no propone `npm i -g @jmanuelcorral/bond@latest`: el
   paquete aún no está publicado en npm, así que remite al `.tgz` de la release.
+- `bond update --skip vX.Y.Z` omite esa versión en el aviso de arranque (hasta que salga otra),
+  sin tocar la red; `bond update --skip-reset` quita la omisión.
+- `bond doctor` añade la fila «actualizaciones»: método de instalación, última comprobación,
+  versión pendiente, versión omitida y si se pregunta al arrancar. Solo avisa si hay una versión
+  pendiente sin omitir; no haber mirado nunca no cuenta como fallo.
 
 ## 1.3.0
 

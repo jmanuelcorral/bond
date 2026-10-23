@@ -4,7 +4,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { readdirSync, statSync } from "node:fs";
-import { assetsPath, BOND_HOME, FROM_SOURCE } from "./runtime.mts";
+import type { UpdateState } from "./config.mts";
+import { assetsPath, BOND_HOME, FROM_SOURCE, VERSION } from "./runtime.mts";
+import { compareVersions, installMethod } from "./update.mts";
 import { CONTEXT_TOOLS, globalSkillsDir, globalSkillTargets, herdrIntegrationStatus, PI_HERDR_SKILL, SHARED_HERDR_SKILL } from "./setup.mts";
 import { AGENT_DIR, bad, caution, die, dim, isCopyOf, linkTarget, ok, REPO_DIR, run, samePath, which } from "./util.mts";
 
@@ -14,14 +16,14 @@ const installedSkill = (src: string, dest: string) => (process.platform === "win
 export const DOCTOR_HELP = `Uso: bond doctor [--quick]
 
 Comprueba la instalación global: Node, Herdr, pi, enlaces de configuración, paquete de pi,
-skill de Herdr, integración, filtro de git, herramientas de contexto, servidores MCP y la
-pasarela de modelos. Sale con 1 si algo falla.
+skill de Herdr, integración, filtro de git, herramientas de contexto, servidores MCP, la
+pasarela de modelos y el aviso de versión nueva. Sale con 1 si algo falla.
 
   --quick      Se salta lo lento (conectar los servidores MCP)
   -h, --help   Esta ayuda`;
 
 type Level = "ok" | "warn" | "fail";
-interface Check {
+export interface Check {
 	level: Level;
 	name: string;
 	detail: string;
@@ -175,6 +177,44 @@ function checkBond(): void {
 	else add("warn", "bond en el PATH", "no está", "bond setup");
 }
 
+const METHODS = { binary: "binario", brew: "Homebrew", npm: "npm", source: "desde el código" } as const;
+
+/**
+ * Fila de actualizaciones: método de instalación, última consulta, versión pendiente, omitida y
+ * si se pregunta al arrancar. Informa sin fallar: no haber mirado nunca no es un error.
+ */
+export function updateCheck(o: { method: keyof typeof METHODS; state?: UpdateState; auto: boolean; disabled?: boolean; version?: string }): Check {
+	const version = o.version ?? VERSION;
+	const { checkedAt, latest, skipped } = o.state ?? {};
+	const when = checkedAt && !Number.isNaN(Date.parse(checkedAt)) ? `${checkedAt.slice(0, 16).replace("T", " ")} UTC` : undefined;
+	const pending = latest && compareVersions(latest, version) > 0 ? latest.slice(1) : undefined;
+	const ask = o.disabled ? "desactivado (BOND_NO_UPDATE=1)" : o.auto ? "sí" : "no ([update] auto = false)";
+	const detail = [
+		METHODS[o.method],
+		`última comprobación: ${when ?? "nunca"}`,
+		`pendiente: ${pending ?? "ninguna"}`,
+		`omitida: ${skipped?.slice(1) ?? "ninguna"}`,
+		`aviso al arrancar: ${ask}`,
+	].join(" · ");
+	// Pendiente y no omitida: aviso, con el comando. Lo demás es informativo.
+	if (pending && skipped !== latest) return { level: "warn", name: "actualizaciones", detail, fix: "bond update" };
+	return { level: "ok", name: "actualizaciones", detail };
+}
+
+async function checkUpdate(): Promise<void> {
+	let state: UpdateState | undefined;
+	let auto = true;
+	try {
+		const { loadState, updateAuto } = await import("./config.mts");
+		state = loadState().update;
+		auto = updateAuto();
+	} catch {
+		// Sin dependencias (repo sin npm ci): se informa con lo que hay.
+	}
+	const r = updateCheck({ method: installMethod(), state, auto, disabled: process.env.BOND_NO_UPDATE === "1" });
+	add(r.level, r.name, r.detail, r.fix);
+}
+
 export async function doctor(args: string[]): Promise<void> {
 	const quick = args.includes("--quick");
 	for (const a of args) if (a !== "--quick") die(`opción desconocida: ${a} (bond doctor --help)`);
@@ -197,6 +237,7 @@ export async function doctor(args: string[]): Promise<void> {
 	await checkModels();
 	await checkRepo();
 	checkBond();
+	await checkUpdate();
 
 	const mark = { ok: ok("✓"), warn: caution("!"), fail: bad("✗") };
 	const width = Math.max(...results.map((r) => r.name.length));
