@@ -1,6 +1,6 @@
 # Cambios
 
-## Sin publicar
+## 1.4.0
 
 - Al abrir el puesto de trabajo (`bond`, `bond dev`, `bond team`), bond mira una vez al día si
   hay release nueva (tope de ~2 s; sin red, sigue sin más) y pregunta: 1) actualizar ahora,
