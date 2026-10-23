@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { readdirSync, statSync } from "node:fs";
 import type { UpdateState } from "./config.mts";
 import { enabledModelsCover } from "./suggestions.mts";
-import { assetsPath, BOND_HOME, FROM_SOURCE, VERSION } from "./runtime.mts";
+import { assetsPath, BOND_HOME, FROM_SOURCE, installedRuntime, VERSION } from "./runtime.mts";
 import { compareVersions, installMethod } from "./update.mts";
 import { CONTEXT_TOOLS, globalSkillsDir, globalSkillTargets, herdrIntegrationStatus, PI_HERDR_SKILL, SHARED_HERDR_SKILL } from "./setup.mts";
 import { AGENT_DIR, bad, caution, die, dim, isCopyOf, linkTarget, ok, REPO_DIR, run, samePath, which } from "./util.mts";
@@ -78,11 +78,18 @@ function checkPi(): void {
 	// Restos de bond 0.7: config de pi enlazada al repo o el repo como paquete global.
 	const legacy = ["settings.json", "AGENTS.md", "mcp.json", "bond", "pisetup", "prompts"].filter((f) => linkTarget(join(AGENT_DIR, f)) !== undefined);
 	if (legacy.length) add("warn", "instalación anterior", `enlaces en ~/.pi/agent: ${legacy.join(", ")}`, "bond migrate");
-	// Bond Extensions: ~/.bond/pi tiene que apuntar a la versión instalada.
+	// Bond Extensions: ~/.bond/pi tiene que apuntar a la versión instalada. Desde el repo
+	// (desarrollo), un enlace a un runtime instalado válido es aviso: pi usa las extensiones
+	// de esa versión, no las del repo.
 	const link = join(BOND_HOME, "pi");
-	if (!linkTarget(link)) add("warn", "Bond Extensions", "falta ~/.bond/pi", "bond setup");
+	const target = linkTarget(link);
+	if (!target) add("warn", "Bond Extensions", "falta ~/.bond/pi", "bond setup");
 	else if (samePath(link, assetsPath())) add("ok", "Bond Extensions", `~/.bond/pi -> ${FROM_SOURCE ? "repo" : "runtime"}`);
-	else add("fail", "Bond Extensions", "~/.bond/pi apunta a otra versión de bond", "bond setup");
+	else {
+		const runtime = FROM_SOURCE ? installedRuntime(target) : undefined;
+		if (runtime) add("warn", "Bond Extensions", `~/.bond/pi apunta al runtime ${runtime}: pi usa las extensiones instaladas, no las del repo`, "bond setup");
+		else add("fail", "Bond Extensions", "~/.bond/pi apunta a otra versión de bond", "bond setup");
+	}
 }
 
 function checkHerdrSkill(): void {

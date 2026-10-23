@@ -1,5 +1,12 @@
 # Cambios
 
+## Sin publicar
+
+- `bond doctor`: ejecutándose desde el repo de bond, si `~/.bond/pi` apunta a un runtime
+  instalado (`~/.bond/runtime/<versión>` con su marca `.complete`) la fila «Bond Extensions»
+  avisa en vez de fallar: pi está usando las extensiones de esa versión instalada y no las
+  del repo en desarrollo. Sigue fallando si el destino no es ni el repo ni un runtime válido.
+
 ## 1.5.0
 
 - `bond setup` instala y configura las sugerencias de prompt de pi: al terminar cada turno, con

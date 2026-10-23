@@ -7,7 +7,7 @@
 
 import { chmodSync, existsSync, lstatSync, mkdirSync, readlinkSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import pkg from "../package.json" with { type: "json" };
 import { REPO_DIR } from "./util.mts";
 
@@ -52,6 +52,18 @@ export async function assetsDir(): Promise<string> {
 	}
 	extracted = dir;
 	return dir;
+}
+
+/**
+ * ¿target apunta a un runtime instalado? Devuelve la versión si es ~/.bond/runtime/<versión>
+ * con su marca .complete; si no, undefined. Sirve para distinguir, al ejecutar bond desde el
+ * repo, un runtime válido (aviso) de un destino cualquiera (fallo).
+ */
+export function installedRuntime(target: string, runtimeDir = join(BOND_HOME, "runtime")): string | undefined {
+	const abs = resolve(runtimeDir, target);
+	const rel = relative(runtimeDir, abs);
+	if (!rel || rel.startsWith(".") || rel.includes(sep)) return undefined;
+	return existsSync(join(abs, ".complete")) ? rel : undefined;
 }
 
 /**

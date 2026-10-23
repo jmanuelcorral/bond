@@ -1,10 +1,35 @@
 // bond doctor: la fila de actualizaciones (método, última comprobación, pendiente, omitida y aviso).
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { updateCheck } from "../cli/doctor.mts";
+import { installedRuntime } from "../cli/runtime.mts";
+
+describe("runtime instalado (Bond Extensions desde el repo)", () => {
+	let dir: string;
+	beforeEach(() => {
+		dir = mkdtempSync(join(tmpdir(), "bond-rt-"));
+	});
+	afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+	test("acepta runtime/<versión> con .complete", () => {
+		mkdirSync(join(dir, "1.5.0"), { recursive: true });
+		writeFileSync(join(dir, "1.5.0", ".complete"), "1.5.0\n");
+		expect(installedRuntime(join(dir, "1.5.0"), dir)).toBe("1.5.0");
+	});
+
+	test("rechaza lo que no es un runtime instalado", () => {
+		mkdirSync(join(dir, "1.5.0"), { recursive: true });
+		expect(installedRuntime(join(dir, "1.5.0"), dir)).toBeUndefined(); // sin .complete
+		expect(installedRuntime(dir, dir)).toBeUndefined(); // el propio runtime
+		expect(installedRuntime(join(dir, "..", "otro"), dir)).toBeUndefined(); // fuera del runtime
+		mkdirSync(join(dir, "1.5.0", "sub"), { recursive: true });
+		writeFileSync(join(dir, "1.5.0", "sub", ".complete"), "x\n");
+		expect(installedRuntime(join(dir, "1.5.0", "sub"), dir)).toBeUndefined(); // anidado
+	});
+});
 
 describe("fila de actualizaciones", () => {
 	test("sin ninguna comprobación informa y no falla", () => {
@@ -54,7 +79,7 @@ describe("bond doctor", () => {
 	});
 	afterEach(() => rmSync(home, { recursive: true, force: true }));
 
-	async function doctor() {
+	async function doctorFull() {
 		// En su proceso: BOND_HOME se fija al cargar cli/runtime.mts.
 		const p = Bun.spawn([process.execPath, join(import.meta.dir, "..", "cli", "main.mts"), "doctor", "--quick"], {
 			cwd: home,
@@ -64,8 +89,9 @@ describe("bond doctor", () => {
 		});
 		const out = await new Response(p.stdout).text();
 		await p.exited;
-		return out.split("\n").find((l) => l.includes("actualizaciones")) ?? "";
+		return out;
 	}
+	const doctor = async () => (await doctorFull()).split("\n").find((l) => l.includes("actualizaciones")) ?? "";
 
 	test("refleja state.json y config.toml", async () => {
 		mkdirSync(join(home, "xdg"));
@@ -85,5 +111,16 @@ describe("bond doctor", () => {
 		expect(row).toContain("✓ actualizaciones");
 		expect(row).toContain("última comprobación: nunca");
 		expect(row).toContain("aviso al arrancar: sí");
+	}, 30_000);
+
+	test("desde el repo, ~/.bond/pi apuntando a un runtime válido avisa en vez de fallar", async () => {
+		if (!Bun.which("pi")) return; // la fila solo se comprueba con pi instalado
+		mkdirSync(join(home, "runtime", "9.9.0"), { recursive: true });
+		writeFileSync(join(home, "runtime", "9.9.0", ".complete"), "9.9.0\n");
+		symlinkSync(join(home, "runtime", "9.9.0"), join(home, "pi"));
+		const row = ((await doctorFull()).split("\n").find((l) => l.includes("Bond Extensions")) ?? "").trim();
+		expect(row).toStartWith("! Bond Extensions");
+		expect(row).toContain("runtime 9.9.0");
+		expect(row).not.toContain("✗");
 	}, 30_000);
 });
