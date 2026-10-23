@@ -164,4 +164,70 @@ describe("respuestas", () => {
 		expect(r.err).toContain("Sigues con bond");
 		expect(readFileSync(exe, "utf8")).toBe("viejo");
 	});
+
+	test("«1» con npm no promete un paquete que no está publicado: remite al .tgz", async () => {
+		const r = await offer({ answer: "1", method: "npm" });
+		expect(r.result).toBe("manual");
+		expect(r.out).toContain("aún no está publicado en npm");
+		expect(r.out).toContain(`npm i -g ${base}/download/v9.1.0/jmanuelcorral-bond-9.1.0.tgz`);
+		expect(r.out).not.toContain("@jmanuelcorral/bond@");
+	});
+});
+
+/**
+ * Un brew falso al principio del PATH: apunta cada llamada en brew.log, `upgrade` pone `upgradeTo`
+ * en el bond de su prefijo y, con `fail`, `update` falla como con el lock de otro brew.
+ */
+function fakeBrew({ fail = false, upgradeTo = "9.1.0" } = {}): Record<string, string> {
+	const bin = join(home, "fake-bin");
+	const prefix = join(home, "Cellar", "bond");
+	const brewLog = join(home, "brew.log");
+	mkdirSync(bin);
+	mkdirSync(join(prefix, "bin"), { recursive: true });
+	writeFileSync(join(prefix, "version"), "9.0.0\n");
+	writeFileSync(join(prefix, "bin", "bond"), `#!/bin/sh\n[ "$1" = --version ] && cat "${prefix}/version"\n[ "$1" = _runtime ] && echo "bond _runtime" >> "${brewLog}"\nexit 0\n`, { mode: 0o755 });
+	const update = fail ? `echo "Error: Another active Homebrew update process is already in progress." >&2; exit 1` : `echo "Already up-to-date."`;
+	writeFileSync(
+		join(bin, "brew"),
+		`#!/bin/sh\necho "brew $*" >> "${brewLog}"\ncase "$1" in\n  update) ${update} ;;\n  upgrade) echo "==> Upgrading $2"; echo ${upgradeTo} > "${prefix}/version" ;;\n  --prefix) echo "${prefix}" ;;\nesac\n`,
+		{ mode: 0o755 },
+	);
+	return { PATH: `${bin}:${process.env.PATH}` };
+}
+const brewLog = () => (existsSync(join(home, "brew.log")) ? readFileSync(join(home, "brew.log"), "utf8") : "");
+const brewVersion = () => readFileSync(join(home, "Cellar", "bond", "version"), "utf8").trim();
+
+// brew no existe en Windows y el falso es un script de shell.
+describe.skipIf(process.platform === "win32")("«1» con Homebrew", () => {
+	test("avisa de que brew update toca todos los taps, corre brew a la vista y sigue con _runtime", async () => {
+		const r = await offer({ answer: "1", method: "brew" }, fakeBrew());
+		expect(r.result).toBe("updated");
+		const notice = r.out.indexOf("refresca el índice de todos los taps");
+		expect(notice).toBeGreaterThan(-1);
+		expect(notice).toBeLessThan(r.out.indexOf("Already up-to-date."));
+		expect(r.out).toContain("==> Upgrading jmanuelcorral/tap/bond");
+		expect(brewLog()).toBe(`brew update\nbrew upgrade jmanuelcorral/tap/bond\nbrew --prefix bond\nbond _runtime\n`);
+		expect(brewVersion()).toBe("9.1.0");
+		expect(readFileSync(exe, "utf8")).toBe("viejo");
+	});
+
+	test("si brew falla, se ve su error, no cambia nada y el arranque sigue", async () => {
+		const r = await offer({ answer: "1", method: "brew" }, fakeBrew({ fail: true }));
+		expect(r.result).toBe("failed");
+		expect(r.err).toContain("Another active Homebrew update process");
+		expect(r.err).toContain("falló brew update");
+		expect(r.err).toContain("Sigues con bond");
+		expect(r.out).not.toContain("instalado");
+		expect(brewLog()).toBe("brew update\n");
+		expect(brewVersion()).toBe("9.0.0");
+		expect(state()).toEqual({ checkedAt: new Date(T0).toISOString(), latest: "v9.1.0" });
+		expect(existsSync(join(home, "config.toml")) && config()).not.toContain("auto = false");
+	});
+
+	test("si el tap va por detrás de la release, no dice que ha actualizado", async () => {
+		const r = await offer({ answer: "1", method: "brew" }, fakeBrew({ upgradeTo: "9.0.0" }));
+		expect(r.result).toBe("failed");
+		expect(r.err).toContain("Homebrew no trae la 9.1.0");
+		expect(brewLog()).not.toContain("_runtime");
+	});
 });
