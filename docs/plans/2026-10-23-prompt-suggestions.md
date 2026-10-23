@@ -3,8 +3,8 @@ name: "2026-10-23-prompt-suggestions"
 description: "bond setup instala y configura las sugerencias de prompt (ghost text after-turn) en pi y bond doctor informa de su estado"
 created_at: "2026-10-23T09:36:35Z"
 last_implementation_at: "2026-10-23T10:06:11Z"
-has_completed_all_phases: false
-next_step: "Revisar y aceptar P2 (aceptada P1 por el usuario el 2026-10-23T10:06:11Z)"
+has_completed_all_phases: true
+next_step: "Plan completo. Empujar main (aprobado por el usuario) y, si se pide, preparar la release con release-prepare-github"
 ---
 
 # Sugerencias de prompt en pi como parte de bond
@@ -116,15 +116,16 @@ Dependencias y riesgos:
 | Phase | Implementation | Verification | Review | Evidence |
 | --- | --- | --- | --- | --- |
 | P1 | implemented | passed | accepted | recorded |
-| P2 | implemented | passed | pending | recorded |
+| P2 | implemented | passed | accepted | recorded |
 
 ## Next step
 
-Revisar P2 y registrar su aceptación. P1 quedó **aceptada** por el usuario el 2026-10-23T10:06:11Z
-(«acepto P1 y commit opcion 1»); su commit es `5fe7a64` en `main`. P2 queda pendiente de revisión
-una vez commiteada. Al aceptarla, el plan está completo y lo siguiente sería preparar la release.
+Plan completo: las dos fases están implementadas, verificadas y aceptadas.
+P1 aceptada el 2026-10-23T10:06:11Z («acepto P1 y commit opcion 1»); P2 aceptada el
+2026-10-23T10:08:03Z («acepto P2 y empuja main»), que además aprueba el push de `main`.
 
-Ninguna fase se marca `has_completed_all_phases = true` mientras P2 siga sin aceptar.
+Lo que queda fuera de este plan, si se pide después: preparar la release (`release-prepare-github`),
+regenerar `packaging/` y actualizar el tap de Homebrew.
 
 Nota de alcance: el `CHANGELOG.md` y `docs/reference.md` se actualizaron en P2 según este plan; en
 P1 solo cambió código y pruebas.
