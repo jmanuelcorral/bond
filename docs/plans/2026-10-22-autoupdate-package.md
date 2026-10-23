@@ -3,6 +3,7 @@ name: "2026-10-22-autoupdate-package"
 description: "bond se ofrece actualizar al arrancar: avisa, pregunta y aplica según el canal de instalación"
 created_at: "2026-10-22T14:46:20Z"
 has_completed_all_phases: false
+last_implementation_at: "2026-10-22T17:02:24Z"
 ---
 
 # Que bond se actualice solo cuando tú digas que sí
@@ -108,10 +109,10 @@ interactivos), `bond` desde el código, y cualquier actualización sin respuesta
   con «1» en método binario, `bond --version` da la versión nueva al relanzar; si el binario
   nuevo no arranca, se conserva el actual y se avisa; ayuda y `CHANGELOG.md` al día.
 - Acciones:
-  - [ ] Chequeo con throttle, pregunta de tres salidas, aplicación en binario, pruebas y
+  - [x] Chequeo con throttle, pregunta de tres salidas, aplicación en binario, pruebas y
     documentación.
-  - [ ] Ejecutar las comprobaciones y apuntar los resultados reales.
-  - [ ] Presentar la evidencia y parar para revisión.
+  - [x] Ejecutar las comprobaciones y apuntar los resultados reales.
+  - [x] Presentar la evidencia y parar para revisión (aceptada con el merge del PR #9).
 - Verificación: `npm run typecheck && bun test` (con el servidor de releases falso de
   `test/update.test.mts` y `BOND_HOME` temporal: throttle, omitir versión, `auto = false`,
   fallo de red y binario que no arranca); a mano, `bin/bond` contra `BOND_RELEASES_URL` local
@@ -180,15 +181,20 @@ P2 depende de P1 y P3 depende de P1. **P2 y P3 no se ejecutan en paralelo**: las
 
 | Fase | Implementación | Verificación | Revisión | Evidencia |
 | --- | --- | --- | --- | --- |
-| P1 | pending | not_run | pending | none yet |
+| P1 | implemented | passed | accepted (usuario, 2026-10-22, merge del PR #9) | rama `plan/autoupdate-package-p1` (Claude, `kevin`): commit `995911a`, rebaseado en `main` como `3a422d2`; PR #9 fusionado el 2026-10-22T17:01:54Z; 7 ficheros (+424/−37), `test/offer.test.mts` (13 casos) y `test/offer-driver.mts` nuevos. CI en verde en linux, macOS y Windows. Verificado en el checkout principal sobre `3a422d2`: `tsc` limpio y `bun test` 95/95. Comprobaciones independientes: `bond update --check` con red real («bond 1.3.0 ya es la última», camino refactorizado sin regresión), `state.json` intacto tras un `--check` (el aviso solo escribe desde el puesto de trabajo) y revisión del diff: el chequeo no puede bloquear el arranque (timeout + `catch` que sigue), nada se instala sin un «1» explícito y un fallo deja la versión actual intacta. Prueba a mano en Linux (Claude, `BOND_HOME` temporal y `BOND_RELEASES_URL` local): salida redirigida solo avisa por stderr; «2» guarda `skipped` y no nombra esa versión pasadas 24 h; «3» deja `[update] auto = false` y deja de consultar; `BOND_NO_UPDATE=1` no consulta; sin red, mismo tiempo de arranque; binario compilado con «1» instala |
 | P2 | pending | not_run | pending | none yet |
 | P3 | pending | not_run | pending | none yet |
 
 ## Siguiente paso
 
-**P1** de `docs/plans/2026-10-22-autoupdate-package.md`: es la única fase sin dependencias y
-aporta ya el comportamiento central (chequeo + pregunta + aplicar en binario). Ejecutar con
-`plan-execute` sobre esta ruta y solo P1. Alternativas: `revisa` el plan o `para`.
+**P1 integrada y aceptada** (PR #9 fusionado con rebase en `main` como `3a422d2`): `tsc` limpio,
+`bun test` 95/95 y CI en verde en las tres plataformas.
+
+Siguiente fase elegible: **P2** (brew en el auto-apply y mensaje de npm honesto). P3 también es
+elegible tras P1, pero **no pueden ir en paralelo**: las dos tocan `cli/update.mts` y su test, así
+que se ejecutan de una en una — P2 primero, porque deja el mensaje de npm correcto antes de tocar
+el control. Ejecutar con `plan-execute` sobre esta ruta y solo P2. Alternativas: `revisa` el plan
+o `para`.
 
 ## Evidencia y seguimiento
 
