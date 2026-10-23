@@ -1,6 +1,6 @@
 # Cambios
 
-## Sin publicar
+## 1.5.0
 
 - `bond setup` instala y configura las sugerencias de prompt de pi: al terminar cada turno, con
   el editor vacío, pi muestra en *ghost text* el siguiente prompt sugerido, aceptable con `→` o
