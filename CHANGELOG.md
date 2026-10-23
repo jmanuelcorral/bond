@@ -9,6 +9,11 @@
   descarga, comprueba el SHA-256 y que arranca, sustituye el binario y sigue con la versión
   nueva; con Homebrew, npm o desde el código dice el comando. Sin terminal solo avisa.
   `BOND_NO_UPDATE=1` lo desactiva.
+- Con «1» en una instalación de Homebrew, bond avisa de que `brew update` refresca todos los
+  taps y corre `brew update && brew upgrade jmanuelcorral/tap/bond` con la salida de brew a la
+  vista; si brew falla, se ve su error y sigues con la versión que tenías.
+- En una instalación por npm, bond ya no propone `npm i -g @jmanuelcorral/bond@latest`: el
+  paquete aún no está publicado en npm, así que remite al `.tgz` de la release.
 
 ## 1.3.0
 

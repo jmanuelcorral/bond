@@ -4,12 +4,13 @@
 //
 // offerUpdate(): al abrir el puesto de trabajo (bond, bond dev, bond team), mira una vez al día
 // si hay release nueva y pregunta: actualizar ahora, omitir esa versión o no volver a preguntar.
-// Sin respuesta no toca nada; sin terminal solo avisa.
+// Con «1» instala el binario o corre brew; sin respuesta no toca nada; sin terminal solo avisa.
 //
 // refreshRuntime(): en cada arranque desde el binario, reenlaza lo que apunta a los ficheros de
 // otra versión (~/.bond/pi, skills globales) y borra los de las versiones viejas en
 // ~/.bond/runtime. Así sirve venga la versión de bond update, de brew o de npm.
 
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { accessSync, chmodSync, constants, existsSync, readdirSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -19,9 +20,10 @@ import { caution, COPY_MARK, copyPath, die, dim, isCopyOf, isDryRun, linkTarget,
 export const UPDATE_HELP = `Uso: bond update [opciones]
 
 Pone bond al día con la última release de GitHub. Si lo instalaste con install.sh o
-install.ps1, descarga el binario, comprueba su SHA-256 y sustituye el actual; con Homebrew o
-npm, te dice el comando. La versión nueva quita los ficheros de las anteriores
-(~/.bond/runtime) tras reenlazar lo que los usaba.
+install.ps1, descarga el binario, comprueba su SHA-256 y sustituye el actual; con Homebrew
+te dice el comando. El paquete aún no está publicado en npm: con npm te remite al .tgz de la
+release. La versión nueva quita los ficheros de las anteriores (~/.bond/runtime) tras
+reenlazar lo que los usaba.
 
   --check              Solo dice si hay una versión nueva
   --version <vX.Y.Z>   Instala esa versión (también para volver a una anterior)
@@ -31,7 +33,9 @@ npm, te dice el comando. La versión nueva quita los ficheros de las anteriores
 Al abrir el puesto de trabajo (bond, bond dev, bond team), bond mira una vez al día si hay
 release nueva (como mucho ~2 s; sin red, sigue sin más) y pregunta: 1) actualizar ahora,
 2) omitir esa versión hasta que salga otra, 3) no volver a preguntar ([update] auto = false
-en ~/.bond/config.toml). Sin terminal solo avisa. BOND_NO_UPDATE=1 lo desactiva.`;
+en ~/.bond/config.toml). Con «1» y Homebrew corre brew update && brew upgrade
+jmanuelcorral/tap/bond a la vista (brew update refresca todos tus taps); si brew falla, sigues
+con la versión que tenías. Sin terminal solo avisa. BOND_NO_UPDATE=1 lo desactiva.`;
 
 /** Releases de bond; BOND_RELEASES_URL las cambia (pruebas, espejos). */
 const releases = () => (process.env.BOND_RELEASES_URL || "https://github.com/jmanuelcorral/bond/releases").replace(/\/+$/, "");
@@ -167,11 +171,14 @@ export async function refreshRuntime(): Promise<void> {
 	}
 }
 
+const BREW_FORMULA = "jmanuelcorral/tap/bond";
+
 /** Comando para actualizar a mano con un método que bond no aplica solo. */
-function manualCommand(method: Exclude<Method, "binary">, version: string): string {
+function manualCommand(method: Exclude<Method, "binary">, version: string, base = releases()): string {
 	if (method === "source") return `Desde el código: git -C ${REPO_DIR} pull && npm ci --ignore-scripts`;
-	if (method === "brew") return "Con Homebrew: brew update && brew upgrade jmanuelcorral/tap/bond";
-	return `Con npm: npm i -g @jmanuelcorral/bond@${version}`;
+	if (method === "brew") return `Con Homebrew: brew update && brew upgrade ${BREW_FORMULA}`;
+	// @jmanuelcorral/bond aún no está en npm (npm i -g daría 404): el paquete va en la release.
+	return `Con npm: @jmanuelcorral/bond aún no está publicado en npm. Instala el paquete de la release: npm i -g ${base}/download/v${version}/jmanuelcorral-bond-${version}.tgz`;
 }
 
 function assertWritable(exe: string): void {
@@ -212,6 +219,24 @@ export async function installBinary(want: string, exe = process.execPath, base =
 	if (run(exe, ["_runtime"]).status !== 0) warn(`bond ${version} no limpia ~/.bond/runtime: no pasa nada, ocupan sitio`);
 }
 
+/**
+ * Actualiza con Homebrew a `version`, con la salida de brew a la vista. Si brew falla (lock, sin
+ * red, tap caído) o no trae esa versión, lanza el error y bond sigue como estaba.
+ */
+export function installBrew(version: string): void {
+	log("brew update refresca el índice de todos los taps de esta máquina, no solo el de bond (bond no puede deshacerlo)");
+	for (const args of [["update"], ["upgrade", BREW_FORMULA]]) {
+		console.log(dim(`  $ brew ${args.join(" ")}`));
+		const r = spawnSync("brew", args, { stdio: "inherit" });
+		if (r.status !== 0) throw new Error(`falló brew ${args.join(" ")}${r.error ? `: ${r.error.message}` : ` (status ${r.status ?? r.signal})`}`);
+	}
+	const exe = join(run("brew", ["--prefix", "bond"]).stdout.trim(), "bin", "bond");
+	const v = run(exe, ["--version"]).stdout.trim();
+	if (v !== version) throw new Error(`Homebrew no trae la ${version} (${exe} da ${v || "nada"}): el tap puede ir por detrás de la release`);
+	log(`bond ${version} instalado con Homebrew en ${exe}`);
+	if (run(exe, ["_runtime"]).status !== 0) warn(`bond ${version} no limpia ~/.bond/runtime: no pasa nada, ocupan sitio`);
+}
+
 export async function update(args: string[]): Promise<void> {
 	let check = false;
 	let force = false;
@@ -237,7 +262,7 @@ export async function update(args: string[]): Promise<void> {
 	if (check) return;
 
 	const method = installMethod();
-	if (method !== "binary") return console.log(manualCommand(method, asked ? want.slice(1) : "latest"));
+	if (method !== "binary") return console.log(manualCommand(method, want.slice(1)));
 
 	const exe = process.execPath;
 	try {
@@ -338,12 +363,13 @@ export async function offerUpdate(o: OfferOptions = {}): Promise<Offer> {
 	if (answer !== "1") return "later";
 
 	const method = o.method ?? installMethod();
-	if (method !== "binary") {
-		console.log(manualCommand(method, version));
+	if (method !== "binary" && method !== "brew") {
+		console.log(manualCommand(method, version, o.base ?? releases()));
 		return "manual";
 	}
 	try {
-		await installBinary(latest, o.exe ?? process.execPath, o.base ?? releases());
+		if (method === "brew") installBrew(version);
+		else await installBinary(latest, o.exe ?? process.execPath, o.base ?? releases());
 		return "updated";
 	} catch (e) {
 		warn(`no he actualizado: ${(e as Error).message}. Sigues con bond ${VERSION}.`);

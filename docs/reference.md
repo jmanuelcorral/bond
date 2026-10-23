@@ -698,10 +698,13 @@ bond setup && bond doctor                       # revalida todo tras actualizar
 
 `bond update` sustituye el binario si lo instalaste con `install.sh` o `install.ps1`: descarga
 el de la release, comprueba su SHA-256 contra `SHA256SUMS` y prueba que arranca antes de
-cambiarlo. Con Homebrew o npm te dice el comando (`brew upgrade jmanuelcorral/tap/bond`,
-`npm i -g @jmanuelcorral/bond@latest`). `--version vX.Y.Z` instala una concreta, también
-anterior. Venga de donde venga, la versión nueva pasa a sus ficheros `~/.bond/pi` y los skills
-globales que apuntaban a los de otra, y borra las versiones viejas de `~/.bond/runtime/`.
+cambiarlo. Con Homebrew te dice el comando (`brew update && brew upgrade
+jmanuelcorral/tap/bond`). `@jmanuelcorral/bond` aún no está publicado en npm: en una instalación
+por npm te remite al paquete de la release (`npm i -g
+https://github.com/jmanuelcorral/bond/releases/download/vX.Y.Z/jmanuelcorral-bond-X.Y.Z.tgz`).
+`--version vX.Y.Z` instala una concreta, también anterior. Venga de donde venga, la versión
+nueva pasa a sus ficheros `~/.bond/pi` y los skills globales que apuntaban a los de otra, y
+borra las versiones viejas de `~/.bond/runtime/`.
 
 Al abrir el puesto de trabajo (`bond`, `bond dev`, `bond team`; no sus subcomandos ni la
 ayuda), bond mira si hay release nueva una vez cada 24 h (la marca va en `~/.bond/state.json`).
@@ -710,7 +713,12 @@ Si hay versión nueva, pregunta:
 
 1. **Actualizar ahora**: con el binario de `install.sh`/`install.ps1` hace lo mismo que
    `bond update` y sigue con la versión nueva; si el binario descargado no arranca, se queda
-   el actual y avisa. Con Homebrew, npm o desde el código dice el comando.
+   el actual y avisa. Con Homebrew avisa de que `brew update` refresca el índice de todos los
+   taps de la máquina (bond no puede deshacerlo), corre `brew update && brew upgrade
+   jmanuelcorral/tap/bond` con la salida de brew a la vista y sigue con
+   `$(brew --prefix bond)/bin/bond`. Si brew falla (lock, sin red, tap caído) o aún no trae esa
+   versión, se ve el error, no cambia nada y el arranque sigue con la versión que tenías. Con
+   npm o desde el código dice el comando.
 2. **Omitir esa versión**: no la vuelve a nombrar; la siguiente release sí se ofrece.
 3. **No volver a preguntar**: escribe `[update] auto = false` en `~/.bond/config.toml` (sin
    tocar el resto del fichero). Para recuperarlo, `auto = true` o borra la tabla.
