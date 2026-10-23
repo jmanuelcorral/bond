@@ -37,23 +37,30 @@ function publish(tag: string, prints: string): void {
 }
 
 let home: string;
+let xdg: string;
 let exe: string;
 beforeEach(() => {
 	home = mkdtempSync(join(tmpdir(), "bond-offer-"));
+	// XDG_CONFIG_HOME aparte: sin ello, migrateLegacy() copia el ~/.config/bond real de la
+	// maquina dentro del BOND_HOME temporal y los tests ven una config que no han escrito.
+	xdg = mkdtempSync(join(tmpdir(), "bond-offer-xdg-"));
 	mkdirSync(join(home, "bin"));
 	exe = join(home, "bin", "bond");
 	writeFileSync(exe, "viejo", { mode: 0o755 });
 	latest = "v9.1.0";
 	hits = 0;
 });
-afterEach(() => rmSync(home, { recursive: true, force: true }));
+afterEach(() => {
+	rmSync(home, { recursive: true, force: true });
+	rmSync(xdg, { recursive: true, force: true });
+});
 
 const HOUR = 3_600_000;
 const T0 = Date.parse("2026-10-22T08:00:00Z");
 
 async function offer(opts: Record<string, unknown> = {}, env: Record<string, string> = {}) {
 	const p = Bun.spawn([process.execPath, join(import.meta.dir, "offer-driver.mts"), JSON.stringify({ base, now: T0, interactive: true, method: "binary", exe, ...opts })], {
-		env: { ...process.env, BOND_NO_UPDATE: "", BOND_HOME: home, NO_COLOR: "1", ...env },
+		env: { ...process.env, BOND_NO_UPDATE: "", BOND_HOME: home, XDG_CONFIG_HOME: xdg, NO_COLOR: "1", ...env },
 		stdout: "pipe",
 		stderr: "pipe",
 	});
@@ -221,7 +228,8 @@ describe.skipIf(process.platform === "win32")("«1» con Homebrew", () => {
 		expect(brewLog()).toBe("brew update\n");
 		expect(brewVersion()).toBe("9.0.0");
 		expect(state()).toEqual({ checkedAt: new Date(T0).toISOString(), latest: "v9.1.0" });
-		expect(existsSync(join(home, "config.toml")) && config()).not.toContain("auto = false");
+		// Si brew falla antes de escribir nada puede que no exista config.toml: cuenta como «no auto = false».
+		expect(existsSync(join(home, "config.toml")) ? config() : "").not.toContain("auto = false");
 	});
 
 	test("si el tap va por detrás de la release, no dice que ha actualizado", async () => {
