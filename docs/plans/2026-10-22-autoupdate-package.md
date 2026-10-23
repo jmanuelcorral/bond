@@ -182,19 +182,38 @@ P2 depende de P1 y P3 depende de P1. **P2 y P3 no se ejecutan en paralelo**: las
 | Fase | Implementación | Verificación | Revisión | Evidencia |
 | --- | --- | --- | --- | --- |
 | P1 | implemented | passed | accepted (usuario, 2026-10-22, merge del PR #9) | rama `plan/autoupdate-package-p1` (Claude, `kevin`): commit `995911a`, rebaseado en `main` como `3a422d2`; PR #9 fusionado el 2026-10-22T17:01:54Z; 7 ficheros (+424/−37), `test/offer.test.mts` (13 casos) y `test/offer-driver.mts` nuevos. CI en verde en linux, macOS y Windows. Verificado en el checkout principal sobre `3a422d2`: `tsc` limpio y `bun test` 95/95. Comprobaciones independientes: `bond update --check` con red real («bond 1.3.0 ya es la última», camino refactorizado sin regresión), `state.json` intacto tras un `--check` (el aviso solo escribe desde el puesto de trabajo) y revisión del diff: el chequeo no puede bloquear el arranque (timeout + `catch` que sigue), nada se instala sin un «1» explícito y un fallo deja la versión actual intacta. Prueba a mano en Linux (Claude, `BOND_HOME` temporal y `BOND_RELEASES_URL` local): salida redirigida solo avisa por stderr; «2» guarda `skipped` y no nombra esa versión pasadas 24 h; «3» deja `[update] auto = false` y deja de consultar; `BOND_NO_UPDATE=1` no consulta; sin red, mismo tiempo de arranque; binario compilado con «1» instala |
-| P2 | pending | not_run | pending | none yet |
-| P3 | pending | not_run | pending | none yet |
+| P2 | implemented | passed (brew simulado; brew real pendiente en macOS) | accepted (usuario, 2026-10-23, merge del PR #10) | rama `plan/autoupdate-package-p2` (Claude, `kevin`): commit `0672fe4`, rebaseado en `main` como `61214bc`. `installBrew()` y la rama brew de `offerUpdate()`: aviso previo de que `brew update` refresca el índice de todos los taps, upgrade con la salida de brew a la vista, `_runtime` desde `$(brew --prefix bond)/bin/bond` y un fallo de brew deja todo intacto. Mensaje de npm honesto (`npm view @jmanuelcorral/bond` → 404: remite al `.tgz` de la release). Rama sola: `tsc` limpio y `bun test` 99/99 (4 casos nuevos en `test/offer.test.mts` con brew simulado en el `PATH`). **Pendiente**: una pasada con Homebrew de verdad en macOS; aquí no hay `brew` |
+| P3 | implemented | passed | accepted (usuario, 2026-10-23, merge del PR #10) | rama `plan/autoupdate-package-p3` (Claude, `stuart`): commit `87e2ba3`, rebaseado sobre P2 y en `main` como `4bdcc71`. `bond update --skip <v>` / `--skip-reset` sobre `update.skipped` y fila «actualizaciones» en `bond doctor`. Prueba a mano: `--skip v9.9.9` deja `{"skipped":"v9.9.9"}`, `--skip-reset` lo deja en `{}` con «vuelvo a avisar de la 9.9.9», y `bond doctor` saca `desde el código · última comprobación: nunca · pendiente: ninguna · omitida: 9.9.9 · aviso al arrancar: sí`. Rama sola: `tsc` limpio y `bun test` 110/110 (`test/doctor.test.mts` y `test/update-skip.test.mts` nuevos) |
+
+Integración de P2 y P3 (PR #10, fusionado con rebase el 2026-10-23T07:22:29Z, `main` en `ac25519`):
+
+- El rebase de P3 sobre P2 dio conflicto en `CHANGELOG.md` y `docs/reference.md` (las dos fases
+  escribiendo en líneas vecinas); resuelto uniendo ambos textos (detalle de brew en el punto 1 de
+  «Actualizar», nota de `--skip` en el punto 2, cuatro balas en el CHANGELOG en orden P2 → P3).
+  `cli/update.mts` se fusionó solo. Ninguna rama tocó este fichero del plan.
+- Combinadas: `tsc` limpio y `bun test` 114/114; CI en verde en linux, macOS y Windows.
+- **Arreglo aparte** (`aa50528 test(offer): isolate the offer tests from the machine's legacy
+  config`): el CI de Linux y macOS rompió por una aserción que, sin `config.toml`, recibía el
+  booleano del `&&` (`existsSync(...) && config()`) y bun la rechaza. En local la tapaba la fuga
+  preexistente: `migrateLegacy()` copiaba el `~/.config/bond` real dentro del `BOND_HOME` temporal.
+  Los tests de `offer` usan ahora un `XDG_CONFIG_HOME` temporal propio (como los de P3) y la aserción
+  es ternaria. **Deuda apuntada**: revisar el aislamiento de `migrateLegacy()` en el resto de la suite.
 
 ## Siguiente paso
 
-**P1 integrada y aceptada** (PR #9 fusionado con rebase en `main` como `3a422d2`): `tsc` limpio,
-`bun test` 95/95 y CI en verde en las tres plataformas.
+**P2 y P3 integradas y aceptadas** (PR #10 fusionado con rebase en `main` como `ac25519`; P2 `61214bc`,
+P3 `4bdcc71`, aislamiento de los tests `aa50528`): `tsc` limpio, `bun test` 114/114 y CI en verde en
+las tres plataformas. El paquete de auto-actualización queda completo: aviso diario con tres respuestas,
+auto-apply por binario y por Homebrew, `--skip`/`--skip-reset` y la fila de `bond doctor`.
 
-Siguiente fase elegible: **P2** (brew en el auto-apply y mensaje de npm honesto). P3 también es
-elegible tras P1, pero **no pueden ir en paralelo**: las dos tocan `cli/update.mts` y su test, así
-que se ejecutan de una en una — P2 primero, porque deja el mensaje de npm correcto antes de tocar
-el control. Ejecutar con `plan-execute` sobre esta ruta y solo P2. Alternativas: `revisa` el plan
-o `para`.
+No quedan fases en este plan. Lo que deja abierto:
+
+- **Brew de verdad en macOS**: queda por ejecutar una vez; aquí está cubierto con brew simulado en el
+  `PATH`.
+- **Publicar `@jmanuelcorral/bond` en npm** (ticket aparte): cuando el paquete exista, hará falta la
+  rama de auto-apply por npm; hoy el mensaje remite al `.tgz` de la release.
+- **Deuda de aislamiento de la suite**: `migrateLegacy()` copia la config legacy si existe; los tests de
+  `offer` y los de P3 se aislan con `XDG_CONFIG_HOME` temporal, conviene generalizarlo.
 
 ## Evidencia y seguimiento
 
