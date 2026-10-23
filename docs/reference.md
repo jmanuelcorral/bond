@@ -448,10 +448,15 @@ lo limita la pasarela; con proveedores en la nube, la cuota.
 3. **Agentes.** Detecta los instalados (pi, Claude Code, Codex, Copilot CLI, opencode, Crush,
    Gemini CLI). Ninguno es obligatorio, pero hace falta al menos uno: si no hay ninguno, enseña
    cómo instalar cada uno y para. Eliges con cuáles trabajar y cuál es el de por defecto.
+4. **Sugerencias de prompt (pi).** Se proponen activas si el registro de bond tiene un modelo
+   barato para pi; si no hay ninguno, salen apagadas con un aviso. El modelo propuesto se ve en
+   la pregunta y se puede fijar a mano en `[suggestions] model`.
 
 **Después aplica**, solo para los agentes elegidos:
 
 - los modelos en los agentes que pueden usar endpoints propios (pi, opencode, Crush, Codex);
+- las sugerencias de prompt de pi: el paquete, su config y `enabledModels` (ver
+  [Sugerencias de prompt de pi](#sugerencias-de-prompt-de-pi));
 - la integración de Herdr de cada uno (si un agente aún no creó su carpeta de config, avisa y
   se instala en el siguiente `setup`);
 - los skills globales `bond-delegate` y `bond-team`;
@@ -482,10 +487,56 @@ La configuración de bond 0.3–0.7 (`~/.bond/`) se mueve sola a `~/.bond/` la p
 |---|---|
 | `--yes` | Sin preguntas: lo detectado y lo ya configurado |
 | `--dry-run` | Pregunta, pero solo enseña lo que haría al aplicar |
+| `--no-suggestions` | No activar las sugerencias de prompt de pi |
 | `--herdr-config` | Aplica el snippet de Herdr (opt-in: tu `config.toml` de Herdr es tuyo) |
 
 Desde el código fuente, además, instala las dependencias de la CLI (`npm ci`) y pone `bond`
 en el PATH. Antes de aplicar, convierte una instalación anterior (`bond migrate`).
+
+### Sugerencias de prompt de pi
+
+`cli/suggestions.mts`. Al terminar un turno, con el editor vacío, pi muestra en *ghost text* el
+siguiente prompt sugerido; se acepta con `→` o `Tab` y se puede editar antes de enviarlo. Lo
+pone `@mrclrchtr/supi-prompt-suggestions` (MIT), que bond instala en el ámbito personal de pi
+(`pi install npm:…`), no por proyecto. Solo sugiere después del turno del agente: no completado
+mientras escribes.
+
+**Qué escribe bond**, todo bajo `~/.pi/agent/` y nunca en el repo:
+
+| Fichero | Qué | Notas |
+|---|---|---|
+| `supi/config.json` | `promptSuggestions.model = "proveedor/modelo"` | Se **fusiona**: las secciones de otros paquetes de la suite supi se conservan. `"disabled"` = apagada |
+| `settings.json` | `enabledModels: ["*"]` | Solo si no estaba o estaba vacío; una lista tuya no se toca |
+
+Antes de tocar un fichero que ya existía se guarda copia `.prev`.
+
+**Cómo elige el modelo.** `[suggestions] model` manda. Si no está, heurística en este orden:
+
+1. proveedores con `free = true` del registro de bond (modelos propios sin coste);
+2. dentro de ellos, los de nombre más barato y rápido (`haiku`, `mini`, `flash`, `nano`, `lite`,
+   `small`, tamaños `…b`);
+3. si no hay gratuitos, el mismo criterio sobre el resto del registro;
+4. si nada aplica, se propone apagado.
+
+Los modelos con `agents = [...]` que no incluyan `pi` quedan fuera, igual que los proveedores
+apagados.
+
+**El tropiezo de `enabledModels`.** La extensión saca sus candidatos de `enabledModels` de pi.
+Si esa clave no está, o está vacía, la lista sale vacía y no sugiere nada — aunque el *default*
+de pi sea «todos los modelos». Por eso bond escribe `["*"]`. Si luego pones una lista
+restrictiva y el modelo de sugerencias queda fuera, `bond doctor` lo avisa.
+
+**Apagar y quitar.** `bond setup --no-suggestions` (o `enabled = false` en `config.toml`) deja
+`"disabled"` en el config de la extensión y no instala nada. Para quitar el paquete de en medio:
+`pi remove npm:@mrclrchtr/supi-prompt-suggestions`.
+
+**Conflicto de editor.** La extensión sustituye el componente de editor de pi
+(`setEditorComponent`), así que solo una de ese tipo puede estar activa a la vez: gana la que se
+carga última. `bond doctor` lista las demás que usen esa API desde el directorio de extensiones
+de pi (`~/.pi/agent/extensions`); los paquetes npm de terceros no se inspeccionan.
+
+**Red y fallos.** Si `pi install` falla (sin red, paquete caído) `bond setup` avisa y sigue: los
+configs quedan escritos y se puede repetir `bond setup` más tarde.
 
 ## `bond doctor`
 
@@ -506,6 +557,7 @@ fuera, y sale con 1 si algo falla:
 | La pasarela de cada proveedor del registro sirve los modelos declarados | revisar la pasarela |
 | `bond` en el PATH y es el de este repo | `bond setup` |
 | Actualizaciones: método de instalación, última comprobación, versión pendiente, omitida y si se pregunta al arrancar (informativa; aviso si hay una pendiente sin omitir; no haber mirado nunca no falla) | `bond update`; `bond update --skip vX.Y.Z` |
+| Sugerencias de prompt de pi: modelo, paquete instalado, `enabledModels` y si el config de la extensión coincide con `config.toml`; otras extensiones que reemplacen el editor (aviso, nunca fallo) | `bond setup` |
 
 ## Snippet de Herdr
 

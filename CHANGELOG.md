@@ -1,5 +1,21 @@
 # Cambios
 
+## Sin publicar
+
+- `bond setup` instala y configura las sugerencias de prompt de pi: al terminar cada turno, con
+  el editor vacío, pi muestra en *ghost text* el siguiente prompt sugerido, aceptable con `→` o
+  `Tab`. Bond hace `pi install npm:@mrclrchtr/supi-prompt-suggestions@11.0.1` en el ámbito
+  personal (no por proyecto), elige el modelo entre los de coste cero del registro de bond y pone
+  `enabledModels: ["*"]` en pi si no lo tenía ya. El config de la suite supi se fusiona: las
+  secciones de otros paquetes se conservan. `--no-suggestions` las deja apagadas.
+- `[suggestions]` en `~/.bond/config.toml`: `enabled` y `model` (p. ej.
+  `model = "halo/flash-halogen"`). Sin sección, bond aplica su heurística y, si el registro no
+  tiene ningún modelo para pi, propone apagado.
+- `bond doctor` añade la fila «sugerencias»: modelo, si el paquete está instalado,
+  `enabledModels` y si el config de la extensión coincide con `config.toml`; avisa además de
+  otras extensiones locales que reemplacen el editor (solo una puede estar activa). Nunca falla:
+  es una comodidad, no una pieza de la instalación.
+
 ## 1.4.0
 
 - Al abrir el puesto de trabajo (`bond`, `bond dev`, `bond team`), bond mira una vez al día si

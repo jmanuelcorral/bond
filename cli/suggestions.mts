@@ -8,7 +8,7 @@
 //
 // El fichero de supi lo comparten varios paquetes de la suite: se fusiona, nunca se sustituye.
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { activeProviders, type Config, type Model } from "./config.mts";
 import { act, AGENT_DIR, run, which } from "./util.mts";
@@ -101,6 +101,47 @@ export function isPackageDeclared(settings: Record<string, unknown> | null, name
 		if (typeof p === "string") return p.includes(name);
 		return isRecord(p) && typeof p.source === "string" && p.source.includes(name);
 	});
+}
+
+/** El modelo que tiene puesto ahora mismo la extensión en el config de supi. */
+export function readSupiModel(paths: SuggestionPaths = suggestionPaths()): string | undefined {
+	const s = readJsonFile(paths.supiConfig);
+	const section = s && isRecord(s[SUGGESTIONS_SECTION]) ? (s[SUGGESTIONS_SECTION] as Record<string, unknown>) : undefined;
+	return typeof section?.model === "string" ? section.model : undefined;
+}
+
+/**
+ * ¿`enabledModels` de pi permite este modelo? Admite `"*"`, `"proveedor/*"` y `"proveedor/modelo"`.
+ * Sin lista (o vacía) no deja ninguno: es justo el caso que con `bond setup` se evita.
+ */
+export function enabledModelsCover(model: string, patterns: unknown): boolean {
+	if (!Array.isArray(patterns) || patterns.length === 0) return false;
+	return patterns.some((raw) => {
+		if (typeof raw !== "string") return false;
+		const p = raw.trim();
+		if (p === "*") return true;
+		if (p.endsWith("/*")) return model.startsWith(p.slice(0, -1));
+		return p === model;
+	});
+}
+
+/**
+ * Otras extensiones locales que también reemplazan el editor de pi (`setEditorComponent`):
+ * solo una puede estar activa, así que interesa saber si hay más. Mejor esfuerzo: se miran los
+ * ficheros del directorio de extensiones de pi, no los paquetes npm de terceros.
+ */
+export function otherEditorExtensions(dir: string = join(AGENT_DIR, "extensions")): string[] {
+	if (!existsSync(dir)) return [];
+	const out: string[] = [];
+	for (const entry of readdirSync(dir, { withFileTypes: true })) {
+		if (!entry.isFile() || !/\.(ts|js|mjs|cjs)$/.test(entry.name)) continue;
+		try {
+			if (readFileSync(join(dir, entry.name), "utf8").includes("setEditorComponent")) out.push(entry.name);
+		} catch {
+			// Fichero ilegible: no se cuenta.
+		}
+	}
+	return out;
 }
 
 /** Copia la versión anterior (.prev) antes de escribir, como hace saveConfig con config.toml. */

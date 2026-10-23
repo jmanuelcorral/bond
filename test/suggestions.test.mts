@@ -10,9 +10,12 @@ import {
 	DISABLED,
 	SUGGESTIONS_PACKAGE,
 	applySuggestions,
+	enabledModelsCover,
 	isPackageDeclared,
 	mergeSupiConfig,
+	otherEditorExtensions,
 	pickSuggestionModel,
+	readSupiModel,
 	type SuggestionPaths,
 	withEnabledModels,
 } from "../cli/suggestions.mts";
@@ -227,5 +230,50 @@ describe("applySuggestions", () => {
 		applySuggestions(c, { paths, install: okInstall });
 		expect(read(`${paths.supiConfig}.prev`).promptSuggestions.model).toBe("viejo/uno");
 		expect(read(paths.supiConfig).promptSuggestions.model).toBe("gratis/haiku-mini");
+	});
+});
+
+describe("lecturas que usa bond doctor", () => {
+	let dir: string;
+	let paths: SuggestionPaths;
+
+	beforeEach(() => {
+		dir = mkdtempSync(join(tmpdir(), "bond-sugg-read-"));
+		paths = { supiConfig: join(dir, "supi-config.json"), piSettings: join(dir, "pi-settings.json") };
+	});
+
+	afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+	test("enabledModelsCover: todos, por proveedor y exacto", () => {
+		expect(enabledModelsCover("halo/flash", ["*"])).toBe(true);
+		expect(enabledModelsCover("halo/flash", ["halo/*"])).toBe(true);
+		expect(enabledModelsCover("halo/flash", ["ollama/*", "halo/flash"])).toBe(true);
+	});
+
+	test("enabledModelsCover: fuera del listado o sin lista, no", () => {
+		expect(enabledModelsCover("halo/flash", ["anthropic/*"])).toBe(false);
+		expect(enabledModelsCover("halo/flash", [])).toBe(false);
+		expect(enabledModelsCover("halo/flash", undefined)).toBe(false);
+		expect(enabledModelsCover("halo/flash", ["halo/flashx"])).toBe(false);
+	});
+
+	test("readSupiModel: lo que hay en la seccion; undefined si no", () => {
+		writeFileSync(paths.supiConfig, JSON.stringify({ promptSuggestions: { model: "halo/flash" } }));
+		expect(readSupiModel(paths)).toBe("halo/flash");
+		expect(readSupiModel({ ...paths, supiConfig: join(dir, "no-existe.json") })).toBeUndefined();
+		writeFileSync(paths.supiConfig, JSON.stringify({ other: { model: "no es mi seccion" } }));
+		expect(readSupiModel(paths)).toBeUndefined();
+	});
+
+	test("otherEditorExtensions: solo ficheros que usan setEditorComponent", () => {
+		mkdirSync(join(dir, "extensions"), { recursive: true });
+		writeFileSync(join(dir, "extensions", "mi-editor.ts"), "pi.ui.setEditorComponent(makeEditor())");
+		writeFileSync(join(dir, "extensions", "inocuo.ts"), "pi.events.on('turn_end', () => {})");
+		writeFileSync(join(dir, "extensions", "nota.md"), "setEditorComponent en un markdown no cuenta");
+		expect(otherEditorExtensions(join(dir, "extensions"))).toEqual(["mi-editor.ts"]);
+	});
+
+	test("otherEditorExtensions: directorio ausente, lista vacia", () => {
+		expect(otherEditorExtensions(join(dir, "nadie"))).toEqual([]);
 	});
 });

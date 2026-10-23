@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { readdirSync, statSync } from "node:fs";
 import type { UpdateState } from "./config.mts";
+import { enabledModelsCover } from "./suggestions.mts";
 import { assetsPath, BOND_HOME, FROM_SOURCE, VERSION } from "./runtime.mts";
 import { compareVersions, installMethod } from "./update.mts";
 import { CONTEXT_TOOLS, globalSkillsDir, globalSkillTargets, herdrIntegrationStatus, PI_HERDR_SKILL, SHARED_HERDR_SKILL } from "./setup.mts";
@@ -17,7 +18,8 @@ export const DOCTOR_HELP = `Uso: bond doctor [--quick]
 
 Comprueba la instalación global: Node, Herdr, pi, enlaces de configuración, paquete de pi,
 skill de Herdr, integración, filtro de git, herramientas de contexto, servidores MCP, la
-pasarela de modelos y el aviso de versión nueva. Sale con 1 si algo falla.
+pasarela de modelos, las sugerencias de prompt de pi y el aviso de versión nueva. Sale con 1
+si algo falla.
 
   --quick      Se salta lo lento (conectar los servidores MCP)
   -h, --help   Esta ayuda`;
@@ -201,6 +203,95 @@ export function updateCheck(o: { method: keyof typeof METHODS; state?: UpdateSta
 	return { level: "ok", name: "actualizaciones", detail };
 }
 
+export interface SuggestionsState {
+	/** [suggestions] enabled (por defecto, true). */
+	enabled: boolean;
+	/** [suggestions] model, si se puso a mano. */
+	configuredModel?: string;
+	/** Lo que resuelve la heurística de bond cuando no hay modelo explícito. */
+	resolvedModel?: string;
+	/** El modelo que tiene puesto la extensión en su config (supi). */
+	supiModel?: string;
+	/** El paquete está declarado en la config de pi. */
+	installed: boolean;
+	/** enabledModels de pi, tal cual está en su settings.json. */
+	enabledModels?: unknown;
+	/** Otras extensiones locales que también reemplazan el editor. */
+	otherEditors?: string[];
+}
+
+/**
+ * Fila de sugerencias de prompt: modelo elegido, si el paquete está, si el config de la
+ * extensión coincide y si enabledModels de pi deja pasar ese modelo. Solo avisos: es una
+ * comodidad, no una pieza que rompa la instalación.
+ */
+export function suggestionsCheck(s: SuggestionsState): Check {
+	const model = s.configuredModel ?? s.resolvedModel;
+	if (!s.enabled) return { level: "ok", name: "sugerencias", detail: "desactivadas ([suggestions] enabled = false)", fix: "bond setup" };
+	if (!model) return { level: "warn", name: "sugerencias", detail: "sin modelo: el registro de bond no tiene nada para pi", fix: "bond models init" };
+
+	const list = Array.isArray(s.enabledModels) ? s.enabledModels : undefined;
+	const parts = [model, s.installed ? "paquete instalado" : "paquete no instalado"];
+	let warn = !s.installed;
+
+	if (!list || list.length === 0) {
+		parts.push("enabledModels: sin poner, la extensión no ve modelos");
+		warn = true;
+	} else {
+		parts.push(`enabledModels: ${list.length === 1 && list[0] === "*" ? "todos" : list.join(", ")}`);
+		if (!enabledModelsCover(model, list)) {
+			parts.push("el elegido queda fuera de enabledModels");
+			warn = true;
+		}
+	}
+
+	if (s.supiModel !== model) {
+		parts.push(`la extensión tiene: ${s.supiModel ?? "nada"}`);
+		warn = true;
+	}
+
+	if (s.otherEditors?.length) {
+		parts.push(`otras extensiones de editor: ${s.otherEditors.join(", ")} (solo una puede estar activa)`);
+		warn = true;
+	}
+
+	const detail = parts.join(" · ");
+	return { level: warn ? "warn" : "ok", name: "sugerencias", detail, fix: warn ? "bond setup" : undefined };
+}
+
+async function checkSuggestions(): Promise<void> {
+	if (chosen.length && !chosen.includes("pi")) return; // las sugerencias son de pi
+	if (!which("pi")) return;
+	const { isPackageDeclared, otherEditorExtensions, pickSuggestionModel, readJsonFile, readSupiModel, suggestionPaths } = await import("./suggestions.mts");
+	let enabled = true;
+	let configuredModel: string | undefined;
+	let resolvedModel: string | undefined;
+	try {
+		const { configExists, loadConfig } = await import("./config.mts");
+		if (configExists()) {
+			const cfg = loadConfig();
+			enabled = cfg.suggestions?.enabled !== false;
+			configuredModel = cfg.suggestions?.model;
+			resolvedModel = pickSuggestionModel(cfg);
+		}
+		// Sin config.toml no hay registro que consultar: suggestionsCheck lo dice con su «sin modelo».
+	} catch {
+		// Sin dependencias o con config.toml roto: se informa con lo que hay.
+	}
+	const paths = suggestionPaths();
+	const piSettings = readJsonFile(paths.piSettings);
+	const r = suggestionsCheck({
+		enabled,
+		configuredModel,
+		resolvedModel,
+		supiModel: readSupiModel(paths),
+		installed: isPackageDeclared(piSettings),
+		enabledModels: piSettings?.enabledModels,
+		otherEditors: otherEditorExtensions(),
+	});
+	add(r.level, r.name, r.detail, r.fix);
+}
+
 async function checkUpdate(): Promise<void> {
 	let state: UpdateState | undefined;
 	let auto = true;
@@ -238,6 +329,7 @@ export async function doctor(args: string[]): Promise<void> {
 	await checkRepo();
 	checkBond();
 	await checkUpdate();
+	await checkSuggestions();
 
 	const mark = { ok: ok("✓"), warn: caution("!"), fail: bad("✗") };
 	const width = Math.max(...results.map((r) => r.name.length));
