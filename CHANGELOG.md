@@ -1,6 +1,6 @@
 # Cambios
 
-## Sin publicar
+## 1.5.1
 
 - `bond doctor`: ejecutándose desde el repo de bond, si `~/.bond/pi` apunta a un runtime
   instalado (`~/.bond/runtime/<versión>` con su marca `.complete`) la fila «Bond Extensions»
