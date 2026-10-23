@@ -29,6 +29,8 @@ reenlazar lo que los usaba.
   --version <vX.Y.Z>   Instala esa versión (también para volver a una anterior)
   --force              Reinstala aunque ya tengas esa versión
   --dry-run            Dice qué haría sin descargar nada
+  --skip <vX.Y.Z>      No avisar de esa versión al arrancar (hasta que salga otra)
+  --skip-reset         Vuelve a avisar de la versión omitida
 
 Al abrir el puesto de trabajo (bond, bond dev, bond team), bond mira una vez al día si hay
 release nueva (como mucho ~2 s; sin red, sigue sin más) y pregunta: 1) actualizar ahora,
@@ -241,12 +243,21 @@ export async function update(args: string[]): Promise<void> {
 	let check = false;
 	let force = false;
 	let asked: string | undefined;
+	let skip: string | undefined;
+	let skipReset = false;
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
 		if (a === "--check") check = true;
 		else if (a === "--force") force = true;
 		else if (a === "--version") asked = args[++i] ?? die("--version necesita un valor (p. ej. v1.0.2)");
+		else if (a === "--skip") skip = args[++i] ?? die("--skip necesita una versión (p. ej. v1.4.0)");
+		else if (a === "--skip-reset") skipReset = true;
 		else if (a !== "--dry-run") die(`opción desconocida: ${a} (bond update --help)`);
+	}
+	if (skip !== undefined || skipReset) {
+		if (skip !== undefined && skipReset) die("--skip y --skip-reset no van juntas");
+		if (check || force || asked) die(`${skipReset ? "--skip-reset" : "--skip"} no va con --check, --version ni --force`);
+		return skipVersion(skip);
 	}
 
 	let want: string;
@@ -273,6 +284,31 @@ export async function update(args: string[]): Promise<void> {
 		die((e as Error).message);
 	}
 	console.log(ok("listo"));
+}
+
+/**
+ * Guarda en state.json la versión que el aviso de arranque no debe nombrar (la misma que su
+ * opción 2), o la quita sin versión. No toca la red.
+ */
+async function skipVersion(version?: string): Promise<void> {
+	const { loadState, saveState } = await import("./config.mts");
+	const state = loadState();
+	const previous = state.update?.skipped;
+	if (version === undefined) {
+		if (!previous) return console.log(ok("no había ninguna versión omitida"));
+		const { skipped: _, ...rest } = state.update ?? {};
+		state.update = rest;
+		if (isDryRun()) return console.log(dim(`  [dry-run] quitaría la omisión de la ${previous.slice(1)}`));
+		saveState(state);
+		return console.log(ok(`vuelvo a avisar de la ${previous.slice(1)}`));
+	}
+	if (!/^v?\d+\.\d+\.\d+$/.test(version)) die(`--skip espera una versión vX.Y.Z (no ${version})`);
+	const tag = `v${version.replace(/^v/, "")}`;
+	state.update = { ...state.update, skipped: tag };
+	if (isDryRun()) return console.log(dim(`  [dry-run] omitiría la ${tag.slice(1)} en ${join(BOND_HOME, "state.json")}`));
+	saveState(state);
+	console.log(ok(`no avisaré de la ${tag.slice(1)} al arrancar; sí de la siguiente (bond update --skip-reset lo quita)`));
+	if (compareVersions(tag, VERSION) <= 0) console.log(dim(`  Ya tienes ${VERSION}: esa versión no se ofrecería de todos modos.`));
 }
 
 const DAY_MS = 24 * 3_600_000;
