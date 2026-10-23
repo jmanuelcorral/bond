@@ -34,10 +34,11 @@ Configura bond en esta máquina (una vez; se puede repetir para cambiar algo):
      compatibles con OpenAI). Las claves se guardan en ~/.bond/keys (permisos 600).
   3. Agentes: con cuáles trabajar (de los instalados; hace falta al menos uno) y cuál por
      defecto.
-  4. Aplica: modelos en cada agente, integraciones de Herdr, skills globales y tus
-     instrucciones (~/.bond/AGENTS.md) en cada agente.
+  4. Aplica: modelos en cada agente, sugerencias de prompt en pi, integraciones de Herdr,
+     skills globales y tus instrucciones (~/.bond/AGENTS.md) en cada agente.
 
   --yes            Sin preguntas: usa lo detectado y lo ya configurado
+  --no-suggestions No activar las sugerencias de prompt de pi
   --herdr-config   Añade el snippet de Herdr a ~/.config/herdr/config.toml
   --dry-run        Pregunta, pero solo enseña lo que haría al aplicar
   -h, --help       Esta ayuda`;
@@ -49,9 +50,11 @@ const OLD_HERDR_MARKER = ">>> piSetup >>>";
 export async function setup(args: string[]): Promise<void> {
 	let withHerdrConfig = false;
 	let yes = false;
+	let noSuggestions = false;
 	for (const a of args) {
 		if (a === "--herdr-config") withHerdrConfig = true;
 		else if (a === "--yes" || a === "-y") yes = true;
+		else if (a === "--no-suggestions") noSuggestions = true;
 		else if (a === "--dry-run" || a === "--no-pi") continue; // --dry-run lo trata main; --no-pi ya no hace falta
 		else die(`opción desconocida: ${a} (bond setup --help)`);
 	}
@@ -64,7 +67,7 @@ export async function setup(args: string[]): Promise<void> {
 	if (FROM_SOURCE && !configExists()) importLegacyModels();
 
 	const interactive = !yes && process.stdin.isTTY === true;
-	const result = await runWizard({ interactive, logo: renderSmall(56, "setup") });
+	const result = await runWizard({ interactive, logo: renderSmall(56, "setup"), noSuggestions });
 	if (!result) {
 		process.exitCode = 1;
 		return;
@@ -81,6 +84,16 @@ export async function setup(args: string[]): Promise<void> {
 	if (agents.includes("pi")) {
 		act(`mkdir -p ${join(AGENT_DIR, "extensions")}`, () => mkdirSync(join(AGENT_DIR, "extensions"), { recursive: true }));
 		if (!isDryRun()) log(`Bond Extensions de pi: ${await ensureBondLink()} (los repos las cargan con bond init)`);
+	}
+
+	// Sugerencias de prompt de pi: config de supi fusionado, enabledModels y el paquete.
+	let suggestionsLine = "n/a";
+	if (agents.includes("pi")) {
+		const { applySuggestions } = await import("./suggestions.mts");
+		const s = applySuggestions(cfg);
+		for (const n of s.notes) warn(n);
+		suggestionsLine = s.enabled ? `${s.model}${s.installed ? "" : " (paquete sin instalar)"}` : "desactivadas";
+		if (s.enabled) log(`pi: sugerencias de prompt con ${s.model}`);
 	}
 	if (herdr) herdrSkill();
 	globalSkills();
@@ -100,6 +113,7 @@ export async function setup(args: string[]): Promise<void> {
   Agentes:        ${agents.join(", ")}  (por defecto: ${cfg.default_agent})
   Endpoints:      ${cfg.providers.map((x) => x.id).join(", ") || "ninguno (cada agente usa su proveedor)"}
   Configuración:  ${CONFIG_FILE}
+  Sugerencias:    ${suggestionsLine}  (bond setup --no-suggestions para apagarlas)
   Instrucciones:  ${PERSONAL_FILE}  (edítalas y repite bond setup para propagarlas)
   Comprobar:      bond doctor
 

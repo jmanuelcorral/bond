@@ -1,5 +1,6 @@
-// Preguntas de `bond setup`: Herdr, endpoints de modelos y agentes. Devuelve la config global
-// lista para guardar; aplicarla (generar la config de cada agente) lo hace setup.mts.
+// Preguntas de `bond setup`: Herdr, endpoints de modelos, agentes y sugerencias de prompt.
+// Devuelve la config global lista para guardar; aplicarla (generar la config de cada agente)
+// lo hace setup.mts.
 // Sin terminal interactiva o con --yes, usa lo detectado sin preguntar.
 
 import * as p from "@clack/prompts";
@@ -7,6 +8,7 @@ import { herdrInstallHelp, installedAgents, AGENTS } from "./catalog-agents.mts"
 import { type Config, type Provider, loadConfigOrEmpty, loadState, saveState } from "./config.mts";
 import { LOCAL_ENDPOINTS, listModels, probeApis, type EndpointModel } from "./endpoints.mts";
 import { saveKey } from "./keys.mts";
+import { pickSuggestionModel } from "./suggestions.mts";
 import { which } from "./util.mts";
 
 export interface WizardResult {
@@ -163,7 +165,32 @@ async function agentsStep(cfg: Config, interactive: boolean): Promise<boolean> {
 	return true;
 }
 
-export async function runWizard(opts: { interactive: boolean; logo: string }): Promise<WizardResult | undefined> {
+/**
+ * Sugerencias de prompt de pi (ghost text after-turn). Se proponen activas si el registro de
+ * bond tiene un modelo barato; sin agentes pi no se toca nada.
+ */
+async function suggestionsStep(cfg: Config, interactive: boolean, forcedOff: boolean): Promise<void> {
+	if (!cfg.agents.includes("pi")) return;
+	if (forcedOff) {
+		cfg.suggestions = { enabled: false };
+		p.log.message("Sugerencias de prompt: desactivadas (--no-suggestions)");
+		return;
+	}
+	const proposed = cfg.suggestions?.model ?? pickSuggestionModel(cfg);
+	if (!proposed) {
+		cfg.suggestions = { ...(cfg.suggestions ?? {}), enabled: false };
+		p.log.warn("Sugerencias de prompt: el registro de bond no tiene modelos para pi; quedan desactivadas");
+		return;
+	}
+	const initial = cfg.suggestions?.enabled ?? true;
+	const enabled = interactive
+		? await ask(p.confirm({ message: `¿Sugerencias de prompt en pi? (ghost text con el siguiente prompt al terminar cada turno)`, initialValue: initial }))
+		: initial;
+	cfg.suggestions = { enabled, model: proposed };
+	p.log.message(`Sugerencias de prompt: ${enabled ? "activadas" : "desactivadas"} con ${proposed}`);
+}
+
+export async function runWizard(opts: { interactive: boolean; logo: string; noSuggestions?: boolean }): Promise<WizardResult | undefined> {
 	p.intro(opts.logo);
 	const cfg = loadConfigOrEmpty();
 
@@ -186,5 +213,9 @@ export async function runWizard(opts: { interactive: boolean; logo: string }): P
 		p.outro("Instala un agente y vuelve a lanzar bond setup");
 		return undefined;
 	}
+
+	// 4. Sugerencias de prompt (solo pi)
+	await suggestionsStep(cfg, opts.interactive, opts.noSuggestions === true);
+
 	return { cfg, herdr };
 }

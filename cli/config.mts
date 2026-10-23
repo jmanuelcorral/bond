@@ -79,6 +79,8 @@ export interface Config {
 	providers: Provider[];
 	/** [update] auto = false: bond no pregunta al arrancar si hay versión nueva. */
 	update?: { auto?: boolean };
+	/** [suggestions] sugerencias de prompt de pi: modelo barato del registro y si van activas. */
+	suggestions?: { enabled?: boolean; model?: string };
 }
 
 /** Lo que recuerda el aviso de versión nueva al arrancar (ver offerUpdate en update.mts). */
@@ -120,7 +122,18 @@ export function loadConfig(): Config {
 		agents: Array.isArray(raw.agents) ? (raw.agents as string[]) : [],
 		default_agent: typeof raw.default_agent === "string" ? raw.default_agent : undefined,
 		providers,
+		suggestions: readSuggestions(raw),
 	};
+}
+
+/** [suggestions] de config.toml; undefined si no hay sección o no dice nada útil. */
+function readSuggestions(raw: Record<string, unknown>): Config["suggestions"] {
+	if (!raw.suggestions || typeof raw.suggestions !== "object" || Array.isArray(raw.suggestions)) return undefined;
+	const s = raw.suggestions as Record<string, unknown>;
+	const out: { enabled?: boolean; model?: string } = {};
+	if (typeof s.enabled === "boolean") out.enabled = s.enabled;
+	if (typeof s.model === "string") out.model = s.model;
+	return Object.keys(out).length ? out : undefined;
 }
 
 /** Config vacía (primera vez) o la que haya. */
@@ -141,6 +154,7 @@ export function saveConfig(cfg: Config): void {
 	if (cfg.default_agent) data.default_agent = cfg.default_agent;
 	data.providers = providers;
 	if (cfg.update) data.update = cfg.update;
+	if (cfg.suggestions) data.suggestions = cfg.suggestions;
 	writeFileSync(CONFIG_FILE, `${SAVED_HEADER}\n${stringify(data)}\n`);
 }
 
