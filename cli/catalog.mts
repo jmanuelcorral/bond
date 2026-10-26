@@ -283,6 +283,9 @@ Catálogo "${name}". Siguiente:
   3. Commitea y publícalo en git: git add catalog.toml skills commands mcps`);
 }
 
+/** "1 skill", "2 skills". */
+export const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
 function check(args: string[]): void {
 	const dirs = args.filter((a) => !a.startsWith("-"));
 	for (const a of args) if (a.startsWith("-") && a !== "--dry-run") die(`opción desconocida: ${a} (bond catalog --help)`);
@@ -293,9 +296,9 @@ function check(args: string[]): void {
 	for (const w of r.warnings) warn(w);
 	for (const e of r.errors) console.error(`${bad("error:")} ${e}`);
 	const label = r.name ? `"${r.name}"` : (relative(process.cwd(), dir) || ".");
-	const counts = `${r.skills.length} skills, ${r.commands.length} comandos, ${r.mcps.length} servidores MCP`;
-	if (r.errors.length) die(`el catálogo ${label} tiene ${r.errors.length} error${r.errors.length === 1 ? "" : "es"} (${counts})`);
-	console.log(`${ok("✓")} catálogo ${label} correcto: ${counts}${r.warnings.length ? `, ${r.warnings.length} aviso${r.warnings.length === 1 ? "" : "s"}` : ""}`);
+	const counts = `${count(r.skills.length, "skill", "skills")}, ${count(r.commands.length, "comando", "comandos")}, ${count(r.mcps.length, "servidor MCP", "servidores MCP")}`;
+	if (r.errors.length) die(`el catálogo ${label} tiene ${count(r.errors.length, "error", "errores")} (${counts})`);
+	console.log(`${ok("✓")} catálogo ${label} correcto: ${counts}${r.warnings.length ? `, ${count(r.warnings.length, "aviso", "avisos")}` : ""}`);
 }
 
 export async function catalogCommand(args: string[]): Promise<void> {
