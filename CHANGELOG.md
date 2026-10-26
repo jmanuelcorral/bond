@@ -1,5 +1,11 @@
 # Cambios
 
+## Sin publicar
+
+- La tool `repo_map` de pi (y el script `repo-map` de la skill `code-context`) ya no falla en
+  repos con mucha historia: la lista de ficheros más tocados cortaba la tubería con `head` y,
+  con `pipefail`, el script terminaba con error (SIGPIPE) aunque hubiera escrito el mapa.
+
 ## 1.6.1
 
 - `bond init` interactivo vuelve a marcar de partida lo que el repo ya usa (o, en un repo nuevo,
