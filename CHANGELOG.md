@@ -1,10 +1,12 @@
 # Cambios
 
-## Sin publicar
+## 1.6.2
 
 - La tool `repo_map` de pi (y el script `repo-map` de la skill `code-context`) ya no falla en
   repos con mucha historia: la lista de ficheros más tocados cortaba la tubería con `head` y,
   con `pipefail`, el script terminaba con error (SIGPIPE) aunque hubiera escrito el mapa.
+- La web de la documentación (https://josecorral.dev/bond/) tiene vídeos de bond en acción sobre
+  un proyecto real: `bond init`, el puesto de trabajo, un equipo de agentes y los catálogos.
 
 ## 1.6.1
 
