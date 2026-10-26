@@ -1,34 +1,10 @@
 # Cambios
 
-## Sin publicar
+## 1.6.0
 
-- `bond doctor` ya no se corta cuando `.bond/bond.toml`, `.bond/lock.json` o un catálogo del
-  equipo no valen (lock ilegible o que no cuadra, catálogo con errores, nombre desconocido): la
-  fila «repo» falla con el motivo y el arreglo, y el resto de comprobaciones, incluida la fila
-  de cada catálogo, sale igual.
-- `bond doctor` añade una fila por cada catálogo del equipo en `.bond/bond.toml`: el commit
-  fijado en `.bond/lock.json`, si está descargado en `~/.bond/catalogs` y si la ref tiene un
-  commit más nuevo (avisa con `bond catalog update <nombre>`; con `--quick` o sin acceso, «sin
-  verificar» — no toca la red). Los catálogos locales salen con su carpeta, y falla si no
-  existe.
-- Documentado el ciclo de vida de los catálogos externos (crear, comprobar, publicar, añadir,
-  sincronizar, actualizar y diagnosticar) con las notas de seguridad y de CI con repos privados
-  en `docs/reference.md`; atajo para equipos en `docs/getting-started.md`.
-- Catálogos del equipo por git: `bond catalog add <url> [--ref tag|rama|sha]` los declara en
-  `.bond/bond.toml` (`[[catalog]]` con `name`, `git` y `ref`) y fija el commit en
-  `.bond/lock.json`, que se commitea. `sync` usa ese commit (aunque la rama avance) y lo descarga
-  a `~/.bond/catalogs/` si falta; con la caché llena funciona sin red. `bond catalog update`
-  vuelve a resolver la ref y mueve el lock; `list`, `remove` (quita también lo elegido de él) y
-  `clean` (poda la caché). `add` y `update` enseñan antes los servidores MCP que llegan o cambian
-  y lo que pasa a venir de otro catálogo, y piden confirmación (`--yes`). `add` también acepta
-  una carpeta (`[[catalog]] path`).
-- Catálogos del equipo en un repo: `[[catalog]]` con `path` en `.bond/bond.toml`. Sus skills,
-  comandos y servidores MCP salen en `bond init` (y en `--list`, con el nombre del catálogo) y
-  `bond sync` los genera para cada agente como los del catálogo de bond; en pi, sus comandos van
-  a `.pi/prompts/`. Con el mismo nombre que una de bond, gana la del equipo (`bond:nombre` pide
-  la de bond); en dos catálogos del equipo, se elige con `catalogo:nombre`. `sync`
-  valida el catálogo como `bond catalog check` y no escribe nada si tiene errores; avisa si la
-  carpeta está fuera del repo. Sin `[[catalog]]`, nada cambia.
+Catálogos del equipo: un equipo reúne en un repo sus skills, comandos y servidores MCP, y cada
+proyecto lo usa con bond como usa el catálogo de bond.
+
 - `bond catalog create`: prepara el repo actual como catálogo propio de un equipo. Pregunta el
   nombre (por defecto, el de la carpeta; `--name` para no preguntar) y crea `catalog.toml` y
   las carpetas `skills/`, `commands/` y `mcps/`, cada una con un `README.md` que explica cómo
@@ -38,14 +14,41 @@
   carpeta, comandos con `description`, servidores MCP con `command` o `url`, entradas de
   `catalog.toml` que existen) y sale con 1 si hay errores, para CI. Avisa de secretos escritos
   tal cual en `env` o `headers`.
-- Los servidores MCP del catálogo van ahora en un fichero por servidor (`catalog/mcps/<nombre>.json`
-  en lugar de `catalog/mcp.json`), el mismo formato que los catálogos propios. Lo que genera
-  `bond sync` no cambia.
+- Catálogos del equipo en un repo: `[[catalog]]` con `path` en `.bond/bond.toml`. Sus skills,
+  comandos y servidores MCP salen en `bond init` (y en `--list`, con el nombre del catálogo) y
+  `bond sync` los genera para cada agente como los del catálogo de bond; en pi, sus comandos van
+  a `.pi/prompts/`. Con el mismo nombre que una de bond, gana la del equipo (`bond:nombre` pide
+  la de bond); en dos catálogos del equipo, se elige con `catalogo:nombre`. `sync`
+  valida el catálogo como `bond catalog check` y no escribe nada si tiene errores; avisa si la
+  carpeta está fuera del repo. Sin `[[catalog]]`, nada cambia.
+- Catálogos del equipo por git: `bond catalog add <url> [--ref tag|rama|sha]` los declara en
+  `.bond/bond.toml` (`[[catalog]]` con `name`, `git` y `ref`) y fija el commit en
+  `.bond/lock.json`, que se commitea. `sync` usa ese commit (aunque la rama avance) y lo descarga
+  a `~/.bond/catalogs/` si falta; con la caché llena funciona sin red. `bond catalog update`
+  vuelve a resolver la ref y mueve el lock; `list`, `remove` (quita también lo elegido de él) y
+  `clean` (poda la caché). `add` y `update` enseñan antes los servidores MCP que llegan o cambian
+  y lo que pasa a venir de otro catálogo, y piden confirmación (`--yes`). `add` también acepta
+  una carpeta (`[[catalog]] path`).
+- `bond doctor` añade una fila por cada catálogo del equipo en `.bond/bond.toml`: el commit
+  fijado en `.bond/lock.json`, si está descargado en `~/.bond/catalogs` y si la ref tiene un
+  commit más nuevo (avisa con `bond catalog update <nombre>`; con `--quick` o sin acceso, «sin
+  verificar» — no toca la red). Los catálogos locales salen con su carpeta, y falla si no
+  existe.
+- `bond doctor` ya no se corta cuando `.bond/bond.toml`, `.bond/lock.json` o un catálogo del
+  equipo no valen (lock ilegible o que no cuadra, catálogo con errores, nombre desconocido): la
+  fila «repo» falla con el motivo y el arreglo, y el resto de comprobaciones, incluida la fila
+  de cada catálogo, sale igual.
 - Skill nueva en el catálogo de bond: `catalog-maintain` (opcional, `default = false`). Ayuda a
   llenar y mantener un catálogo de equipo creado con `bond catalog create`: añadir skills,
   comandos y servidores MCP con el formato de los `README.md` que `create` deja en cada
   carpeta, mantener `catalog.toml` y pasar `bond catalog check` antes de publicar. No duplica
   la estructura que ya da `create`.
+- Los servidores MCP del catálogo van ahora en un fichero por servidor (`catalog/mcps/<nombre>.json`
+  en lugar de `catalog/mcp.json`), el mismo formato que los catálogos propios. Lo que genera
+  `bond sync` no cambia.
+- Documentado el ciclo de vida de los catálogos externos (crear, comprobar, publicar, añadir,
+  sincronizar, actualizar y diagnosticar) con las notas de seguridad y de CI con repos privados
+  en `docs/reference.md`; atajo para equipos en `docs/getting-started.md`.
 
 ## 1.5.1
 
