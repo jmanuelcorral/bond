@@ -83,7 +83,7 @@ interface CatalogContents {
 	meta: Record<string, CatalogEntry>;
 }
 
-const bondCatalog = (): Catalog => ({ name: "bond", dir: catalogPath() });
+export const bondCatalog = (): Catalog => ({ name: "bond", dir: catalogPath() });
 const isBond = (c: Catalog) => !c.path && !c.git;
 /** Cómo se nombra un catálogo del equipo en los mensajes: su carpeta, o su URL y commit. */
 export const catalogWhere = (c: Catalog) => c.path ?? `${c.git}${c.ref ? `#${c.ref}` : ""} @ ${c.sha?.slice(0, 7)}`;
@@ -116,7 +116,7 @@ export interface Tool {
 }
 
 const names = (c: Catalog, kind: Kind) => (kind === "mcp" ? Object.keys(contents(c).mcp) : contents(c)[kind]);
-const toolsOf = (catalogs: Catalog[], kind: Kind): Tool[] => catalogs.flatMap((c) => names(c, kind).map((name) => ({ name, catalog: c })));
+export const toolsOf = (catalogs: Catalog[], kind: Kind): Tool[] => catalogs.flatMap((c) => names(c, kind).map((name) => ({ name, catalog: c })));
 
 /**
  * A qué herramienta lleva un nombre sin prefijo: la de un catálogo del equipo sustituye a la de
@@ -128,14 +128,20 @@ function byName(all: Tool[], name: string): Tool[] {
 	return team.length ? team : found;
 }
 
+/**
+ * La misma herramienta: mismo catálogo y nombre. No vale comparar objetos, porque toolsOf
+ * crea unos nuevos en cada llamada.
+ */
+const sameTool = (a: Tool, b: Tool) => a.name === b.name && a.catalog.name === b.catalog.name;
+
 /** Cómo se escribe en bond.toml: el nombre a secas si lleva a ella, o catalogo:nombre. */
-function refOf(t: Tool, all: Tool[]): string {
+export function refOf(t: Tool, all: Tool[]): string {
 	const plain = byName(all, t.name);
-	return plain.length === 1 && plain[0] === t ? t.name : `${t.catalog.name}:${t.name}`;
+	return plain.length === 1 && sameTool(plain[0], t) ? t.name : `${t.catalog.name}:${t.name}`;
 }
 
 /** Herramientas pedidas en bond.toml (nombre o catalogo:nombre). Muere si no existen o son ambiguas. */
-function resolveTools(catalogs: Catalog[], kind: Kind, refs: string[]): Tool[] {
+export function resolveTools(catalogs: Catalog[], kind: Kind, refs: string[]): Tool[] {
 	const all = toolsOf(catalogs, kind);
 	const out: Tool[] = [];
 	const unknown: string[] = [];
@@ -255,7 +261,7 @@ function catalogRows(catalogs: Catalog[], max: number): Record<Kind, Array<{ ref
 		const all = toolsOf(catalogs, kind);
 		const origin = (t: Tool) => {
 			if (!isBond(t.catalog)) return ` [${t.catalog.name}]`;
-			const over = byName(all, t.name).filter((x) => x !== t);
+			const over = byName(all, t.name).filter((x) => !sameTool(x, t));
 			return over.length ? ` (la sustituye ${over.map((x) => x.catalog.name).join(" o ")})` : "";
 		};
 		return all.map((t) => ({ ref: refOf(t, all), text: text(t) + origin(t), tool: t }));

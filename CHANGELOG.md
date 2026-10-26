@@ -1,5 +1,13 @@
 # Cambios
 
+## Sin publicar
+
+- `bond init` interactivo vuelve a marcar de partida lo que el repo ya usa (o, en un repo nuevo,
+  lo del catálogo por defecto). En la 1.6.0 la lista salía sin marcar y, si confirmabas sin
+  tocarla, guardaba lo del catálogo de bond con prefijo (`"bond:context7"` en vez de
+  `"context7"`): funcionaba, pero no era lo esperado. Un `bond.toml` con esos prefijos sigue
+  valiendo; `bond init` lo deja otra vez con los nombres a secas.
+
 ## 1.6.0
 
 Catálogos del equipo: un equipo reúne en un repo sus skills, comandos y servidores MCP, y cada

@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
-const { syncRepo, updateBondToml } = await import("../cli/repo.mts");
+const { bondCatalog, refOf, resolveTools, syncRepo, toolsOf, updateBondToml } = await import("../cli/repo.mts");
 
 const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
 const origCwd = process.cwd();
@@ -228,6 +228,19 @@ describe("catálogos mal declarados", () => {
 		expect(r.code).toBe(0);
 		expect(r.err).toContain("está fuera del repo");
 		expect(existsSync(at(".claude/commands/notas.md"))).toBe(true);
+	});
+});
+
+describe("refOf", () => {
+	// bond init marca lo que el repo ya pide con refOf de herramientas que resolveTools crea en
+	// otra llamada a toolsOf: con objetos distintos, tiene que dar el mismo nombre que la lista.
+	test("lo de bond, sin catálogos del equipo, va a secas aunque venga de otra llamada", () => {
+		const catalogs = [bondCatalog()];
+		for (const kind of ["mcp", "skills", "commands"] as const) {
+			const all = toolsOf(catalogs, kind);
+			const refs = all.map((t) => t.name);
+			expect(resolveTools(catalogs, kind, refs).map((t) => refOf(t, toolsOf(catalogs, kind)))).toEqual(refs);
+		}
 	});
 });
 
