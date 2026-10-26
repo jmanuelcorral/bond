@@ -1,12 +1,14 @@
 # Cambios
 
-## Sin publicar
+## 1.6.1
 
 - `bond init` interactivo vuelve a marcar de partida lo que el repo ya usa (o, en un repo nuevo,
   lo del catálogo por defecto). En la 1.6.0 la lista salía sin marcar y, si confirmabas sin
   tocarla, guardaba lo del catálogo de bond con prefijo (`"bond:context7"` en vez de
   `"context7"`): funcionaba, pero no era lo esperado. Un `bond.toml` con esos prefijos sigue
   valiendo; `bond init` lo deja otra vez con los nombres a secas.
+- La documentación tiene web propia, en castellano e inglés: https://josecorral.dev/bond/
+  (los mismos `docs/`, con buscador).
 
 ## 1.6.0
 
