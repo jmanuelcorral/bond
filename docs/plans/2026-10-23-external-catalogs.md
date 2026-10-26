@@ -3,7 +3,7 @@ name: "external-catalogs"
 description: "Repos externos de skills/MCPs/comandos consumibles por bond init/sync para que los equipos compartan su config"
 created_at: "2026-10-23T11:35:02Z"
 has_completed_all_phases: false
-last_implementation_at: "2026-10-26T09:14:23Z"
+last_implementation_at: "2026-10-26T09:58:52Z"
 ---
 
 # Catálogos externos: compartir skills, MCPs y comandos entre equipos
@@ -281,9 +281,9 @@ Dependencias: ninguna externa. Riesgos:
     ciclo de vida (`create`, `check`, `add`, `sync`, `update`), CI con repos privados y
     seguridad.
 - Actions:
-  - [ ] Fila(s) en `bond doctor`.
-  - [ ] Docs y CHANGELOG.
-  - [ ] Presentar evidencia y parar a revisión.
+  - [x] Fila(s) en `bond doctor`.
+  - [x] Docs y CHANGELOG.
+  - [x] Presentar evidencia y parar a revisión.
 - Verification: `npm run typecheck && bun test`; `bond doctor` en un repo con catálogo de
   fixture, con y sin red.
 
@@ -306,15 +306,14 @@ Dependencias: ninguna externa. Riesgos:
 | P1 | implemented | passed | accepted | PR #11 fusionado (rebase) el 2026-10-26, CI verde en Linux, macOS y Windows; ver «Evidencia P1» |
 | P2 | implemented | passed | accepted | PR #12 fusionado (rebase) el 2026-10-26, CI verde en Linux, macOS y Windows; ver «Evidencia P2» |
 | P3 | implemented | passed | accepted | PR #13 fusionado (rebase) el 2026-10-26, CI verde en Linux, macOS y Windows tras `fix(catalog)` de rutas 8.3; ver «Evidencia P3» |
-| P4 | pending | not_run | pending | none yet |
-| P5 | pending | not_run | pending | none yet |
+| P4 | implemented | passed (Linux) | pending | `plan/external-catalogs-p4` (`3c3006a`), integrada en `feat/catalog-p4-p5`; ver «Evidencia P4 y P5» |
+| P5 | implemented | passed (Linux) | pending | `plan/external-catalogs-p5` (`bee7cbc`), integrada en `feat/catalog-p4-p5`; ver «Evidencia P4 y P5» |
 
 ## Next step
 
-P4 y P5 en paralelo con `plan-team` (dos agentes pi, ramas `plan/external-catalogs-p4` y
-`plan/external-catalogs-p5` desde `plan/external-catalogs`). Las dos tocan `CHANGELOG.md` y
-`docs/reference.md` en secciones distintas: integrar una y luego la otra, resolviendo esos
-conflictos.
+Revisar P4 y P5 (PR de `feat/catalog-p4-p5`) y aceptarlas: son las últimas fases del plan.
+Aparte, fuera del plan: que `bond doctor` no se corte cuando el lock está roto o no cuadra
+(hoy `checkRepo` llama a sync, que termina el proceso, y la fila de catálogos no llega a salir).
 
 ## Evidence and tracking
 
@@ -394,3 +393,24 @@ GitHub, los issues pasan a ser la autoridad de estado y esta tabla pasa a snapsh
   las tres.
 - Pendiente: la confirmación interactiva de `add`/`update` (sin terminal en las pruebas: se
   cubren `--yes` y el rechazo sin terminal).
+
+### Evidencia P4 y P5 (2026-10-26, en paralelo con `plan-team`, base `f2b3137`)
+
+- P4 (kevin, pi, `plan/external-catalogs-p4`, `3c3006a`): fila por catálogo en `bond doctor`
+  (commit fijado, caché y si la ref tiene un commit más nuevo; «sin verificar» con `--quick` o
+  sin red; los locales, con su carpeta), `probeRef` y `readLockSafe` en `cli/catalog-git.mts`,
+  ciclo de vida, seguridad y CI con repos privados en `docs/reference.md`, atajo en
+  `docs/getting-started.md`. 10 pruebas nuevas, sin red.
+- P5 (stuart, pi, `plan/external-catalogs-p5`, `bee7cbc`): skill `catalog-maintain` (en inglés,
+  opcional) en `catalog/skills/`, su entrada en `catalog.toml` y su fila en la referencia.
+  Prueba de punta a punta del agente: catálogo creado con `create`, llenado siguiendo la skill,
+  `check` correcto y consumido con `[[catalog]] path` (skill, comando en `.pi/prompts/` y MCP).
+- Comprobado de nuevo en cada worktree desde el checkout principal: `npm run typecheck` sin
+  errores; `bun test` 218 pass (P4) y 208 pass (P5); `bin/bond sync --check` «al día»;
+  `bin/bond catalog check catalog` correcto (10 skills en P5). Ninguna rama tocó el plan;
+  `git merge-tree` de las dos: sin conflictos.
+- Al integrar: corregidas dos erratas de P4 en `docs/reference.md` («exacta mente»,
+  «instructan»).
+- Riesgo conocido (anterior a P4): con un lock roto o que no cuadra, `bond doctor` se corta en
+  `checkRepo` antes de enseñar la fila de catálogos. Con red, `doctor` tarda hasta unos 15 s
+  más por catálogo por git.
