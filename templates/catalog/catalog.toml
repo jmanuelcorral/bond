@@ -1,0 +1,16 @@
+# Catálogo de bond: skills, comandos y servidores MCP que un equipo comparte entre sus repos.
+#
+#   skills/<nombre>/SKILL.md    una carpeta por skill
+#   commands/<nombre>.md        un fichero por comando
+#   mcps/<nombre>.json          un fichero por servidor MCP
+#
+# Cada carpeta tiene un README.md con el formato. Antes de publicar: bond catalog check
+
+name = "{{name}}"
+
+# Resumen de cada skill que enseña bond init, y si sale marcada (default = false: aparece sin
+# marcar). Sin entrada, bond usa el principio de su description y la marca.
+#
+# [skills.mi-skill]
+# summary = "Qué hace, en una línea"
+# default = false

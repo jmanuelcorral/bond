@@ -52,6 +52,13 @@ jobs:
           "$bin" sync --check
           test -f .claude/skills/code-context/SKILL.md
           test -f .agents/skills/code-context/SKILL.md
+          # Catálogo propio: create lo prepara y check lo da por bueno, igual que el de bond.
+          cat="${{ runner.temp }}/catalogo"
+          mkdir -p "$cat" && cd "$cat" && git init -q
+          "$bin" catalog create --name equipo
+          test -f mcps/README.md
+          "$bin" catalog check
+          "$bin" catalog check "$GITHUB_WORKSPACE/catalog"
       - name: Detecta un agente instalado (en Windows, por su extensión)
         env:
           BOND_HOME: ${{ runner.temp }}/bond-home

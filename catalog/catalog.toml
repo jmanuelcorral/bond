@@ -1,5 +1,8 @@
 # Catálogo de bond: lo que enseña `bond init` de cada skill (summary, en inglés) y si sale
 # marcada por defecto (default = false: aparece en la lista, pero hay que marcarla).
+# Mismo formato que los catálogos de los equipos: bond catalog check catalog
+
+name = "bond"
 
 [skills.code-context]
 summary = "Gather just enough repo and library context before editing"

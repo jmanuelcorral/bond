@@ -29,6 +29,7 @@ Máquina
 Repo
   init         Prepara el repo para los agentes: .bond/bond.toml, AGENTS.md y su config
   sync         Regenera la config de cada agente desde .bond/bond.toml
+  catalog      Catálogo propio de skills, comandos y MCP para el equipo (create, check)
 
 Trabajo diario (Herdr)
   (sin comando)  Dentro de un repo: abre su puesto de trabajo con el agente por defecto
@@ -104,6 +105,10 @@ async function main(argv: string[]): Promise<void> {
 			const r = await import("./repo.mts");
 			if (wantsHelp) return console.log(cmd === "init" ? r.INIT_HELP : r.SYNC_HELP);
 			return cmd === "init" ? r.init(rest) : r.sync(rest);
+		}
+		case "catalog": {
+			const c = await import("./catalog.mts");
+			return wantsHelp ? console.log(c.CATALOG_HELP) : c.catalogCommand(rest);
 		}
 		case "dev":
 		case "team":
