@@ -124,7 +124,7 @@ describe("bond catalog check", () => {
 		write("catalog.toml", 'name = "equipo"\n[skills.revisar]\nsummary = "Revisar"\ndefault = false\n');
 		const r = bond(["catalog", "check"]);
 		expect(r.code).toBe(0);
-		expect(r.out).toContain("1 skills, 1 comandos, 2 servidores MCP");
+		expect(r.out).toContain("1 skill, 1 comando, 2 servidores MCP");
 		expect(r.err).toBe("");
 	});
 
@@ -158,6 +158,7 @@ describe("bond catalog check", () => {
 		const r = bond(["catalog", "check"]);
 		expect(r.code).toBe(0);
 		expect(r.err).toContain("env.API_KEY parece un secreto");
+		expect(r.out).toContain("0 skills, 0 comandos, 1 servidor MCP, 1 aviso");
 	});
 
 	test("sin catalog.toml no es un catálogo", () => {
