@@ -9,7 +9,7 @@ import { enabledModelsCover } from "./suggestions.mts";
 import { assetsPath, BOND_HOME, FROM_SOURCE, installedRuntime, VERSION } from "./runtime.mts";
 import { compareVersions, installMethod } from "./update.mts";
 import { CONTEXT_TOOLS, globalSkillsDir, globalSkillTargets, herdrIntegrationStatus, PI_HERDR_SKILL, SHARED_HERDR_SKILL } from "./setup.mts";
-import { AGENT_DIR, bad, caution, die, dim, isCopyOf, linkTarget, ok, REPO_DIR, run, samePath, which } from "./util.mts";
+import { AGENT_DIR, bad, catchDie, caution, die, dim, isCopyOf, linkTarget, ok, REPO_DIR, run, samePath, which } from "./util.mts";
 
 /** Skill global en su sitio: enlazado (o, en Windows, copiado) desde bond. */
 const installedSkill = (src: string, dest: string) => (process.platform === "win32" ? isCopyOf(src, dest) : !!linkTarget(dest) && samePath(dest, src));
@@ -173,7 +173,9 @@ async function checkRepo(): Promise<void> {
 	const root = top.status === 0 ? top.stdout.trim() : process.cwd();
 	if (!existsSync(join(root, ".bond", "bond.toml")) || (FROM_SOURCE && !existsSync(join(REPO_DIR, "node_modules", "smol-toml")))) return;
 	const { syncRepo } = await import("./repo.mts");
-	const actions = syncRepo({ check: true, quiet: true });
+	// Un bond.toml, un lock o un catálogo que no valen hacen morir a sync: aquí son una fila más.
+	const { value: actions, error } = catchDie(() => syncRepo({ check: true, quiet: true }));
+	if (error !== undefined) return add("fail", "repo", `${root}: ${error}`, /\bbond \w+/.test(error) ? undefined : "bond sync");
 	const conflicts = actions.filter((a) => a.sign === "!").length;
 	if (!actions.length) add("ok", "repo", `${root}: config de agentes al día`);
 	else add(conflicts ? "fail" : "warn", "repo", `${root}: ${actions.length} cambio(s) pendiente(s)${conflicts ? `, ${conflicts} conflicto(s)` : ""}`, "bond sync");

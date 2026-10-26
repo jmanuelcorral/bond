@@ -18,7 +18,7 @@ import { parseJsonc } from "./agents.mts";
 import { catalogSlug, count, type McpServer, readCommandNames, readMcps, validateCatalog } from "./catalog.mts";
 import { ensureFetched, gitKey, type Lock, readLock, repoRelative } from "./catalog-git.mts";
 import { assetsPath, ensureBondLink } from "./runtime.mts";
-import { bad, caution, die, dim, isDryRun, log, ok, run, STAMP, warn, which } from "./util.mts";
+import { bad, catchingDie, caution, die, dim, isDryRun, log, ok, run, STAMP, warn, which } from "./util.mts";
 
 export const SUPPORTED_AGENTS = ["pi", "claude", "copilot", "codex", "opencode", "crush", "gemini"];
 /** Catálogo: carpeta del repo o extraída del binario. */
@@ -201,7 +201,7 @@ function loadCatalogs(root: string, raw: Record<string, unknown>, lock: Lock = r
 		if (out.some((o) => o.name === name)) die(`${where}: ya hay un catálogo "${name}"${name === "bond" ? " (es el de bond)" : ""}; ponle otro name`);
 		c.name = name;
 		if (report.errors.length) {
-			for (const e of report.errors) console.error(`${bad("error:")} catálogo ${name} (${catalogWhere(c)}): ${e}`);
+			if (!catchingDie()) for (const e of report.errors) console.error(`${bad("error:")} catálogo ${name} (${catalogWhere(c)}): ${e}`);
 			die(`el catálogo ${name} tiene ${count(report.errors.length, "error", "errores")}: arréglalo y compruébalo con bond catalog check ${path ?? c.dir}`);
 		}
 		const rel = repoRelative(root, c.dir);

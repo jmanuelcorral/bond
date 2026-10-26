@@ -312,8 +312,8 @@ Dependencias: ninguna externa. Riesgos:
 ## Next step
 
 Revisar P4 y P5 (PR de `feat/catalog-p4-p5`) y aceptarlas: son las últimas fases del plan.
-Aparte, fuera del plan: que `bond doctor` no se corte cuando el lock está roto o no cuadra
-(hoy `checkRepo` llama a sync, que termina el proceso, y la fila de catálogos no llega a salir).
+Fuera del plan, hecho aparte (rama `fix/doctor-broken-lock`): `bond doctor` ya no se corta con
+un lock roto o que no cuadra ni con un catálogo con errores (`catchDie` en `cli/util.mts`).
 
 ## Evidence and tracking
 

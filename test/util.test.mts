@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { COPY_MARK, copyPath, isCopyOf, which } from "../cli/util.mts";
+import { catchDie, catchingDie, COPY_MARK, copyPath, die, isCopyOf, which } from "../cli/util.mts";
 
 let dir: string;
 beforeEach(() => {
@@ -70,5 +70,24 @@ describe("copyPath", () => {
 		expect(readFileSync(join(dest, "SKILL.md"), "utf8")).toBe("bond");
 		const bak = readdirSync(dir).find((f) => f.startsWith("dest.bak."));
 		expect(bak && readFileSync(join(dir, bak, "SKILL.md"), "utf8")).toBe("mía");
+	});
+});
+
+describe("catchDie", () => {
+	test("devuelve el mensaje de die() sin terminar el proceso, y el valor si no muere", () => {
+		expect(catchDie(() => die("lock roto"))).toEqual({ error: "lock roto" });
+		expect(catchDie(() => 42)).toEqual({ value: 42 });
+		expect(catchingDie()).toBe(false);
+	});
+
+	test("deja pasar los demás errores y anidado sigue capturando", () => {
+		expect(() => catchDie(() => { throw new Error("otro"); })).toThrow("otro");
+		const outer = catchDie(() => {
+			expect(catchingDie()).toBe(true);
+			expect(catchDie(() => die("dentro")).error).toBe("dentro");
+			return die("fuera");
+		});
+		expect(outer).toEqual({ error: "fuera" });
+		expect(catchingDie()).toBe(false);
 	});
 });

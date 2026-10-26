@@ -15,10 +15,31 @@ const paint = (code: string, s: string) => (color ? `\x1b[${code}m${s}\x1b[0m` :
 
 export const log = (msg: string) => console.log(`${paint("1;36", "==>")} ${msg}`);
 export const warn = (msg: string) => console.error(`${paint("1;33", "aviso:")} ${msg}`);
+/** El error de un die() dentro de catchDie(): su mensaje, sin terminar el proceso. */
+export class DieError extends Error {}
+let catching = 0;
 export function die(msg: string, code = 1): never {
+	if (catching) throw new DieError(msg);
 	console.error(`${paint("1;31", "error:")} ${msg}`);
 	process.exit(code);
 }
+/**
+ * Ejecuta fn y, si llama a die(), devuelve su mensaje en vez de terminar el proceso. Para quien
+ * informa de un fallo y sigue (bond doctor); lo demás muere como siempre.
+ */
+export function catchDie<T>(fn: () => T): { value: T; error?: undefined } | { value?: undefined; error: string } {
+	catching++;
+	try {
+		return { value: fn() };
+	} catch (e) {
+		if (e instanceof DieError) return { error: e.message };
+		throw e;
+	} finally {
+		catching--;
+	}
+}
+/** ¿Dentro de catchDie()? Quien imprime errores antes de un die() puede callarlos. */
+export const catchingDie = () => catching > 0;
 export const dim = (s: string) => paint("2", s);
 export const ok = (s: string) => paint("32", s);
 export const bad = (s: string) => paint("31", s);
