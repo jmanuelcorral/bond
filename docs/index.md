@@ -55,6 +55,35 @@ En Windows: `powershell -ExecutionPolicy Bypass -c "irm https://raw.githubuserco
 
 Después, `bond setup` y a correr. Te lo contamos paso a paso en [Primeros pasos](getting-started.md).
 
+## Míralo en acción
+
+Cuatro vídeos cortos sobre [fluzo](https://github.com/fluzo-labs/fluzo), un proyecto real en Rust:
+
+<div class="bond-videos">
+
+<figure class="bond-video">
+<video src="/videos/init.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>Preparar un repo con bond init</figcaption>
+</figure>
+
+<figure class="bond-video">
+<video src="/videos/puesto.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>El puesto de trabajo en Herdr</figcaption>
+</figure>
+
+<figure class="bond-video">
+<video src="/videos/equipo.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>Un equipo de agentes con bond team</figcaption>
+</figure>
+
+<figure class="bond-video">
+<video src="/videos/catalogos.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>Catálogos del equipo</figcaption>
+</figure>
+
+</div>
+
+
 ## El código, en GitHub
 
 bond es software libre (MIT). El código, las [releases](https://github.com/jmanuelcorral/bond/releases)

@@ -167,6 +167,11 @@ and Claude Code asks you to approve the servers in `.mcp.json`. bond approves no
 
 ## Your own catalog (`bond catalog`)
 
+<figure class="bond-video">
+<video src="/videos/catalogos.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>A team catalog from start to finish: create, one skill, check, then in fluzo add with the commit pinned, init --list and doctor.</figcaption>
+</figure>
+
 A team gathers in a repo the skills, commands and MCP servers it shares, with the same
 structure as bond's catalog (`catalog/`):
 

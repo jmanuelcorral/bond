@@ -27,6 +27,11 @@ un paseo con calma.
 
 ## Abrir el puesto con `bond`
 
+<figure class="bond-video">
+<video src="/videos/puesto.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>bond abre fluzo en Herdr con gru (pi), le preguntamos de qué va el repo y miramos bond status en una shell al lado.</figcaption>
+</figure>
+
 Imagina que estás en `~/gitrepos/mi-proyecto` y escribes `bond`, a secas. Lo que obtienes es el
 puesto de trabajo del repo en Herdr: el agente por defecto, que se llama `gru`, solo en su panel
 y listo para que le hables. Si te gusta tener una terminal a mano, añade `--shell` y tendrás una
@@ -102,6 +107,11 @@ bond team clean [repo] [rama...] [--force] [--delete-branch] [--keep-table] [--d
 ```
 
 ### Un ejemplo de principio a fin
+
+<figure class="bond-video">
+<video src="/videos/equipo.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>Dos ramas, dos minions pi: cada uno hace su cambio y su commit, y la tabla en vivo los pasa a «Por revisar». (La espera está recortada.)</figcaption>
+</figure>
 
 Sigamos en `mi-proyecto`, con `gru` abierto. Tienes dos cosas que hacer que no se pisan entre
 sí, el login y la página de pagos, y quieres que vayan a la vez. Desde la shell del repo:

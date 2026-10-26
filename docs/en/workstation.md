@@ -27,6 +27,11 @@ deserve a relaxed stroll.
 
 ## Opening the workstation with `bond`
 
+<figure class="bond-video">
+<video src="/videos/puesto.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>bond opens fluzo in Herdr with gru (pi), we ask what the repo is about and check bond status in a shell next to it.</figcaption>
+</figure>
+
 Picture yourself in `~/gitrepos/mi-proyecto` typing `bond`, nothing else. What you get is the
 repo's workstation in Herdr: the default agent, called `gru`, alone in its pane and ready for you
 to talk to it. If you like having a terminal at hand, add `--shell` and you'll get a shell next
@@ -103,6 +108,11 @@ bond team clean [repo] [rama...] [--force] [--delete-branch] [--keep-table] [--d
 ```
 
 ### An example from start to finish
+
+<figure class="bond-video">
+<video src="/videos/equipo.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>Two branches, two pi minions: each one makes its change and commits, and the live table moves them to «Por revisar» (ready to review). The wait is trimmed.</figcaption>
+</figure>
 
 Let's stay in `mi-proyecto`, with `gru` open. You have two things to do that don't step on each
 other, the login and the payments page, and you want them to happen at the same time. From the

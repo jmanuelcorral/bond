@@ -20,3 +20,29 @@
 .VPHero .name {
 	letter-spacing: -0.02em;
 }
+
+/* Vídeos de la documentación (docs/public/videos). */
+.bond-video {
+	margin: 16px 0 24px;
+}
+.bond-video video {
+	display: block;
+	width: 100%;
+	height: auto;
+	border-radius: 8px;
+	border: 1px solid var(--vp-c-divider);
+	background: #1e1e2e;
+}
+.bond-video figcaption {
+	margin-top: 8px;
+	font-size: 14px;
+	color: var(--vp-c-text-2);
+}
+.bond-videos {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+	gap: 8px 24px;
+}
+.bond-videos .bond-video {
+	margin: 8px 0;
+}
