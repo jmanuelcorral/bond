@@ -3,7 +3,7 @@ name: "external-catalogs"
 description: "Repos externos de skills/MCPs/comandos consumibles por bond init/sync para que los equipos compartan su config"
 created_at: "2026-10-23T11:35:02Z"
 has_completed_all_phases: false
-last_implementation_at: "2026-10-26T07:55:36Z"
+last_implementation_at: "2026-10-26T08:38:23Z"
 ---
 
 # Catálogos externos: compartir skills, MCPs y comandos entre equipos
@@ -85,9 +85,13 @@ Decisiones (resueltas el 2026-10-23):
 - **D2 — Fijación**: `.bond/lock.json` commiteado con el SHA resuelto por catálogo. `sync` (y
   `sync --check`) descargan el SHA fijado si falta en la caché; solo `bond catalog update` mueve
   el lock. Con la caché llena, `sync` funciona sin red.
-- **D3 — Conflicto de nombres**: un nombre que existe en dos catálogos (incluido el de bond) es
-  error con las dos procedencias; se desambigua con `catalogo:nombre` en `bond.toml`. Nada
-  silencioso.
+- **D3 — Conflicto de nombres** (revisada el 2026-10-26 tras probar con common-skills): si un
+  nombre está en bond y en un catálogo del equipo, **gana el del equipo** (el equipo ha decidido
+  sustituir la de bond); `bond:nombre` sigue pidiendo la de bond. Si está en **dos catálogos del
+  equipo**, es error con las procedencias y se elige con `catalogo:nombre`. `bond init` lo
+  enseña: la de bond sale como `bond:nombre` «(la sustituye equipo)». Pedir el mismo nombre de
+  dos sitios es error: en el repo solo cabe uno. Se descartó renombrar las skills de bond a
+  `bond-*`: rompía repos existentes y dejaba convivir dos versiones casi iguales.
 - **D4 — MCP externos**: solo se instalan los nombrados en `mcp = [...]`. `bond catalog add` y
   `update` enseñan los servidores MCP nuevos o cambiados (comando, args, url) y piden
   confirmación antes de escribir el lock (`--yes` para scripts). Sin lista blanca en `bond.toml`.
@@ -204,21 +208,22 @@ Dependencias: ninguna externa. Riesgos:
   - Un catálogo que no pasa el validador (P1) hace morir `sync` con los mismos errores que
     `bond catalog check`.
   - Sin `[[catalog]]`, `bond sync --check` en el repo de bond sigue dando «al día».
-  - Un nombre en dos catálogos: `sync` muere citando los dos; con `catalogo:nombre` se instala
-    el elegido.
+  - Un nombre en bond y en un catálogo del equipo: se instala el del equipo; `bond:nombre`
+    instala el de bond. En dos catálogos del equipo: `sync` muere citando los dos; con
+    `catalogo:nombre` se instala el elegido (D3 revisada).
   - `bond init` muestra y deja elegir lo externo con su origen; `updateSelection` conserva la
     tabla `[[catalog]]` y los comentarios.
   - `path` fuera del repo: aviso en `sync`.
   - `npm run typecheck && bun test` en limpio.
 - Actions:
-  - [ ] Resolver de catálogos en `cli/repo.mts` (`catalogs(root)` → lista de `{name, dir}` con
+  - [x] Resolver de catálogos en `cli/repo.mts` (`catalogs(root)` → lista de `{name, dir}` con
         `bond` primero) y sustituir los usos de `catalogPath` por él.
-  - [ ] Comandos externos a pi por `.pi/prompts/` (como los propios).
-  - [ ] `[[catalog]]` en `bond.toml`: parseo, validación, `catalogo:nombre`, plantilla de init.
-  - [ ] Fixture de catálogo en `test/fixtures/` (montado con `create`) y pruebas de sync para
-        los 7 agentes.
-  - [ ] Origen en el selector y en `--list`; ayuda de `bond init`; CHANGELOG.
-  - [ ] Presentar evidencia y parar a revisión.
+  - [x] Comandos externos a pi por `.pi/prompts/` (como los propios).
+  - [x] `[[catalog]]` en `bond.toml`: parseo, validación, `catalogo:nombre`, plantilla de init.
+  - [x] Catálogo de prueba montado con `create` en cada prueba (en un directorio temporal, no
+        en `test/fixtures/`: así prueba también `create`) y pruebas de sync para los 7 agentes.
+  - [x] Origen en el selector y en `--list`; ayuda de `bond init`; CHANGELOG.
+  - [x] Presentar evidencia y parar a revisión.
 - Verification: `npm run typecheck && bun test`; `bond sync --check` en el repo de bond;
   `bond sync --dry-run` en un repo temporal con catálogo local, revisando las salidas de los 7
   agentes.
@@ -298,17 +303,17 @@ Dependencias: ninguna externa. Riesgos:
 
 | Phase | Implementation | Verification | Review | Evidence |
 | --- | --- | --- | --- | --- |
-| P1 | implemented | passed (Linux) | pending | ver «Evidencia P1» |
-| P2 | pending | not_run | pending | none yet |
+| P1 | implemented | passed | accepted | PR #11 fusionado (rebase) el 2026-10-26, CI verde en Linux, macOS y Windows; ver «Evidencia P1» |
+| P2 | implemented | passed (Linux) | pending | ver «Evidencia P2» |
 | P3 | pending | not_run | pending | none yet |
 | P4 | pending | not_run | pending | none yet |
 | P5 | pending | not_run | pending | none yet |
 
 ## Next step
 
-Revisar P1 (rama `feat/catalog-create`, sin commitear) y elegir su commit; la CI del PR
-comprueba Windows y macOS. Con P1 aceptada, la siguiente fase es P2 (varios catálogos y
-catálogos locales), que depende de ella.
+Revisar P2 (rama `feat/catalog-local`, sin commitear) y elegir su commit; la CI del PR comprueba
+Windows y macOS. Con P2 aceptada, la siguiente fase es P3 (catálogos git, caché, lock y revisión
+de MCP).
 
 ## Evidence and tracking
 
@@ -333,3 +338,30 @@ GitHub, los issues pasan a ser la autoridad de estado y esta tabla pasa a snapsh
   romperlo (2 errores y 1 aviso, código 1), repetir `create` sin cambios y `bond init`/`sync`
   en el propio repo del catálogo.
 - Pendiente: Windows y macOS (pasos nuevos en `ci.yml`, se ejecutan en el PR).
+
+### Evidencia P2 (2026-10-26, árbol de trabajo sobre `cba87dc`, rama `feat/catalog-local`)
+
+- `npm run typecheck`: sin errores. `bun test`: 189 pass, 0 fail (13 nuevas en
+  `test/catalogs.test.mts`): los 7 agentes con un catálogo montado con `bond catalog create`
+  (skill, comando y MCP; en pi el comando va a `.pi/prompts/` y los de bond no), segunda pasada
+  sin cambios, quitar el catálogo borra lo generado, nombre por defecto desde su `catalog.toml`,
+  `init --list` con origen, `init` con flags conserva `[[catalog]]`, el del equipo sustituye
+  al de bond (y `bond:nombre`), ambigüedad entre dos catálogos del equipo y `catalogo:nombre`,
+  el mismo nombre de dos sitios, catálogo roto con los mismos errores que
+  `check` (y sin escribir nada), declaraciones mal hechas, ruta fuera del repo con aviso y
+  `updateBondToml` con `[[catalog]]`.
+- `bin/bond sync --check` en el repo de bond: «al día».
+- Sin `[[catalog]]`: `init --agents` con los 7 agentes con bond en `cba87dc` (`git archive`) y
+  con este árbol: ficheros generados y `manifest.json` idénticos; en `bond.toml` solo cambia la
+  plantilla comentada de `[[catalog]]`.
+- Hallazgo: `bond catalog create` escribe en la raíz del repo git aunque se lance desde una
+  subcarpeta (es lo decidido en D8); las pruebas montan el catálogo como su propio repo.
+- Prueba con una copia de fluzo-labs/common-skills (`bond catalog create` le añade
+  `catalog.toml`, `commands/` y `mcps/`; `check` correcto, 7 skills): un repo con
+  `bond init --yes` y luego `[[catalog]] path` a la copia sincroniza sin errores; sus
+  `plan-create`, `plan-execute` y `git-conventional-commit` sustituyen a las de bond y
+  `code-context` sigue siendo la de bond. Antes de revisar D3, ese mismo repo fallaba por
+  ambigüedad.
+- Pendiente: Windows y macOS (CI del PR) y el selector interactivo de `bond init` con un catálogo
+  del equipo (sin terminal en las pruebas; lo cubren `--list` y `init` con flags, que usan las
+  mismas filas).

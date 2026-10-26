@@ -190,8 +190,33 @@ bond catalog check ruta/al/catalogo
 - El repo del catálogo es un repo normal: se puede trabajar en él con bond (`bond init`,
   `.bond/`, `.agents/skills/`), que no toca las carpetas del catálogo.
 
-Usar un catálogo propio desde otros repos (`bond catalog add`) está en camino
-([plan](plans/2026-10-23-external-catalogs.md)).
+### Usar un catálogo en un repo
+
+Se declara en `.bond/bond.toml` con su carpeta, relativa al repo. Lo suyo aparece en
+`bond init` (con su nombre al final) y se elige igual que lo del catálogo de bond:
+
+```toml
+skills = ["code-context", "revisar-migraciones"]
+mcp = ["context7", "postgres"]
+commands = ["review", "notas"]
+
+[[catalog]]
+name = "equipo"                  # opcional: por defecto, el name de su catalog.toml
+path = "../skills-equipo"
+```
+
+- **Mismo nombre que una de bond**: gana la del catálogo del equipo, que la sustituye (en
+  `bond init` la de bond sale como `bond:nombre` «(la sustituye equipo)»). Para quedarte con la
+  de bond: `"bond:nombre"`.
+- **Mismo nombre en dos catálogos del equipo**: `sync` falla y pide elegir con
+  `catalogo:nombre` (`"equipo:revisar"` o `"plataforma:revisar"`). En el repo solo cabe uno.
+- **Validación**: `sync` comprueba el catálogo igual que `bond catalog check` y no escribe nada
+  si tiene errores.
+- **Comandos en pi**: los del catálogo de bond le llegan por las Bond Extensions; los de un
+  catálogo del equipo se escriben en `.pi/prompts/`.
+- **Ruta fuera del repo**: funciona, con aviso: al resto del equipo solo le sirve si tiene esa
+  misma carpeta. Declarar el catálogo por su URL de git, con la versión fijada, está en camino
+  ([plan](plans/2026-10-23-external-catalogs.md)).
 
 ## Modelos globales (`bond models`)
 
