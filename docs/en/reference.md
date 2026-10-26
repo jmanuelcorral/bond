@@ -1,6 +1,10 @@
 # bond reference
 
-Every command, what it writes where, and why.
+This is the page for when you already know what you want to do and need the details: every
+command, what it writes and where, and why it works that way. If you are just starting, go
+through [getting started](getting-started.md) and [the workstation](workstation.md) first;
+you will come back here to look things up. Missing something, or something does not match what
+you see? Open an [issue on GitHub](https://github.com/jmanuelcorral/bond/issues).
 
 ## Commands
 

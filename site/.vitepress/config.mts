@@ -20,8 +20,15 @@ const es: DefaultTheme.Config = {
 	nav: [
 		{ text: "Empezar", link: "/getting-started" },
 		{ text: "Referencia", link: "/reference" },
-		{ text: "Cambios", link: `${REPO}/blob/main/CHANGELOG.md` },
-		{ text: "Descargar", link: `${REPO}/releases/latest` },
+		{
+			text: "GitHub",
+			items: [
+				{ text: "Código", link: REPO },
+				{ text: "Descargar la última versión", link: `${REPO}/releases/latest` },
+				{ text: "Cambios", link: `${REPO}/blob/main/CHANGELOG.md` },
+				{ text: "Abrir un issue", link: `${REPO}/issues` },
+			],
+		},
 	],
 	sidebar: [
 		{
@@ -58,15 +65,25 @@ const es: DefaultTheme.Config = {
 	returnToTopLabel: "Volver arriba",
 	langMenuLabel: "Idioma",
 	notFound: { title: "Esta página no existe", quote: "Puede que se haya movido.", linkText: "Ir al inicio" },
-	footer: { message: "MIT · 007 · licence to code", copyright: "bond" },
+	footer: {
+		message: `MIT · <a href="${REPO}">GitHub</a> · <a href="${REPO}/releases">Releases</a> · <a href="${REPO}/issues">Issues</a>`,
+		copyright: "bond · 007 · licence to code",
+	},
 };
 
 const en: DefaultTheme.Config = {
 	nav: [
 		{ text: "Get started", link: "/en/getting-started" },
 		{ text: "Reference", link: "/en/reference" },
-		{ text: "Changelog", link: `${REPO}/blob/main/CHANGELOG.md` },
-		{ text: "Download", link: `${REPO}/releases/latest` },
+		{
+			text: "GitHub",
+			items: [
+				{ text: "Source code", link: REPO },
+				{ text: "Download the latest release", link: `${REPO}/releases/latest` },
+				{ text: "Changelog", link: `${REPO}/blob/main/CHANGELOG.md` },
+				{ text: "Open an issue", link: `${REPO}/issues` },
+			],
+		},
 	],
 	sidebar: [
 		{
@@ -90,7 +107,10 @@ const en: DefaultTheme.Config = {
 	],
 	editLink: { pattern: `${REPO}/edit/main/docs/:path`, text: "Edit this page on GitHub" },
 	outline: { level: [2, 3], label: "On this page" },
-	footer: { message: "MIT · 007 · licence to code", copyright: "bond" },
+	footer: {
+		message: `MIT · <a href="${REPO}">GitHub</a> · <a href="${REPO}/releases">Releases</a> · <a href="${REPO}/issues">Issues</a>`,
+		copyright: "bond · 007 · licence to code",
+	},
 };
 
 export default defineConfig({
