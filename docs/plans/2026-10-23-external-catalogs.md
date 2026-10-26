@@ -2,7 +2,7 @@
 name: "external-catalogs"
 description: "Repos externos de skills/MCPs/comandos consumibles por bond init/sync para que los equipos compartan su config"
 created_at: "2026-10-23T11:35:02Z"
-has_completed_all_phases: false
+has_completed_all_phases: true
 last_implementation_at: "2026-10-26T09:58:52Z"
 ---
 
@@ -306,14 +306,14 @@ Dependencias: ninguna externa. Riesgos:
 | P1 | implemented | passed | accepted | PR #11 fusionado (rebase) el 2026-10-26, CI verde en Linux, macOS y Windows; ver «Evidencia P1» |
 | P2 | implemented | passed | accepted | PR #12 fusionado (rebase) el 2026-10-26, CI verde en Linux, macOS y Windows; ver «Evidencia P2» |
 | P3 | implemented | passed | accepted | PR #13 fusionado (rebase) el 2026-10-26, CI verde en Linux, macOS y Windows tras `fix(catalog)` de rutas 8.3; ver «Evidencia P3» |
-| P4 | implemented | passed (Linux) | pending | `plan/external-catalogs-p4` (`3c3006a`), integrada en `feat/catalog-p4-p5`; ver «Evidencia P4 y P5» |
-| P5 | implemented | passed (Linux) | pending | `plan/external-catalogs-p5` (`bee7cbc`), integrada en `feat/catalog-p4-p5`; ver «Evidencia P4 y P5» |
+| P4 | implemented | passed | accepted | PR #14 fusionado (rebase) el 2026-10-26, CI verde en Linux, macOS y Windows; aceptada por el usuario el 2026-10-26; ver «Evidencia P4 y P5» |
+| P5 | implemented | passed | accepted | PR #14 fusionado (rebase) el 2026-10-26, CI verde en Linux, macOS y Windows; aceptada por el usuario el 2026-10-26; ver «Evidencia P4 y P5» |
 
 ## Next step
 
-Revisar P4 y P5 (PR de `feat/catalog-p4-p5`) y aceptarlas: son las últimas fases del plan.
-Fuera del plan, hecho aparte (rama `fix/doctor-broken-lock`): `bond doctor` ya no se corta con
-un lock roto o que no cuadra ni con un catálogo con errores (`catchDie` en `cli/util.mts`).
+Plan completo: P1 a P5 aceptadas e integradas en `main` (#11 a #14). Fuera del plan, el corte
+de `bond doctor` con un lock o catálogo roto se arregló en #15. Lo siguiente es publicarlo en
+una release (`## Sin publicar` del CHANGELOG), con `release-prepare-github`.
 
 ## Evidence and tracking
 
