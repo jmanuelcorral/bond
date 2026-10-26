@@ -2,6 +2,10 @@
 
 ## Sin publicar
 
+- `bond doctor` ya no se corta cuando `.bond/bond.toml`, `.bond/lock.json` o un catálogo del
+  equipo no valen (lock ilegible o que no cuadra, catálogo con errores, nombre desconocido): la
+  fila «repo» falla con el motivo y el arreglo, y el resto de comprobaciones, incluida la fila
+  de cada catálogo, sale igual.
 - `bond doctor` añade una fila por cada catálogo del equipo en `.bond/bond.toml`: el commit
   fijado en `.bond/lock.json`, si está descargado en `~/.bond/catalogs` y si la ref tiene un
   commit más nuevo (avisa con `bond catalog update <nombre>`; con `--quick` o sin acceso, «sin

@@ -300,6 +300,35 @@ describe("bond doctor con catálogos del equipo", () => {
 		expect(row).not.toContain("✗");
 	});
 
+	test("con el lock roto, que no cuadra o un catálogo con errores, sigue y lo cuenta en su fila", () => {
+		expect(bond(["catalog", "add", url, "--ref", "v1", "--yes"]).code).toBe(0);
+		const rows = (out: string) => out.split("\n").filter((l) => /\b(repo|catálogo equipo)\b/.test(l));
+		const lockText = read(".bond/lock.json");
+
+		writeFileSync(at(".bond/lock.json"), "{ roto");
+		let r = bond(["doctor", "--quick"]);
+		expect(r.code).toBe(1);
+		expect(rows(r.out).join("\n")).toMatch(/✗ repo .*\.bond\/lock\.json no se puede leer/);
+		expect(rows(r.out).join("\n")).toMatch(/✗ catálogo equipo .*no se puede leer/);
+		expect(r.out).toContain("bond en el PATH"); // las filas de después también salen
+
+		writeFileSync(at(".bond/lock.json"), lockText);
+		writeFileSync(at(".bond/bond.toml"), read(".bond/bond.toml").replace('ref = "v1"', 'ref = "main"'));
+		r = bond(["doctor", "--quick"]);
+		expect(r.code).toBe(1);
+		expect(rows(r.out).join("\n")).toMatch(/✗ repo .*bond catalog update equipo/);
+
+		writeFileSync(at(".bond/bond.toml"), read(".bond/bond.toml").replace('ref = "main"', 'ref = "v1"'));
+		writeFileSync(at(".bond/bond.toml"), `${read(".bond/bond.toml")}\n[[catalog]]\nname = "roto"\npath = "roto"\n`);
+		mkdirSync(at("roto/skills/x"), { recursive: true });
+		writeFileSync(at("roto/catalog.toml"), 'name = "roto"\n');
+		writeFileSync(at("roto/skills/x/SKILL.md"), "sin frontmatter\n");
+		r = bond(["doctor", "--quick"]);
+		expect(r.code).toBe(1);
+		expect(rows(r.out).join("\n")).toMatch(/✗ repo .*el catálogo roto tiene 1 error/);
+		expect(r.err).not.toContain("falta el frontmatter"); // sin errores sueltos encima de la tabla
+	});
+
 	test("un catálogo por carpeta sale con su path", () => {
 		expect(bond(["catalog", "add", "../skills-equipo", "--yes"]).code).toBe(0);
 		const r = bond(["doctor", "--quick"]);
