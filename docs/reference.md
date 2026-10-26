@@ -273,11 +273,11 @@ ref = "v1"
    descargado en `~/.bond/catalogs` y si la ref tiene un commit más nuevo (con red; con
    `--quick` o sin acceso, «sin verificar»). Falla si el lock no cuadra con `bond.toml`.
 
-**Seguridad**: la fijación por SHA hace que lo que se revisó al añadir o actualizar sea exacta
-mente lo que se instala; los servidores MCP se revisan siempre en `add`/`update` porque
+**Seguridad**: la fijación por SHA hace que lo que se revisó al añadir o actualizar sea
+exactamente lo que se instala; los servidores MCP se revisan siempre en `add`/`update` porque
 ejecutan programas en tu máquina o abren conexiones; los secretos no se escriben en el
 catálogo, se referencian con `${VARIABLE}` (`bond catalog check` avisa si uno parece escrito
-tal cual); el repo del catálogo se audita como cualquier repo del equipo: sus skills instructan
+tal cual); el repo del catálogo se audita como cualquier repo del equipo: sus skills instruyen
 a los agentes, así que quien las escribe debe ser de confianza.
 
 **CI con catálogos privados**: el job necesita credenciales de lectura del repo del catálogo
