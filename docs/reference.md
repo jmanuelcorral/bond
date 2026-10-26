@@ -1,6 +1,10 @@
 # Referencia de bond
 
-Cada comando, qué escribe en cada sitio y por qué.
+Esta es la página para cuando ya sabes lo que quieres hacer y necesitas el detalle: cada
+comando, qué escribe y dónde, y por qué funciona así. Si estás empezando, mejor pasa antes por
+los [primeros pasos](getting-started.md) y por [el puesto de trabajo](puesto.md); aquí vendrás
+a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que ves? Abre un
+[issue en GitHub](https://github.com/jmanuelcorral/bond/issues).
 
 ## Comandos
 
