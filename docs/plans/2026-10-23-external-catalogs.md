@@ -327,6 +327,9 @@ GitHub, los issues pasan a ser la autoridad de estado y esta tabla pasa a snapsh
 - Binario: `bun scripts/build.mts --targets linux-x64 --no-npm`; con él, `catalog create
   --name equipo`, `catalog check` y `catalog check catalog` correctos (las plantillas van
   dentro).
-- Pendiente: Windows y macOS (pasos nuevos en `ci.yml`, se ejecutan en el PR) y la pregunta
-  interactiva del nombre (sin terminal en las pruebas: se cubre el valor por defecto y
-  `--name`).
+- Pregunta interactiva del nombre: probada a mano por el usuario en una terminal (2026-10-26),
+  correcta. Las pruebas automáticas cubren el valor por defecto y `--name`.
+- Prueba manual de punta a punta: crear, llenar (skill, comando, MCP), `check` correcto,
+  romperlo (2 errores y 1 aviso, código 1), repetir `create` sin cambios y `bond init`/`sync`
+  en el propio repo del catálogo.
+- Pendiente: Windows y macOS (pasos nuevos en `ci.yml`, se ejecutan en el PR).
