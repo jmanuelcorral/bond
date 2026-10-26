@@ -167,6 +167,11 @@ y Claude Code pide aprobar los servidores de `.mcp.json`. bond no aprueba nada p
 
 ## Catálogo propio (`bond catalog`)
 
+<figure class="bond-video">
+<video src="/videos/catalogos.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>Un catálogo del equipo de principio a fin: create, una skill, check, y en fluzo add con el commit fijado, init --list y doctor.</figcaption>
+</figure>
+
 Un equipo reúne en un repo las skills, comandos y servidores MCP que comparte, con la misma
 estructura que el catálogo de bond (`catalog/`):
 

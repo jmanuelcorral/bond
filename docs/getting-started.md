@@ -85,6 +85,11 @@ login, esos funcionan directamente.
 
 ## 4. `bond init` (una vez por repo)
 
+<figure class="bond-video">
+<video src="/videos/init.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>bond init en fluzo, un repo en Rust: elegimos pi y Claude Code, quitamos las skills que fluzo ya tiene y añadimos plan-team.</figcaption>
+</figure>
+
 Con la máquina lista, toca preparar el repo en el que vas a trabajar. Pongamos que se llama
 `mi-proyecto`:
 

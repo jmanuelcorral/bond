@@ -59,6 +59,35 @@ Then run `bond setup` and off you go. We walk you through it in [Getting started
 bond's own messages (command output, `bond doctor` rows, status names such as `trabajando` or `lista`) are in Spanish. These docs gloss them in English where they appear.
 :::
 
+## See it in action
+
+Four short videos on [fluzo](https://github.com/fluzo-labs/fluzo), a real Rust project:
+
+<div class="bond-videos">
+
+<figure class="bond-video">
+<video src="/videos/init.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>Setting up a repo with bond init</figcaption>
+</figure>
+
+<figure class="bond-video">
+<video src="/videos/puesto.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>The workstation in Herdr</figcaption>
+</figure>
+
+<figure class="bond-video">
+<video src="/videos/equipo.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>A team of agents with bond team</figcaption>
+</figure>
+
+<figure class="bond-video">
+<video src="/videos/catalogos.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>Team catalogs</figcaption>
+</figure>
+
+</div>
+
+
 ## The code, on GitHub
 
 bond is free software (MIT). The source, the [releases](https://github.com/jmanuelcorral/bond/releases)
