@@ -16,6 +16,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { parse } from "smol-toml";
 import { parseJsonc } from "./agents.mts";
 import { catalogSlug, count, type McpServer, readCommandNames, readMcps, validateCatalog } from "./catalog.mts";
+import { ensureFetched, gitKey, type Lock, readLock } from "./catalog-git.mts";
 import { assetsPath, ensureBondLink } from "./runtime.mts";
 import { bad, caution, die, dim, isDryRun, log, ok, run, STAMP, warn, which } from "./util.mts";
 
@@ -54,11 +55,16 @@ Genera la configuración de cada agente del repo a partir de .bond/bond.toml.
  * Un catálogo: el de bond (siempre, el primero) o uno del equipo declarado en bond.toml con
  * [[catalog]]. Todos tienen la misma estructura (cli/catalog.mts).
  */
-interface Catalog {
+export interface Catalog {
 	name: string;
+	/** Su carpeta: la del repo de bond, la de path o la de la caché del commit fijado. */
 	dir: string;
-	/** Ruta tal cual en bond.toml (solo los del equipo). */
+	/** Carpeta tal cual en bond.toml (catálogo local). */
 	path?: string;
+	/** URL y ref de bond.toml, y el commit fijado en .bond/lock.json (catálogo por git). */
+	git?: string;
+	ref?: string;
+	sha?: string;
 }
 
 interface CatalogEntry {
@@ -78,7 +84,9 @@ interface CatalogContents {
 }
 
 const bondCatalog = (): Catalog => ({ name: "bond", dir: catalogPath() });
-const isBond = (c: Catalog) => !c.path;
+const isBond = (c: Catalog) => !c.path && !c.git;
+/** Cómo se nombra un catálogo del equipo en los mensajes: su carpeta, o su URL y commit. */
+export const catalogWhere = (c: Catalog) => c.path ?? `${c.git}${c.ref ? `#${c.ref}` : ""} @ ${c.sha?.slice(0, 7)}`;
 
 const contentsCache = new Map<string, CatalogContents>();
 function contents(c: Catalog): CatalogContents {
@@ -98,11 +106,11 @@ function contents(c: Catalog): CatalogContents {
 	return out;
 }
 
-type Kind = "mcp" | "skills" | "commands";
+export type Kind = "mcp" | "skills" | "commands";
 const KIND_LABEL: Record<Kind, string> = { mcp: "servidores MCP", skills: "skills", commands: "comandos" };
 
 /** Una herramienta de un catálogo: un servidor MCP, una skill o un comando. */
-interface Tool {
+export interface Tool {
 	name: string;
 	catalog: Catalog;
 }
@@ -154,34 +162,63 @@ const commandText = (t: Tool) => readFileSync(join(t.catalog.dir, "commands", `$
 /** Catálogos del equipo ya avisados por estar fuera del repo (una vez por ejecución). */
 const warnedOutside = new Set<string>();
 
-/** El de bond y los de [[catalog]] en bond.toml, validados. Muere si alguno está mal. */
-function loadCatalogs(root: string, raw: Record<string, unknown>): Catalog[] {
+/**
+ * El de bond y los de [[catalog]] en bond.toml, validados. Los de git, del commit fijado en el
+ * lock (descargado a la caché si falta). Muere si alguno está mal.
+ */
+function loadCatalogs(root: string, raw: Record<string, unknown>, lock: Lock = readLock(root)): Catalog[] {
 	const decl = raw.catalog;
 	if (decl === undefined) return [bondCatalog()];
 	if (!Array.isArray(decl)) die("bond.toml: catalog tiene que ser una lista de tablas ([[catalog]])");
 	const out = [bondCatalog()];
+	const validName = (n: unknown): n is string => typeof n === "string" && /^[a-z0-9][a-z0-9_-]*$/.test(n);
 	for (const [i, entry] of (decl as Array<Record<string, unknown>>).entries()) {
 		const where = `bond.toml: [[catalog]] nº ${i + 1}`;
-		if (typeof entry?.path !== "string" || !entry.path.trim()) die(`${where}: falta path (la carpeta del catálogo, relativa al repo)`);
-		const path = entry.path;
-		const dir = resolve(root, path);
-		if (!existsSync(dir) || !statSync(dir).isDirectory()) die(`${where}: no existe la carpeta ${path}`);
-		const report = validateCatalog(dir);
-		const name = entry.name ?? report.name ?? catalogSlug(basename(dir));
-		if (typeof name !== "string" || !/^[a-z0-9][a-z0-9_-]*$/.test(name)) die(`${where}: name ${JSON.stringify(name)} no vale (minúsculas, dígitos, - o _)`);
-		if (out.some((c) => c.name === name)) die(`${where}: ya hay un catálogo "${name}"${name === "bond" ? " (es el de bond)" : ""}; ponle otro name`);
-		if (report.errors.length) {
-			for (const e of report.errors) console.error(`${bad("error:")} catálogo ${name} (${path}): ${e}`);
-			die(`el catálogo ${name} tiene ${count(report.errors.length, "error", "errores")}: arréglalo y compruébalo con bond catalog check ${path}`);
+		const text = (k: string) => (typeof entry?.[k] === "string" && (entry[k] as string).trim() ? (entry[k] as string) : undefined);
+		const path = text("path");
+		const url = text("git");
+		if (path && url) die(`${where}: path o git, no los dos`);
+		if (!path && !url) die(`${where}: falta path (una carpeta, relativa al repo) o git (la URL del repo)`);
+		let c: Catalog;
+		if (url) {
+			const name = entry.name;
+			if (!validName(name)) die(`${where}: un catálogo por git necesita name (minúsculas, dígitos, - o _)`);
+			const ref = text("ref");
+			const locked = lock.catalogs[name];
+			if (!locked) die(`${where}: ${name} no está fijado en .bond/lock.json: bond catalog update ${name}`);
+			if (gitKey(locked.git) !== gitKey(url) || (locked.ref ?? "") !== (ref ?? "")) die(`${where}: .bond/lock.json fija ${name} para otra URL o ref: bond catalog update ${name}`);
+			const twin = out.find((o) => o.git && gitKey(o.git) === gitKey(url));
+			if (twin) die(`${where}: ${url} ya está como el catálogo ${twin.name}`);
+			c = { name, dir: ensureFetched(url, locked.sha), git: url, ref, sha: locked.sha };
+		} else {
+			const dir = resolve(root, path!);
+			if (!existsSync(dir) || !statSync(dir).isDirectory()) die(`${where}: no existe la carpeta ${path}`);
+			c = { name: "", dir, path };
 		}
-		const rel = relative(root, dir);
-		if ((rel.startsWith("..") || isAbsolute(rel)) && !warnedOutside.has(dir)) {
-			warnedOutside.add(dir);
+		const report = validateCatalog(c.dir);
+		const name = entry.name ?? report.name ?? catalogSlug(basename(c.dir));
+		if (!validName(name)) die(`${where}: name ${JSON.stringify(name)} no vale (minúsculas, dígitos, - o _)`);
+		if (out.some((o) => o.name === name)) die(`${where}: ya hay un catálogo "${name}"${name === "bond" ? " (es el de bond)" : ""}; ponle otro name`);
+		c.name = name;
+		if (report.errors.length) {
+			for (const e of report.errors) console.error(`${bad("error:")} catálogo ${name} (${catalogWhere(c)}): ${e}`);
+			die(`el catálogo ${name} tiene ${count(report.errors.length, "error", "errores")}: arréglalo y compruébalo con bond catalog check ${path ?? c.dir}`);
+		}
+		const rel = relative(root, c.dir);
+		if (path && (rel.startsWith("..") || isAbsolute(rel)) && !warnedOutside.has(c.dir)) {
+			warnedOutside.add(c.dir);
 			warn(`el catálogo ${name} (${path}) está fuera del repo: al resto del equipo no le sirve si no tiene esa misma carpeta`);
 		}
-		out.push({ name, dir, path });
+		out.push(c);
 	}
 	return out;
+}
+
+/** Nombres que se pueden pedir en bond.toml con estos catálogos: a secas y catalogo:nombre. */
+export function availableRefs(root: string, toml: string, lock: Lock): Record<Kind, Set<string>> {
+	const catalogs = loadCatalogs(root, parse(toml) as Record<string, unknown>, lock);
+	const refs = (kind: Kind) => new Set(toolsOf(catalogs, kind).flatMap((t) => [t.name, `${t.catalog.name}:${t.name}`]));
+	return { mcp: refs("mcp"), skills: refs("skills"), commands: refs("commands") };
 }
 
 /** Los catálogos de un repo con bond.toml, o solo el de bond (sin repo, o sin bond.toml). */
@@ -238,7 +275,7 @@ function printCatalog(): void {
 		const width = Math.max(14, ...list.map((r) => r.ref.length + 1));
 		for (const r of list) console.log(`  ${r.ref.padEnd(width)} ${dim(r.text)}`);
 	};
-	if (catalogs.length > 1) console.log(`Catálogos: ${catalogs.map((c) => (isBond(c) ? "bond" : `${c.name} (${c.path})`)).join(", ")}`);
+	if (catalogs.length > 1) console.log(`Catálogos: ${catalogs.map((c) => (isBond(c) ? "bond" : `${c.name} (${catalogWhere(c)})`)).join(", ")}`);
 	print("Servidores MCP:", rows.mcp);
 	print("Skills:", rows.skills);
 	print("Comandos:", rows.commands);
@@ -247,7 +284,7 @@ function printCatalog(): void {
 
 // --- configuración del repo -------------------------------------------------------------
 
-interface RepoConfig {
+export interface RepoConfig {
 	agents: string[];
 	/** Agente que abre `bond` en este repo. */
 	default_agent?: string;
@@ -261,7 +298,7 @@ interface RepoConfig {
 	tools: Record<Kind, Tool[]>;
 }
 
-function repoRoot(): string {
+export function repoRoot(): string {
 	const r = run("git", ["rev-parse", "--show-toplevel"]);
 	// En Windows git responde C:/x/y: resolve() lo deja con las barras del sistema.
 	return r.status === 0 ? resolve(r.stdout.trim()) : process.cwd();
@@ -275,12 +312,16 @@ const repoPath = (...parts: string[]) => join(...parts).split(sep).join("/");
 
 const bondDir = (root: string) => join(root, ".bond");
 
-function loadRepoConfig(root: string): RepoConfig {
+/**
+ * bond.toml del repo, resuelto y validado. Con `toml`/`lock` se valida lo que se va a escribir
+ * (bond catalog add, update...) antes de escribirlo: si algo no cuadra, muere sin tocar nada.
+ */
+export function loadRepoConfig(root: string, over: { toml?: string; lock?: Lock } = {}): RepoConfig {
 	const file = join(bondDir(root), "bond.toml");
-	if (!existsSync(file)) die(`no hay ${relative(process.cwd(), file) || file}: ejecuta bond init`);
+	if (over.toml === undefined && !existsSync(file)) die(`no hay ${relative(process.cwd(), file) || file}: ejecuta bond init`);
 	let raw: Record<string, unknown>;
 	try {
-		raw = parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+		raw = parse(over.toml ?? readFileSync(file, "utf8")) as Record<string, unknown>;
 	} catch (e) {
 		die(`.bond/bond.toml no es TOML válido: ${(e as Error).message}`);
 	}
@@ -295,7 +336,7 @@ function loadRepoConfig(root: string): RepoConfig {
 	const agents = list("agents");
 	const unknownAgents = agents.filter((a) => !SUPPORTED_AGENTS.includes(a));
 	if (unknownAgents.length) die(`bond.toml: agentes desconocidos: ${unknownAgents.join(", ")} (bond init --list)`);
-	const catalogs = loadCatalogs(root, raw);
+	const catalogs = loadCatalogs(root, raw, over.lock);
 	const cfg: RepoConfig = {
 		agents,
 		default_agent: typeof raw.default_agent === "string" ? raw.default_agent : undefined,

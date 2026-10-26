@@ -130,7 +130,8 @@ bond/
 │   ├── main.mts                  # subcomandos
 │   ├── setup.mts, wizard.mts     # bond setup
 │   ├── repo.mts                  # bond init, bond sync
-│   ├── catalog.mts               # bond catalog (create, check)
+│   ├── catalog.mts               # bond catalog (create, check, add, list, update, remove, clean)
+│   ├── catalog-git.mts           # catálogos por git: refs, caché y .bond/lock.json
 │   ├── launch.mts, herdr.mts     # bond, bond dev, bond status
 │   ├── team.mts                  # bond team (status, prompt, clean)
 │   ├── sessions.mts              # bond sessions

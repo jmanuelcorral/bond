@@ -11,13 +11,15 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { parse } from "smol-toml";
+import { cleanCache, ensureFetched, gitKey, isGitUrl, type Lock, readLock, resolveRef, writeLock } from "./catalog-git.mts";
 import { assetsPath } from "./runtime.mts";
-import { bad, die, dim, isDryRun, log, ok, run, warn } from "./util.mts";
+import { bad, caution, die, dim, isDryRun, log, ok, run, warn } from "./util.mts";
 
-export const CATALOG_HELP = `Uso: bond catalog <create|check> [opciones]
+export const CATALOG_HELP = `Uso: bond catalog <subcomando> [opciones]
 
 Catálogos de skills, comandos y servidores MCP para compartir entre repos.
 
+Crear un catálogo (en su propio repo):
   create [--name n]   Prepara el repo actual como catálogo: catalog.toml y las carpetas
                       skills/, commands/ y mcps/, cada una con un README.md que explica cómo
                       añadir lo suyo. Pregunta el nombre (por defecto, el de la carpeta). Si ya
@@ -25,7 +27,20 @@ Catálogos de skills, comandos y servidores MCP para compartir entre repos.
   check [dir]         Comprueba un catálogo (por defecto, el del repo actual). Sale con 1 si
                       hay errores, para CI.
 
-  --dry-run           Enseña lo que haría sin escribir`;
+Usarlo en un repo con bond (.bond/bond.toml):
+  add <url|carpeta>   Lo declara en bond.toml ([[catalog]]). Por git, fija el commit en
+                      .bond/lock.json: --ref tag, rama o sha (por defecto, la rama por defecto).
+                      --name n le da otro nombre (por defecto, el de su catalog.toml).
+  list                El de bond y los del repo, con su ref y commit.
+  update [nombre]     Vuelve a resolver la ref de los catálogos por git y mueve el lock;
+                      --ref cambia la ref (con nombre).
+  remove <nombre>     Lo quita de bond.toml, del lock y de lo que el repo tenía elegido de él.
+  clean               Vacía la caché (~/.bond/catalogs), salvo los commits que fija este repo.
+
+add y update enseñan antes los servidores MCP que llegan o cambian (ejecutan programas en tu
+máquina) y lo que pasa a venir de otro catálogo, y piden confirmación (--yes la da).
+
+  --dry-run           (create) Enseña lo que haría sin escribir`;
 
 export interface McpServer {
 	command?: string;
@@ -301,10 +316,268 @@ function check(args: string[]): void {
 	console.log(`${ok("✓")} catálogo ${label} correcto: ${counts}${r.warnings.length ? `, ${count(r.warnings.length, "aviso", "avisos")}` : ""}`);
 }
 
+// --- catálogos del equipo en un repo: add, list, update, remove, clean --------------------
+
+/** Bloques [[catalog]] de un bond.toml, en orden: dónde empieza y acaba cada uno (en caracteres). */
+function catalogBlocks(text: string): Array<{ start: number; end: number }> {
+	const blocks: Array<{ start: number; end: number }> = [];
+	let offset = 0;
+	let open: number | undefined;
+	for (const line of text.split(/(?<=\n)/)) {
+		if (/^\s*\[/.test(line)) {
+			if (open !== undefined) blocks.push({ start: open, end: offset });
+			open = /^\s*\[\[catalog\]\]\s*(#.*)?$/.test(line.trimEnd()) ? offset : undefined;
+		}
+		offset += line.length;
+	}
+	if (open !== undefined) blocks.push({ start: open, end: text.length });
+	return blocks;
+}
+
+/** Añade un [[catalog]] al final de bond.toml. */
+function appendCatalog(text: string, fields: Array<[string, string]>): string {
+	return `${text.replace(/\s*$/, "")}\n\n[[catalog]]\n${fields.map(([k, v]) => `${k} = ${JSON.stringify(v)}`).join("\n")}\n`;
+}
+
+/** Quita el [[catalog]] nº i (desde 0). */
+function removeCatalogBlock(text: string, i: number): string {
+	const b = catalogBlocks(text)[i];
+	return `${(text.slice(0, b.start).replace(/\s*$/, "\n") + text.slice(b.end).replace(/^\s*/, "\n")).replace(/\n{3,}/g, "\n\n").replace(/^\n+/, "").replace(/\s*$/, "")}\n`;
+}
+
+/** Pone (o quita, con undefined) una clave dentro del [[catalog]] nº i. */
+function setInCatalog(text: string, i: number, key: string, value: string | undefined): string {
+	const b = catalogBlocks(text)[i];
+	let block = text.slice(b.start, b.end);
+	const re = new RegExp(`^${key}\\s*=.*\\n?`, "m");
+	const line = value === undefined ? "" : `${key} = ${JSON.stringify(value)}\n`;
+	block = re.test(block) ? block.replace(re, line) : block.replace(/^(.*\n)/, `$1${line}`);
+	return text.slice(0, b.start) + block + text.slice(b.end);
+}
+
+type Repo = typeof import("./repo.mts");
+
+/** Raíz, bond.toml (texto y TOML) y lock de un repo con bond. */
+async function repoState() {
+	const repo: Repo = await import("./repo.mts");
+	const root = repo.repoRoot();
+	const file = join(root, ".bond", "bond.toml");
+	if (!existsSync(file)) die("este repo no tiene .bond/bond.toml: ejecuta antes bond init");
+	const toml = readFileSync(file, "utf8");
+	let raw: Record<string, unknown>;
+	try {
+		raw = parse(toml) as Record<string, unknown>;
+	} catch (e) {
+		die(`.bond/bond.toml no es TOML válido: ${(e as Error).message}`);
+	}
+	const decl = (Array.isArray(raw.catalog) ? raw.catalog : []) as Array<Record<string, unknown>>;
+	return { repo, root, file, toml, decl, lock: readLock(root) };
+}
+
+/** Una línea de servidor MCP para revisar: qué ejecuta o adónde se conecta. */
+const mcpLine = (s: McpServer) => (s.url ? s.url : [s.command, ...(s.args ?? [])].join(" ")) + (s.env ? `  env: ${Object.keys(s.env).join(", ")}` : "");
+
+/** Servidores MCP que trae o cambia un catálogo: ejecutan programas, así que se revisan (D4). */
+function mcpReview(name: string, oldDir: string | undefined, newDir: string): string[] {
+	const lines: string[] = [];
+	const prev = oldDir ? readMcps(oldDir) : {};
+	const next = readMcps(newDir);
+	for (const [n, s] of Object.entries(next)) {
+		if (!prev[n]) lines.push(`  ${ok("+")} mcp ${n}: ${mcpLine(s)}`);
+		else if (JSON.stringify({ ...prev[n], description: undefined }) !== JSON.stringify({ ...s, description: undefined })) lines.push(`  ${bad("~")} mcp ${n}: ${mcpLine(prev[n])}  →  ${mcpLine(s)}`);
+	}
+	for (const n of Object.keys(prev)) if (!next[n]) lines.push(`  ${bad("-")} mcp ${n}`);
+	if (lines.length) lines.unshift(`Servidores MCP del catálogo ${name} (se instalan solo si están en mcp = [...]):`);
+	return lines;
+}
+
+type RepoConfig = import("./repo.mts").RepoConfig;
+
+/** Lo que usa el repo y pasa a venir de otro catálogo (p. ej. una skill de bond que sustituye la del equipo). */
+function movedReview(before: RepoConfig | undefined, after: RepoConfig): string[] {
+	if (!before) return [];
+	const moved: string[] = [];
+	for (const kind of ["mcp", "skills", "commands"] as const) {
+		after.tools[kind].forEach((t, i) => {
+			const was = before.tools[kind][i];
+			if (was && was.name === t.name && was.catalog.name !== t.catalog.name) moved.push(`  ${caution("~")} ${t.name}: de ${was.catalog.name} pasa a ${t.catalog.name}`);
+		});
+	}
+	return moved.length ? ["Lo que usa este repo y pasa a venir de otro catálogo:", ...moved] : [];
+}
+
+/** Enseña lo que hay que revisar y pide confirmación (o --yes). Devuelve si se sigue. */
+async function confirm(lines: string[], yes: boolean): Promise<boolean> {
+	if (!lines.length) return true;
+	console.log(lines.join("\n"));
+	if (yes) return true;
+	if (process.stdin.isTTY !== true) die("hay cambios que revisar (arriba): repite con --yes para aceptarlos");
+	const p = await import("@clack/prompts");
+	const answer = await p.confirm({ message: "¿Seguir?", initialValue: false });
+	return answer === true;
+}
+
+function flags(args: string[], withValue: string[], bare: string[]): { opts: Record<string, string>; has: Set<string>; pos: string[] } {
+	const opts: Record<string, string> = {};
+	const has = new Set<string>();
+	const pos: string[] = [];
+	for (let i = 0; i < args.length; i++) {
+		const a = args[i];
+		if (withValue.includes(a)) {
+			if (args[i + 1] === undefined) die(`${a} necesita un valor`);
+			opts[a] = args[++i];
+		} else if (bare.includes(a)) has.add(a);
+		else if (a.startsWith("-")) die(`opción desconocida: ${a} (bond catalog --help)`);
+		else pos.push(a);
+	}
+	return { opts, has, pos };
+}
+
+async function add(args: string[]): Promise<void> {
+	const { opts, has, pos } = flags(args, ["--name", "--ref"], ["--yes", "-y"]);
+	if (pos.length !== 1) die("uso: bond catalog add <url|carpeta> [--name n] [--ref tag|rama|sha] [--yes]");
+	const source = pos[0];
+	const { repo, root, file, toml, lock } = await repoState();
+	const before = repo.loadRepoConfig(root);
+	let dir: string;
+	let fields: Array<[string, string]>;
+	const nextLock: Lock = { catalogs: { ...lock.catalogs } };
+	if (isGitUrl(source)) {
+		const twin = before.catalogs.find((c) => c.git && gitKey(c.git) === gitKey(source));
+		if (twin) die(`${source} ya está como el catálogo ${twin.name}`);
+		const sha = resolveRef(source, opts["--ref"]);
+		dir = ensureFetched(source, sha);
+		const name = opts["--name"] ?? validateCatalog(dir).name ?? catalogSlug(basename(gitKey(source)));
+		fields = [["name", name], ["git", source], ...(opts["--ref"] ? [["ref", opts["--ref"]] as [string, string]] : [])];
+		nextLock.catalogs[name] = { git: source, ...(opts["--ref"] ? { ref: opts["--ref"] } : {}), sha };
+	} else {
+		if (opts["--ref"]) die("--ref solo vale para un catálogo por git");
+		dir = resolve(source);
+		if (!existsSync(dir) || !statSync(dir).isDirectory()) die(`no existe la carpeta ${source}`);
+		const path = relative(root, dir).split("\\").join("/") || ".";
+		fields = [...(opts["--name"] ? [["name", opts["--name"]] as [string, string]] : []), ["path", path]];
+	}
+	// Se valida todo lo que quedaría (catálogo, nombres, lo que pide el repo) antes de escribir.
+	const report = validateCatalog(dir);
+	if (report.errors.length) {
+		for (const e of report.errors) console.error(`${bad("error:")} ${e}`);
+		die(`el catálogo de ${source} tiene ${count(report.errors.length, "error", "errores")}: no se añade (arréglalo en su repo y compruébalo con bond catalog check)`);
+	}
+	const nextToml = appendCatalog(toml, fields);
+	const after = repo.loadRepoConfig(root, { toml: nextToml, lock: nextLock });
+	const added = after.catalogs[after.catalogs.length - 1];
+	if (!(await confirm([...mcpReview(added.name, undefined, added.dir), ...movedReview(before, after)], has.has("--yes") || has.has("-y")))) die("cancelado: no se ha cambiado nada", 130);
+	writeFileSync(file, nextToml);
+	writeLock(root, nextLock);
+	console.log(`${ok("+")} catálogo ${added.name} (${repo.catalogWhere(added)}): ${count(report.skills.length, "skill", "skills")}, ${count(report.commands.length, "comando", "comandos")}, ${count(report.mcps.length, "servidor MCP", "servidores MCP")}`);
+	repo.syncRepo();
+	console.log(dim("  elige lo suyo con bond init (o en .bond/bond.toml) y commitea .bond/"));
+}
+
+async function list(args: string[]): Promise<void> {
+	flags(args, [], []);
+	const repo: Repo = await import("./repo.mts");
+	const root = repo.repoRoot();
+	const catalogs = existsSync(join(root, ".bond", "bond.toml")) ? repo.loadRepoConfig(root).catalogs : [];
+	const width = Math.max(14, ...catalogs.map((c) => c.name.length + 2));
+	console.log(`  ${"bond".padEnd(width)}${dim("incluido en bond")}`);
+	for (const c of catalogs.slice(1)) {
+		console.log(`  ${c.name.padEnd(width)}${c.git ? `${c.git}  ${dim(`${c.ref ?? "rama por defecto"} @ ${c.sha?.slice(0, 7)}`)}` : `${c.path}  ${dim("carpeta")}`}`);
+	}
+}
+
+async function update(args: string[]): Promise<void> {
+	const { opts, has, pos } = flags(args, ["--ref"], ["--yes", "-y"]);
+	if (pos.length > 1) die("uso: bond catalog update [nombre] [--ref tag|rama|sha] [--yes]");
+	const { repo, root, file, toml, decl, lock } = await repoState();
+	const gits = decl.map((e, i) => ({ e, i })).filter(({ e }) => typeof e.git === "string");
+	const targets = pos[0] ? gits.filter(({ e }) => e.name === pos[0]) : gits;
+	if (pos[0] && !targets.length) die(decl.some((e) => e.name === pos[0]) ? `${pos[0]} es un catálogo local: no hay nada que actualizar` : `no hay ningún catálogo por git llamado ${pos[0]} (bond catalog list)`);
+	if (!targets.length) return console.log(dim("no hay catálogos por git que actualizar"));
+	if (opts["--ref"] && targets.length > 1) die("--ref necesita el nombre del catálogo: bond catalog update <nombre> --ref ...");
+	// Con el lock al día se puede comparar con lo de antes; si no (falta o es de otra URL), no.
+	const fresh = gits.every(({ e }) => {
+		const l = lock.catalogs[e.name as string];
+		return l && gitKey(l.git) === gitKey(e.git as string) && (l.ref ?? "") === ((e.ref as string | undefined) ?? "");
+	});
+	const before = fresh ? repo.loadRepoConfig(root) : undefined;
+	let nextToml = toml;
+	const nextLock: Lock = { catalogs: { ...lock.catalogs } };
+	const changed: Array<{ name: string; oldDir?: string }> = [];
+	for (const { e, i } of targets) {
+		const name = e.name as string;
+		const url = e.git as string;
+		const ref = opts["--ref"] ?? (e.ref as string | undefined);
+		const sha = resolveRef(url, ref);
+		const old = lock.catalogs[name];
+		if (old && old.sha === sha && gitKey(old.git) === gitKey(url) && (old.ref ?? "") === (ref ?? "")) {
+			console.log(`${dim("=")} ${name}: al día (${ref ?? "rama por defecto"} @ ${sha.slice(0, 7)})`);
+			continue;
+		}
+		ensureFetched(url, sha);
+		if (opts["--ref"]) nextToml = setInCatalog(nextToml, i, "ref", opts["--ref"]);
+		nextLock.catalogs[name] = { git: url, ...(ref ? { ref } : {}), sha };
+		changed.push({ name, oldDir: old && gitKey(old.git) === gitKey(url) ? ensureFetched(old.git, old.sha) : undefined });
+		console.log(`${caution("~")} ${name}: ${old ? old.sha.slice(0, 7) : "sin fijar"} → ${sha.slice(0, 7)} (${ref ?? "rama por defecto"})`);
+	}
+	if (!changed.length) return;
+	const after = repo.loadRepoConfig(root, { toml: nextToml, lock: nextLock });
+	const lines = [...changed.flatMap((c) => mcpReview(c.name, c.oldDir, after.catalogs.find((x) => x.name === c.name)!.dir)), ...movedReview(before, after)];
+	if (!(await confirm(lines, has.has("--yes") || has.has("-y")))) die("cancelado: el lock queda como estaba", 130);
+	if (nextToml !== toml) writeFileSync(file, nextToml);
+	writeLock(root, nextLock);
+	repo.syncRepo();
+}
+
+async function remove(args: string[]): Promise<void> {
+	const { pos } = flags(args, [], []);
+	if (pos.length !== 1) die("uso: bond catalog remove <nombre>");
+	const name = pos[0];
+	const { repo, root, file, toml, decl, lock } = await repoState();
+	// Por su name, o por el que tiene su catalog.toml (los locales pueden no llevarlo en bond.toml).
+	const i = decl.findIndex((e) => e.name === name || (e.name === undefined && typeof e.path === "string" && existsSync(resolve(root, e.path)) && (validateCatalog(resolve(root, e.path)).name ?? catalogSlug(basename(resolve(root, e.path)))) === name));
+	if (i < 0) die(`no hay ningún catálogo ${name} en .bond/bond.toml (bond catalog list)`);
+	let nextToml = removeCatalogBlock(toml, i);
+	const nextLock: Lock = { catalogs: { ...lock.catalogs } };
+	delete nextLock.catalogs[name];
+	// Lo que el repo pedía de ese catálogo deja de existir: se quita de la selección.
+	const known = repo.availableRefs(root, nextToml, nextLock);
+	const raw = parse(nextToml) as Record<string, unknown>;
+	const sel = (k: string) => (Array.isArray(raw[k]) ? (raw[k] as string[]) : []);
+	const dropped: string[] = [];
+	const keep = (k: "mcp" | "skills" | "commands") =>
+		sel(k).filter((r) => {
+			const found = known[k].has(r);
+			if (!found) dropped.push(r);
+			return found;
+		});
+	const kept = { mcp: keep("mcp"), skills: keep("skills"), commands: keep("commands") };
+	if (dropped.length) nextToml = repo.updateBondToml(nextToml, { agents: sel("agents"), default_agent: typeof raw.default_agent === "string" ? raw.default_agent : undefined, ...kept });
+	repo.loadRepoConfig(root, { toml: nextToml, lock: nextLock });
+	writeFileSync(file, nextToml);
+	writeLock(root, nextLock);
+	console.log(`${bad("-")} catálogo ${name}${dropped.length ? dim(`  (quitado también de la selección: ${dropped.join(", ")})`) : ""}`);
+	repo.syncRepo();
+}
+
+async function clean(args: string[]): Promise<void> {
+	flags(args, [], []);
+	const repo: Repo = await import("./repo.mts");
+	const root = repo.repoRoot();
+	const keep = Object.values(readLock(root).catalogs);
+	const n = cleanCache(keep);
+	console.log(`${n ? ok("-") : dim("=")} caché de catálogos: ${count(n, "commit borrado", "commits borrados")}${keep.length ? dim(keep.length === 1 ? " (se queda el que fija este repo)" : ` (se quedan los ${keep.length} que fija este repo)`) : ""}`);
+}
+
 export async function catalogCommand(args: string[]): Promise<void> {
 	const [sub, ...rest] = args;
 	if (sub === "create") return create(rest);
 	if (sub === "check") return check(rest);
+	if (sub === "add") return add(rest);
+	if (sub === "list") return list(rest);
+	if (sub === "update") return update(rest);
+	if (sub === "remove") return remove(rest);
+	if (sub === "clean") return clean(rest);
 	if (sub) die(`subcomando desconocido: ${sub} (bond catalog --help)`);
 	console.log(CATALOG_HELP);
 	process.exit(2);
