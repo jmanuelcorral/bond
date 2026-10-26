@@ -11,3 +11,7 @@ __pycache__/
 node_modules/
 cli/assets.gen.mts
 dist/
+
+# Site de la documentación (VitePress): caché de build
+site/.vitepress/cache/
+site/src/

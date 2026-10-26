@@ -1,0 +1,14 @@
+{
+  "name": "bond-docs-site",
+  "private": true,
+  "description": "Site de la documentación de bond (GitHub Pages): VitePress sobre ../docs (castellano) y ../docs/en (inglés)",
+  "type": "module",
+  "scripts": {
+    "dev": "node prepare.mjs && vitepress dev",
+    "build": "node prepare.mjs && vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "1.6.4"
+  }
+}
