@@ -37,6 +37,11 @@
 - Los servidores MCP del catálogo van ahora en un fichero por servidor (`catalog/mcps/<nombre>.json`
   en lugar de `catalog/mcp.json`), el mismo formato que los catálogos propios. Lo que genera
   `bond sync` no cambia.
+- Skill nueva en el catálogo de bond: `catalog-maintain` (opcional, `default = false`). Ayuda a
+  llenar y mantener un catálogo de equipo creado con `bond catalog create`: añadir skills,
+  comandos y servidores MCP con el formato de los `README.md` que `create` deja en cada
+  carpeta, mantener `catalog.toml` y pasar `bond catalog check` antes de publicar. No duplica
+  la estructura que ya da `create`.
 
 ## 1.5.1
 
