@@ -1,5 +1,5 @@
 # Site de la documentación: docs/ con VitePress (site/) en GitHub Pages,
-# https://jmanuelcorral.github.io/bond/. En un PR solo lo construye (un enlace roto lo para);
+# https://josecorral.dev/bond/. En un PR solo lo construye (un enlace roto lo para);
 # en main, además, lo publica.
 name: pages
 

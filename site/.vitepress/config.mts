@@ -1,4 +1,4 @@
-// Site de la documentación (GitHub Pages, https://jmanuelcorral.github.io/bond/), en castellano
+// Site de la documentación (GitHub Pages, https://josecorral.dev/bond/), en castellano
 // (raíz) e inglés (/en/). Las páginas son los .md de docs/ y docs/en/, que siguen leyéndose igual
 // en GitHub; prepare.mjs las copia a src/ antes de construir. Aquí solo la navegación y el
 // estilo. Fuera: los planes (docs/plans/ y docs/plan-*.md), que son de trabajo interno.
