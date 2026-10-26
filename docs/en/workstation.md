@@ -204,8 +204,8 @@ These are the statuses:
 | `bloqueado` (blocked) | The agent is waiting for an answer from you (e.g. trusting the folder) |
 | `sin commitear` (uncommitted) | There are changes in the worktree outside a commit |
 | `lista` (ready) | It has unintegrated commits and it's time to review |
-| `integrada` (integrated) | Already in the base, also if it went in via rebase or squash |
-| `sin commits` (no commits) | Nothing yet (or it was integrated via fast-forward) |
+| `integrada` (integrated) | Already in the base, whether it went in via merge, fast-forward, rebase or squash |
+| `sin commits` (no commits) | Nothing yet: the branch has not moved since it was created |
 
 ### The live table
 

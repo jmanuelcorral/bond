@@ -44,7 +44,7 @@ otros agentes, pregunta como siempre.
 
 status   Cada worktree del repo: estado, agente, commits por delante de la base y ficheros.
          Estados: trabajando, bloqueado, sin commitear, lista (commits por revisar),
-         integrada (ya está en la base, también por rebase o squash), sin commits.
+         integrada (ya está en la base: por merge, fast-forward, rebase o squash), sin commits.
          La base, por defecto, es la rama del checkout principal.
          --watch: tabla en vivo (cada 2 s) agrupada por estado, en este orden: ⛔ necesita tu
          respuesta (con la pregunta debajo), 🔄 trabajando, ✏️ sin commitear, 📦 por revisar
@@ -409,7 +409,10 @@ export interface BranchInfo {
 	ahead: number;
 	files: string[];
 	dirty: number;
+	/** No tiene nada que no esté ya en la base (se puede borrar sin perder trabajo). */
 	integrated: boolean;
+	/** Ha tenido commits desde que se creó: sin commits por delante, es que ya se integró. */
+	worked: boolean;
 }
 
 /**
@@ -419,6 +422,12 @@ export interface BranchInfo {
  */
 export function branchInfo(root: string, base: string, branch: string, path?: string): BranchInfo {
 	const ahead = Number(git(root, ["rev-list", "--count", `${base}..${branch}`]).stdout.trim()) || 0;
+	// Tras un merge o un fast-forward la rama ya no tiene commits por delante de la base, igual
+	// que una recién creada. Las distingue el reflog: su primera entrada es el commit del que
+	// salió; si la punta ya no es ese, la rama trabajó. Sin reflog, como antes: sin commits.
+	const created = lines(git(root, ["reflog", "show", "--format=%H", `refs/heads/${branch}`, "--"]).stdout).pop();
+	const tip = git(root, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).stdout.trim();
+	const worked = ahead > 0 || (!!created && !!tip && created !== tip);
 	const files = lines(git(root, ["diff", "--name-only", `${base}...${branch}`]).stdout);
 	const dirty = path && existsSync(path) ? lines(git(path, ["status", "--porcelain"]).stdout).length : 0;
 	let integrated = ahead === 0;
@@ -427,16 +436,17 @@ export function branchInfo(root: string, base: string, branch: string, path?: st
 		integrated = cherry.length > 0 && cherry.every((l) => l.startsWith("-"));
 	}
 	if (!integrated && files.length) integrated = git(root, ["diff", "--quiet", base, branch, "--", ...files]).status === 0;
-	return { ahead, files, dirty, integrated };
+	return { ahead, files, dirty, integrated, worked };
 }
 
 export type State = "trabajando" | "bloqueado" | "sin commitear" | "lista" | "integrada" | "sin commits";
 
-export function classify(i: { agentStatus?: string; dirty: number; ahead: number; integrated: boolean }): State {
+export function classify(i: { agentStatus?: string; dirty: number; ahead: number; integrated: boolean; worked?: boolean }): State {
 	if (i.agentStatus === "working") return "trabajando";
 	if (i.agentStatus === "blocked") return "bloqueado";
 	if (i.dirty) return "sin commitear";
-	if (i.ahead === 0) return "sin commits";
+	// Sin commits por delante: si trabajó, ya está en la base (merge o fast-forward).
+	if (i.ahead === 0) return i.worked ? "integrada" : "sin commits";
 	return i.integrated ? "integrada" : "lista";
 }
 
@@ -644,7 +654,8 @@ const BUSY: State[] = ["trabajando", "bloqueado", "sin commitear", "lista"];
 /**
  * ¿Le queda trabajo al equipo? Una rama en un estado con trabajo, o con su agente abierto y sin
  * commits aún (recién creada, le toca empezar). Integradas o sin agente, no. `worked`: ramas que
- * ya tuvieron commits; si vuelven a `sin commits`, es que se integraron por merge o fast-forward.
+ * ya tuvieron commits; si vuelven a `sin commits`, es que se integraron por merge o fast-forward
+ * (respaldo para cuando branchInfo no puede saberlo, sin reflog: con él ya salen `integrada`).
  */
 export const pendingWork = (rows: Row[], worked: Set<string> = new Set()) => rows.some((r) => BUSY.includes(r.state) || (r.state === "sin commits" && !!r.agent && !worked.has(r.branch)));
 
