@@ -16,7 +16,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { parse } from "smol-toml";
 import { parseJsonc } from "./agents.mts";
 import { catalogSlug, count, type McpServer, readCommandNames, readMcps, validateCatalog } from "./catalog.mts";
-import { ensureFetched, gitKey, type Lock, readLock } from "./catalog-git.mts";
+import { ensureFetched, gitKey, type Lock, readLock, repoRelative } from "./catalog-git.mts";
 import { assetsPath, ensureBondLink } from "./runtime.mts";
 import { bad, caution, die, dim, isDryRun, log, ok, run, STAMP, warn, which } from "./util.mts";
 
@@ -204,7 +204,7 @@ function loadCatalogs(root: string, raw: Record<string, unknown>, lock: Lock = r
 			for (const e of report.errors) console.error(`${bad("error:")} catálogo ${name} (${catalogWhere(c)}): ${e}`);
 			die(`el catálogo ${name} tiene ${count(report.errors.length, "error", "errores")}: arréglalo y compruébalo con bond catalog check ${path ?? c.dir}`);
 		}
-		const rel = relative(root, c.dir);
+		const rel = repoRelative(root, c.dir);
 		if (path && (rel.startsWith("..") || isAbsolute(rel)) && !warnedOutside.has(c.dir)) {
 			warnedOutside.add(c.dir);
 			warn(`el catálogo ${name} (${path}) está fuera del repo: al resto del equipo no le sirve si no tiene esa misma carpeta`);

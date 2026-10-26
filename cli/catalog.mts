@@ -11,7 +11,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { parse } from "smol-toml";
-import { cleanCache, ensureFetched, gitKey, isGitUrl, type Lock, readLock, resolveRef, writeLock } from "./catalog-git.mts";
+import { cleanCache, ensureFetched, gitKey, isGitUrl, type Lock, readLock, repoRelative, resolveRef, writeLock } from "./catalog-git.mts";
 import { assetsPath } from "./runtime.mts";
 import { bad, caution, die, dim, isDryRun, log, ok, run, warn } from "./util.mts";
 
@@ -454,7 +454,7 @@ async function add(args: string[]): Promise<void> {
 		if (opts["--ref"]) die("--ref solo vale para un catálogo por git");
 		dir = resolve(source);
 		if (!existsSync(dir) || !statSync(dir).isDirectory()) die(`no existe la carpeta ${source}`);
-		const path = relative(root, dir).split("\\").join("/") || ".";
+		const path = repoRelative(root, dir);
 		fields = [...(opts["--name"] ? [["name", opts["--name"]] as [string, string]] : []), ["path", path]];
 	}
 	// Se valida todo lo que quedaría (catálogo, nombres, lo que pide el repo) antes de escribir.
