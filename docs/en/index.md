@@ -61,7 +61,18 @@ bond's own messages (command output, `bond doctor` rows, status names such as `t
 
 ## See it in action
 
-Four short videos on [fluzo](https://github.com/fluzo-labs/fluzo), a real Rust project:
+Start with this one. You open `bond` with Claude alone in its pane and ask it, in a single
+sentence, for a very simple website: make a plan, split it between two pi agents with
+`bond team` and act as the orchestrator. Everything else happens on its own, inside bond: the
+minions each write their page, the live table shows how they are doing, Claude reviews and sends
+two fixes back, merges into `main` and tidies up the team. No cuts: it takes as long as it takes.
+
+<figure class="bond-video">
+<video src="/videos/orquestador.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>Claude orchestrates two pi agents: plan, split, four panes at once, review with fixes, merge and cleanup.</figcaption>
+</figure>
+
+And four more, short ones, on [fluzo](https://github.com/fluzo-labs/fluzo), a real Rust project:
 
 <div class="bond-videos">
 
