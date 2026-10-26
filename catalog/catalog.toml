@@ -35,3 +35,7 @@ default = false
 [skills.plan-team]
 summary = "Run a plan's independent phases in parallel, one bond team branch each"
 default = false
+
+[skills.catalog-maintain]
+summary = "Fill and maintain a team catalog: skills, commands and MCP servers, checked before publishing"
+default = false
