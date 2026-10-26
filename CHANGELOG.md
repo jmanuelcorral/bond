@@ -1,5 +1,12 @@
 # Cambios
 
+## Sin publicar
+
+- `bond team status` da por `integrada` una rama que entró en la base por fast-forward o con un
+  merge (antes salía `sin commits`, como si no hubiera empezado), y por eso `bond team clean`
+  sin argumentos ya la quita. Lo distingue el reflog de la rama: si avanzó desde que se creó, ya
+  trabajó. Una rama recién creada sigue saliendo `sin commits`.
+
 ## 1.6.2
 
 - La tool `repo_map` de pi (y el script `repo-map` de la skill `code-context`) ya no falla en

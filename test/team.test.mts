@@ -64,7 +64,7 @@ describe("branchInfo", () => {
 		g("switch", "-qc", "feat/a");
 		commit("a.txt", "a\n");
 		g("switch", "-q", "main");
-		expect(branchInfo(repo, "main", "feat/a")).toEqual({ ahead: 1, files: ["a.txt"], dirty: 0, integrated: false });
+		expect(branchInfo(repo, "main", "feat/a")).toEqual({ ahead: 1, files: ["a.txt"], dirty: 0, integrated: false, worked: true });
 	});
 
 	test("integrada por fast-forward", () => {
@@ -72,7 +72,39 @@ describe("branchInfo", () => {
 		commit("a.txt", "a\n");
 		g("switch", "-q", "main");
 		g("merge", "-q", "--ff-only", "feat/a");
-		expect(branchInfo(repo, "main", "feat/a")).toMatchObject({ ahead: 0, integrated: true });
+		const info = branchInfo(repo, "main", "feat/a");
+		expect(info).toMatchObject({ ahead: 0, integrated: true, worked: true });
+		// Antes salía «sin commits» y bond team clean, sin nombrarla, no la quitaba.
+		expect(classify(info)).toBe("integrada");
+	});
+
+	test("integrada por merge (con commit de merge)", () => {
+		g("switch", "-qc", "feat/a");
+		commit("a.txt", "a\n");
+		g("switch", "-q", "main");
+		commit("b.txt", "b\n");
+		g("merge", "-q", "--no-ff", "--no-edit", "feat/a");
+		expect(classify(branchInfo(repo, "main", "feat/a"))).toBe("integrada");
+	});
+
+	test("recién creada, aunque la base avance (otra rama se integró): sin commits", () => {
+		g("branch", "feat/a");
+		g("switch", "-qc", "feat/b");
+		commit("b.txt", "b\n");
+		g("switch", "-q", "main");
+		g("merge", "-q", "--ff-only", "feat/b");
+		const info = branchInfo(repo, "main", "feat/a");
+		expect(info).toMatchObject({ ahead: 0, worked: false });
+		expect(classify(info)).toBe("sin commits");
+	});
+
+	test("sin reflog no se puede saber: sin commits, como antes", () => {
+		g("config", "core.logAllRefUpdates", "false");
+		g("switch", "-qc", "feat/a");
+		commit("a.txt", "a\n");
+		g("switch", "-q", "main");
+		g("merge", "-q", "--ff-only", "feat/a");
+		expect(classify(branchInfo(repo, "main", "feat/a"))).toBe("sin commits");
 	});
 
 	test("integrada por rebase (commits equivalentes en la base)", () => {
@@ -118,6 +150,7 @@ describe("classify", () => {
 		expect(classify({ ...base, ahead: 2, integrated: false })).toBe("lista");
 		expect(classify({ ...base, ahead: 2 })).toBe("integrada");
 		expect(classify(base)).toBe("sin commits");
+		expect(classify({ ...base, worked: true })).toBe("integrada");
 	});
 });
 
@@ -217,7 +250,7 @@ describe("equipo en la pestaña", () => {
 });
 
 describe("tabla en vivo", () => {
-	const row = (branch: string, state: State, extra: Partial<Row> = {}): Row => ({ branch, state, path: `/w/${branch}`, ahead: 0, files: [], dirty: 0, integrated: false, managed: true, ...extra });
+	const row = (branch: string, state: State, extra: Partial<Row> = {}): Row => ({ branch, state, path: `/w/${branch}`, ahead: 0, files: [], dirty: 0, integrated: false, worked: false, managed: true, ...extra });
 	const rows = [
 		row("feat/a", "trabajando", { agent: { name: "kevin", kind: "pi", status: "working", pane: "w1:p2" }, ahead: 2, files: ["a", "b", "c"] }),
 		row("feat/b", "bloqueado", { agent: { name: "stuart", kind: "pi", status: "idle", question: "confiar en la carpeta del proyecto", pane: "w1:p3" } }),
@@ -342,7 +375,7 @@ describe("tabla en vivo", () => {
 });
 
 describe("cerrar al terminar", () => {
-	const row = (branch: string, state: State, extra: Partial<Row> = {}): Row => ({ branch, state, path: `/w/${branch}`, ahead: 0, files: [], dirty: 0, integrated: false, managed: true, ...extra });
+	const row = (branch: string, state: State, extra: Partial<Row> = {}): Row => ({ branch, state, path: `/w/${branch}`, ahead: 0, files: [], dirty: 0, integrated: false, worked: false, managed: true, ...extra });
 	const kevin = { name: "kevin", kind: "pi", status: "idle", pane: "w1:p2" };
 	const table = { label: "tabla · fluzo", focused: false };
 

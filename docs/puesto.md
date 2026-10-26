@@ -202,8 +202,8 @@ toca. Los estados son estos:
 | `bloqueado` | El agente espera una respuesta tuya (p. ej. confiar en la carpeta) |
 | `sin commitear` | Hay cambios en el worktree fuera de un commit |
 | `lista` | Tiene commits sin integrar y toca revisar |
-| `integrada` | Ya está en la base, también si entró por rebase o squash |
-| `sin commits` | Nada todavía (o se integró por fast-forward) |
+| `integrada` | Ya está en la base, entrara por merge, fast-forward, rebase o squash |
+| `sin commits` | Nada todavía: la rama no ha avanzado desde que se creó |
 
 ### La tabla en vivo
 
