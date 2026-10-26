@@ -88,6 +88,14 @@ describe("URLs y refs", () => {
 		expect(resolveRef(url, "main")).toBe(v2);
 		expect(resolveRef(url, v1)).toBe(v1);
 	});
+
+	test("probeRef: resuelve igual que resolveRef, pero no muere si no puede leer", () => {
+		expect(git_.probeRef(url, "v1")).toBe(v1);
+		expect(git_.probeRef(url, "main")).toBe(git(["rev-parse", "main"]));
+		expect(git_.probeRef(url, v1)).toBe(v1); // una sha fijada no se consulta: no hay red
+		expect(git_.probeRef(url, "v9")).toBeUndefined();
+		expect(git_.probeRef("file:///ruta/que/no/existe/repo", "main")).toBeUndefined();
+	});
 });
 
 describe("bond catalog add", () => {
@@ -278,5 +286,25 @@ describe("bond catalog list, remove y clean", () => {
 		expect(existsSync(cacheDir(url, v1))).toBe(false);
 		expect(existsSync(cacheDir(url, lock().equipo.sha))).toBe(true);
 		expect(readdirSync(join(cacheDir(url, v1), "..")).length).toBe(1);
+	});
+});
+
+describe("bond doctor con catálogos del equipo", () => {
+	test("--quick: commit fijado, en caché y «sin verificar», sin tocar la red", () => {
+		expect(bond(["catalog", "add", url, "--ref", "v1", "--yes"]).code).toBe(0);
+		const r = bond(["doctor", "--quick"]);
+		const row = r.out.split("\n").find((l) => l.includes("catálogo equipo")) ?? "";
+		expect(row).toContain(v1.slice(0, 7));
+		expect(row).toContain("en caché");
+		expect(row).toContain("sin verificar");
+		expect(row).not.toContain("✗");
+	});
+
+	test("un catálogo por carpeta sale con su path", () => {
+		expect(bond(["catalog", "add", "../skills-equipo", "--yes"]).code).toBe(0);
+		const r = bond(["doctor", "--quick"]);
+		const row = r.out.split("\n").find((l) => l.includes("catálogo equipo")) ?? "";
+		expect(row).toContain("carpeta ../skills-equipo");
+		expect(row).not.toContain("✗");
 	});
 });

@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+- `bond doctor` añade una fila por cada catálogo del equipo en `.bond/bond.toml`: el commit
+  fijado en `.bond/lock.json`, si está descargado en `~/.bond/catalogs` y si la ref tiene un
+  commit más nuevo (avisa con `bond catalog update <nombre>`; con `--quick` o sin acceso, «sin
+  verificar» — no toca la red). Los catálogos locales salen con su carpeta, y falla si no
+  existe.
+- Documentado el ciclo de vida de los catálogos externos (crear, comprobar, publicar, añadir,
+  sincronizar, actualizar y diagnosticar) con las notas de seguridad y de CI con repos privados
+  en `docs/reference.md`; atajo para equipos en `docs/getting-started.md`.
 - Catálogos del equipo por git: `bond catalog add <url> [--ref tag|rama|sha]` los declara en
   `.bond/bond.toml` (`[[catalog]]` con `name`, `git` y `ref`) y fija el commit en
   `.bond/lock.json`, que se commitea. `sync` usa ese commit (aunque la rama avance) y lo descarga
