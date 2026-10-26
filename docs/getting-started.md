@@ -65,6 +65,12 @@ del catálogo usar (servidores MCP de documentación y búsqueda, skills como `c
 completes y la config de cada agente. Commitéalo todo. La primera vez que abras cada agente en
 el repo, te pedirá confiar en él.
 
+¿Compartís skills, comandos o servidores MCP en el equipo? El equipo monta un catálogo en su
+propio repo (`bond catalog create`), lo comprueba con `bond catalog check` (para su CI) y cada
+proyecto lo declara con `bond catalog add <url> [--ref tag|rama]`: el commit queda fijado en
+`.bond/lock.json` y `bond doctor` da una fila por catálogo — fijado, en caché y si hay
+versión más nueva. Detalle y seguridad, en la [referencia](reference.md#catálogo-propio-bond-catalog).
+
 ## 5. `bond` y el bucle de trabajo diario
 
 Dentro del repo:

@@ -1,10 +1,11 @@
-// bond doctor: la fila de actualizaciones (método, última comprobación, pendiente, omitida y aviso).
+// bond doctor: la fila de actualizaciones (método, última comprobación, pendiente, omitida y
+// aviso) y la de catálogos del repo (commit fijado, caché y ref).
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { updateCheck } from "../cli/doctor.mts";
+import { catalogCheck, updateCheck } from "../cli/doctor.mts";
 import { installedRuntime } from "../cli/runtime.mts";
 
 describe("runtime instalado (Bond Extensions desde el repo)", () => {
@@ -69,6 +70,68 @@ describe("fila de actualizaciones", () => {
 
 	test("una fecha ilegible cuenta como nunca", () => {
 		expect(updateCheck({ method: "binary", auto: true, state: { checkedAt: "ayer" } }).detail).toContain("última comprobación: nunca");
+	});
+});
+
+describe("fila de catálogos del repo", () => {
+	const sha = "a".repeat(40);
+	const git = (o: Partial<Parameters<typeof catalogCheck>[0]> = {}) => ({
+		name: "equipo",
+		kind: "git" as const,
+		where: "https://github.com/acme/skills-equipo",
+		ref: "v1",
+		sha,
+		cached: true,
+		remoteSha: sha,
+		verified: true,
+		...o,
+	});
+
+	test("en caché y al día: informativa", () => {
+		const r = catalogCheck(git());
+		expect(r.level).toBe("ok");
+		expect(r.name).toBe("catálogo equipo");
+		expect(r.detail).toContain("aaaaaaa en caché");
+		expect(r.detail).toContain("al día (v1)");
+	});
+
+	test("sin descargar: informa, no falla (sync la baja)", () => {
+		const r = catalogCheck(git({ cached: false }));
+		expect(r.level).toBe("ok");
+		expect(r.detail).toContain("sin descargar (bond sync la baja)");
+	});
+
+	test("la ref tiene un commit más nuevo: aviso con el arreglo", () => {
+		const r = catalogCheck(git({ remoteSha: "b".repeat(40) }));
+		expect(r.level).toBe("warn");
+		expect(r.fix).toBe("bond catalog update equipo");
+		expect(r.detail).toContain("hay un commit más nuevo en v1: bbbbbbb");
+	});
+
+	test("sin verificar (--quick o sin red) no falla", () => {
+		const r = catalogCheck(git({ verified: false, remoteSha: undefined }));
+		expect(r.level).toBe("ok");
+		expect(r.detail).toContain("sin verificar");
+		expect(r.detail).not.toContain("al día");
+	});
+
+	test("local: su carpeta declarada", () => {
+		const r = catalogCheck({ name: "equipo", kind: "local", where: "../skills-equipo", verified: true });
+		expect(r.level).toBe("ok");
+		expect(r.detail).toBe("carpeta ../skills-equipo");
+	});
+
+	test("un error en un catálogo por git propone bond catalog update", () => {
+		const r = catalogCheck({ name: "equipo", kind: "git", where: "u", verified: true, error: "no está fijado en .bond/lock.json" });
+		expect(r.level).toBe("fail");
+		expect(r.detail).toContain("no está fijado en .bond/lock.json");
+		expect(r.fix).toBe("bond catalog update equipo");
+	});
+
+	test("un error en un local no propone update", () => {
+		const r = catalogCheck({ name: "equipo", kind: "local", where: "../x", verified: true, error: "no existe la carpeta ../x" });
+		expect(r.level).toBe("fail");
+		expect(r.fix).toBeUndefined();
 	});
 });
 

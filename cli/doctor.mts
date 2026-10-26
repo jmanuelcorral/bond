@@ -2,7 +2,7 @@
 // de fuera (Herdr, MCP, la pasarela de modelos) responde. Sale con 1 si algo falla.
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { readdirSync, statSync } from "node:fs";
 import type { UpdateState } from "./config.mts";
 import { enabledModelsCover } from "./suggestions.mts";
@@ -18,10 +18,11 @@ export const DOCTOR_HELP = `Uso: bond doctor [--quick]
 
 Comprueba la instalación global: Node, Herdr, pi, enlaces de configuración, paquete de pi,
 skill de Herdr, integración, filtro de git, herramientas de contexto, servidores MCP, la
-pasarela de modelos, las sugerencias de prompt de pi y el aviso de versión nueva. Sale con 1
-si algo falla.
+pasarela de modelos, las sugerencias de prompt de pi, los catálogos del repo y el aviso de
+versión nueva. Sale con 1 si algo falla.
 
-  --quick      Se salta lo lento (conectar los servidores MCP)
+  --quick      Se salta lo lento (conectar los servidores MCP, consultar las refs de los
+               catálogos por git)
   -h, --help   Esta ayuda`;
 
 type Level = "ok" | "warn" | "fail";
@@ -35,8 +36,8 @@ export interface Check {
 const results: Check[] = [];
 /** Agentes elegidos en `bond setup` (vacío: todavía no hay configuración). */
 let chosen: string[] = [];
-const add = (level: Level, name: string, detail: string, fix?: string): void => {
-	results.push({ level, name, detail, fix });
+const add = (level: Level | Check, name?: string, detail?: string, fix?: string): void => {
+	results.push(typeof level === "string" ? { level, name: name ?? "", detail: detail ?? "", fix } : level);
 };
 
 function checkConfig(): void {
@@ -176,6 +177,108 @@ async function checkRepo(): Promise<void> {
 	const conflicts = actions.filter((a) => a.sign === "!").length;
 	if (!actions.length) add("ok", "repo", `${root}: config de agentes al día`);
 	else add(conflicts ? "fail" : "warn", "repo", `${root}: ${actions.length} cambio(s) pendiente(s)${conflicts ? `, ${conflicts} conflicto(s)` : ""}`, "bond sync");
+}
+
+/**
+ * Estado de un catálogo del repo ([[catalog]] en bond.toml) para su fila en `bond doctor`.
+ * Lo construye checkCatalogs() sin descargar nada; `verified`/`remoteSha` vienen de consultar
+ * la ref por la red, cosa que solo se hace sin `--quick`.
+ */
+export interface CatalogStatus {
+	name: string;
+	kind: "git" | "local";
+	/** De dónde viene: la URL (el git de bond.toml) o la carpeta declarada. */
+	where: string;
+	/** La ref declarada (git). */
+	ref?: string;
+	/** Commit fijado en .bond/lock.json (git). */
+	sha?: string;
+	/** Está descargado en ~/.bond/catalogs (git). */
+	cached?: boolean;
+	/** Commit actual de la ref, si se pudo consultar la red. */
+	remoteSha?: string;
+	/** Se consultó la ref. false con --quick o si no se pudo leer: «sin verificar». */
+	verified: boolean;
+	/** Algo que impide usar el catálogo (lock que falta o no cuadra, carpeta inexistente). */
+	error?: string;
+}
+
+/** Fila de un catálogo del equipo: commit fijado, caché y si la ref tiene algo más nuevo. */
+export function catalogCheck(s: CatalogStatus): Check {
+	const name = `catálogo ${s.name}`;
+	if (s.error) return { level: "fail", name, detail: s.error, fix: s.kind === "git" ? `bond catalog update ${s.name}` : undefined };
+	if (s.kind === "local") return { level: "ok", name, detail: `carpeta ${s.where}` };
+	const parts = [`${s.sha?.slice(0, 7)}${s.cached ? " en caché" : " sin descargar (bond sync la baja)"}`];
+	if (!s.verified) parts.push("sin verificar");
+	else if (s.remoteSha === s.sha) parts.push(`al día (${s.ref ?? "rama por defecto"})`);
+	else return { level: "warn", name, detail: `${parts.join(" · ")} · hay un commit más nuevo en ${s.ref ?? "la ref"}: ${s.remoteSha?.slice(0, 7)}`, fix: `bond catalog update ${s.name}` };
+	return { level: "ok", name, detail: parts.join(" · ") };
+}
+
+/**
+ * Una fila por catálogo del repo (bond.toml [[catalog]]): commit fijado, caché y, si hay red,
+ * si la ref tiene un commit más nuevo. No descarga nada: lee bond.toml y el lock tal cual
+ * están; con `--quick` no consulta la red («sin verificar»). Fuera de un repo con bond, no
+ * dice nada.
+ */
+async function checkCatalogs(quick: boolean): Promise<void> {
+	const top = run("git", ["rev-parse", "--show-toplevel"]);
+	const root = top.status === 0 ? top.stdout.trim() : process.cwd();
+	const file = join(root, ".bond", "bond.toml");
+	if (!existsSync(file) || (FROM_SOURCE && !existsSync(join(REPO_DIR, "node_modules", "smol-toml")))) return;
+	const { parse } = await import("smol-toml");
+	let raw: Record<string, unknown>;
+	try {
+		raw = parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+	} catch {
+		return; // bond.toml inválido: checkRepo lo cuenta antes que esto.
+	}
+	const decl = (Array.isArray(raw.catalog) ? raw.catalog : []) as Array<Record<string, unknown>>;
+	if (!decl.length) return;
+	const { cacheDir, gitKey, probeRef, readLockSafe } = await import("./catalog-git.mts");
+	const { catalogSlug } = await import("./catalog.mts");
+	const { lock, error: lockError } = readLockSafe(root);
+	const text = (v: unknown) => (typeof v === "string" && v.trim() ? v : undefined);
+	for (const entry of decl) {
+		const path = text(entry?.path);
+		const url = text(entry?.git);
+		if (url) {
+			const name = text(entry?.name) ?? catalogSlug(basename(gitKey(url)));
+			if (!text(entry?.name)) {
+				add("fail", `catálogo ${name}`, "un catálogo por git necesita name en bond.toml (es su clave en el lock)", "bond catalog update");
+				continue;
+			}
+			if (lockError) {
+				add("fail", `catálogo ${name}`, `.bond/lock.json no se puede leer (${lockError})`, "bond catalog update");
+				continue;
+			}
+			const ref = text(entry?.ref);
+			const locked = lock!.catalogs[name];
+			if (!locked) {
+				add("fail", `catálogo ${name}`, `${url} no está fijado en .bond/lock.json`, `bond catalog update ${name}`);
+				continue;
+			}
+			if (gitKey(locked.git) !== gitKey(url) || (locked.ref ?? "") !== (ref ?? "")) {
+				add("fail", `catálogo ${name}`, ".bond/lock.json fija este catálogo para otra URL o ref", `bond catalog update ${name}`);
+				continue;
+			}
+			const remoteSha = quick ? undefined : probeRef(url, ref);
+			add(catalogCheck({ name, kind: "git", where: url, ref, sha: locked.sha, cached: existsSync(cacheDir(url, locked.sha)), remoteSha, verified: remoteSha !== undefined }));
+		} else if (path) {
+			const dir = resolve(root, path);
+			let name = text(entry?.name);
+			if (!name) {
+				try {
+					name = text((parse(readFileSync(join(dir, "catalog.toml"), "utf8")) as Record<string, unknown>).name);
+				} catch {
+					// Sin catalog.toml legible: se nombra por la carpeta, como hace el aviso.
+				}
+				name = name ?? catalogSlug(basename(dir));
+			}
+			if (!existsSync(dir) || !statSync(dir).isDirectory()) add("fail", `catálogo ${name}`, `no existe la carpeta ${path}`, "bond catalog add <carpeta>");
+			else add(catalogCheck({ name, kind: "local", where: path, verified: true }));
+		} else add("fail", "catálogo", "un [[catalog]] de bond.toml no tiene ni path ni git", "bond catalog add <url|carpeta>");
+	}
 }
 
 function checkBond(): void {
@@ -334,6 +437,7 @@ export async function doctor(args: string[]): Promise<void> {
 	if (!quick) checkMcp();
 	await checkModels();
 	await checkRepo();
+	await checkCatalogs(quick);
 	checkBond();
 	await checkUpdate();
 	await checkSuggestions();

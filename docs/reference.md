@@ -254,6 +254,37 @@ ref = "v1"
 - **Repos privados**: bond usa tu `git` y sus credenciales, sin preguntar (si pide contraseña,
   falla). En CI, el job necesita acceso de lectura al repo del catálogo.
 
+### Ciclo de vida de un catálogo externo
+
+1. **Crear** — `bond catalog create` en el repo del catálogo: `catalog.toml` y las carpetas
+   con sus READMEs (arriba). Sin ejemplos instalables: nada llega al `bond init` del equipo sin
+   que alguien lo escriba.
+2. **Comprobar** — `bond catalog check` en local y en la CI del propio catálogo: sale con 1 si
+   algo no vale, así nada roto llega al equipo.
+3. **Publicar** — es un repo git normal del equipo: se versiona y se revisa como cualquier
+   código (tags para las versiones estables, ramas para ir por delante).
+4. **Añadir** — `bond catalog add <url> [--ref]` en cada proyecto que lo consume: declara el
+   `[[catalog]]` en `bond.toml` y fija el commit en `.bond/lock.json` (se commitea).
+5. **Sincronizar** — `bond sync` instala lo elegido desde el commit del lock, no desde la punta
+   de la rama; lo generado viaja commiteado con el repo, así que clonar no descarga nada.
+6. **Actualizar** — `bond catalog update [nombre]` es lo único que mueve el commit, y enseña
+   antes los servidores MCP que llegan o cambian.
+7. **Diagnosticar** — `bond doctor` da una fila por catálogo: el commit fijado, si está
+   descargado en `~/.bond/catalogs` y si la ref tiene un commit más nuevo (con red; con
+   `--quick` o sin acceso, «sin verificar»). Falla si el lock no cuadra con `bond.toml`.
+
+**Seguridad**: la fijación por SHA hace que lo que se revisó al añadir o actualizar sea exacta
+mente lo que se instala; los servidores MCP se revisan siempre en `add`/`update` porque
+ejecutan programas en tu máquina o abren conexiones; los secretos no se escriben en el
+catálogo, se referencian con `${VARIABLE}` (`bond catalog check` avisa si uno parece escrito
+tal cual); el repo del catálogo se audita como cualquier repo del equipo: sus skills instructan
+a los agentes, así que quien las escribe debe ser de confianza.
+
+**CI con catálogos privados**: el job necesita credenciales de lectura del repo del catálogo
+(token con `repo` desplegado como variable secreta y usado en el `git` del runner, o clave SSH)
+antes de `bond sync --check`; si la URL falla, el error dice cuál. Con la caché llena
+(`~/.bond/catalogs` cacheada entre runs) no hace falta red para el commit fijado.
+
 ## Modelos globales (`bond models`)
 
 Los modelos se declaran **una vez** en `~/.bond/config.toml` (fuera del repo: son de
@@ -654,6 +685,7 @@ fuera, y sale con 1 si algo falla:
 | `bond` en el PATH y es el de este repo | `bond setup` |
 | Actualizaciones: método de instalación, última comprobación, versión pendiente, omitida y si se pregunta al arrancar (informativa; aviso si hay una pendiente sin omitir; no haber mirado nunca no falla) | `bond update`; `bond update --skip vX.Y.Z` |
 | Sugerencias de prompt de pi: modelo, paquete instalado, `enabledModels` y si el config de la extensión coincide con `config.toml`; otras extensiones que reemplacen el editor (aviso, nunca fallo) | `bond setup` |
+| Catálogos del repo (`[[catalog]]` en `bond.toml`): por cada uno, el commit fijado en `.bond/lock.json`, si está descargado en `~/.bond/catalogs` y si la ref tiene un commit más nuevo (se consulta la red; con `--quick`, «sin verificar»); un catálogo local sale con su carpeta | `bond catalog update <nombre>` |
 
 ## Snippet de Herdr
 

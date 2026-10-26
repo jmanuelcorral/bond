@@ -70,24 +70,48 @@ function needGit(): void {
 	if (run("git", ["--version"]).status !== 0) die("hace falta git para los catálogos del equipo por URL (instálalo y vuelve a probar)");
 }
 
+/** Lee las refs del remote sin morir: refs (nombre → commit) o el motivo de no haber podido. */
+function remoteRefs(url: string, ref: string | undefined, timeout: number): { refs?: Map<string, string>; error?: string } {
+	if (run("git", ["--version"]).status !== 0) return { error: "git no está en el PATH" };
+	const r = run("git", ["ls-remote", url, ...(ref ? [`refs/tags/${ref}`, `refs/tags/${ref}^{}`, `refs/heads/${ref}`] : ["HEAD"])], { timeout });
+	if (r.status !== 0) return { error: (r.stderr || r.stdout).trim().split("\n").pop() || "git ls-remote falló" };
+	return {
+		refs: new Map(
+			r.stdout
+				.trim()
+				.split("\n")
+				.filter(Boolean)
+				.map((l) => l.split("\t") as [string, string])
+				.map(([sha, name]) => [name, sha]),
+		),
+	};
+}
+
+/** Commit de la ref en el mapa de refs; sin ref, el de su rama por defecto. */
+const pickRef = (refs: Map<string, string>, ref?: string) =>
+	ref
+		? // Un tag anotado apunta a su objeto; ^{} es el commit.
+		  refs.get(`refs/tags/${ref}^{}`) ?? refs.get(`refs/tags/${ref}`) ?? refs.get(`refs/heads/${ref}`)
+		: refs.get("HEAD");
+
 /** Commit al que apunta una ref (tag, rama o sha) del repo; sin ref, su rama por defecto. */
 export function resolveRef(url: string, ref?: string): string {
 	if (ref && SHA.test(ref)) return ref;
 	needGit();
-	const r = git(["ls-remote", url, ...(ref ? [`refs/tags/${ref}`, `refs/tags/${ref}^{}`, `refs/heads/${ref}`] : ["HEAD"])]);
-	if (r.status !== 0) die(`no se puede leer ${url}: ${(r.stderr || r.stdout).trim().split("\n").pop()}`);
-	const refs = new Map(
-		r.stdout
-			.trim()
-			.split("\n")
-			.filter(Boolean)
-			.map((l) => l.split("\t") as [string, string])
-			.map(([sha, name]) => [name, sha]),
-	);
-	if (!ref) return refs.get("HEAD") ?? die(`${url} no tiene rama por defecto: indica --ref`);
-	// Un tag anotado apunta a su objeto; ^{} es el commit.
-	const sha = refs.get(`refs/tags/${ref}^{}`) ?? refs.get(`refs/tags/${ref}`) ?? refs.get(`refs/heads/${ref}`);
-	return sha ?? die(`no hay ningún tag ni rama "${ref}" en ${url}`);
+	const { refs, error } = remoteRefs(url, ref, 120_000);
+	if (!refs) die(`no se puede leer ${url}: ${error}`);
+	return pickRef(refs, ref) ?? die(ref ? `no hay ningún tag ni rama "${ref}" en ${url}` : `${url} no tiene rama por defecto: indica --ref`);
+}
+
+/**
+ * Commit actual de la ref, sin morir: undefined si no se puede leer (sin red, sin acceso,
+ * ref inexistente). Lo usa `bond doctor` para decir «sin verificar» sin tocar la red más de
+ * lo necesario (por eso su propio timeout, corto).
+ */
+export function probeRef(url: string, ref?: string, timeout = 15_000): string | undefined {
+	if (ref && SHA.test(ref)) return ref;
+	const { refs } = remoteRefs(url, ref, timeout);
+	return refs ? pickRef(refs, ref) : undefined;
 }
 
 /** Descarga un commit a la caché si no está, y devuelve su carpeta. */
@@ -125,20 +149,27 @@ export function ensureFetched(url: string, sha: string): string {
 
 const lockPath = (root: string) => join(root, ".bond", "lock.json");
 
-/** El lock del repo (vacío si no hay). Muere si no se puede leer: mejor que adivinar commits. */
-export function readLock(root: string): Lock {
+/** Lee el lock sin morir: para `bond doctor`, que informa sin abortar la comprobación. */
+export function readLockSafe(root: string): { lock?: Lock; error?: string } {
 	const p = lockPath(root);
-	if (!existsSync(p)) return { catalogs: {} };
+	if (!existsSync(p)) return { lock: { catalogs: {} } };
 	try {
 		const raw = JSON.parse(readFileSync(p, "utf8")) as Partial<Lock>;
 		const catalogs = raw.catalogs ?? {};
 		for (const [n, e] of Object.entries(catalogs)) {
 			if (typeof e?.git !== "string" || typeof e?.sha !== "string" || !SHA.test(e.sha)) throw new Error(`entrada ${n} incompleta`);
 		}
-		return { catalogs };
+		return { lock: { catalogs } };
 	} catch (e) {
-		die(`.bond/lock.json no se puede leer (${(e as Error).message}): recupéralo de git o ejecuta bond catalog update`);
+		return { error: (e as Error).message };
 	}
+}
+
+/** El lock del repo (vacío si no hay). Muere si no se puede leer: mejor que adivinar commits. */
+export function readLock(root: string): Lock {
+	const { lock, error } = readLockSafe(root);
+	if (error) die(`.bond/lock.json no se puede leer (${error}): recupéralo de git o ejecuta bond catalog update`);
+	return lock!;
 }
 
 /** Escribe el lock de una vez (fichero temporal y renombrar); sin catálogos git, lo borra. */
