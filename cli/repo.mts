@@ -12,10 +12,10 @@
 
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parse } from "smol-toml";
 import { parseJsonc } from "./agents.mts";
-import { type McpServer, readCommandNames, readMcps } from "./catalog.mts";
+import { catalogSlug, count, type McpServer, readCommandNames, readMcps, validateCatalog } from "./catalog.mts";
 import { assetsPath, ensureBondLink } from "./runtime.mts";
 import { bad, caution, die, dim, isDryRun, log, ok, run, STAMP, warn, which } from "./util.mts";
 
@@ -27,8 +27,9 @@ export const INIT_HELP = `Uso: bond init [opciones]
 
 Prepara el repo actual para tus agentes. Pregunta con cuáles integrarlo (de los instalados,
 partiendo de los elegidos en bond setup), cuál abre \`bond\` por defecto y qué herramientas del
-catálogo usar. Crea .bond/bond.toml, un AGENTS.md (si falta) y la config de cada agente; con
-pi, además las Bond Extensions. En un repo ya inicializado, permite cambiar la selección.
+catálogo usar: el de bond y los de tu equipo declarados con [[catalog]] en bond.toml. Crea
+.bond/bond.toml, un AGENTS.md (si falta) y la config de cada agente; con pi, además las Bond
+Extensions. En un repo ya inicializado, permite cambiar la selección.
 
   --agents <a,b>      Agentes, sin preguntar (${SUPPORTED_AGENTS.join(", ")})
   --default <a>       Agente por defecto
@@ -36,7 +37,7 @@ pi, además las Bond Extensions. En un repo ya inicializado, permite cambiar la 
   --skills <a,b>      Skills del catálogo (defecto: las marcadas por defecto, sin las opcionales)
   --commands <a,b>    Comandos del catálogo (defecto: todos)
   --yes               Sin preguntas: lo elegido en bond setup y el catálogo por defecto
-  --list              Enseña el catálogo y sale
+  --list              Enseña el catálogo (y los del equipo de bond.toml) y sale
   --dry-run           Enseña lo que haría sin escribir`;
 
 export const SYNC_HELP = `Uso: bond sync [opciones]
@@ -47,18 +48,18 @@ Genera la configuración de cada agente del repo a partir de .bond/bond.toml.
   --check     No escribe; sale con 1 si algo está desfasado (para CI)
   --force     Sobrescribe ficheros de bond editados a mano (guarda copia .bak)`;
 
-// --- catálogo ---------------------------------------------------------------------------
+// --- catálogos ----------------------------------------------------------------------------
 
-const catalog = {
-	mcp: () => readMcps(catalogPath()),
-	/** En el orden de catalog.toml; las que no estén ahí, al final por nombre. */
-	skills: () => {
-		const found = readdirSync(catalogPath("skills")).filter((d) => existsSync(catalogPath("skills", d, "SKILL.md")));
-		const order = Object.keys(catalogMeta().skills).filter((n) => found.includes(n));
-		return [...order, ...found.filter((n) => !order.includes(n)).sort()];
-	},
-	commands: () => readCommandNames(catalogPath()),
-};
+/**
+ * Un catálogo: el de bond (siempre, el primero) o uno del equipo declarado en bond.toml con
+ * [[catalog]]. Todos tienen la misma estructura (cli/catalog.mts).
+ */
+interface Catalog {
+	name: string;
+	dir: string;
+	/** Ruta tal cual en bond.toml (solo los del equipo). */
+	path?: string;
+}
 
 interface CatalogEntry {
 	/** Resumen breve (en inglés) para bond init. */
@@ -67,40 +68,180 @@ interface CatalogEntry {
 	default?: boolean;
 }
 
-/** catalog/catalog.toml: resumen y marca por defecto de cada skill. */
-function catalogMeta(): { skills: Record<string, CatalogEntry> } {
+/** Lo que ofrece un catálogo. Los comandos del de bond le llegan a pi por las Bond Extensions. */
+interface CatalogContents {
+	mcp: Record<string, McpServer>;
+	/** En el orden de catalog.toml; las que no estén ahí, al final por nombre. */
+	skills: string[];
+	commands: string[];
+	meta: Record<string, CatalogEntry>;
+}
+
+const bondCatalog = (): Catalog => ({ name: "bond", dir: catalogPath() });
+const isBond = (c: Catalog) => !c.path;
+
+const contentsCache = new Map<string, CatalogContents>();
+function contents(c: Catalog): CatalogContents {
+	const hit = contentsCache.get(c.dir);
+	if (hit) return hit;
+	let meta: Record<string, CatalogEntry> = {};
 	try {
-		const raw = parse(readFileSync(catalogPath("catalog.toml"), "utf8")) as { skills?: Record<string, CatalogEntry> };
-		return { skills: raw.skills ?? {} };
+		meta = ((parse(readFileSync(join(c.dir, "catalog.toml"), "utf8")) as { skills?: Record<string, CatalogEntry> }).skills ?? {}) as Record<string, CatalogEntry>;
 	} catch {
-		return { skills: {} };
+		// Sin catalog.toml legible: sin resúmenes (en los del equipo ya lo cazó el validador).
+	}
+	const skillsDir = join(c.dir, "skills");
+	const found = existsSync(skillsDir) ? readdirSync(skillsDir).filter((d) => existsSync(join(skillsDir, d, "SKILL.md"))) : [];
+	const order = Object.keys(meta).filter((n) => found.includes(n));
+	const out = { mcp: readMcps(c.dir), skills: [...order, ...found.filter((n) => !order.includes(n)).sort()], commands: readCommandNames(c.dir), meta };
+	contentsCache.set(c.dir, out);
+	return out;
+}
+
+type Kind = "mcp" | "skills" | "commands";
+const KIND_LABEL: Record<Kind, string> = { mcp: "servidores MCP", skills: "skills", commands: "comandos" };
+
+/** Una herramienta de un catálogo: un servidor MCP, una skill o un comando. */
+interface Tool {
+	name: string;
+	catalog: Catalog;
+}
+
+const names = (c: Catalog, kind: Kind) => (kind === "mcp" ? Object.keys(contents(c).mcp) : contents(c)[kind]);
+const toolsOf = (catalogs: Catalog[], kind: Kind): Tool[] => catalogs.flatMap((c) => names(c, kind).map((name) => ({ name, catalog: c })));
+
+/**
+ * A qué herramienta lleva un nombre sin prefijo: la de un catálogo del equipo sustituye a la de
+ * bond (el equipo ha decidido usar la suya); en dos catálogos del equipo es ambiguo (varias).
+ */
+function byName(all: Tool[], name: string): Tool[] {
+	const found = all.filter((t) => t.name === name);
+	const team = found.filter((t) => !isBond(t.catalog));
+	return team.length ? team : found;
+}
+
+/** Cómo se escribe en bond.toml: el nombre a secas si lleva a ella, o catalogo:nombre. */
+function refOf(t: Tool, all: Tool[]): string {
+	const plain = byName(all, t.name);
+	return plain.length === 1 && plain[0] === t ? t.name : `${t.catalog.name}:${t.name}`;
+}
+
+/** Herramientas pedidas en bond.toml (nombre o catalogo:nombre). Muere si no existen o son ambiguas. */
+function resolveTools(catalogs: Catalog[], kind: Kind, refs: string[]): Tool[] {
+	const all = toolsOf(catalogs, kind);
+	const out: Tool[] = [];
+	const unknown: string[] = [];
+	for (const ref of refs) {
+		const i = ref.indexOf(":");
+		const found = i < 0 ? byName(all, ref) : all.filter((t) => t.catalog.name === ref.slice(0, i) && t.name === ref.slice(i + 1));
+		if (!found.length) unknown.push(ref);
+		else if (found.length > 1) {
+			const from = found.map((t) => t.catalog.name);
+			die(`bond.toml: "${ref}" está en los catálogos ${from.join(" y ")}; elige uno: ${from.map((c) => `"${c}:${ref}"`).join(" o ")}`);
+		} else out.push(found[0]);
+	}
+	if (unknown.length) die(`bond.toml: ${KIND_LABEL[kind]} desconocidos: ${unknown.join(", ")} (bond init --list)`);
+	for (const t of out) {
+		const twice = out.filter((x) => x.name === t.name);
+		if (twice.length > 1) die(`bond.toml: ${KIND_LABEL[kind]}: "${t.name}" pedido de ${twice.map((x) => x.catalog.name).join(" y ")}; en el repo solo cabe uno`);
+	}
+	return out;
+}
+
+const skillDir = (t: Tool) => join(t.catalog.dir, "skills", t.name);
+const commandText = (t: Tool) => readFileSync(join(t.catalog.dir, "commands", `${t.name}.md`), "utf8");
+
+/** Catálogos del equipo ya avisados por estar fuera del repo (una vez por ejecución). */
+const warnedOutside = new Set<string>();
+
+/** El de bond y los de [[catalog]] en bond.toml, validados. Muere si alguno está mal. */
+function loadCatalogs(root: string, raw: Record<string, unknown>): Catalog[] {
+	const decl = raw.catalog;
+	if (decl === undefined) return [bondCatalog()];
+	if (!Array.isArray(decl)) die("bond.toml: catalog tiene que ser una lista de tablas ([[catalog]])");
+	const out = [bondCatalog()];
+	for (const [i, entry] of (decl as Array<Record<string, unknown>>).entries()) {
+		const where = `bond.toml: [[catalog]] nº ${i + 1}`;
+		if (typeof entry?.path !== "string" || !entry.path.trim()) die(`${where}: falta path (la carpeta del catálogo, relativa al repo)`);
+		const path = entry.path;
+		const dir = resolve(root, path);
+		if (!existsSync(dir) || !statSync(dir).isDirectory()) die(`${where}: no existe la carpeta ${path}`);
+		const report = validateCatalog(dir);
+		const name = entry.name ?? report.name ?? catalogSlug(basename(dir));
+		if (typeof name !== "string" || !/^[a-z0-9][a-z0-9_-]*$/.test(name)) die(`${where}: name ${JSON.stringify(name)} no vale (minúsculas, dígitos, - o _)`);
+		if (out.some((c) => c.name === name)) die(`${where}: ya hay un catálogo "${name}"${name === "bond" ? " (es el de bond)" : ""}; ponle otro name`);
+		if (report.errors.length) {
+			for (const e of report.errors) console.error(`${bad("error:")} catálogo ${name} (${path}): ${e}`);
+			die(`el catálogo ${name} tiene ${count(report.errors.length, "error", "errores")}: arréglalo y compruébalo con bond catalog check ${path}`);
+		}
+		const rel = relative(root, dir);
+		if ((rel.startsWith("..") || isAbsolute(rel)) && !warnedOutside.has(dir)) {
+			warnedOutside.add(dir);
+			warn(`el catálogo ${name} (${path}) está fuera del repo: al resto del equipo no le sirve si no tiene esa misma carpeta`);
+		}
+		out.push({ name, dir, path });
+	}
+	return out;
+}
+
+/** Los catálogos de un repo con bond.toml, o solo el de bond (sin repo, o sin bond.toml). */
+function repoCatalogs(root: string): Catalog[] {
+	const file = join(bondDir(root), "bond.toml");
+	if (!existsSync(file)) return [bondCatalog()];
+	try {
+		return loadCatalogs(root, parse(readFileSync(file, "utf8")) as Record<string, unknown>);
+	} catch (e) {
+		die(`.bond/bond.toml no es TOML válido: ${(e as Error).message}`);
 	}
 }
 
-/** Skills del catálogo que salen marcadas por defecto. */
+/** Skills del catálogo de bond que salen marcadas por defecto. */
 const defaultSkills = () => {
-	const meta = catalogMeta().skills;
-	return catalog.skills().filter((n) => meta[n]?.default !== false);
+	const c = contents(bondCatalog());
+	return c.skills.filter((n) => c.meta[n]?.default !== false);
 };
 
 /** Resumen de una skill: el de catalog.toml o, si no hay, el principio de su description. */
-function skillSummary(name: string, max: number): string {
-	return catalogMeta().skills[name]?.summary ?? describe(readFileSync(catalogPath("skills", name, "SKILL.md"), "utf8")).slice(0, max);
+function skillSummary(t: Tool, max: number): string {
+	return contents(t.catalog).meta[t.name]?.summary ?? describe(readFileSync(join(skillDir(t), "SKILL.md"), "utf8")).slice(0, max);
 }
+
+const isOptional = (t: Tool) => contents(t.catalog).meta[t.name]?.default === false;
 
 function describe(md: string): string {
 	return /^description:\s*(.+)$/m.exec(md)?.[1]?.replace(/^["']|["']$/g, "") ?? "";
 }
 
+/** Una línea por herramienta: nombre (o catalogo:nombre), descripción y, si no es de bond, su catálogo. */
+function catalogRows(catalogs: Catalog[], max: number): Record<Kind, Array<{ ref: string; text: string; tool: Tool }>> {
+	const rows = (kind: Kind, text: (t: Tool) => string) => {
+		const all = toolsOf(catalogs, kind);
+		const origin = (t: Tool) => {
+			if (!isBond(t.catalog)) return ` [${t.catalog.name}]`;
+			const over = byName(all, t.name).filter((x) => x !== t);
+			return over.length ? ` (la sustituye ${over.map((x) => x.catalog.name).join(" o ")})` : "";
+		};
+		return all.map((t) => ({ ref: refOf(t, all), text: text(t) + origin(t), tool: t }));
+	};
+	return {
+		mcp: rows("mcp", (t) => contents(t.catalog).mcp[t.name].description ?? ""),
+		skills: rows("skills", (t) => skillSummary(t, max) + (isOptional(t) ? " (opcional)" : "")),
+		commands: rows("commands", (t) => describe(commandText(t))),
+	};
+}
+
 function printCatalog(): void {
-	console.log("Servidores MCP:");
-	for (const [name, s] of Object.entries(catalog.mcp())) console.log(`  ${name.padEnd(14)} ${dim(s.description ?? "")}`);
-	console.log("Skills:");
-	const meta = catalogMeta().skills;
-	const width = Math.max(14, ...catalog.skills().map((n) => n.length + 1));
-	for (const name of catalog.skills()) console.log(`  ${name.padEnd(width)} ${dim(skillSummary(name, 90))}${meta[name]?.default === false ? dim(" (opcional)") : ""}`);
-	console.log("Comandos:");
-	for (const name of catalog.commands()) console.log(`  ${name.padEnd(14)} ${dim(describe(readFileSync(catalogPath("commands", `${name}.md`), "utf8")))}`);
+	const catalogs = repoCatalogs(repoRoot());
+	const rows = catalogRows(catalogs, 90);
+	const print = (title: string, list: Array<{ ref: string; text: string }>) => {
+		console.log(title);
+		const width = Math.max(14, ...list.map((r) => r.ref.length + 1));
+		for (const r of list) console.log(`  ${r.ref.padEnd(width)} ${dim(r.text)}`);
+	};
+	if (catalogs.length > 1) console.log(`Catálogos: ${catalogs.map((c) => (isBond(c) ? "bond" : `${c.name} (${c.path})`)).join(", ")}`);
+	print("Servidores MCP:", rows.mcp);
+	print("Skills:", rows.skills);
+	print("Comandos:", rows.commands);
 	console.log(`Agentes: ${SUPPORTED_AGENTS.join(", ")}`);
 }
 
@@ -110,10 +251,14 @@ interface RepoConfig {
 	agents: string[];
 	/** Agente que abre `bond` en este repo. */
 	default_agent?: string;
+	/** Tal cual en bond.toml: nombre o catalogo:nombre. */
 	mcp: string[];
 	skills: string[];
 	commands: string[];
 	mcp_servers: Record<string, McpServer>;
+	catalogs: Catalog[];
+	/** Lo pedido, resuelto a su catálogo. */
+	tools: Record<Kind, Tool[]>;
 }
 
 function repoRoot(): string {
@@ -140,29 +285,27 @@ function loadRepoConfig(root: string): RepoConfig {
 		die(`.bond/bond.toml no es TOML válido: ${(e as Error).message}`);
 	}
 	const list = (k: string) => (Array.isArray(raw[k]) ? (raw[k] as string[]) : []);
-	const cfg: RepoConfig = {
-		agents: list("agents"),
-		default_agent: typeof raw.default_agent === "string" ? raw.default_agent : undefined,
-		mcp: list("mcp"),
-		skills: list("skills"),
-		commands: list("commands"),
-		mcp_servers: (raw.mcp_servers ?? {}) as Record<string, McpServer>,
-	};
 	// Nombres antiguos del catálogo: "web" chocaba con un espacio de nombres reservado de OpenAI.
 	const ALIASES: Record<string, string> = { web: "duckduckgo" };
-	cfg.mcp = cfg.mcp.map((n) => {
+	const mcp = list("mcp").map((n) => {
 		if (!ALIASES[n]) return n;
 		warn(`bond.toml: el servidor MCP "${n}" ahora se llama "${ALIASES[n]}"; cámbialo en .bond/bond.toml`);
 		return ALIASES[n];
 	});
-	const check = (kind: string, wanted: string[], known: string[]) => {
-		const unknown = wanted.filter((w) => !known.includes(w));
-		if (unknown.length) die(`bond.toml: ${kind} desconocidos: ${unknown.join(", ")} (bond init --list)`);
+	const agents = list("agents");
+	const unknownAgents = agents.filter((a) => !SUPPORTED_AGENTS.includes(a));
+	if (unknownAgents.length) die(`bond.toml: agentes desconocidos: ${unknownAgents.join(", ")} (bond init --list)`);
+	const catalogs = loadCatalogs(root, raw);
+	const cfg: RepoConfig = {
+		agents,
+		default_agent: typeof raw.default_agent === "string" ? raw.default_agent : undefined,
+		mcp,
+		skills: list("skills"),
+		commands: list("commands"),
+		mcp_servers: (raw.mcp_servers ?? {}) as Record<string, McpServer>,
+		catalogs,
+		tools: { mcp: resolveTools(catalogs, "mcp", mcp), skills: resolveTools(catalogs, "skills", list("skills")), commands: resolveTools(catalogs, "commands", list("commands")) },
 	};
-	check("agentes", cfg.agents, SUPPORTED_AGENTS);
-	check("servidores MCP", cfg.mcp, Object.keys(catalog.mcp()));
-	check("skills", cfg.skills, catalog.skills());
-	check("comandos", cfg.commands, catalog.commands());
 	for (const [name, s] of Object.entries(cfg.mcp_servers)) {
 		if (!s.command && !s.url) die(`bond.toml: mcp_servers.${name} necesita command o url`);
 	}
@@ -212,15 +355,15 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 	const out: Output[] = [];
 	const agents = new Set(cfg.agents);
 	const servers: Record<string, McpServer> = {
-		...Object.fromEntries(cfg.mcp.map((n) => [n, catalog.mcp()[n]])),
+		...Object.fromEntries(cfg.tools.mcp.map((t) => [t.name, contents(t.catalog).mcp[t.name]])),
 		...cfg.mcp_servers,
 	};
 
 	// Skills: se copian a .agents/skills/, que leen pi y casi todos los agentes.
-	for (const name of cfg.skills) {
-		const src = catalogPath("skills", name);
+	for (const t of cfg.tools.skills) {
+		const src = skillDir(t);
 		for (const f of walk(src)) {
-			out.push({ kind: "file", path: repoPath(".agents", "skills", name, relative(src, f)), content: readFileSync(f, "utf8"), mode: statSync(f).mode & 0o777 });
+			out.push({ kind: "file", path: repoPath(".agents", "skills", t.name, relative(src, f)), content: readFileSync(f, "utf8"), mode: statSync(f).mode & 0o777 });
 		}
 	}
 	// Todos los skills del repo, para enlazarlos a Claude: los del catálogo elegidos y los
@@ -229,7 +372,8 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 	const own = existsSync(skillsDir)
 		? readdirSync(skillsDir).filter((d) => existsSync(join(skillsDir, d, "SKILL.md")) && !prev.files[repoPath(".agents", "skills", d, "SKILL.md")])
 		: [];
-	const allSkills = new Set([...cfg.skills, ...own]);
+	const chosen = new Map(cfg.tools.skills.map((t) => [t.name, t]));
+	const allSkills = new Set([...chosen.keys(), ...own]);
 
 	// Comandos propios del repo: .bond/commands/*.md (sintaxis común: $ARGUMENTS, $1...).
 	const ownDir = join(bondDir(root), "commands");
@@ -251,7 +395,9 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 		// catálogo): por ~/.bond/pi, un enlace estable a la versión instalada de bond, así la
 		// ruta sirve en cualquier máquina con bond.
 		out.push({ kind: "json", path: repoPath(".pi", "settings.json"), parent: null, entries: { defaultTools: ["+grep", "+find", "+ls"], packages: ["~/.bond/pi"] } });
-		// Los comandos del catálogo le llegan a pi por el paquete global de bond; aquí, solo los propios.
+		// Los comandos del catálogo de bond le llegan a pi por el paquete global de bond; aquí, los
+		// de los catálogos del equipo y los propios.
+		for (const t of cfg.tools.commands.filter((t) => !isBond(t.catalog))) out.push({ kind: "file", path: repoPath(".pi", "prompts", `${t.name}.md`), content: commandText(t) });
 		for (const f of ownCommands) out.push({ kind: "file", path: repoPath(".pi", "prompts", f), content: readFileSync(join(ownDir, f), "utf8") });
 	}
 
@@ -267,9 +413,7 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 		);
 		out.push({ kind: "json", path: ".mcp.json", parent: "mcpServers", entries: shared });
 		// Copilot también lee .claude/commands como skills: un solo sitio para los dos.
-		for (const name of cfg.commands) {
-			out.push({ kind: "file", path: repoPath(".claude", "commands", `${name}.md`), content: readFileSync(catalogPath("commands", `${name}.md`), "utf8") });
-		}
+		for (const t of cfg.tools.commands) out.push({ kind: "file", path: repoPath(".claude", "commands", `${t.name}.md`), content: commandText(t) });
 		for (const f of ownCommands) out.push({ kind: "file", path: repoPath(".claude", "commands", f), content: readFileSync(join(ownDir, f), "utf8") });
 	}
 
@@ -282,7 +426,8 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 				out.push({ kind: "link", path: repoPath(".claude", "skills", name), target: join("..", "..", ".agents", "skills", name) });
 				continue;
 			}
-			const src = cfg.skills.includes(name) ? catalogPath("skills", name) : join(skillsDir, name);
+			const t = chosen.get(name);
+			const src = t ? skillDir(t) : join(skillsDir, name);
 			for (const f of walk(src)) {
 				out.push({ kind: "file", path: repoPath(".claude", "skills", name, relative(src, f)), content: readFileSync(f, "utf8") });
 			}
@@ -317,9 +462,7 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 			]),
 		);
 		out.push({ kind: "json", path: "opencode.json", parent: "mcp.servers", entries: oc });
-		for (const name of cfg.commands) {
-			out.push({ kind: "file", path: repoPath(".opencode", "commands", `${name}.md`), content: readFileSync(catalogPath("commands", `${name}.md`), "utf8") });
-		}
+		for (const t of cfg.tools.commands) out.push({ kind: "file", path: repoPath(".opencode", "commands", `${t.name}.md`), content: commandText(t) });
 		for (const f of ownCommands) out.push({ kind: "file", path: repoPath(".opencode", "commands", f), content: readFileSync(join(ownDir, f), "utf8") });
 	}
 
@@ -351,7 +494,7 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 		);
 		out.push({ kind: "json", path: settings, parent: "mcpServers", entries: gm });
 		const commands = [
-			...cfg.commands.map((n) => [n, readFileSync(catalogPath("commands", `${n}.md`), "utf8")] as const),
+			...cfg.tools.commands.map((t) => [t.name, commandText(t)] as const),
 			...ownCommands.map((f) => [f.slice(0, -3), readFileSync(join(ownDir, f), "utf8")] as const),
 		];
 		for (const [name, md] of commands) out.push({ kind: "file", path: repoPath(".gemini", "commands", `${name}.toml`), content: geminiCommand(md) });
@@ -615,7 +758,7 @@ Las personales de cada uno van en su configuración global; aquí, solo lo de es
 `;
 }
 
-type Selection = Omit<RepoConfig, "mcp_servers">;
+type Selection = Pick<RepoConfig, "agents" | "default_agent" | "mcp" | "skills" | "commands">;
 const tomlArr = (a: string[]) => `[${a.map((x) => JSON.stringify(x)).join(", ")}]`;
 
 function bondToml(cfg: Selection): string {
@@ -636,6 +779,12 @@ commands = ${tomlArr(cfg.commands)}      # comandos del catálogo
 
 # Comandos propios: ficheros Markdown en .bond/commands/ ($ARGUMENTS, $1, $2...).
 # Skills propios: carpetas con SKILL.md en .agents/skills/ (bond los enlaza para Claude).
+
+# Catálogos de tu equipo, además del de bond (se crean con bond catalog create). Lo suyo se
+# elige igual, por nombre; si un nombre está en dos catálogos: "catalogo:nombre".
+# [[catalog]]
+# name = "equipo"
+# path = "../skills-equipo"
 `;
 }
 
@@ -658,7 +807,7 @@ export function updateBondToml(text: string, cfg: Selection): string {
 const AGENT_NAMES: Record<string, string> = { pi: "pi", claude: "Claude Code", copilot: "Copilot CLI", codex: "Codex", opencode: "opencode", crush: "Crush", gemini: "Gemini CLI" };
 
 /** Preguntas de init: agentes (de los instalados), agente por defecto y herramientas del catálogo. */
-async function askSelection(current: Selection, installed: string[]): Promise<Selection | undefined> {
+async function askSelection(current: Selection, installed: string[], catalogs: Catalog[]): Promise<Selection | undefined> {
 	const p = await import("@clack/prompts");
 	const cancel = <T,>(v: T | symbol): T => {
 		if (p.isCancel(v)) {
@@ -687,12 +836,13 @@ async function askSelection(current: Selection, installed: string[]): Promise<Se
 				);
 	// Qué hace cada herramienta, antes de elegir: clack solo enseña el hint de las marcadas y de
 	// la que tiene el cursor, y al confirmar junta las etiquetas, así que estas van sin texto.
-	const describeCommand = (n: string) => describe(readFileSync(catalogPath("commands", `${n}.md`), "utf8"));
-	const meta = catalogMeta().skills;
+	// Los de un catálogo del equipo llevan su nombre al final; si un nombre está en dos
+	// catálogos, va como catalogo:nombre (así se escribe en bond.toml).
+	const rows = catalogRows(catalogs, 200);
 	const groups: Array<[string, Array<[string, string]>]> = [
-		["Servidores MCP", Object.entries(catalog.mcp()).map(([n, s]) => [n, s.description ?? ""])],
-		["Skills", catalog.skills().map((n) => [n, skillSummary(n, 200) + (meta[n]?.default === false ? " (opcional)" : "")])],
-		["Comandos", catalog.commands().map((n) => [`/${n}`, describeCommand(n)])],
+		["Servidores MCP", rows.mcp.map((r) => [r.ref, r.text])],
+		["Skills", rows.skills.map((r) => [r.ref, r.text])],
+		["Comandos", rows.commands.map((r) => [`/${r.ref}`, r.text])],
 	];
 	const width = Math.max(...groups.flatMap(([, rows]) => rows.map(([n]) => n.length))) + 2;
 	const room = Math.max(20, (process.stdout.columns || 100) - width - 8);
@@ -702,11 +852,14 @@ async function askSelection(current: Selection, installed: string[]): Promise<Se
 		await p.groupMultiselect({
 			message: "¿Qué herramientas del catálogo? (espacio para marcar o desmarcar)",
 			options: {
-				"Servidores MCP": Object.keys(catalog.mcp()).map((n) => ({ value: `mcp:${n}`, label: n })),
-				Skills: catalog.skills().map((n) => ({ value: `skills:${n}`, label: n })),
-				Comandos: catalog.commands().map((n) => ({ value: `commands:${n}`, label: n })),
+				"Servidores MCP": rows.mcp.map((r) => ({ value: `mcp:${r.ref}`, label: r.ref })),
+				Skills: rows.skills.map((r) => ({ value: `skills:${r.ref}`, label: r.ref })),
+				Comandos: rows.commands.map((r) => ({ value: `commands:${r.ref}`, label: r.ref })),
 			},
-			initialValues: [...current.mcp.map((n) => `mcp:${n}`), ...current.skills.map((n) => `skills:${n}`), ...current.commands.map((n) => `commands:${n}`)],
+			initialValues: (["mcp", "skills", "commands"] as const).flatMap((k) => {
+				const all = toolsOf(catalogs, k);
+				return resolveTools(catalogs, k, current[k]).map((t) => `${k}:${refOf(t, all)}`);
+			}),
 			required: false,
 		}),
 	);
@@ -752,15 +905,16 @@ export async function init(args: string[]): Promise<void> {
 	} catch {
 		// Sin configuración global: se parte de lo instalado.
 	}
-	const current: Selection = exists
-		? loadRepoConfig(root)
-		: {
-				agents: global.agents.filter((a) => installed.includes(a)).length ? global.agents.filter((a) => installed.includes(a)) : installed,
-				default_agent: global.default_agent,
-				mcp: Object.keys(catalog.mcp()),
-				skills: defaultSkills(),
-				commands: catalog.commands(),
-			};
+	// Sin bond.toml no hay catálogos del equipo todavía: se parte del de bond.
+	const repoCfg = exists ? loadRepoConfig(root) : undefined;
+	const catalogs = repoCfg?.catalogs ?? [bondCatalog()];
+	const current: Selection = repoCfg ?? {
+		agents: global.agents.filter((a) => installed.includes(a)).length ? global.agents.filter((a) => installed.includes(a)) : installed,
+		default_agent: global.default_agent,
+		mcp: Object.keys(contents(bondCatalog()).mcp),
+		skills: defaultSkills(),
+		commands: contents(bondCatalog()).commands,
+	};
 
 	// Con flags o --yes, sin preguntas; si no, preguntas (si hay terminal).
 	const explicit = flags.some((f) => args.includes(f));
@@ -778,7 +932,7 @@ export async function init(args: string[]): Promise<void> {
 		const { renderSmall } = await import("../lib/bond-logo.mts");
 		p.intro(renderSmall(56, `init · ${basename(root)}`));
 		if (exists) p.log.info("Este repo ya tiene .bond/bond.toml: cambia lo que quieras (se conservan tus comentarios y servidores MCP propios)");
-		sel = (await askSelection(current, installed))!;
+		sel = (await askSelection(current, installed, catalogs))!;
 	}
 	if (!sel.agents.length) die("hace falta al menos un agente");
 	if (!sel.default_agent || !sel.agents.includes(sel.default_agent)) sel.default_agent = sel.agents[0];

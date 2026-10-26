@@ -2,6 +2,13 @@
 
 ## Sin publicar
 
+- Catálogos del equipo en un repo: `[[catalog]]` con `path` en `.bond/bond.toml`. Sus skills,
+  comandos y servidores MCP salen en `bond init` (y en `--list`, con el nombre del catálogo) y
+  `bond sync` los genera para cada agente como los del catálogo de bond; en pi, sus comandos van
+  a `.pi/prompts/`. Con el mismo nombre que una de bond, gana la del equipo (`bond:nombre` pide
+  la de bond); en dos catálogos del equipo, se elige con `catalogo:nombre`. `sync`
+  valida el catálogo como `bond catalog check` y no escribe nada si tiene errores; avisa si la
+  carpeta está fuera del repo. Sin `[[catalog]]`, nada cambia.
 - `bond catalog create`: prepara el repo actual como catálogo propio de un equipo. Pregunta el
   nombre (por defecto, el de la carpeta; `--name` para no preguntar) y crea `catalog.toml` y
   las carpetas `skills/`, `commands/` y `mcps/`, cada una con un `README.md` que explica cómo
