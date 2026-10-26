@@ -1,5 +1,20 @@
 # Cambios
 
+## Sin publicar
+
+- `bond catalog create`: prepara el repo actual como catálogo propio de un equipo. Pregunta el
+  nombre (por defecto, el de la carpeta; `--name` para no preguntar) y crea `catalog.toml` y
+  las carpetas `skills/`, `commands/` y `mcps/`, cada una con un `README.md` que explica cómo
+  añadir lo suyo. No mete ejemplos instalables. Si ya hay `catalog.toml`, no lo toca y solo
+  añade lo que falte.
+- `bond catalog check [dir]`: comprueba un catálogo (skills con `SKILL.md` y `name` igual a su
+  carpeta, comandos con `description`, servidores MCP con `command` o `url`, entradas de
+  `catalog.toml` que existen) y sale con 1 si hay errores, para CI. Avisa de secretos escritos
+  tal cual en `env` o `headers`.
+- Los servidores MCP del catálogo van ahora en un fichero por servidor (`catalog/mcps/<nombre>.json`
+  en lugar de `catalog/mcp.json`), el mismo formato que los catálogos propios. Lo que genera
+  `bond sync` no cambia.
+
 ## 1.5.1
 
 - `bond doctor`: ejecutándose desde el repo de bond, si `~/.bond/pi` apunta a un runtime

@@ -15,6 +15,7 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSy
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { parse } from "smol-toml";
 import { parseJsonc } from "./agents.mts";
+import { type McpServer, readCommandNames, readMcps } from "./catalog.mts";
 import { assetsPath, ensureBondLink } from "./runtime.mts";
 import { bad, caution, die, dim, isDryRun, log, ok, run, STAMP, warn, which } from "./util.mts";
 
@@ -48,28 +49,15 @@ Genera la configuración de cada agente del repo a partir de .bond/bond.toml.
 
 // --- catálogo ---------------------------------------------------------------------------
 
-interface McpServer {
-	command?: string;
-	args?: string[];
-	env?: Record<string, string>;
-	url?: string;
-	headers?: Record<string, string>;
-	description?: string;
-}
-
 const catalog = {
-	mcp: () => JSON.parse(readFileSync(catalogPath("mcp.json"), "utf8")) as Record<string, McpServer>,
+	mcp: () => readMcps(catalogPath()),
 	/** En el orden de catalog.toml; las que no estén ahí, al final por nombre. */
 	skills: () => {
 		const found = readdirSync(catalogPath("skills")).filter((d) => existsSync(catalogPath("skills", d, "SKILL.md")));
 		const order = Object.keys(catalogMeta().skills).filter((n) => found.includes(n));
 		return [...order, ...found.filter((n) => !order.includes(n)).sort()];
 	},
-	commands: () =>
-		readdirSync(catalogPath("commands"))
-			.filter((f) => f.endsWith(".md"))
-			.map((f) => f.slice(0, -3))
-			.sort(),
+	commands: () => readCommandNames(catalogPath()),
 };
 
 interface CatalogEntry {

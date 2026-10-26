@@ -21,6 +21,7 @@ const ASSET_PATHS = [
 	"extensions",
 	"lib",
 	"prompts",
+	"templates", // plantillas de bond catalog create
 	"herdr/config.snippet.toml",
 ];
 

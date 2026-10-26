@@ -130,6 +130,7 @@ bond/
 │   ├── main.mts                  # subcomandos
 │   ├── setup.mts, wizard.mts     # bond setup
 │   ├── repo.mts                  # bond init, bond sync
+│   ├── catalog.mts               # bond catalog (create, check)
 │   ├── launch.mts, herdr.mts     # bond, bond dev, bond status
 │   ├── team.mts                  # bond team (status, prompt, clean)
 │   ├── sessions.mts              # bond sessions
@@ -140,10 +141,11 @@ bond/
 │   ├── catalog-agents.mts        # agentes conocidos y cómo instalarlos
 │   ├── doctor.mts, runtime.mts, util.mts
 ├── catalog/                      # lo que bond init instala en un repo
-│   ├── mcp.json                  # servidores MCP: context7, duckduckgo
-│   ├── catalog.toml              # resumen de cada skill y si sale marcada
+│   ├── catalog.toml              # nombre, resumen de cada skill y si sale marcada
 │   ├── skills/                   # code-context, plan-create, plan-execute...
-│   └── commands/                 # review, commit, handoff (sintaxis común)
+│   ├── commands/                 # review, commit, handoff (sintaxis común)
+│   └── mcps/                     # servidores MCP, uno por fichero: context7, duckduckgo
+├── templates/catalog/            # lo que bond catalog create escribe en un catálogo nuevo
 ├── global/skills/                # bond-delegate, bond-team (globales, para cualquier agente)
 ├── extensions/, prompts/, lib/   # Bond Extensions de pi (paquete: package.json → "pi")
 ├── scripts/build.mts             # binarios y paquete de npm

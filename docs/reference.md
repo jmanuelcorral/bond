@@ -14,6 +14,7 @@ Cada comando, qué escribe en cada sitio y por qué.
 | `bond status` | Agentes vivos en Herdr |
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
 | `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
+| `bond catalog create\|check` | Prepara un repo como catálogo propio de skills, comandos y MCP, y lo comprueba ([abajo](#catálogo-propio-bond-catalog)) |
 | `bond models list\|probe\|sync` | Endpoints y modelos globales, y su config en cada agente |
 | `bond run copilot` | Copilot CLI contra un modelo propio (variables de entorno) |
 | `bond key <endpoint>` | Imprime una clave guardada (la usan los agentes) |
@@ -157,6 +158,40 @@ tiene igualmente la configuración de su agente.
 **Confianza.** La primera vez, pi pregunta si confías en el proyecto (sin eso no carga `.pi/`)
 y Claude Code pide aprobar los servidores de `.mcp.json`. bond no aprueba nada por ti.
 `bond doctor` dentro de un repo con `.bond/` comprueba además que está al día.
+
+## Catálogo propio (`bond catalog`)
+
+Un equipo reúne en un repo las skills, comandos y servidores MCP que comparte, con la misma
+estructura que el catálogo de bond (`catalog/`):
+
+```text
+catalog.toml               name y, por skill, summary/default para bond init
+skills/<nombre>/SKILL.md   frontmatter name (igual que la carpeta) y description
+commands/<nombre>.md       frontmatter description; $ARGUMENTS, $1…
+mcps/<nombre>.json         command/args/env o url/headers, y description; secretos con ${VAR}
+```
+
+```bash
+cd ~/gitrepos/skills-equipo
+bond catalog create              # pregunta el nombre (por defecto, el de la carpeta)
+bond catalog create --name equipo
+bond catalog check               # sale con 1 si hay errores: para la CI del catálogo
+bond catalog check ruta/al/catalogo
+```
+
+- **`create`** escribe `catalog.toml` y las carpetas `skills/`, `commands/` y `mcps/`, cada
+  una con un `README.md` que explica el formato con un ejemplo. No mete skills, comandos ni
+  servidores. Si ya hay `catalog.toml`, no lo toca y solo añade lo que falte; repetirlo no
+  cambia nada. No hace `git init` ni commit (fuera de git, avisa).
+- **`check`** da un error por cada problema: skill sin `SKILL.md` o con `name` distinto de su
+  carpeta, sin `description`, comando sin `description`, JSON inválido, servidor sin `command`
+  ni `url`, `[skills.x]` en `catalog.toml` de una skill que no existe. Un valor de `env` o
+  `headers` que parece un secreto escrito tal cual es un aviso. Los `README.md` no cuentan.
+- El repo del catálogo es un repo normal: se puede trabajar en él con bond (`bond init`,
+  `.bond/`, `.agents/skills/`), que no toca las carpetas del catálogo.
+
+Usar un catálogo propio desde otros repos (`bond catalog add`) está en camino
+([plan](plans/2026-10-23-external-catalogs.md)).
 
 ## Modelos globales (`bond models`)
 
@@ -590,8 +625,8 @@ con `halo/flash-halogen`.
 |---|---|---|
 | Tools `grep`, `find`, `ls` | `settings.json` → `defaultTools` | Búsqueda con salida acotada. Necesitan `rg` y `fd`. |
 | Tool `repo_map` | `extensions/repo-map.ts` | Mapa del repo en ~40 líneas: manifiestos y comandos, árbol con nº de ficheros, lenguajes, ficheros más tocados. |
-| MCP `context7` | `catalog/mcp.json` (por repo) | Documentación de librerías por versión (`resolve-library-id`, `query-docs`). Remoto, sin clave. |
-| MCP `duckduckgo` | `catalog/mcp.json` (por repo) | Búsqueda en DuckDuckGo y lectura de páginas (`search`, `fetch_content`). `uvx duckduckgo-mcp-server==0.7.0`, sin clave. |
+| MCP `context7` | `catalog/mcps/context7.json` (por repo) | Documentación de librerías por versión (`resolve-library-id`, `query-docs`). Remoto, sin clave. |
+| MCP `duckduckgo` | `catalog/mcps/duckduckgo.json` (por repo) | Búsqueda en DuckDuckGo y lectura de páginas (`search`, `fetch_content`). `uvx duckduckgo-mcp-server==0.7.0`, sin clave. |
 | `ast-grep` | `bun add -g @ast-grep/cli@0.45.3` | Búsqueda estructural por sintaxis. |
 | Skill `code-context` | `catalog/skills/code-context/` (por repo, con `bond init`) | Cuándo usar cada cosa, recetas de `ast-grep` por lenguaje. |
 
@@ -612,7 +647,7 @@ añaden servidores grandes, conviene `"exposure": "deferred"` y `tool_search`.
 
 **Versiones fijadas.** El servidor `duckduckgo` y `ast-grep` van con versión exacta y de al menos dos
 semanas de antigüedad, para no ejecutar lo publicado ayer. Para actualizar: cambia la versión
-en `mcp.json` (o reinstala `ast-grep`) y verifica con `pi mcp list`.
+en `catalog/mcps/duckduckgo.json` (o reinstala `ast-grep`) y verifica con `pi mcp list`.
 
 **Privacidad.** `context7` y `duckduckgo` son servicios externos: reciben las consultas, no el código.
 `AGENTS.md` pide no mandar a la web código ni datos privados.
