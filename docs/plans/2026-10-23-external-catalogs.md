@@ -3,7 +3,7 @@ name: "external-catalogs"
 description: "Repos externos de skills/MCPs/comandos consumibles por bond init/sync para que los equipos compartan su config"
 created_at: "2026-10-23T11:35:02Z"
 has_completed_all_phases: false
-last_implementation_at: "2026-10-26T08:38:23Z"
+last_implementation_at: "2026-10-26T09:14:23Z"
 ---
 
 # Catálogos externos: compartir skills, MCPs y comandos entre equipos
@@ -256,12 +256,12 @@ Dependencias: ninguna externa. Riesgos:
   - `bond catalog clean` deja solo los SHAs del repo actual.
   - URLs ssh y https del mismo repo cuentan como el mismo catálogo.
 - Actions:
-  - [ ] `cli/catalogs.mts`: fetch con la CLI de `git` (por SHA; si el servidor no lo permite,
+  - [x] `cli/catalogs.mts`: fetch con la CLI de `git` (por SHA; si el servidor no lo permite,
         fetch de la ref y comprobación), caché por SHA, escritura atómica del lock.
-  - [ ] `bond catalog` con su ayuda y la revisión de MCP (`--yes`).
-  - [ ] Pruebas con un repo git de fixture por `file://` (sin red en los tests).
-  - [ ] CHANGELOG, ayuda y `docs/reference.md`.
-  - [ ] Presentar evidencia y parar a revisión.
+  - [x] `bond catalog` con su ayuda y la revisión de MCP (`--yes`).
+  - [x] Pruebas con un repo git de fixture por `file://` (sin red en los tests).
+  - [x] CHANGELOG, ayuda y `docs/reference.md`.
+  - [x] Presentar evidencia y parar a revisión.
 - Verification: `npm run typecheck && bun test`; manual en un repo temporal: `catalog add`,
   `sync`, borrar caché, `sync --check`, `catalog update` con un tag movido.
 - Risks y recovery: sin `git` en el PATH, error claro; caché corrupta, `clean` y volver a
@@ -304,16 +304,16 @@ Dependencias: ninguna externa. Riesgos:
 | Phase | Implementation | Verification | Review | Evidence |
 | --- | --- | --- | --- | --- |
 | P1 | implemented | passed | accepted | PR #11 fusionado (rebase) el 2026-10-26, CI verde en Linux, macOS y Windows; ver «Evidencia P1» |
-| P2 | implemented | passed (Linux) | pending | ver «Evidencia P2» |
-| P3 | pending | not_run | pending | none yet |
+| P2 | implemented | passed | accepted | PR #12 fusionado (rebase) el 2026-10-26, CI verde en Linux, macOS y Windows; ver «Evidencia P2» |
+| P3 | implemented | passed (Linux) | pending | ver «Evidencia P3» |
 | P4 | pending | not_run | pending | none yet |
 | P5 | pending | not_run | pending | none yet |
 
 ## Next step
 
-Revisar P2 (rama `feat/catalog-local`, sin commitear) y elegir su commit; la CI del PR comprueba
-Windows y macOS. Con P2 aceptada, la siguiente fase es P3 (catálogos git, caché, lock y revisión
-de MCP).
+Revisar P3 (rama `feat/catalog-git`, sin commitear) y elegir su commit; la CI del PR comprueba
+Windows y macOS (las pruebas usan `file://`). Con P3 aceptada, la siguiente fase es P4 (`bond
+doctor` y documentación para equipos).
 
 ## Evidence and tracking
 
@@ -365,3 +365,26 @@ GitHub, los issues pasan a ser la autoridad de estado y esta tabla pasa a snapsh
 - Pendiente: Windows y macOS (CI del PR) y el selector interactivo de `bond init` con un catálogo
   del equipo (sin terminal en las pruebas; lo cubren `--list` y `init` con flags, que usan las
   mismas filas).
+
+### Evidencia P3 (2026-10-26, árbol de trabajo sobre `80db929`, rama `feat/catalog-git`)
+
+- `npm run typecheck`: sin errores. `bun test`: 208 pass, 0 fail (19 nuevas en
+  `test/catalog-git.test.mts`, con un repo de catálogo servido por `file://`): URLs ssh/https
+  equivalentes, tag anotado resuelto a su commit, `add` por git (bond.toml, lock, caché sin
+  `.git`, `sync` instala lo elegido), sin `--yes` no escribe, revisión de lo sustituido,
+  `--name`, `add` de carpeta, tag inexistente / catálogo roto / URL repetida no se añaden,
+  `sync --check` sin caché baja el commit del lock y no la punta de la rama, caché llena sin
+  repo, lock que no cuadra / que falta / ilegible, git sin name, `update` sin cambios / con tag
+  movido (enseña el MCP cambiado; sin `--yes` el lock queda igual) / con `--ref`, catálogo
+  local no se actualiza, `list`, `remove` y `clean`.
+- `bin/bond sync --check` en el repo de bond: «al día».
+- A mano, de punta a punta en un repo temporal con un catálogo `file://` (add, list, caché
+  borrada con la rama avanzada, URL inaccesible con caché, update con tag movido, remove,
+  clean) y con el binario `linux-x64`. Con red: `add https://github.com/fluzo-labs/common-skills`
+  descarga `b73053c` y lo rechaza (falta `catalog.toml`) sin tocar el repo.
+- Desviaciones del plan, a revisar: el módulo es `cli/catalog-git.mts` (no `cli/catalogs.mts`,
+  demasiado parecido a `cli/catalog.mts`); `remove` quita también de la selección lo que venía
+  del catálogo (en vez de que `sync` avise), así el repo queda válido; un catálogo por git
+  necesita `name` en `bond.toml` (es su clave en el lock; `add` lo escribe siempre).
+- Pendiente: Windows y macOS (CI del PR) y la confirmación interactiva de `add`/`update` (sin
+  terminal en las pruebas: se cubren `--yes` y el rechazo sin terminal).

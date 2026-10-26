@@ -15,6 +15,7 @@ Cada comando, qué escribe en cada sitio y por qué.
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
 | `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
 | `bond catalog create\|check` | Prepara un repo como catálogo propio de skills, comandos y MCP, y lo comprueba ([abajo](#catálogo-propio-bond-catalog)) |
+| `bond catalog add\|list\|update\|remove\|clean` | Usa en el repo el catálogo de tu equipo, por git (con el commit fijado) o por carpeta ([abajo](#catálogos-por-git-bond-catalog-add)) |
 | `bond models list\|probe\|sync` | Endpoints y modelos globales, y su config en cada agente |
 | `bond run copilot` | Copilot CLI contra un modelo propio (variables de entorno) |
 | `bond key <endpoint>` | Imprime una clave guardada (la usan los agentes) |
@@ -34,6 +35,7 @@ Cada comando, qué escribe en cada sitio y por qué.
 | `AGENTS.md` | Tus instrucciones para todos los agentes |
 | `state.json` | Lo que detectó la sonda, lo que bond gestiona en cada agente y la última comprobación de versión |
 | `runtime/<versión>/` | Ficheros que lleva dentro el binario, extraídos; solo se queda la versión en uso |
+| `catalogs/<host>/<repo>/<commit>/` | Catálogos del equipo por git, uno por commit; `bond catalog clean` los poda |
 | `pi` | Enlace a las Bond Extensions de la versión instalada |
 
 **En la config de cada agente** (siempre solo lo de bond; el resto del fichero no se toca):
@@ -45,7 +47,7 @@ Cada comando, qué escribe en cada sitio y por qué.
 | Skills `bond-delegate`, `bond-team` | `~/.agents/skills/` y `~/.claude/skills/` |
 | Integración de Herdr | La instala `herdr integration install <agente>` |
 
-**En cada repo**: `.bond/bond.toml` (lo que pides), `.bond/manifest.json` (lo que generó bond),
+**En cada repo**: `.bond/bond.toml` (lo que pides), `.bond/lock.json` (el commit de cada catálogo por git), `.bond/manifest.json` (lo que generó bond),
 `AGENTS.md` (tuyo) y la config de cada agente ([abajo](#configuración-por-repo-bond-init-y-bond-sync)).
 
 ## Bond Extensions (pi)
@@ -215,8 +217,42 @@ path = "../skills-equipo"
 - **Comandos en pi**: los del catálogo de bond le llegan por las Bond Extensions; los de un
   catálogo del equipo se escriben en `.pi/prompts/`.
 - **Ruta fuera del repo**: funciona, con aviso: al resto del equipo solo le sirve si tiene esa
-  misma carpeta. Declarar el catálogo por su URL de git, con la versión fijada, está en camino
-  ([plan](plans/2026-10-23-external-catalogs.md)).
+  misma carpeta. Para compartirlo, por git (abajo).
+
+### Catálogos por git (`bond catalog add`)
+
+Lo normal en un equipo: el catálogo vive en su repo y cada proyecto lo declara por su URL, con
+el commit fijado en `.bond/lock.json` (se commitea, como un lockfile).
+
+```bash
+bond catalog add https://github.com/acme/skills-equipo --ref v1   # tag, rama o sha
+bond catalog add git@github.com:acme/skills-equipo.git           # sin --ref: rama por defecto
+bond catalog add ../skills-equipo                                 # una carpeta: [[catalog]] path
+bond catalog list                # el de bond y los del repo, con ref y commit
+bond catalog update [equipo]     # vuelve a resolver la ref y mueve el lock (--ref para cambiarla)
+bond catalog remove equipo       # lo quita de bond.toml, del lock y de lo elegido de él
+bond catalog clean               # vacía ~/.bond/catalogs salvo los commits de este repo
+```
+
+```toml
+[[catalog]]
+name = "equipo"                  # obligatorio por git: es su clave en el lock
+git = "https://github.com/acme/skills-equipo"
+ref = "v1"
+```
+
+- **Lo que se revisa**: `add` y `update` enseñan los servidores MCP que llegan o cambian (qué
+  ejecutan o adónde se conectan) y lo que el repo usa y pasa a venir de otro catálogo (una skill
+  de bond que el equipo sustituye), y piden confirmación; `--yes` la da (sin terminal, sin
+  `--yes`, no escriben nada). Un catálogo que no pasa `bond catalog check` no se añade.
+- **Fijado**: solo `add` y `update` cambian el commit. `sync` (y `sync --check` en CI) usa el
+  del lock aunque la rama haya avanzado, y lo descarga a `~/.bond/catalogs/` si no está; con la
+  caché llena funciona sin red. Si `bond.toml` y el lock no cuadran (otra URL o ref), `sync`
+  pide `bond catalog update`.
+- **Mismo repo, otra URL**: `git@github.com:acme/x.git` y `https://github.com/acme/x` son el
+  mismo catálogo: no se puede añadir dos veces.
+- **Repos privados**: bond usa tu `git` y sus credenciales, sin preguntar (si pide contraseña,
+  falla). En CI, el job necesita acceso de lectura al repo del catálogo.
 
 ## Modelos globales (`bond models`)
 

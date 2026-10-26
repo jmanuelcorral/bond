@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+- Catálogos del equipo por git: `bond catalog add <url> [--ref tag|rama|sha]` los declara en
+  `.bond/bond.toml` (`[[catalog]]` con `name`, `git` y `ref`) y fija el commit en
+  `.bond/lock.json`, que se commitea. `sync` usa ese commit (aunque la rama avance) y lo descarga
+  a `~/.bond/catalogs/` si falta; con la caché llena funciona sin red. `bond catalog update`
+  vuelve a resolver la ref y mueve el lock; `list`, `remove` (quita también lo elegido de él) y
+  `clean` (poda la caché). `add` y `update` enseñan antes los servidores MCP que llegan o cambian
+  y lo que pasa a venir de otro catálogo, y piden confirmación (`--yes`). `add` también acepta
+  una carpeta (`[[catalog]] path`).
 - Catálogos del equipo en un repo: `[[catalog]]` con `path` en `.bond/bond.toml`. Sus skills,
   comandos y servidores MCP salen en `bond init` (y en `--list`, con el nombre del catálogo) y
   `bond sync` los genera para cada agente como los del catálogo de bond; en pi, sus comandos van
