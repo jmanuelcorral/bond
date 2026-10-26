@@ -38,8 +38,8 @@ bond            # cada día, dentro del repo: Herdr con el agente por defecto (g
 
 ## Documentación
 
-En la web: **[jmanuelcorral.github.io/bond](https://jmanuelcorral.github.io/bond/)**, en castellano
-y en [inglés](https://jmanuelcorral.github.io/bond/en/) (los mismos `docs/` y `docs/en/`, con
+En la web: **[josecorral.dev/bond](https://josecorral.dev/bond/)**, en castellano
+y en [inglés](https://josecorral.dev/bond/en/) (los mismos `docs/` y `docs/en/`, con
 buscador). En el repo:
 
 | Doc | Para qué |
