@@ -96,6 +96,11 @@ Esta tabla sí merece seguir siendo tabla, porque es lo que vas a querer consult
 
 ## `bond team`
 
+<figure class="bond-video">
+<video src="/videos/orquestador.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>Así se ve desde dentro: Claude, solo en su panel, monta un equipo de dos minions pi con bond team, les reparte una web, revisa, pide correcciones, integra y limpia. Una sola instrucción, sin cortes.</figcaption>
+</figure>
+
 Aquí es donde bond se pone interesante. Con `bond team` abres un worktree y un agente por cada
 rama que le pidas, y tienes a la vista cómo va cada una. Estos son sus cuatro modos:
 

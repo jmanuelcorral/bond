@@ -97,6 +97,11 @@ This table does deserve to stay a table, because it's what you'll want to check 
 
 ## `bond team`
 
+<figure class="bond-video">
+<video src="/videos/orquestador.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>What it looks like from inside: Claude, alone in its pane, sets up a team of two pi minions with bond team, hands them a website, reviews, asks for fixes, merges and cleans up. One instruction, no cuts.</figcaption>
+</figure>
+
 This is where bond gets interesting. With `bond team` you open one worktree and one agent for
 each branch you ask for, and you can see how each one is doing. These are its four modes:
 

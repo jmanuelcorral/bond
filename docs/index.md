@@ -57,7 +57,18 @@ Después, `bond setup` y a correr. Te lo contamos paso a paso en [Primeros pasos
 
 ## Míralo en acción
 
-Cuatro vídeos cortos sobre [fluzo](https://github.com/fluzo-labs/fluzo), un proyecto real en Rust:
+Empieza por este. Abres `bond` con Claude solo en su panel y le pides, en una sola frase, una
+web muy sencilla: que haga un plan, lo reparta entre dos agentes pi con `bond team` y haga de
+orquestador. Lo demás pasa solo, dentro de bond: los minions escriben cada uno su página, la
+tabla en vivo enseña cómo van, Claude revisa y les devuelve dos correcciones, integra en `main`
+y recoge el equipo. Sin cortes: dura lo que dura.
+
+<figure class="bond-video">
+<video src="/videos/orquestador.mp4" controls muted playsinline preload="metadata"></video>
+<figcaption>Claude orquesta a dos agentes pi: plan, reparto, cuatro paneles a la vez, revisión con correcciones, integración y limpieza.</figcaption>
+</figure>
+
+Y cuatro más, cortos, sobre [fluzo](https://github.com/fluzo-labs/fluzo), un proyecto real en Rust:
 
 <div class="bond-videos">
 
