@@ -305,15 +305,16 @@ Dependencias: ninguna externa. Riesgos:
 | --- | --- | --- | --- | --- |
 | P1 | implemented | passed | accepted | PR #11 fusionado (rebase) el 2026-10-26, CI verde en Linux, macOS y Windows; ver «Evidencia P1» |
 | P2 | implemented | passed | accepted | PR #12 fusionado (rebase) el 2026-10-26, CI verde en Linux, macOS y Windows; ver «Evidencia P2» |
-| P3 | implemented | passed (Linux) | pending | ver «Evidencia P3» |
+| P3 | implemented | passed | accepted | PR #13 fusionado (rebase) el 2026-10-26, CI verde en Linux, macOS y Windows tras `fix(catalog)` de rutas 8.3; ver «Evidencia P3» |
 | P4 | pending | not_run | pending | none yet |
 | P5 | pending | not_run | pending | none yet |
 
 ## Next step
 
-Revisar P3 (rama `feat/catalog-git`, sin commitear) y elegir su commit; la CI del PR comprueba
-Windows y macOS (las pruebas usan `file://`). Con P3 aceptada, la siguiente fase es P4 (`bond
-doctor` y documentación para equipos).
+P4 y P5 en paralelo con `plan-team` (dos agentes pi, ramas `plan/external-catalogs-p4` y
+`plan/external-catalogs-p5` desde `plan/external-catalogs`). Las dos tocan `CHANGELOG.md` y
+`docs/reference.md` en secciones distintas: integrar una y luego la otra, resolviendo esos
+conflictos.
 
 ## Evidence and tracking
 
@@ -386,5 +387,10 @@ GitHub, los issues pasan a ser la autoridad de estado y esta tabla pasa a snapsh
   demasiado parecido a `cli/catalog.mts`); `remove` quita también de la selección lo que venía
   del catálogo (en vez de que `sync` avise), así el repo queda válido; un catálogo por git
   necesita `name` en `bond.toml` (es su clave en el lock; `add` lo escribe siempre).
-- Pendiente: Windows y macOS (CI del PR) y la confirmación interactiva de `add`/`update` (sin
-  terminal en las pruebas: se cubren `--yes` y el rechazo sin terminal).
+- CI del PR #13: Linux y macOS en verde a la primera; Windows falló en `add <carpeta>` (la
+  raíz del repo llegaba de git con nombres largos y el directorio actual con nombres cortos
+  8.3, `RUNNER~1`, y la ruta relativa salía absurda). Arreglado en `fix(catalog): compare real
+  paths when relativizing on Windows` (`repoRelative` con `realpathSync.native`); CI verde en
+  las tres.
+- Pendiente: la confirmación interactiva de `add`/`update` (sin terminal en las pruebas: se
+  cubren `--yes` y el rechazo sin terminal).
