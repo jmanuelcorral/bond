@@ -1,0 +1,51 @@
+# Site de la documentación: docs/ con VitePress (site/) en GitHub Pages,
+# https://jmanuelcorral.github.io/bond/. En un PR solo lo construye (un enlace roto lo para);
+# en main, además, lo publica.
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**", "site/**", ".github/workflows/pages.yml"]
+  pull_request:
+    paths: ["docs/**", "site/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: site
+      - run: npm run build
+        working-directory: site
+      - if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

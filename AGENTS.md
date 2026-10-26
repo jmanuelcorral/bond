@@ -16,6 +16,7 @@ npm ci --ignore-scripts          # dependencias
 bin/bond <comando>               # bond desde el código (Node >= 22.18)
 npm run typecheck && bun test    # tipos y pruebas: lo mismo que CI
 bun scripts/build.mts --targets linux-x64 --no-npm   # un binario en dist/ para probar
+(cd site && npm ci --ignore-scripts && npm run build)  # el site de docs/ (GitHub Pages)
 ```
 
 - **Código**: TypeScript en `cli/` (`.mts`), sin paso de compilación para ejecutarlo. Pruebas en

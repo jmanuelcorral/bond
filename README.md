@@ -38,6 +38,10 @@ bond            # cada día, dentro del repo: Herdr con el agente por defecto (g
 
 ## Documentación
 
+En la web: **[jmanuelcorral.github.io/bond](https://jmanuelcorral.github.io/bond/)**, en castellano
+y en [inglés](https://jmanuelcorral.github.io/bond/en/) (los mismos `docs/` y `docs/en/`, con
+buscador). En el repo:
+
 | Doc | Para qué |
 |---|---|
 | [docs/getting-started.md](docs/getting-started.md) | De cero a trabajar: instalación, setup, primer repo, bucle diario, glosario |
@@ -150,7 +154,8 @@ bond/
 ├── global/skills/                # bond-delegate, bond-team (globales, para cualquier agente)
 ├── extensions/, prompts/, lib/   # Bond Extensions de pi (paquete: package.json → "pi")
 ├── scripts/build.mts             # binarios y paquete de npm
-├── docs/
+├── docs/                         # la documentación (también en GitHub Pages)
+├── site/                         # el site de docs/ con VitePress (.github/workflows/pages.yml)
 └── .github/workflows/ci.yml      # compila y prueba en Linux, macOS y Windows
 ```
 
