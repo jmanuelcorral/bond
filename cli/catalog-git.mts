@@ -3,8 +3,8 @@
 // repo (.bond/lock.json), que fija el commit de cada catálogo. Solo `bond catalog add` y
 // `update` mueven el lock; sync descarga el commit fijado si falta en la caché.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 import { BOND_HOME } from "./runtime.mts";
 import { die, run } from "./util.mts";
 
@@ -19,6 +19,16 @@ export interface Lock {
 }
 
 const SHA = /^[0-9a-f]{40}$/;
+
+/**
+ * Ruta de una carpeta del catálogo relativa al repo, con /. Las dos pasan por realpath: en
+ * Windows una puede llegar con nombres cortos 8.3 (RUNNER~1) y la otra largos (de git), y
+ * relative() las tomaría por carpetas distintas.
+ */
+export function repoRelative(root: string, dir: string): string {
+	const real = (p: string) => (existsSync(p) ? realpathSync.native(p) : p);
+	return relative(real(root), real(dir)).split("\\").join("/") || ".";
+}
 
 /** ¿Es una URL de git (https, ssh, git, file o usuario@host:ruta) y no una carpeta? */
 export const isGitUrl = (s: string) => /^(https?|ssh|git|file):\/\//.test(s) || /^[\w.-]+@[\w.-]+:/.test(s);
