@@ -334,6 +334,19 @@ describe("check", () => {
 		spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", `aplica lo suyo\n\nDecision: ${id}`], { cwd: repo });
 		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
 	});
+
+	test("no mira los trailers de otras ramas (agentes en paralelo)", () => {
+		enableMemory();
+		add();
+		const g = (...a: string[]) => spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: repo, encoding: "utf8" });
+		g("add", "-A");
+		g("commit", "-qm", "base");
+		const base = g("rev-parse", "--abbrev-ref", "HEAD").stdout.trim();
+		g("checkout", "-q", "-b", "otra");
+		g("commit", "-q", "--allow-empty", "-m", "de la otra rama\n\nDecision: 2026-01-01-solo-en-otra");
+		g("checkout", "-q", base);
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+	});
 });
 
 describe("sin índice compartido: ramas paralelas (D19)", () => {

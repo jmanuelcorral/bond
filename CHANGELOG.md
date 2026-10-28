@@ -37,6 +37,8 @@
   toma su última respuesta del `transcript.jsonl` de la conversación cuando Herdr la reporta
   (con `herdr integration install antigravity-cli`) y, si no, del panel sin el logo ni la
   bienvenida de `agy`.
+- `bond decisions check` mira solo los trailers `Decision:` de la rama actual: antes leía los de
+  todas las ramas y, con agentes en paralelo, una rama fallaba por las decisiones de otra.
 
 ## 1.8.0
 

@@ -379,7 +379,7 @@ export interface DecisionsReport {
 
 /** Trailers `Decision: <id>` de todos los commits del repo (último párrafo de cada mensaje). */
 export function decisionTrailers(root: string): string[] {
-	const r = run("git", ["-C", root, "log", "--all", "--format=%B\x1e"]);
+	const r = run("git", ["-C", root, "log", "HEAD", "--format=%B\x1e"]);
 	if (r.status !== 0) return [];
 	const out: string[] = [];
 	for (const msg of r.stdout.split("\x1e")) {
