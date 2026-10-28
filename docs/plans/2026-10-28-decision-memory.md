@@ -2,7 +2,7 @@
 name: "2026-10-28-decision-memory"
 description: "Cada repo con bond guarda por escrito las decisiones y los encargos de sus agentes, con trazas en git, y bond decisions permite auditarlos"
 created_at: "2026-10-28T09:34:29Z"
-last_implementation_at: "2026-10-28T11:32:11Z"
+last_implementation_at: "2026-10-28T12:12:03Z"
 has_completed_all_phases: false
 ---
 
@@ -28,6 +28,8 @@ has_completed_all_phases: false
   herramienta de bond (D11–D15). Se reordenan las fases: la antigua P4 (`bond decisions`) pasa a
   P2 con la parte de escritura; la antigua P2 (skills) pasa a P3 y la antigua P3 (encargos e
   informes) a P4; ambas dependen ahora de P2.
+- Revisión 3 (usuario, 2026-10-28, «acepta P3 y P4, añade P5 y lánzala»): la prueba real con un
+  agente pi encontró cuatro problemas; se añaden D16–D19 y la fase P5.
 
 ## Goal
 
@@ -130,6 +132,21 @@ lo delicado lo hace bond, no el modelo:
   `Decision:` se aprovechan cuando aparecen, pero no son obligatorios. Sin hooks de git por
   defecto (chocan con husky y `core.hooksPath`). El informe del agente lo guarda
   `bond team collect <rama>` leyendo su panel.
+
+Revisión 3 (usuario, 2026-10-28), tras la prueba real con un agente pi:
+
+- **D16 — Frontmatter válido**: la descripción de `decision-record` contenía `Agent: and
+  Decision:` sin comillas, YAML inválido que pi rechaza (Claude Code lo tolera). Se entrecomilla y
+  `bond catalog check` valida el frontmatter de cada skill como YAML estricto.
+- **D17 — Informe desde la sesión**: `bond team collect` toma el último mensaje del agente de su
+  fichero de sesión (Herdr lo da en `agent_session`; en pi, un `.jsonl`) y solo si no puede, el
+  panel, quitando el banner de arranque y los avisos de pi.
+- **D18 — Las decisiones viajan con la rama**: lo que un agente registra en su worktree se
+  commitea en su rama y se revisa con el código en el PR; `bond team prompt` lo pide en el encargo
+  cuando la memoria está activa.
+- **D19 — Sin índice compartido**: `add`, `accept`, `reject` y `supersede` dejan de reescribir la
+  tabla del README, que provocaba conflictos entre ramas paralelas; el README queda con el formato
+  y el índice lo da `bond decisions`. `check` deja de exigir el índice al día.
 
 Dependencias y riesgos:
 
@@ -268,12 +285,12 @@ Dependencias y riesgos:
     mismos apartados que anuncian el README y la plantilla; `check` sigue dando por válidas las
     decisiones ya escritas.
 - Actions:
-  - [ ] Apartados de `add`/`record_decision`, README de `decisionsReadme()` y plantilla alineados,
+  - [x] Apartados de `add`/`record_decision`, README de `decisionsReadme()` y plantilla alineados,
         con su prueba en `test/decisions.test.mts`.
-  - [ ] Editar las cinco skills y sus `references/` en `catalog/skills/`; `bond sync`.
-  - [ ] `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
-  - [ ] Run applicable checks and record actual results.
-  - [ ] Present evidence and stop for review before another phase.
+  - [x] Editar las cinco skills y sus `references/` en `catalog/skills/`; `bond sync`.
+  - [x] `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
+  - [x] Run applicable checks and record actual results.
+  - [x] Present evidence and stop for review before another phase.
 - Verification: `npm run typecheck && bun test`, `bin/bond catalog check catalog`,
   `bin/bond sync --check`; revisión del diff de las skills contra los criterios.
 - Risks and recovery: cambios solo de texto en skills; se revierten con el commit.
@@ -303,17 +320,57 @@ Dependencias y riesgos:
   - El agente de la rama nunca escribe en el run ni en el plan.
   - Rutas con `/` en lo guardado; pruebas pasan en Windows.
 - Actions:
-  - [ ] Runs en `cli/team.mts` (`prompt`, `collect`) con pruebas en `test/team.test.mts`.
-  - [ ] Editar `global/skills/bond-team`, `global/skills/bond-delegate` y
+  - [x] Runs en `cli/team.mts` (`prompt`, `collect`) con pruebas en `test/team.test.mts`.
+  - [x] Editar `global/skills/bond-team`, `global/skills/bond-delegate` y
         `catalog/skills/plan-team`; `bond sync`.
-  - [ ] Ayuda de `bond team`, `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
-  - [ ] Run applicable checks and record actual results.
-  - [ ] Present evidence and stop for review before another phase.
+  - [x] Ayuda de `bond team`, `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
+  - [x] Run applicable checks and record actual results.
+  - [x] Present evidence and stop for review before another phase.
 - Verification: `npm run typecheck && bun test`; a mano, dentro de Herdr, `bin/bond team` con una
   rama en un repo de prueba con `[decisions]`, `bond team prompt`, `bond team collect` y
   `bond decisions runs`.
 - Risks and recovery: el guardado no puede romper el envío; `collect` solo lee el panel y escribe
   en el checkout principal.
+
+### P5: Ajustes tras la prueba real
+
+- Outcome: con agentes pi reales, la skill `decision-record` carga, el informe guardado por
+  `collect` es la respuesta final del agente, las decisiones del agente quedan commiteadas en su
+  rama y dos ramas paralelas que registran decisiones se integran sin conflictos de memoria.
+- Owning repository: `bond`.
+- Dependencies: P4 (aceptada).
+- Affected contracts: frontmatter de `catalog/skills/decision-record/SKILL.md`; `bond catalog
+  check` (validación YAML estricta del frontmatter de cada skill); `bond team collect` (fuente del
+  informe, D17); texto que `bond team prompt` añade al encargo con memoria activa (D18);
+  `cli/decisions.mts` (`add`, `accept`, `reject`, `supersede` sin tocar el índice; `check` sin
+  exigirlo, D19); `decisionsReadme()` sin tabla de índice; skills y documentación que mencionen el
+  índice.
+- Acceptance criteria:
+  - pi carga `decision-record` sin «Skill conflicts»; `bond catalog check` falla con un mensaje
+    claro ante una skill con frontmatter YAML inválido (prueba con el caso de `Agent: and
+    Decision:` sin comillas).
+  - `collect` sobre un agente pi guarda solo su última respuesta, sin banner ni avisos de
+    arranque; si no hay fichero de sesión legible, cae al panel recortado. Probado con un `.jsonl`
+    de ejemplo en `test/`.
+  - Con `[decisions]`, el encargo de `bond team prompt` incluye commitear lo que el agente
+    registre en la carpeta de decisiones; sin `[decisions]`, no añade nada.
+  - Dos `add` en ramas distintas a partir de la misma base se fusionan sin conflictos; el README
+    no cambia al registrar ni al aceptar.
+  - Los README ya creados con tabla siguen siendo válidos para `check`.
+- Actions:
+  - [ ] Frontmatter de la skill y validación en `bond catalog check`, con prueba.
+  - [ ] `collect` desde la sesión del agente, con prueba.
+  - [ ] Texto de `bond team prompt` con memoria activa, con prueba.
+  - [ ] Índice fuera de `add`/`accept`/`reject`/`supersede`/`check` y de `decisionsReadme()`,
+        con prueba de dos ramas.
+  - [ ] Skills, `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`; `bond sync`.
+  - [ ] Run applicable checks and record actual results.
+  - [ ] Present evidence and stop for review before another phase.
+- Verification: `npm run typecheck && bun test`, `bin/bond catalog check catalog`,
+  `bin/bond sync --check`; a mano, repetir la prueba real (repo temporal con `[decisions]`, un
+  agente pi en `bond team`, `prompt`, `collect`, `bond decisions runs` y `check`).
+- Risks and recovery: el formato de las sesiones de pi puede cambiar; por eso el panel queda como
+  respaldo.
 
 ## Progress (local plans only)
 
@@ -321,14 +378,14 @@ Dependencias y riesgos:
 | --- | --- | --- | --- | --- |
 | P1 | implemented | passed | accepted | rama `plan/decision-memory-p1` (kevin, pi), commits `47c338a` y `6701239`, integrada en `main` por fast-forward; en `main`: `npm run typecheck` limpio, `bun test` 235/235, `bond catalog check catalog` correcto, `bond sync --check` al día; aceptada por el usuario en sesión el 2026-10-28 |
 | P2 | implemented | passed | accepted | rama `plan/decision-memory-p2` (kevin, pi), commit `5354318`, integrada en `main` por fast-forward; en `main`: `npm run typecheck` limpio, `bun test` 267/267, `bond catalog check catalog` correcto, `bond sync --check` al día; a mano: `add` por flags y stdin, sufijo `-2`, `\|` escapado en el índice, autoría `agent:claude` desde un panel de Herdr, `accept` sin TTY negado (exit 1); aceptada por el usuario en sesión el 2026-10-28 |
-| P3 | pending | not_run | pending | none yet |
-| P4 | pending | not_run | pending | none yet |
+| P3 | implemented | passed | accepted | rama `plan/decision-memory-p3` (kevin, pi), commit `ac7cec7`, integrada en `main` por fast-forward; `bun test` 272/272 en la rama y 279/279 en `main` con P4; aceptada por el usuario en sesión el 2026-10-28 |
+| P4 | implemented | passed | accepted | rama `plan/decision-memory-p4` (stuart, pi), commit `3206cdf` rebasado sobre P3 como `4b823f1` (conflictos en `CHANGELOG.md`, docs y `.bond/manifest.json`, resueltos conservando ambas fases), integrada en `main` por fast-forward; en `main`: typecheck limpio, `bun test` 279/279, `bond sync --check` al día; prueba real con un agente pi (ver Evidence); aceptada por el usuario en sesión el 2026-10-28 |
+| P5 | pending | not_run | pending | none yet |
 
 ## Next step
 
-P3 y P4 de `docs/plans/2026-10-28-decision-memory.md` en paralelo con `plan-team`, un agente pi
-por fase: las dos dependen solo de P2, aceptada, y tocan zonas distintas salvo `CHANGELOG.md` y
-la documentación. Después, revisar e integrar cada rama.
+Ejecutar P5 de `docs/plans/2026-10-28-decision-memory.md` con un agente pi y repetir después la
+prueba real. Respuesta corta: «revisa P5» cuando termine.
 
 ## Evidence and tracking
 
@@ -339,3 +396,11 @@ la documentación. Después, revisar e integrar cada rama.
 - P2: `5354318` (`feat(decisions): add bond decisions and the record_decision pi tool`), en
   `main`. Primero se colgó probando la herramienta (`execFile` con `input`, que no existe); se
   interrumpió con permiso del usuario y se le dio el arreglo (`spawn` con `stdin.end()`).
+- P3: `ac7cec7` (`feat(decisions): wire catalog skills to the decision memory tool`), en `main`.
+- P4: `4b823f1` (`feat: record team requests and reports in the decision memory`), en `main`.
+- Prueba real (2026-10-28), repo temporal con `[decisions]` y un agente pi (bob) en `bond team`:
+  `prompt` guardó el encargo en `runs/`; bob usó `record_decision` y bond le atribuyó
+  `agent:pi/bob`; `collect` dejó el run `reported` con su commit y su decisión. Problemas: pi
+  rechazó la skill `decision-record` por YAML inválido; el informe incluía el banner de pi; la
+  decisión quedó sin commitear en el worktree; el índice del README se reescribe en cada `add`
+  (conflictos en paralelo). Origen de P5.
