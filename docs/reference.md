@@ -60,7 +60,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 El repo de bond es también un paquete de pi (`package.json` → `"pi"`): las extensiones
 `status-line.ts` (pie de estado), `bond-header.ts` (cabecera), `repo-map.ts` (tool `repo_map`)
 y `record-decision.ts` (tool `record_decision`), y los comandos `/delegate`, `/team`
-(`prompts/`) y `/review`, `/commit`, `/handoff` (`catalog/commands/`). Se cargan **por repo**:
+(`prompts/`) y `/review`, `/commit`, `/handoff`, `/accept` (`catalog/commands/`). Se cargan **por repo**:
 `bond init` añade `"packages": ["~/.bond/pi"]` a `.pi/settings.json` cuando el repo usa pi. En
 los repos sin bond, pi funciona sin ellas.
 
@@ -483,6 +483,7 @@ Ficheros Markdown en `catalog/commands/`, con la sintaxis común a todos los age
 | `/review [foco]` | foco opcional | Revisión priorizada (bugs, seguridad, errores, rendimiento, estilo) con `fichero:línea`. No edita. |
 | `/commit [contexto]` | contexto extra | Commit con la skill `git-conventional-commit` (sin ella, con la que tenga el agente): enseña alcance y mensaje y espera OK. Nunca push. |
 | `/handoff [ruta]` | ruta, por defecto `.handoff.md` | Estado escrito: objetivo, estado, ficheros, verificación, siguientes pasos. |
+| `/accept [ids]` | ids o "todas" | Aceptar/rechazar decisiones propuestas desde la conversación: lista las `proposed`, pregunta y ejecuta `bond decisions accept/reject/supersede --confirmed-by "<lo que dijo el usuario>"`. Solo con respuesta explícita. |
 
 En pi, además, `/delegate` y `/team`, atajos a los skills `bond-delegate` y `bond-team`
 ([abajo](#herdr-skill-y-prompts)).
@@ -731,18 +732,28 @@ sale con 0 explicando que no se usa la memoria.
 |---|---|
 | `bond decisions` | Lista las decisiones, las más recientes primero; `--status <estado>`, `--agent <subcadena>`, `--json` |
 | `bond decisions add` | Registra una decisión: `--title`, `--context`, `--decision`, `--alternatives`, `--consequences`, `--link "tipo: valor"` (repetible); o con `--stdin`, el mismo objeto en JSON (incluido `consequences`). Bond calcula el id (`YYYY-MM-DD-slug`, `-2` si colisiona), la autoría y los enlaces de rama y HEAD, escribe `<dir>/<id>.md` con los apartados en inglés (*Context*, *Decision*, *Rejected alternatives*, *Consequences* — este solo si se pasan consecuencias). No toca ningún índice: el listado lo da esta orden. Entra siempre como `proposed` |
-| `bond decisions accept <id>` | La pasa a `accepted` (`--ref <aceptación>`). Exige terminal interactiva y confirmación: desde el shell de un agente (sin TTY) se niega |
-| `bond decisions reject <id>` | La pasa a `rejected`; misma confirmación |
-| `bond decisions supersede <id> --by <nueva>` | La vieja queda `superseded` y la nueva la referencia en `supersedes`; misma confirmación |
+| `bond decisions accept <id>...` | La pasa a `accepted`. Desde la terminal con confirmación interactiva (`--ref <aceptación>`), o desde la conversación con `--confirmed-by "<lo que dijo el usuario>"`: sin terminal no hace falta y la decisión guarda además `accepted_via` (quién lo ejecutó: `agent:<kind>/<nombre>` desde un panel de Herdr, `user` fuera). Admite varios ids y `--all-proposed`; un id desconocido o no `proposed` se informa sin abortar los demás (salida != 0 si alguno falló). `--confirmed-by` vacío se rechaza; sin terminal y sin `--confirmed-by`, se niega |
+| `bond decisions reject <id>...` | La pasa a `rejected`; misma confirmación y opciones |
+| `bond decisions supersede <id>... --by <nueva>` | Las viejas quedan `superseded` y la nueva las referencia en `supersedes` (ella sigue `proposed` hasta que el usuario la acepte); misma confirmación y opciones |
 | `bond decisions show <id>` | El fichero entero de la decisión (o del run si el id es de uno en `<dir>/runs/`) |
 | `bond decisions runs` | Los runs (encargos a agentes) en `<dir>/runs/`, con los commits de su rama y las decisiones de ese agente; `--agent <subcadena>`, `--json` |
 | `bond decisions check` | Audita la memoria: frontmatter, id contra nombre de fichero, duplicados, referencias de sustitución rotas y trailers `Decision:`. El README no se audita: no hay índice que mantener al día. Sale con 1 si hay errores |
 
 La autoría (`decided_by`): en un panel de Herdr, `agent:<kind>/<nombre>` —bond mira el agente
 del panel, el agente no necesita saber su propio nombre—; fuera de Herdr o sin agente en el
-panel, `user`. Aceptar es solo del usuario: `accept`, `reject` y `supersede` exigen TTY en la
-entrada y la salida, y piden confirmación. La barrera de TTY evita que un agente acepte por
-descuido; no es una medida de seguridad: la integridad de los registros la da git.
+panel, `user`. Aceptar es solo del usuario, pero puede hacerlo desde la conversación:
+`accept`, `reject` y `supersede` piden confirmación interactiva con terminal, o
+`--confirmed-by "<lo que dijo el usuario>"` sin ella; en ese caso `accepted_by` guarda la
+cita y `accepted_via` quién ejecutó (`check` valida su formato). Sin una cosa ni la otra, se
+niegan: un agente no acepta por su cuenta; lo que sí puede es ejecutar el comando citando al
+usuario, con el comando `/accept` como guía. La barrera evita aceptaciones por descuido; no
+es una medida de seguridad: la integridad de los registros la da git, y una aceptación
+indebida se ve en el diff y se revierte con `supersede` o `git revert`. En Claude Code, con
+`[decisions]` activo, `bond sync` deja además en `.claude/settings.json` reglas `ask` para
+`accept`, `reject` y `supersede` (`Bash(bond decisions accept:*)`…): cada ejecución pasa
+por su cuadro de permiso. La clave `ask` que gestiona bond es la unión de las que el repo ya
+tenga y las suyas: otras claves y reglas se conservan, y quitar una de bond la trae el sync
+de vuelta.
 
 pi tiene la tool `record_decision` (`extensions/record-decision.ts`), que llama a este mismo
 `bond decisions add --stdin`: el modelo pasa solo el contenido y bond escribe el registro con

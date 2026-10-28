@@ -55,9 +55,17 @@ in doubt, leave it out; noise is worse than a gap, and `bond decisions check` (a
    `bond decisions` lists the records, so parallel branches never conflict over a README.
    Every tool-made decision enters as `proposed`.
 4. Status is not yours to raise: `record_decision` and `add` always create `proposed`.
-   Only the user moves a decision to `accepted` (`bond decisions accept <id>`, interactive
-   terminal and confirmation required); `reject` and `supersede <id> --by <new>` work the
-   same way. Never fabricate `accepted_by`, and never invent a model name in any field.
+   Only the user moves a decision to `accepted`. From a terminal: `bond decisions accept
+   <id>` (interactive confirmation). From the conversation with their agent (D20): the
+   `/accept` command lists the `proposed` records, asks which ones the user wants, and
+   runs `bond decisions accept <id>... --confirmed-by "<what the user said>"` — the
+   record then keeps `accepted_by` with that reference and `accepted_via` with whoever
+   executed it (`agent:<kind>[/<name>]` from a Herdr pane, `user` outside). `reject`
+   and `supersede <id> --by <new>` take the same options. You may run accept/reject/
+   supersede with `--confirmed-by` only on an explicit, unambiguous user request in the
+   conversation, quoting their words; never on your own initiative. Without a terminal
+   and without `--confirmed-by`, the commands refuse. Never fabricate `accepted_by`,
+   and never invent a model name in any field.
 5. Fill the content well: context in two or three factual sentences, the decision stated so
    it can be applied without rereading the conversation, only real rejected alternatives
    with their cost. Write in the language established by the project. `links` entries are

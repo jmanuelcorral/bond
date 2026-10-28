@@ -5,6 +5,22 @@
 - El comentario de `[decisions]` que escribe `bond init` en `.bond/bond.toml` ya no habla de un
   índice en el README (desde la 1.7.0 no lo hay) y dice que los trailers `Agent:` y `Decision:`
   son opcionales.
+- Aceptar decisiones desde la conversación: `bond decisions accept <id>...`, `reject` y
+  `supersede` admiten `--confirmed-by "<lo que dijo el usuario>"` y no necesitan terminal con
+  él. La decisión guarda esa referencia en `accepted_by` y en `accepted_via` quién ejecutó
+  (`agent:<kind>/<nombre>` desde un panel de Herdr, `user` fuera); `check` valida su formato.
+  Sin terminal y sin `--confirmed-by`, se siguen negando: un agente no acepta por su cuenta,
+  pero puede ejecutar el comando citando al usuario. Admiten varios ids y `--all-proposed`; un
+  id desconocido o no `proposed` se informa sin abortar los demás (salida != 0 si alguno
+  falló) y `--confirmed-by` vacío se rechaza. `supersede` arregla además `supersedes` de la
+  nueva: refería a sí misma en vez de a la decisión sustituida.
+- Nuevo comando del catálogo `/accept` (`catalog/commands/accept.md`): lista las `proposed`,
+  pregunta cuáles quieres y solo entonces ejecuta el comando correspondiente citando tus
+  palabras en `--confirmed-by`.
+- Con `[decisions]` y Claude Code, `bond sync` deja reglas `ask` en `.claude/settings.json`
+  para `accept`, `reject` y `supersede`: cada ejecución pasa por el cuadro de permiso de
+  Claude. La fusión conserva las reglas y claves que el repo ya tenga; quitar una de bond la
+  trae el sync de vuelta, y al quitar `[decisions]` solo se van las de bond.
 
 ## 1.7.0
 

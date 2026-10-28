@@ -368,7 +368,7 @@ describe("CLI de lista y runs", () => {
 		add({ title: "Dos" });
 		const all = JSON.parse(await capture(["--json"]));
 		expect(all.length).toBe(2);
-		expect(Object.keys(all[0]).sort().join(",")).toBe("accepted_by,body,date,decided_by,id,links,rel,status,superseded_by,supersedes,title");
+		expect(Object.keys(all[0]).sort().join(",")).toBe("accepted_by,accepted_via,body,date,decided_by,id,links,rel,status,superseded_by,supersedes,title");
 		expect(JSON.parse(await capture(["--json", "--status", "accepted"])).length).toBe(0);
 		expect(JSON.parse(await capture(["--json", "--agent", "user"])).length).toBe(2);
 	});
@@ -388,6 +388,132 @@ describe("CLI de lista y runs", () => {
 		const r = bond(["decisions"]);
 		expect(r.status).toBe(0);
 		expect(r.stdout).toContain("no usa la memoria de decisiones");
+	});
+});
+
+// P6 (D20): aceptar desde la conversacion con --confirmed-by, varios ids y --all-proposed.
+describe("accept/reject/supersede desde la conversacion (D20)", () => {
+	test("--confirmed-by sin terminal acepta y guarda accepted_by y accepted_via", () => {
+		enableMemory();
+		const { id } = add();
+		const r = bond(["decisions", "accept", id, "--confirmed-by", "«acepta la 1, user»"]);
+		expect(r.status).toBe(0);
+		const fm = parseFm(read(`docs/decisions/${id}.md`));
+		expect(fm?.scalars.status).toBe("accepted");
+		expect(fm?.scalars.accepted_by).toBe("«acepta la 1, user»");
+		// Fuera de Herdr la autoría de la ejecucion es "user" (D12).
+		expect(fm?.scalars.accepted_via).toBe("user");
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+	});
+
+	test("--confirmed-by vacio o en blanco se rechaza y no cambia nada", () => {
+		enableMemory();
+		const { id } = add();
+		const before = read(`docs/decisions/${id}.md`);
+		for (const v of ["", "   "]) {
+			const r = bond(["decisions", "accept", id, "--confirmed-by", v]);
+			expect(r.status).toBe(1);
+			expect(r.stderr).toContain("--confirmed-by");
+			expect(read(`docs/decisions/${id}.md`)).toBe(before);
+		}
+	});
+
+	test("varios ids: se aceptan los validos y un id desconocido se informa sin abortar", () => {
+		enableMemory();
+		const a = add({ title: "Una" });
+		const b = add({ title: "Dos" });
+		const r = bond(["decisions", "accept", a.id, b.id, "no-existe-9999", "--confirmed-by", "«ambas, user»"]);
+		expect(r.status).toBe(1); // alguno fallo
+		expect(r.stderr).toContain("no-existe-9999");
+		expect(parseFm(read(`docs/decisions/${a.id}.md`))?.scalars.status).toBe("accepted");
+		expect(parseFm(read(`docs/decisions/${b.id}.md`))?.scalars.status).toBe("accepted");
+	});
+
+	test("un id no proposed se informa sin abortar y la salida es != 0", () => {
+		enableMemory();
+		const a = add({ title: "Una" });
+		const b = add({ title: "Dos" });
+		bond(["decisions", "accept", a.id, "--confirmed-by", "«una, user»"]);
+		const r = bond(["decisions", "accept", a.id, b.id, "--confirmed-by", "«las dos, user»"]);
+		expect(r.status).toBe(1);
+		expect(r.stderr).toContain("no es");
+		expect(parseFm(read(`docs/decisions/${b.id}.md`))?.scalars.status).toBe("accepted");
+	});
+
+	test("--all-proposed acepta todas las propuestas y deja las demas", () => {
+		enableMemory();
+		const a = add({ title: "Una" });
+		const b = add({ title: "Dos" });
+		const c = add({ title: "Tres" });
+		bond(["decisions", "reject", c.id, "--confirmed-by", "«tres no, user»"]);
+		const r = bond(["decisions", "accept", "--all-proposed", "--confirmed-by", "«todas, user»"]);
+		expect(r.status).toBe(0);
+		expect(parseFm(read(`docs/decisions/${a.id}.md`))?.scalars.status).toBe("accepted");
+		expect(parseFm(read(`docs/decisions/${b.id}.md`))?.scalars.status).toBe("accepted");
+		expect(parseFm(read(`docs/decisions/${c.id}.md`))?.scalars.status).toBe("rejected");
+	});
+
+	test("--all-proposed sin propuestas no falla y no cambia nada", () => {
+		enableMemory();
+		const a = add();
+		bond(["decisions", "accept", a.id, "--confirmed-by", "«vale, user»"]);
+		const before = read(`docs/decisions/${a.id}.md`);
+		const r = bond(["decisions", "accept", "--all-proposed", "--confirmed-by", "«otras, user»"]);
+		expect(r.status).toBe(0);
+		expect(read(`docs/decisions/${a.id}.md`)).toBe(before);
+	});
+
+	test("reject con --confirmed-by pasa a rejected con la referencia", () => {
+		enableMemory();
+		const { id } = add();
+		const r = bond(["decisions", "reject", id, "--confirmed-by", "«no, user»"]);
+		expect(r.status).toBe(0);
+		const fm = parseFm(read(`docs/decisions/${id}.md`));
+		expect(fm?.scalars.status).toBe("rejected");
+		expect(fm?.scalars.accepted_by).toBe("«no, user»");
+		expect(fm?.scalars.accepted_via).toBe("user");
+	});
+
+	test("supersede con --confirmed-by: la vieja queda superseded y la nueva la referencia en supersedes", () => {
+		enableMemory();
+		const vieja = add({ title: "Vieja" });
+		const nueva = add({ title: "Nueva" });
+		const r = bond(["decisions", "supersede", vieja.id, "--by", nueva.id, "--confirmed-by", "«cambia a la nueva, user»"]);
+		expect(r.status).toBe(0);
+		const v = parseFm(read(`docs/decisions/${vieja.id}.md`));
+		expect(v?.scalars.status).toBe("superseded");
+		expect(v?.scalars.superseded_by).toBe(nueva.id);
+		expect(v?.scalars.accepted_by).toBe("«cambia a la nueva, user»");
+		expect(v?.scalars.accepted_via).toBe("user");
+		// La nueva la referencia a la vieja (no a si misma) y sigue propuesta.
+		const n = parseFm(read(`docs/decisions/${nueva.id}.md`));
+		expect(n?.scalars.supersedes).toBe(vieja.id);
+		expect(n?.scalars.status).toBe("proposed");
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+	});
+
+	test("supersede: --by igual que una de las sustituidas se rechaza", () => {
+		enableMemory();
+		const a = add({ title: "Una" });
+		const r = bond(["decisions", "supersede", a.id, "--by", a.id, "--confirmed-by", "«raro, user»"]);
+		expect(r.status).toBe(1);
+		expect(r.stderr).toContain("--by");
+		expect(parseFm(read(`docs/decisions/${a.id}.md`))?.scalars.status).toBe("proposed");
+	});
+
+	test("check valida accepted_via si esta y ignora si falta", () => {
+		enableMemory();
+		// Sin accepted_via (decisiones ya escritas antes de P6): valido.
+		write("docs/decisions/2026-01-01-sin-via.md", `---\nid: "2026-01-01-sin-via"\ntitle: "t"\nstatus: "accepted"\ndate: "2026-01-01"\ndecided_by: "user"\naccepted_by: "sesion"\n---\n`);
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+		// Con accepted_via valido: user y agent:<kind>[/<nombre>].
+		write("docs/decisions/2026-01-02-via-user.md", `---\nid: "2026-01-02-via-user"\ntitle: "t"\nstatus: "accepted"\ndate: "2026-01-02"\ndecided_by: "user"\naccepted_via: "user"\n---\n`);
+		write("docs/decisions/2026-01-03-via-agent.md", `---\nid: "2026-01-03-via-agent"\ntitle: "t"\nstatus: "accepted"\ndate: "2026-01-03"\ndecided_by: "user"\naccepted_via: "agent:pi/kevin"\n---\n`);
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+		// Accepted_via invalido: error nombrando el fichero.
+		write("docs/decisions/2026-01-04-via-malo.md", `---\nid: "2026-01-04-via-malo"\ntitle: "t"\nstatus: "accepted"\ndate: "2026-01-04"\ndecided_by: "user"\naccepted_via: "gpt-99"\n---\n`);
+		const errs = checkDecisions(repo, "docs/decisions").errors;
+		expect(errs.some((e) => e.includes("accepted_via") && e.includes("2026-01-04-via-malo"))).toBe(true);
 	});
 });
 

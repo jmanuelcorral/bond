@@ -429,6 +429,9 @@ function walk(dir: string): string[] {
 const tomlKey = (k: string) => (/^[A-Za-z0-9_-]+$/.test(k) ? k : JSON.stringify(k));
 const tomlInline = (o: Record<string, string>) => `{ ${Object.entries(o).map(([k, v]) => `${tomlKey(k)} = ${JSON.stringify(v)}`).join(", ")} }`;
 
+/** Reglas `ask` que bond deja en .claude/settings.json con [decisions] activo (D21). */
+export const BOND_ASK_RULES = ["Bash(bond decisions accept:*)", "Bash(bond decisions reject:*)", "Bash(bond decisions supersede:*)"];
+
 /** Comando en Markdown (frontmatter + cuerpo con $ARGUMENTS) a comando TOML de Gemini ({{args}}). */
 function geminiCommand(md: string): string {
 	const m = /^---\n([\s\S]*?)\n---\n?/.exec(md);
@@ -508,6 +511,36 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 
 	if (agents.has("claude")) {
 		out.push({ kind: "block", path: "CLAUDE.md", body: "@AGENTS.md", style: "md" });
+		// D21: con memoria de decisiones, cada accept/reject/supersede pasa por el cuadro de
+		// permiso de Claude Code. La clave `ask` que gestiona bond es la union de las reglas
+		// que el repo ya tenga y las suyas: editar a mano otras reglas se conserva, y quitar
+		// una de bond la trae el sync de vuelta. Sin [decisions], se quitan solo las de bond
+		// (si no quedan reglas, la clave se va con ellas). Se lee el fichero actual en el
+		// momento de planificar para que la fusion sea idempotente y `--check` quede al dia.
+		const settingsPath = repoPath(".claude", "settings.json");
+		let existingAsk: unknown[] = [];
+		const curSettings = readText(join(root, settingsPath));
+		if (curSettings?.trim()) {
+			try {
+				const parsed = parseJsonc(curSettings) as Record<string, unknown>;
+				const ask = (parsed.permissions as Record<string, unknown> | undefined)?.ask;
+				if (Array.isArray(ask)) existingAsk = ask;
+			} catch {
+				// JSON inválido: diffActions lo marcara como conflicto y no lo tocara.
+			}
+		}
+		const withoutBond = existingAsk.filter((r) => !BOND_ASK_RULES.includes(r as string));
+		const hasBondRules = existingAsk.some((r) => BOND_ASK_RULES.includes(r as string));
+		// Si bond ya gestiona la clave (manifiesto), hay que seguir planificandola aunque ya
+		// no quede reglas suyas: si no, la limpieza generica se llevaria tambien las del usuario.
+		const tracked = (prev.json[settingsPath] ?? []).some((j) => (j.parent ?? "") === "permissions");
+		if (cfg.decisions) {
+			// withoutBond no lleva reglas de bond, asi que la union simple no duplica nada.
+			out.push({ kind: "json", path: settingsPath, parent: "permissions", entries: { ask: [...withoutBond, ...BOND_ASK_RULES] } });
+		} else if ((hasBondRules || tracked) && withoutBond.length) {
+			// Quitar [decisions]: solo se van las reglas de bond, las del usuario se quedan.
+			out.push({ kind: "json", path: settingsPath, parent: "permissions", entries: { ask: withoutBond } });
+		}
 		// Claude no lee .agents/skills: un symlink por skill. En Windows los symlinks necesitan
 		// permisos especiales, así que se copian los ficheros (desde el catálogo o del repo).
 		for (const name of allSkills) {
@@ -873,8 +906,16 @@ Cuerpo (los apartados que escribe \`bond decisions add\`, en inglés, como las s
 se pasan consecuencias al registrar).
 
 Una decisión tomada por un agente sin confirmar entra como \`proposed\`; solo el usuario la
-pasa a \`accepted\`. La barrera de terminal interactiva de \`accept\` evita que un agente la
-acepte por descuido; no es una medida de seguridad: la integridad del registro la da git.
+pasa a \`accepted\`. Puede hacerlo desde la terminal (\`bond decisions accept <id>\`, con
+confirmación interactiva) o desde la conversación con su agente (comando \`/accept\`):
+\`bond decisions accept <id>... --confirmed-by "<lo que dijo el usuario>"\` guarda esa
+referencia en \`accepted_by\` y deja en \`accepted_via\` quién lo ejecutó
+(\`agent:<kind>/<nombre>\` desde un panel de Herdr, \`user\` fuera). Sin terminal y sin
+\`--confirmed-by\`, el comando se niega: la barrera evita que un agente acepte por
+descuido; no es una medida de seguridad: la integridad del registro la da git, y una
+aceptación indebida se ve en el diff y se revierte con \`supersede\` o \`git revert\`.
+En Claude Code, además, \`bond sync\` deja reglas \`ask\` para \`accept\`, \`reject\` y
+\`supersede\`: cada ejecución pasa por su cuadro de permiso.
 
 ## Runs
 

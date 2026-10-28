@@ -15,6 +15,7 @@ status: "proposed"        # proposed | accepted | rejected | superseded
 date: "2026-10-28"       # actual UTC date of the decision
 decided_by: "agent:pi/worker-2"   # user | agent:<kind> | agent:<kind>/<herdr-name>
 accepted_by: ""          # reference to the user's acceptance (session, PR review, issue)
+accepted_via: ""         # who executed the acceptance from the conversation (D20): user | agent:<kind>[/<name>]
 supersedes: ""           # id of the decision this one replaces
 superseded_by: ""        # id of the decision that replaces this one
 links:
@@ -47,6 +48,13 @@ things that stop being allowed.
 
 - `status` starts as `proposed` for agent-made decisions. Only the user's real acceptance
   moves it to `accepted`, with `accepted_by` naming where it happened.
+- `accepted_via` is optional: it appears when the acceptance ran from the conversation with
+  `--confirmed-by` (D20) and records who executed it (`user` outside Herdr,
+  `agent:<kind>[/<name>]` from a Herdr pane). Decisions accepted in an interactive
+  terminal may have it empty; `bond decisions check` validates its format only when present.
+  Audit trail: `accepted_by` says what the user asked, `accepted_via` says which agent ran
+  it — a wrong acceptance is visible in git and can be reverted with `supersede` or
+  `git revert`.
 - `decided_by` never carries an invented model name or version. Known Herdr pane name goes
   after the slash: `agent:claude/lead`; unknown: `agent:claude`.
 - `links` entries are `kind: value` strings (plan, phase, commit, pr, run). Omit what does

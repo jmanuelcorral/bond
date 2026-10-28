@@ -2,8 +2,8 @@
   "files": {
     ".agents/skills/code-context/SKILL.md": "4789650da602b192fe18703c79b347be12904aaca4a77f871ff922aacac9ca75",
     ".agents/skills/code-context/scripts/repo-map": "7790b2f69bfa04d80fd8d75b1cd0e6ffb3c7d28e9a390a3c4d10ce127883ec84",
-    ".agents/skills/decision-record/SKILL.md": "da68873f740976055431454fd7528a292e7a4d6f2cdb98b5f0ce6639adb33544",
-    ".agents/skills/decision-record/references/decision-template.md": "ae62ed33c376effd62895e6be580efff841537a3418571ad50ad8964b807f50b",
+    ".agents/skills/decision-record/SKILL.md": "a2e8ec43dfa8264a30c97fca264e04b1a460de060248c2b2ec9b352f9e2b27ed",
+    ".agents/skills/decision-record/references/decision-template.md": "2b13e7a8a0e703135f68721139772d1914ed2e00f0f6e43f1fe24c068f353a6f",
     ".agents/skills/decision-record/references/run-template.md": "bb9332a5f27f7fa9444823dbdbb4ec1c872fbc169ce2d4ffae879b706df84b1e",
     ".agents/skills/git-conventional-commit/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
     ".agents/skills/git-conventional-commit/SKILL.md": "8f065caef56ca834f1459119261062e0ba98689b47e8eaadf6238f223471d426",
@@ -34,7 +34,8 @@
     ".agents/skills/plan-team/SKILL.md": "2bb7717d8706fb35efcb4d55d792eab76b9492c110620a7451f15f027c32dbcc",
     ".claude/commands/commit.md": "242baf393b4748ebd266962b44e40813c35d4ffdd89558f0d34fe7c9db0321ae",
     ".claude/commands/handoff.md": "a89d6969aba465aa31ffef540afeb7344c3e06a24ea25a609c98c4d1cdddfecd",
-    ".claude/commands/review.md": "22bcec81ce5c048d207f7d0d9005cc38c967197907b69cb27b4c5e28686089a4"
+    ".claude/commands/review.md": "22bcec81ce5c048d207f7d0d9005cc38c967197907b69cb27b4c5e28686089a4",
+    ".claude/commands/accept.md": "484f4085c8d4d74f159ec0d2de28d7bf26585cafc130566afc7dbfdb5fbf9c26"
   },
   "links": {
     ".claude/skills/code-context": "../../.agents/skills/code-context",
@@ -73,6 +74,14 @@
         "keys": [
           "context7",
           "duckduckgo"
+        ]
+      }
+    ],
+    ".claude/settings.json": [
+      {
+        "parent": "permissions",
+        "keys": [
+          "ask"
         ]
       }
     ]

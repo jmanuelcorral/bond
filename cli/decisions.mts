@@ -3,8 +3,10 @@
 // de pi, que llama a este mismo código): bond calcula el id, la autoría (D12) y escribe
 // el fichero con el formato de D6. No hay índice compartido (D19): el listado lo da esta
 // orden, así que dos ramas paralelas que registran decisiones no chocan al fusionarse.
-// Aceptar es solo del usuario: `accept` exige terminal interactiva y confirmación (D13).
-// `check` audita los registros para que la memoria no se rompa con el uso.
+// Aceptar es solo del usuario, pero desde la conversación: `accept` acepta con
+// `--confirmed-by "<lo que dijo el usuario>"` sin terminal (D20) o de forma interactiva
+// con ella; sin una de las dos cosas se niega. `check` audita los registros para que la
+// memoria no se rompa con el uso.
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
@@ -32,13 +34,19 @@ lista las decisiones.
             (este solo si pasas --consequences). Con --stdin, el mismo objeto en JSON
             por la entrada estándar: {"title","context","decision","alternatives",
             "consequences","links"}.
-  accept <id> [--ref <aceptación>]
-            La pasa a "accepted". Necesita terminal interactiva y tu confirmación:
-            desde el shell de un agente (sin TTY) se niega. La barrera de TTY evita
-            aceptaciones por descuido de un agente; no es una medida de seguridad.
-  reject <id> [--ref <motivo>]     La pasa a "rejected" (misma confirmación).
-  supersede <id> --by <nueva>     La sustituye: la vieja queda "superseded" y la
-                                  nueva la referencia en "supersedes".
+  accept <id>... [--ref <aceptación>] [--confirmed-by "<lo que dijo el usuario>"] [--all-proposed]
+            La pasa a "accepted". Es solo del usuario, pero puede hacerlo desde la
+            conversación: con --confirmed-by (una referencia a sus palabras) no hace
+            falta terminal y la decisión guarda además accepted_via: quien lo ejecuto
+            (agent:<kind>/<nombre> desde un panel de Herdr, user fuera). Con terminal y
+            sin --confirmed-by, pregunta. Sin una cosa ni otra, se niega. Admite varios
+            ids y --all-proposed; un id desconocido o no "proposed" se informa sin
+            abortar los demás (salida != 0 si alguno falló). --confirmed-by vacío se rechaza.
+  reject <id>... [--ref <motivo>] [--confirmed-by <ref>] [--all-proposed]
+            La pasa a "rejected" (misma confirmación).
+  supersede <id>... --by <nueva> [--confirmed-by <ref>] [--all-proposed]
+            Las sustituye: las viejas quedan "superseded" y la nueva las referencia en
+            "supersedes" (misma confirmación).
   show <id>                       El fichero entero de una decisión (o de un run, si el
                                   id es de uno en <dir>/runs/).
   runs [--agent <a>] [--json]     Los runs (encargos a agentes) de <dir>/runs/, con los
@@ -104,6 +112,8 @@ export interface Decision {
 	date: string;
 	decided_by: string;
 	accepted_by: string;
+	/** Quien ejecuto la aceptacion desde la conversacion (D20): user o agent:<kind>[/<nombre>]. */
+	accepted_via: string;
 	supersedes: string;
 	superseded_by: string;
 	links: string[];
@@ -119,6 +129,7 @@ const decisionFields = (p: Parsed): Partial<Decision> => ({
 	date: p.scalars.date ?? "",
 	decided_by: p.scalars.decided_by ?? "",
 	accepted_by: p.scalars.accepted_by ?? "",
+	accepted_via: p.scalars.accepted_via ?? "",
 	supersedes: p.scalars.supersedes ?? "",
 	superseded_by: p.scalars.superseded_by ?? "",
 	links: p.lists.links ?? [],
@@ -127,7 +138,7 @@ const decisionFields = (p: Parsed): Partial<Decision> => ({
 
 function decisionFile(d: Decision): string {
 	const links = d.links.length ? `links:\n${d.links.map((l) => `  - ${q(l)}`).join("\n")}` : "links: []";
-	return `---\nid: ${q(d.id)}\ntitle: ${q(d.title)}\nstatus: ${q(d.status)}\ndate: ${q(d.date)}\ndecided_by: ${q(d.decided_by)}\naccepted_by: ${q(d.accepted_by)}\nsupersedes: ${q(d.supersedes)}\nsuperseded_by: ${q(d.superseded_by)}\n${links}\n---\n${d.body}`;
+	return `---\nid: ${q(d.id)}\ntitle: ${q(d.title)}\nstatus: ${q(d.status)}\ndate: ${q(d.date)}\ndecided_by: ${q(d.decided_by)}\naccepted_by: ${q(d.accepted_by)}\naccepted_via: ${q(d.accepted_via)}\nsupersedes: ${q(d.supersedes)}\nsuperseded_by: ${q(d.superseded_by)}\n${links}\n---\n${d.body}`;
 }
 
 const dirAbs = (root: string, dirRel: string) => join(root, ...dirRel.split("/"));
@@ -209,6 +220,7 @@ export function addDecision(root: string, dirRel: string, in_: AddInput): { id: 
 		date: utcToday(),
 		decided_by,
 		accepted_by: "",
+		accepted_via: "",
 		supersedes: "",
 		superseded_by: "",
 		// Sin repetidos: el agente a veces pasa la rama que bond añade de todos modos.
@@ -235,23 +247,10 @@ async function confirm(question: string): Promise<boolean> {
 	return /^y(es)?$/i.test(answer.trim());
 }
 
-/** D13: aceptar, rechazar o sustituir solo con terminal interactiva y confirmación. */
-function requireTty(what: string): void {
-	if (process.stdin.isTTY !== true || process.stdout.isTTY !== true) {
-		die(`${what} la hace solo el usuario, y necesita una terminal interactiva: desde el shell de un agente no se puede. Registra la decisión como "proposed" y acéptala tú con bond decisions ${what} <id>`);
-	}
-}
+const hasTty = () => process.stdin.isTTY === true && process.stdout.isTTY === true;
 
-/** Pide confirmación al usuario antes de cambiar el estado. Con otra respuesta, no lo hace. */
-async function confirmChange(verb: string, id: string): Promise<void> {
-	if (!(await confirm(`¿${verb} la decisión ${id}? [y/N] `))) {
-		console.log(dim("cancelado: nada cambió."));
-		process.exit(0);
-	}
-}
-
-/** Reescribe una decisión cambiando estado y (si se da) accepted_by. */
-function patchDecision(root: string, dirRel: string, id: string, patch: Partial<Pick<Decision, "status" | "accepted_by" | "supersedes" | "superseded_by">>): Decision {
+/** Reescribe una decisión cambiando los campos del parche (estado, aceptación, sustitución). */
+function patchDecision(root: string, dirRel: string, id: string, patch: Partial<Pick<Decision, "status" | "accepted_by" | "accepted_via" | "supersedes" | "superseded_by">>): Decision {
 	const f = findDecisionFile(root, dirRel, id);
 	const p = parseFm(readFileSync(f, "utf8"));
 	if (!p) die(`${dirRel}/${id}.md: sin frontmatter válido; arreglalo antes (bond decisions check)`);
@@ -259,6 +258,107 @@ function patchDecision(root: string, dirRel: string, id: string, patch: Partial<
 	Object.assign(d, patch);
 	writeFileSync(f, decisionFile(d));
 	return d;
+}
+
+/**
+ * D20 (sustituye a D13): aceptar, rechazar o sustituir es del usuario, pero puede
+ * hacerlo desde la conversación: con `--confirmed-by "<referencia>"` no hace falta
+ * terminal —la referencia es lo que el usuario dijo— y queda con `accepted_via` quien
+ * lo ejecuto (autoría de D12). Con terminal y sin `--confirmed-by`, se pregunta.
+ * Sin ninguna de las dos, se niega: un agente no puede aceptar por su cuenta.
+ */
+interface ChangeRequest {
+	/** "aceptar" | "rechazar" | "sustituir" — para el mensaje de la pregunta interactiva. */
+	verb: string;
+	/** Estado destino de las decisiones explicitas (no aplica a `supersede`). */
+	status?: string;
+	ids: string[];
+	allProposed: boolean;
+	confirmedBy?: string;
+	/** Referencia de aceptacion para el modo interactivo (--ref de siempre). */
+	ref?: string;
+	/** Para `supersede`: id de la decisión que sustituye. */
+	by?: string;
+}
+
+/** Aplica el cambio a cada decision pedida; informa sin abortar y devuelve si alguna fallo. */
+async function changeStatus(root: string, dirRel: string, req: ChangeRequest): Promise<boolean> {
+	const confirmedBy = req.confirmedBy?.trim();
+	if (req.confirmedBy !== undefined && !confirmedBy) {
+		die("--confirmed-by necesita una referencia no vacia: lo que dijo el usuario (bond decisions --help)");
+	}
+	if (confirmedBy === undefined && !hasTty()) {
+		die(`${req.verb} la hace solo el usuario: con terminal interactiva y confirmacion, o desde la conversacion con --confirmed-by "<lo que dijo el usuario>". Desde el shell de un agente sin una cosa ni la otra no se puede (bond decisions --help)`);
+	}
+	let ids = [...new Set(req.ids)];
+	if (req.allProposed) {
+		const proposed = loadDecisions(root, dirRel).filter((d) => d.status === "proposed").map((d) => d.id);
+		ids = [...new Set([...ids, ...proposed])];
+	}
+	if (!ids.length) {
+		if (req.allProposed) {
+			console.log(dim(`sin decisiones "proposed" en ${dirRel}/: nada que ${req.verb}.`));
+			return false;
+		}
+		die(`falta al menos un id (o --all-proposed) (bond decisions ${req.verb === "sustituir" ? "supersede" : req.verb === "rechazar" ? "reject" : "accept"} --help)`);
+	}
+	if (req.by && ids.includes(req.by)) die(`supersede: --by no puede ser una de las decisiones sustituidas (${req.by})`);
+	if (req.by) findDecisionFile(root, dirRel, req.by);
+
+	let failed = false;
+	for (const id of ids) {
+		const f = join(dirAbs(root, dirRel), `${id}.md`);
+		if (!existsSync(f)) {
+			console.error(`${bad("✗")} ${id}: no existe en ${dirRel}/`);
+			failed = true;
+			continue;
+		}
+		const p = parseFm(readFileSync(f, "utf8"));
+		if (!p) {
+			console.error(`${bad("✗")} ${dirRel}/${id}.md: sin frontmatter valido; arreglalo antes (bond decisions check)`);
+			failed = true;
+			continue;
+		}
+		const status = p.scalars.status ?? "";
+		if (req.status && status !== "proposed") {
+			console.error(`${bad("✗")} ${id}: no es "proposed" (está en "${status}"), se omite`);
+			failed = true;
+			continue;
+		}
+		if (req.verb === "sustituir" && status === "superseded") {
+			console.error(`${bad("✗")} ${id}: ya está sustituida por ${p.scalars.superseded_by}, se omite`);
+			failed = true;
+			continue;
+		}
+		if (!confirmedBy && !(await confirm(`¿${req.verb} la decisión ${id}? [y/N] `))) {
+			console.log(dim(`cancelado: ${id} no cambia.`));
+			continue;
+		}
+		const patch: Partial<Pick<Decision, "status" | "accepted_by" | "accepted_via" | "supersedes" | "superseded_by">> = {};
+		// Con --confirmed-by: la referencia es lo que dijo el usuario y accepted_via quien
+		// lo ejecuto (D20). En interactivo, accepted_by queda con --ref si se dio.
+		if (confirmedBy) {
+			patch.accepted_by = confirmedBy;
+			patch.accepted_via = resolveAuthor();
+		} else if (req.ref) {
+			patch.accepted_by = req.ref;
+		}
+		if (req.verb === "sustituir") {
+			patch.status = "superseded";
+			patch.superseded_by = req.by!;
+			patchDecision(root, dirRel, id, patch);
+			// La nueva referencia a la vieja en `supersedes`; ella sigue siendo propuesta
+			// hasta que el usuario la acepte por su cuenta.
+			patchDecision(root, dirRel, req.by!, { supersedes: id });
+			console.log(`${ok("~")} ${dirRel}/${id}.md  ${dim(`superseded por ${req.by}`)}`);
+		} else {
+			patch.status = req.status!;
+			const d = patchDecision(root, dirRel, id, patch);
+			const via = d.accepted_via ? ` · via ${d.accepted_via}` : "";
+			console.log(`${ok("~")} ${d.rel}  ${dim(`${d.status}${d.accepted_by ? ` · ${d.accepted_by}` : ""}${via}`)}`);
+		}
+	}
+	return failed;
 }
 
 // --- check ---------------------------------------------------------------------------------
@@ -314,6 +414,12 @@ export function checkDecisions(root: string, dirRel: string): DecisionsReport {
 			const ref = p.scalars[key];
 			if (ref && !byId.has(ref)) errors.push(`${rel}: ${key} apunta a "${ref}", que no existe en ${dirRel}/`);
 		}
+		// accepted_via es opcional (las decisiones aceptadas en terminal no lo llevan); si
+		// está, tiene que ser una autoría valida: user o agent:<kind>[/<nombre>] (D20).
+		const via = p.scalars.accepted_via;
+		if (via && !/^(user|agent:[a-z0-9._-]+(\/[A-Za-z0-9._-]+)?)$/.test(via)) {
+			errors.push(`${rel}: accepted_via "${via}" no es "user" ni "agent:<kind>[/<nombre>]"`);
+		}
 	}
 	for (const t of decisionTrailers(root)) {
 		if (!byId.has(t)) errors.push(`trailers Decision: apuntan a "${t}", que no existe en ${dirRel}/`);
@@ -357,7 +463,7 @@ interface Args {
 	json: boolean;
 }
 
-const VALUE_OPTS = ["--title", "--context", "--decision", "--alternatives", "--consequences", "--link", "--ref", "--by", "--status", "--agent"];
+const VALUE_OPTS = ["--title", "--context", "--decision", "--alternatives", "--consequences", "--link", "--ref", "--confirmed-by", "--by", "--status", "--agent"];
 
 function parseArgs(args: string[]): Args {
 	const pos: string[] = [];
@@ -365,7 +471,7 @@ function parseArgs(args: string[]): Args {
 	const links: string[] = [];
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
-		if (a === "--json" || a === "--stdin") opts[a] = "";
+		if (a === "--json" || a === "--stdin" || a === "--all-proposed") opts[a] = "";
 		else if (VALUE_OPTS.includes(a)) {
 			const v = args[++i];
 			if (v === undefined) die(`${a} necesita un valor (bond decisions --help)`);
@@ -435,30 +541,19 @@ export async function decisions(args: string[]): Promise<void> {
 		case "add":
 			return runAdd(root, dec.dir, a);
 		case "accept": {
-			requireTty("accept");
-			const id = a.pos[0] ?? die("uso: bond decisions accept <id> [--ref <aceptación>]");
-			await confirmChange("aceptar", id);
-			const d = patchDecision(root, dec.dir, id, { status: "accepted", ...(a.opts["--ref"] ? { accepted_by: a.opts["--ref"] } : {}) });
-			console.log(`${ok("~")} ${d.rel}  ${dim(`accepted${d.accepted_by ? ` · ${d.accepted_by}` : ""}`)}`);
+			const failed = await changeStatus(root, dec.dir, { verb: "aceptar", status: "accepted", ids: a.pos, allProposed: a.opts["--all-proposed"] === "", confirmedBy: a.opts["--confirmed-by"], ref: a.opts["--ref"] });
+			if (failed) process.exitCode = 1;
 			return;
 		}
 		case "reject": {
-			requireTty("reject");
-			const id = a.pos[0] ?? die("uso: bond decisions reject <id> [--ref <motivo>]");
-			await confirmChange("rechazar", id);
-			const d = patchDecision(root, dec.dir, id, { status: "rejected", ...(a.opts["--ref"] ? { accepted_by: a.opts["--ref"] } : {}) });
-			console.log(`${ok("~")} ${d.rel}  ${dim(`rejected${d.accepted_by ? ` · ${d.accepted_by}` : ""}`)}`);
+			const failed = await changeStatus(root, dec.dir, { verb: "rechazar", status: "rejected", ids: a.pos, allProposed: a.opts["--all-proposed"] === "", confirmedBy: a.opts["--confirmed-by"], ref: a.opts["--ref"] });
+			if (failed) process.exitCode = 1;
 			return;
 		}
 		case "supersede": {
-			requireTty("supersede");
-			const id = a.pos[0] ?? die("uso: bond decisions supersede <id> --by <nueva>");
 			const by = a.opts["--by"] ?? die("supersede necesita --by <id de la decisión que la sustituye>");
-			findDecisionFile(root, dec.dir, by);
-			await confirmChange(`sustituir ${id} por ${by}`, id);
-			patchDecision(root, dec.dir, id, { status: "superseded", superseded_by: by });
-			patchDecision(root, dec.dir, by, { supersedes: by });
-			console.log(`${ok("~")} ${id}  ${dim(`superseded por ${by}`)}`);
+			const failed = await changeStatus(root, dec.dir, { verb: "sustituir", ids: a.pos, allProposed: a.opts["--all-proposed"] === "", confirmedBy: a.opts["--confirmed-by"], ref: a.opts["--ref"], by });
+			if (failed) process.exitCode = 1;
 			return;
 		}
 		case "show": {
