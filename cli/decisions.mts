@@ -22,14 +22,18 @@ lista las decisiones.
   (lista) [--status <s>] [--agent <a>] [--json]
             Decisiones del repo, las más recientes primero.
   add --title <t> [--context <c>] --decision <d> [--alternatives <a>]
-      [--link <ref>]... [--json]
+      [--consequences <c>] [--link <ref>]... [--json]
             Registra una decisión: bond calcula el id (YYYY-MM-DD-slug), la autoría
             (desde el panel de Herdr, agent:<kind>/<nombre>; fuera, user) y la añade
-            al índice. Siempre entra como "proposed". Con --stdin, el mismo objeto en
-            JSON por la entrada estándar: {"title","context","decision","alternatives","links"}.
+            al índice. Siempre entra como "proposed". El cuerpo queda con los apartados
+            en inglés: Context / Decision / Rejected alternatives / Consequences
+            (este solo si pasas --consequences). Con --stdin, el mismo objeto en JSON
+            por la entrada estándar: {"title","context","decision","alternatives",
+            "consequences","links"}.
   accept <id> [--ref <aceptación>]
             La pasa a "accepted". Necesita terminal interactiva y tu confirmación:
-            desde el shell de un agente (sin TTY) se niega.
+            desde el shell de un agente (sin TTY) se niega. La barrera de TTY evita
+            aceptaciones por descuido de un agente; no es una medida de seguridad.
   reject <id> [--ref <motivo>]     La pasa a "rejected" (misma confirmación).
   supersede <id> --by <nueva>     La sustituye: la vieja queda "superseded" y la
                                   nueva la referencia en "supersedes".
@@ -170,13 +174,14 @@ export interface AddInput {
 	context?: string;
 	decision: string;
 	alternatives?: string;
+	consequences?: string;
 	links?: string[];
 }
 
 const section = (name: string, text?: string) => (text && text.trim() ? `\n## ${name}\n\n${text.trim()}\n` : "");
 
 function buildBody(in_: AddInput): string {
-	return section("Context", in_.context) + section("Decision", in_.decision) + section("Rejected alternatives", in_.alternatives);
+	return section("Context", in_.context) + section("Decision", in_.decision) + section("Rejected alternatives", in_.alternatives) + section("Consequences", in_.consequences);
 }
 
 /** Registra una decisión: fichero con el formato de D6 + fila en el índice. */
@@ -403,7 +408,7 @@ interface Args {
 	json: boolean;
 }
 
-const VALUE_OPTS = ["--title", "--context", "--decision", "--alternatives", "--link", "--ref", "--by", "--status", "--agent"];
+const VALUE_OPTS = ["--title", "--context", "--decision", "--alternatives", "--consequences", "--link", "--ref", "--by", "--status", "--agent"];
 
 function parseArgs(args: string[]): Args {
 	const pos: string[] = [];
@@ -449,7 +454,7 @@ async function runAdd(root: string, dir: string, a: Args): Promise<void> {
 		}
 		input.links = [...(input.links ?? []), ...a.links];
 	} else {
-		input = { title: a.opts["--title"] ?? "", context: a.opts["--context"], decision: a.opts["--decision"] ?? "", alternatives: a.opts["--alternatives"], links: a.links };
+		input = { title: a.opts["--title"] ?? "", context: a.opts["--context"], decision: a.opts["--decision"] ?? "", alternatives: a.opts["--alternatives"], consequences: a.opts["--consequences"], links: a.links };
 	}
 	const { id, rel, decided_by } = addDecision(root, dir, input);
 	if (a.json) console.log(JSON.stringify({ id, path: rel, status: "proposed", decided_by }));

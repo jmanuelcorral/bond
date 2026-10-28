@@ -134,6 +134,66 @@ describe("add", () => {
 	});
 });
 
+// P3: los apartados que escribe add tienen que coincidir con los que anuncian el README
+// de decisionsReadme() y la plantilla de decision-record: en inglés, Consequences opcional.
+describe("apartados del cuerpo (add / README / plantilla)", () => {
+	const SECTIONS = ["Context", "Decision", "Rejected alternatives", "Consequences"];
+
+	test("el README de decisionsReadme() anuncia los apartados en inglés que escribe add", async () => {
+		const { decisionsReadme } = await import("../cli/repo.mts");
+		const readme = decisionsReadme();
+		for (const s of SECTIONS) expect(readme).toContain(`*${s}*`);
+		expect(readme).not.toContain("*Contexto*");
+		expect(readme).toContain("no es una medida de seguridad");
+	});
+
+	test("con consequences escribe los cuatro apartados y check lo da por válido", () => {
+		enableMemory();
+		const { rel } = add({ context: "c", alternatives: "a", consequences: "Migrar los planes a docs/decisions." });
+		const body = parseFm(read(rel))!.body;
+		const order = SECTIONS.map((s) => body.indexOf(`## ${s}`));
+		expect(order.every((i) => i >= 0)).toBe(true);
+		expect(order).toEqual([...order].sort((x, y) => x - y));
+		expect(body).toContain("Migrar los planes a docs/decisions.");
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+	});
+
+	test("sin consequences no aparece el apartado Consequences", () => {
+		enableMemory();
+		const { rel } = add({ context: "c", alternatives: "a" });
+		const body = parseFm(read(rel))!.body;
+		expect(body).toContain("## Rejected alternatives");
+		expect(body).not.toContain("## Consequences");
+	});
+
+	test("el CLI acepta --consequences y escribe el apartado", () => {
+		enableMemory();
+		const r = bond(["decisions", "add", "--title", "Con sec", "--decision", "d", "--consequences", "Consecuencia tal"]);
+		expect(r.status).toBe(0);
+		const ds = loadDecisions(repo, "docs/decisions");
+		expect(ds).toHaveLength(1);
+		expect(ds[0].body).toContain("## Consequences");
+		expect(ds[0].body).toContain("Consecuencia tal");
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+	});
+
+	test("add --stdin acepta consequences en el JSON", () => {
+		enableMemory();
+		const r = spawnSync(process.execPath, [MAIN, "decisions", "add", "--stdin", "--json"], {
+			cwd: repo,
+			input: JSON.stringify({ title: "stdin con sec", decision: "d", consequences: "Via stdin" }),
+			encoding: "utf8",
+			timeout: 30_000,
+			env: { ...process.env, NO_COLOR: "1", HERDR_ENV: "", HERDR_PANE_ID: "" },
+		});
+		expect(r.status).toBe(0);
+		const ds = loadDecisions(repo, "docs/decisions");
+		expect(ds).toHaveLength(1);
+		expect(ds[0].body).toContain("## Consequences");
+		expect(ds[0].body).toContain("Via stdin");
+	});
+});
+
 describe("autoría (D12)", () => {
 	test("fuera de Herdr es user", () => {
 		expect(resolveAuthor()).toBe("user");

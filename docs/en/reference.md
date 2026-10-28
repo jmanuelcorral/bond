@@ -728,7 +728,7 @@ enable it and everything else exits 0 saying the memory is not in use.
 | Command | What it does |
 |---|---|
 | `bond decisions` | Lists the repo's decisions, newest first; `--status <status>`, `--agent <substring>`, `--json` |
-| `bond decisions add` | Records a decision: `--title`, `--context`, `--decision`, `--alternatives`, `--link "kind: value"` (repeatable); or with `--stdin`, the same object as JSON. bond computes the id (`YYYY-MM-DD-slug`, `-2` on collision), the authorship and the branch/HEAD links, writes `<dir>/<id>.md` and updates the index. It always enters as `proposed` |
+| `bond decisions add` | Records a decision: `--title`, `--context`, `--decision`, `--alternatives`, `--consequences`, `--link "kind: value"` (repeatable); or with `--stdin`, the same object as JSON (including `consequences`). bond computes the id (`YYYY-MM-DD-slug`, `-2` on collision), the authorship and the branch/HEAD links, writes `<dir>/<id>.md` with English sections (*Context*, *Decision*, *Rejected alternatives*, *Consequences* — the last only when consequences are provided) and updates the index. It always enters as `proposed` |
 | `bond decisions accept <id>` | Moves it to `accepted` (`--ref <acceptance>`). Requires an interactive terminal and confirmation: refused from an agent's shell (no TTY) |
 | `bond decisions reject <id>` | Moves it to `rejected`; same confirmation |
 | `bond decisions supersede <id> --by <new>` | The old one becomes `superseded` and the new one references it in `supersedes`; same confirmation |
@@ -739,12 +739,21 @@ enable it and everything else exits 0 saying the memory is not in use.
 Authorship (`decided_by`): inside a Herdr pane it is `agent:<kind>/<name>` —bond looks up the
 pane's agent, so an agent never needs to know its own name—; outside Herdr, or with no agent
 in the pane, `user`. Acceptance belongs to the user alone: `accept`, `reject` and `supersede`
-require a TTY on both input and output and ask for confirmation.
+require a TTY on both input and output and ask for confirmation. The TTY barrier keeps an
+agent from accepting by accident; it is not a security measure — git provides the records'
+integrity.
 
 pi has the `record_decision` tool (`extensions/record-decision.ts`), which calls this same
 `bond decisions add --stdin`: the model passes only the content and bond writes the record,
 the id and the index. `bond doctor` adds a decisions row: errors (failure), proposals awaiting
 acceptance (warning) or a clean memory.
+
+With the memory enabled, the catalog skills `plan-create`, `plan-execute`,
+`git-conventional-commit`, `delivery-review-github` and `convention-document` record and
+link decisions with this tool (`record_decision` or `bond decisions add`) while planning,
+executing a phase, committing, preparing a PR or documenting a convention. None of them
+marks a decision `accepted`: that stays with `bond decisions accept`. Without the memory,
+or if the tool or command is unavailable, the skills behave as they always did.
 
 The file and index format is documented in the `decision-record` skill
 (`catalog/skills/decision-record/`).

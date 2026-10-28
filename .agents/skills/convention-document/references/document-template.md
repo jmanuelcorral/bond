@@ -34,7 +34,7 @@ Use the consumer's documentation structure and language; without an established 
 
 ## Related decisions
 
-{Links to actual related documents or approved decisions. Record only the minimal non-sensitive source context needed for traceability, not a conversation transcript.}
+{Links to actual related documents or approved decisions. Record only the minimal non-sensitive source context needed for traceability, not a conversation transcript. In a repo with decision memory, include the recorded decision id and file (e.g. `docs/decisions/2026-10-28-<slug>.md`, from `bond decisions add` or `record_decision`); show a `proposed` decision as awaiting user acceptance.}
 
 ## Index update
 

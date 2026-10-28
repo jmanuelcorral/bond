@@ -60,3 +60,10 @@ Do not replace an explicit message with your own proposal. Check that it describ
 Preserve trailers requested by the user or required by higher-priority instructions and the consumer project. Do not add an agent signature by default or duplicate trailers already inserted by the tool.
 
 Do not infer emails, model names, versions, or reasoning effort levels. If mandatory attribution requires unknown information, request it before committing. Never change `user.name`, `user.email`, or signing configuration to complete the operation.
+
+In repos with decision memory (a `[decisions]` section in `.bond/bond.toml`), the project may ask for two optional trailers (see the `decision-record` skill):
+
+- `Agent: <kind>[/<name>]` — the agent that made the commit, using only the kind and name the environment provides (Herdr pane label, `bond decisions` authorship); never an invented model name or version.
+- `Decision: <id>` — when the commit applies a recorded decision, its id, so `bond decisions check` can verify the link.
+
+Both trailers stay optional: omit them rather than guess values. In repos without decision memory add no agent signature: the default behavior above is unchanged. For non-trivial changes the commit body explains the why regardless; when a recorded decision applies, name its id in the body too.

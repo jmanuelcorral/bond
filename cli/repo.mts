@@ -869,10 +869,13 @@ links: []            # plan, fase, commits, PR, run
 ---
 \`\`\`
 
-Cuerpo: *Contexto*, *Decisión*, *Alternativas descartadas*, *Consecuencias*.
+Cuerpo (los apartados que escribe \`bond decisions add\`, en inglés, como las skills):
+*Context*, *Decision*, *Rejected alternatives*, *Consequences* (este último solo si
+se pasan consecuencias al registrar).
 
 Una decisión tomada por un agente sin confirmar entra como \`proposed\`; solo el usuario la
-pasa a \`accepted\`.
+pasa a \`accepted\`. La barrera de terminal interactiva de \`accept\` evita que un agente la
+acepte por descuido; no es una medida de seguridad: la integridad del registro la da git.
 
 ## Runs
 

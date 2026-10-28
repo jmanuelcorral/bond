@@ -3,8 +3,8 @@
 ## Sin publicar
 
 - Memoria de decisiones de los agentes: en los repos con la sección `[decisions]` en
-  `.bond/bond.toml`, cada decisión no trivial queda en un fichero de `docs/decisions/` y los
-  commits llevan los trailers `Agent:` y `Decision:`. `bond init` la propone por defecto
+  `.bond/bond.toml`, cada decisión no trivial queda en un fichero de `docs/decisions/` y
+  los commits pueden llevar los trailers opcionales `Agent:` y `Decision:`. `bond init` la propone por defecto
   (`dir = "docs/decisions"`, ajustable; quita la sección para no usarla) y `bond sync` crea el
   `README.md` índice si falta —después es del repo, como `AGENTS.md`: no lo pisa ni lo da por
   desfasado—. Un `dir` que salga del repo (ruta absoluta o con `..`) se rechaza. `bond init`
@@ -26,6 +26,18 @@
   escribe el registro. `bond doctor` añade una fila de decisiones: errores, propuestas
   pendientes o memoria limpia. La skill `decision-record` manda ahora usar la herramienta en vez
   de escribir los ficheros a mano.
+- Las skills del catálogo `plan-create`, `plan-execute`, `git-conventional-commit`,
+  `delivery-review-github` y `convention-document` se integran con esa memoria: al planificar,
+  ejecutar una fase, preparar un PR o documentar una convención, las decisiones se registran
+  con `record_decision` / `bond decisions add` y se enlazan (en el plan, la evidencia, el
+  cuerpo del PR o la documentación). En repos con `[decisions]` se aprovechan los trailers
+  opcionales `Agent:` y `Decision:` cuando el entorno los da; en repos sin memoria las skills
+  no firman nada y se comportan como siempre. Ninguna marca una decisión como `accepted`: eso
+  sigue en `bond decisions accept`. Los apartados del cuerpo que escriben `add` y
+  `record_decision` se alinean con lo que anuncian el README y la plantilla: en inglés
+  (*Context*, *Decision*, *Rejected alternatives*, *Consequences*), con `--consequences`
+  (y `consequences` en el JSON) opcional. La barrera de TTY de `accept` se documenta como
+  evita-aceptaciones-por-descuido-de-agentes, no como medida de seguridad.
 
 ## 1.6.3
 

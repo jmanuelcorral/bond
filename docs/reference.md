@@ -727,7 +727,7 @@ sale con 0 explicando que no se usa la memoria.
 | Comando | Qué hace |
 |---|---|
 | `bond decisions` | Lista las decisiones, las más recientes primero; `--status <estado>`, `--agent <subcadena>`, `--json` |
-| `bond decisions add` | Registra una decisión: `--title`, `--context`, `--decision`, `--alternatives`, `--link "tipo: valor"` (repetible); o con `--stdin`, el mismo objeto en JSON. Bond calcula el id (`YYYY-MM-DD-slug`, `-2` si colisiona), la autoría y los enlaces de rama y HEAD, escribe `<dir>/<id>.md` y actualiza el índice. Entra siempre como `proposed` |
+| `bond decisions add` | Registra una decisión: `--title`, `--context`, `--decision`, `--alternatives`, `--consequences`, `--link "tipo: valor"` (repetible); o con `--stdin`, el mismo objeto en JSON (incluido `consequences`). Bond calcula el id (`YYYY-MM-DD-slug`, `-2` si colisiona), la autoría y los enlaces de rama y HEAD, escribe `<dir>/<id>.md` con los apartados en inglés (*Context*, *Decision*, *Rejected alternatives*, *Consequences* — este solo si se pasan consecuencias) y actualiza el índice. Entra siempre como `proposed` |
 | `bond decisions accept <id>` | La pasa a `accepted` (`--ref <aceptación>`). Exige terminal interactiva y confirmación: desde el shell de un agente (sin TTY) se niega |
 | `bond decisions reject <id>` | La pasa a `rejected`; misma confirmación |
 | `bond decisions supersede <id> --by <nueva>` | La vieja queda `superseded` y la nueva la referencia en `supersedes`; misma confirmación |
@@ -738,12 +738,20 @@ sale con 0 explicando que no se usa la memoria.
 La autoría (`decided_by`): en un panel de Herdr, `agent:<kind>/<nombre>` —bond mira el agente
 del panel, el agente no necesita saber su propio nombre—; fuera de Herdr o sin agente en el
 panel, `user`. Aceptar es solo del usuario: `accept`, `reject` y `supersede` exigen TTY en la
-entrada y la salida, y piden confirmación.
+entrada y la salida, y piden confirmación. La barrera de TTY evita que un agente acepte por
+descuido; no es una medida de seguridad: la integridad de los registros la da git.
 
 pi tiene la tool `record_decision` (`extensions/record-decision.ts`), que llama a este mismo
 `bond decisions add --stdin`: el modelo pasa solo el contenido y bond escribe el registro, el
 id y el índice. `bond doctor` añade la fila de decisiones: errores (fallo), propuestas
 pendientes (aviso) o la memoria limpia.
+
+Con la memoria activa, las skills del catálogo `plan-create`, `plan-execute`,
+`git-conventional-commit`, `delivery-review-github` y `convention-document` registran y
+enlazan decisiones con esta herramienta (`record_decision` o `bond decisions add`) al
+planificar, ejecutar, commitear, preparar un PR o documentar una convención. Ninguna marca
+una decisión como `accepted`: eso queda en `bond decisions accept`. Sin memoria, o si la
+herramienta o el comando no están disponibles, las skills se comportan como siempre.
 
 El formato de los ficheros y del índice lo documenta la skill `decision-record`
 (`catalog/skills/decision-record/`).

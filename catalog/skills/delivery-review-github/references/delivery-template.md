@@ -45,7 +45,7 @@ Title: {specific outcome understandable without knowing internal names}.
 
 ### Scope and decisions
 
-{Relevant changes, affected contracts, and rejected alternatives when useful for review. Include all commits that would actually enter from the base; not just the latest commit or local changes that would not reach the PR. If there are unrelated commits, stop to agree on the branch rather than hiding them.}
+{Relevant changes, affected contracts, and rejected alternatives when useful for review. Include all commits that would actually enter from the base; not just the latest commit or local changes that would not reach the PR. If there are unrelated commits, stop to agree on the branch rather than hiding them. In a repo with decision memory, list the in-scope decisions and runs here from `bond decisions --json` and `bond decisions runs --json` (id, status, `decided_by`, links); a `proposed` decision is shown as awaiting user acceptance, never as agreed.}
 
 ### Relationship to the plan and issues
 

@@ -36,6 +36,7 @@ const recordDecisionTool = defineTool({
 		context: Type.Optional(Type.String({ description: "What situation made this decision necessary (two or three sentences)" })),
 		decision: Type.String({ description: "The decision itself, stated so it can be applied without rereading the conversation" }),
 		alternatives: Type.Optional(Type.String({ description: "Alternatives considered and why they were rejected (only real ones)" })),
+		consequences: Type.Optional(Type.String({ description: "What the decision implies going forward: migrations, new constraints, follow-up work (optional)" })),
 		links: Type.Optional(
 			Type.Array(Type.String({ description: 'Reference in "kind: value" form, e.g. "plan: docs/plans/x.md#p2", "pr: https://..." , "run: runs/..."' })),
 		),
@@ -47,6 +48,7 @@ const recordDecisionTool = defineTool({
 			context: params.context ?? "",
 			decision: params.decision,
 			alternatives: params.alternatives ?? "",
+			consequences: params.consequences ?? "",
 			links: params.links ?? [],
 		});
 		const { stdout, stderr, code } = await new Promise<{ stdout: string; stderr: string; code: number }>((resolve, reject) => {
