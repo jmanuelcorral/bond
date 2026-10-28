@@ -97,6 +97,14 @@ Revisión 2 (usuario, 2026-10-28), tras la prueba real con `agy` en Herdr; acept
   de Herdr, para que `collect` lea la sesión de `agy`. Sustituye a la decisión de P3 de no
   instalarla. Registro: `docs/decisions/2026-10-28-bond-setup-instala-la-integracion-de-herdr-para-agy.md`.
 
+Revisión 3 (usuario, 2026-10-28), tras P4; aceptada al aprobarla:
+
+- **A7 — La confianza del orquestador vale para todo el equipo** (sustituye a A4): si el agente
+  del panel que lanza `bond team` confía en el checkout principal, cada agente pi, Claude Code y
+  `agy` del equipo recibe la confianza de su worktree (en `agy`, `trustedWorkspaces`: la versión
+  1.4.9 no tiene `--disable-workspace-trust`). Registro:
+  `docs/decisions/2026-10-28-la-confianza-del-orquestador-vale-para-todo-el-equipo.md`.
+
 Dependencias y riesgos:
 
 - P2 no depende de P1 (zonas distintas: `cli/setup.mts`/`cli/instructions.mts` frente a
@@ -250,12 +258,11 @@ Dependencias y riesgos:
 | P1 | implemented | passed | accepted | rama `plan/agy-support-p1` (kevin, Claude Code), commit `be7395d`, integrada en `main` por fast-forward; en `main`: typecheck limpio, `bun test` 314/314, `bond sync --check` al día; prueba real: en un repo temporal con `bond init --agents agy`, `agy -p` ve `bond_context7`, `bond_duckduckgo` y `/accept`, `/commit`, `/handoff`, `/review`; decisión del agente `2026-10-28-agy-sin-instrucciones-globales-hasta-el-plugin-global` aceptada; aceptada por el usuario en sesión el 2026-10-28 |
 | P2 | implemented | passed | accepted | rama `plan/agy-support-p2` (kevin, Claude Code), commit `f1b6c01`, integrada en `main` por fast-forward; prueba real con HOME temporal (reglas y skills globales en `agy`); decisión del agente `2026-10-28-plugin-global-de-agy-con-el-nombre-bond-global` aceptada; aceptada por el usuario en sesión el 2026-10-28 |
 | P3 | implemented | passed | accepted | rama `plan/agy-support-p3` (stuart, Claude Code), commit `ce80ecb` rebasado como `8dd58c9`, integrada en `main`; en `main` con P2: `bun test` 331/331; prueba real en Herdr: `agy` registra su decisión como `agent:agy/kevin`, la commitea en su rama con trailers y `collect` la atribuye; hallazgos en P4; aceptada por el usuario en sesión el 2026-10-28 |
-| P4 | implemented | passed | accepted | rama `plan/agy-support-p4` (kevin, Claude Code), commit `cd5746a`, integrada en `main` por fast-forward; en `main`: typecheck limpio, `bun test` 344/344, `bond sync --check` al día; decisiones del agente `2026-10-28-agy-fuera-del-path-bond-anade-local-bin-al-path-de-la-shell-del-panel` y `2026-10-28-collect-de-agy-sin-sesion-solo-lo-que-sigue-a-la-ultima-linea-de-herramienta-del-ultimo-turno` aceptadas; aceptada por el usuario en sesión el 2026-10-28; prueba real del orquestador: pendiente |
+| P4 | implemented | passed | accepted | rama `plan/agy-support-p4` (kevin, Claude Code), commit `cd5746a`, integrada en `main` por fast-forward; en `main`: typecheck limpio, `bun test` 344/344, `bond sync --check` al día; decisiones del agente `2026-10-28-agy-fuera-del-path-bond-anade-local-bin-al-path-de-la-shell-del-panel` y `2026-10-28-collect-de-agy-sin-sesion-solo-lo-que-sigue-a-la-ultima-linea-de-herramienta-del-ultimo-turno` aceptadas; aceptada por el usuario en sesión el 2026-10-28; prueba real del orquestador en Herdr: `bond team <rama>:agy` arranca `agy` sin tocar el PATH, la pregunta de confianza sale como «espera una respuesta tuya», `agy` registra `2026-10-28-redactar-nota3-md-en-espanol` y la commitea con trailers (`823b909`), y `collect` guarda el informe desde la sesión (1 commit, 1 decisión); A7 probada en Herdr: en un repo en el que confía el orquestador (Claude Code) y `agy` no, `agy` arranca con `confianza heredada` y sin preguntar |
 
 ## Next step
 
-Ejecutar P4 de `docs/plans/2026-10-28-agy-support.md` con un agente Claude Code; después, la prueba
-real del orquestador en Herdr.
+Plan completo: P1–P4 aceptadas. Queda publicar el soporte de `agy` en la próxima release.
 
 ## Evidence and tracking
 
