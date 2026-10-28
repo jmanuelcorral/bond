@@ -1,6 +1,6 @@
 ---
 name: bond-delegate
-description: Delegar una tarea en otro agente de código (pi, Claude Code, Codex, opencode, Copilot...) en un panel hermano de Herdr y traer su resultado. Úsalo solo cuando el usuario pida expresamente delegar en otro agente o use /delegate; no por iniciativa propia para paralelizar.
+description: Delegar una tarea en otro agente de código (pi, Claude Code, Codex, opencode, Copilot, Antigravity...) en un panel hermano de Herdr y traer su resultado. Úsalo solo cuando el usuario pida expresamente delegar en otro agente o use /delegate; no por iniciativa propia para paralelizar.
 ---
 
 # Delegar en otro agente (Herdr)

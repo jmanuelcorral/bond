@@ -30,6 +30,13 @@
   (antes sumaba las del orquestador del mismo tipo y las ya existentes); y compara con la base
   guardada al mandar el encargo, así que recoger después de integrar la rama sigue mostrando sus
   commits y decisiones.
+- Antigravity (`agy`) en equipos y delegaciones: `bond team <rama>:agy` da al worktree la
+  confianza que ya tenía el checkout principal en `trustedWorkspaces` de
+  `~/.gemini/antigravity-cli/settings.json` (`--no-trust` lo evita), y si `agy` pregunta si
+  confías en la carpeta, la rama sale `bloqueado` y `prompt` no manda nada. `bond team collect`
+  toma su última respuesta del `transcript.jsonl` de la conversación cuando Herdr la reporta
+  (con `herdr integration install antigravity-cli`) y, si no, del panel sin el logo ni la
+  bienvenida de `agy`.
 
 ## 1.8.0
 

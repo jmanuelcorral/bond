@@ -32,9 +32,9 @@ defecto), 2) todo en tu pestaña (filas de 4, aunque se apriete) o 3) un workspa
 de Herdr, un workspace por rama. Dentro, además, un panel estrecho a la derecha del tuyo con la
 tabla en vivo de todas las ramas (bond team status --watch), o el que ya haya.
 
-En paneles, si confías en el checkout principal en pi o en Claude Code, cada worktree hereda esa
-confianza (trust.json de pi, ~/.claude.json) y su agente arranca sin preguntar; sin ella, o con
-otros agentes, pregunta como siempre.
+En paneles, si confías en el checkout principal en pi, Claude Code o agy, cada worktree hereda
+esa confianza (trust.json de pi, ~/.claude.json, trustedWorkspaces de agy) y su agente arranca
+sin preguntar; sin ella, o con otros agentes, pregunta como siempre.
 
   -a, --agent <agente>   Agente para las ramas sin :agente
   -b, --base <ref>       Ref de la que salen las ramas nuevas
@@ -62,7 +62,8 @@ prompt   Manda una tarea al agente de esa rama (herdr agent prompt); --wait espe
          avisa y manda el prompt igual. Con memoria, el encargo lleva además una nota: lo
          que el agente registre en <dir>/ se commitea en su rama (viaja con el código).
 collect  Recoge el informe del agente: toma solo su última respuesta del fichero de sesión
-         que Herdr da en agent_session (en pi, un .jsonl) y, si no puede leerlo, del panel
+         que Herdr da en agent_session (en pi, un .jsonl; en agy, con su integración de
+         Herdr, el transcript.jsonl de la conversación) y, si no puede leerlo, del panel
          recortado (sin banner de arranque ni avisos). Lo guarda en el run de esa rama de la
          memoria de decisiones, con el estado, los commits de la rama y las decisiones
          registradas por ese agente. Repetirlo reemplaza el informe y recalcula listas: no
@@ -86,7 +87,7 @@ export interface TeamArgs {
 	layout?: Layout;
 	/** No preguntar: sin layout, pestañas nuevas. */
 	yes: boolean;
-	/** En paneles: el worktree hereda la confianza del checkout principal (pi, Claude). */
+	/** En paneles: el worktree hereda la confianza del checkout principal (pi, Claude, agy). */
 	inheritTrust: boolean;
 	specs: Array<{ branch: string; agent?: string }>;
 	agentArgs: string[];
@@ -926,7 +927,8 @@ export const withMemoryNote = (task: string, dir: string) =>
  * Última respuesta de texto del asistente en una sesión .jsonl de pi (D17). Cada línea es
  * un evento JSON; los mensajes del asistente llevan bloques `thinking`/`text`/`toolCall`:
  * sale el texto de los bloques `text` del último mensaje con él, saltando los que solo
- * tienen razonamiento o llamadas a herramientas. undefined si el fichero no se puede leer
+ * tienen razonamiento o llamadas a herramientas. Lee también el transcript de Claude Code y
+ * el de agy (pasos PLANNER_RESPONSE con `content`). undefined si el fichero no se puede leer
  * o no hay ninguna respuesta con texto.
  */
 export function lastAssistantText(file: string): string | undefined {
@@ -938,11 +940,16 @@ export function lastAssistantText(file: string): string | undefined {
 	}
 	let last: string | undefined;
 	for (const line of text.split("\n")) {
-		if (!line.includes('"assistant"')) continue;
-		let e: { type?: string; message?: { role?: string; content?: unknown } };
+		if (!line.includes('"assistant"') && !line.includes('"PLANNER_RESPONSE"')) continue;
+		let e: { type?: string; source?: string; content?: unknown; message?: { role?: string; content?: unknown } };
 		try {
 			e = JSON.parse(line);
 		} catch {
+			continue;
+		}
+		// agy: transcript.jsonl con pasos; la respuesta es el content de un PLANNER_RESPONSE.
+		if (e.type === "PLANNER_RESPONSE" && e.source === "MODEL") {
+			if (typeof e.content === "string" && e.content.trim()) last = e.content.trim();
 			continue;
 		}
 		// pi: type "message"; Claude Code: type "assistant". En los dos, message.role.
@@ -958,17 +965,20 @@ export function lastAssistantText(file: string): string | undefined {
 	return last;
 }
 
+/** Línea del arranque de agy: el logo (▄▀ y espacios), la bienvenida o el aviso de inicio de sesión. */
+const isAgyBanner = (l: string) => /^[\s▄▀█]*[▄▀█][\s▄▀█]*$/.test(l) || /Welcome to the Antigravity CLI/.test(l) || /^\s*\S?\s*Signing in\.\.\./.test(l) || !l.trim();
+
 /**
  * Recorta el volcado del panel de un agente (respaldo de D17): fuera el banner de arranque
- * de pi (arte ASCII, versión, «licence to code») y los avisos de skills en conflicto, que
- * no forman parte del informe. El volcado puede traer más cosas (eco del encargo, salidas de
+ * de pi (arte ASCII, versión, «licence to code») o de agy (logo y bienvenida) y los avisos de
+ * skills en conflicto, que no forman parte del informe. El volcado puede traer más cosas (eco del encargo, salidas de
  * herramientas): se quita lo que sabemos que no es respuesta y lo demás se guarda tal cual.
  */
 export function trimAgentBanner(text: string): string {
 	const lines = text.split("\n");
 	let i = 0;
 	while (i < lines.length && !lines[i].trim()) i++;
-	while (i < lines.length && (/[╱╲]{3}/.test(lines[i]) || /\bpi v\d/.test(lines[i]) || /licence to code/i.test(lines[i]))) i++;
+	while (i < lines.length && (/[╱╲]{3}/.test(lines[i]) || /\bpi v\d/.test(lines[i]) || /licence to code/i.test(lines[i]) || isAgyBanner(lines[i]))) i++;
 	const kept: string[] = [];
 	for (let j = i; j < lines.length; j++) {
 		// Aviso de skills en conflicto: de la cabecera hasta el bloque en blanco que lo cierra
@@ -989,12 +999,19 @@ export function trimAgentBanner(text: string): string {
 
 /**
  * Fichero de sesión de un agente según lo que da Herdr: pi da la ruta; Claude Code, el id de la
- * sesión, cuyo transcript está en <config>/projects/<carpeta del proyecto>/<id>.jsonl.
+ * sesión, cuyo transcript está en <config>/projects/<carpeta del proyecto>/<id>.jsonl; agy (con
+ * la integración de Herdr), la ruta del transcript o el id de la conversación, cuyo transcript
+ * está en ~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl.
  */
-export function sessionFile(s?: { agent?: string; kind?: string; value?: string }, claudeDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude")): string | undefined {
+export function sessionFile(s?: { agent?: string; kind?: string; value?: string }, claudeDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), agyDir = join(homedir(), ".gemini", "antigravity-cli")): string | undefined {
 	if (!s?.value) return undefined;
 	if (s.kind === "path") return s.value;
-	if (s.kind !== "id" || s.agent !== "claude" || !/^[\w-]+$/.test(s.value)) return undefined;
+	if (s.kind !== "id" || !/^[\w-]+$/.test(s.value)) return undefined;
+	if (s.agent === "agy") {
+		const f = join(agyDir, "brain", s.value, ".system_generated", "logs", "transcript.jsonl");
+		return existsSync(f) ? f : undefined;
+	}
+	if (s.agent !== "claude") return undefined;
 	const projects = join(claudeDir, "projects");
 	let dirs: string[] = [];
 	try {

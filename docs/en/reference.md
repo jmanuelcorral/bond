@@ -572,7 +572,7 @@ respects, so that the agent doesn't receive contradictory instructions:
 | Only used if the user asks for it, not because something takes long or could be parallelized | `AGENTS.md` repeats it. The `bond-delegate`/`bond-team` skills only activate on request, and the `/delegate` and `/team` prompts start with "Te pido expresamente que uses Herdr…" ("I explicitly ask you to use Herdr…"): invoking them is the explicit request. |
 | No workspaces, tabs, worktrees or other directory without a request | `/delegate` works in a sibling pane and in `$PWD`. Worktrees are created by `bond`/`bond team` (which you launch) or `/team`, which asks for it explicitly and also waits for your OK on the split before creating anything. |
 | Worktrees with `herdr worktree`, not `git worktree` by hand | `bond --worktree` uses `worktree create`/`open` attached to the `bond:<repo>` workspace, so Herdr groups them and knows how to remove them. |
-| `--trust-repository` only after reviewing the repo | `bond`/`bond team` only pass it if you set `--trust-repository`. In panes, `bond team` gives each worktree the pi or Claude Code trust that the main checkout already had, never any other (`--no-trust` disables it). |
+| `--trust-repository` only after reviewing the repo | `bond`/`bond team` only pass it if you set `--trust-repository`. In panes, `bond team` gives each worktree the pi, Claude Code or `agy` trust that the main checkout already had, never any other (`--no-trust` disables it). |
 | The installed CLI takes precedence over memory | The prompts refer to the skill and to `herdr <grupo>`; they only fix the procedure. |
 | Unique agent names | `/delegate` uses `<rol>-<n>` with the first free `n` in `herdr agent list`. |
 | Split according to the pane's shape | `/delegate` reads its `rect` in `herdr pane layout`: `right` if `width >= 120` and `width >= 2*height`, otherwise `down`. |
@@ -791,7 +791,9 @@ sending it (`--no-record` skips it; if saving fails it warns and sends the promp
 the memory enabled, the text the agent receives also carries a note: whatever it records under
 `<dir>/` gets committed on its branch, and it writes nothing in the plan or in `<dir>/runs/`.
 `bond team collect <branch>` takes only the agent's last answer from its session file (for pi,
-the `.jsonl` Herdr reports in `agent_session`) and, when that is not readable, the trimmed pane
+the `.jsonl` Herdr reports in `agent_session`; for Claude Code, its transcript by session id; for
+`agy`, the conversation's `transcript.jsonl`, which Herdr only knows with its integration:
+`herdr integration install antigravity-cli`) and, when that is not readable, the trimmed pane
 dump —no startup banner or notices— (`--lines <n>`, 200 by default); it stores
 the report, the status, the branch's commits and the decisions whose `decided_by` is that
 agent; collecting again replaces the report and recomputes the lists without duplicating. It

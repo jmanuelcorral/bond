@@ -571,7 +571,7 @@ respeta, para que el agente no reciba instrucciones contradictorias:
 | Solo se usa si el usuario lo pide, no porque algo tarde o se pueda paralelizar | `AGENTS.md` lo repite. Los skills `bond-delegate`/`bond-team` solo se activan a petición, y los prompts `/delegate` y `/team` empiezan con "Te pido expresamente que uses Herdr…": invocarlos es la petición explícita. |
 | Nada de workspaces, pestañas, worktrees ni otro directorio sin petición | `/delegate` trabaja en un panel hermano y en `$PWD`. Los worktrees los crean `bond`/`bond team` (los lanzas tú) o `/team`, que lo pide expresamente y además espera tu OK al reparto antes de crear nada. |
 | Worktrees con `herdr worktree`, no `git worktree` a mano | `bond --worktree` usa `worktree create`/`open` colgados del workspace `bond:<repo>`, así Herdr los agrupa y los sabe quitar. |
-| `--trust-repository` solo tras revisar el repo | `bond`/`bond team` solo lo pasan si tú pones `--trust-repository`. En paneles, `bond team` da a cada worktree la confianza de pi o Claude Code que ya tenía el checkout principal, nunca otra (`--no-trust` lo desactiva). |
+| `--trust-repository` solo tras revisar el repo | `bond`/`bond team` solo lo pasan si tú pones `--trust-repository`. En paneles, `bond team` da a cada worktree la confianza de pi, Claude Code o `agy` que ya tenía el checkout principal, nunca otra (`--no-trust` lo desactiva). |
 | La CLI instalada manda sobre la memoria | Los prompts remiten al skill y a `herdr <grupo>`; solo fijan el procedimiento. |
 | Nombres de agente únicos | `/delegate` usa `<rol>-<n>` con el primer `n` libre en `herdr agent list`. |
 | Split según la forma del panel | `/delegate` lee su `rect` en `herdr pane layout`: `right` si `width >= 120` y `width >= 2*height`, si no `down`. |
@@ -790,7 +790,9 @@ mandarlo (`--no-record` lo evita; si la escritura falla, avisa y manda el prompt
 memoria activa, el texto que recibe el agente lleva además una nota: lo que registre en
 `<dir>/` se commitea en su rama, y no escribe en el plan ni en `<dir>/runs/`.
 `bond team collect <rama>` toma solo la última respuesta del agente de su fichero de sesión
-(en pi, el `.jsonl` que Herdr reporta en `agent_session`) y, si no es legible, el volcado
+(en pi, el `.jsonl` que Herdr reporta en `agent_session`; en Claude Code, su transcript por el
+id de la sesión; en `agy`, el `transcript.jsonl` de la conversación, que Herdr solo conoce con
+su integración: `herdr integration install antigravity-cli`) y, si no es legible, el volcado
 del panel recortado —sin banner de arranque ni avisos— (`--lines <n>`, por defecto 200), y
 guarda el informe, el estado, los commits de la rama y las decisiones cuyo `decided_by` es ese
 agente; repetirlo reemplaza el informe y recalcula las listas, sin duplicar. Se niega mientras

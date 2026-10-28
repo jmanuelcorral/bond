@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseFm } from "../cli/decisions.mts";
+import { questionIn } from "../cli/herdr.mts";
 import { branchInfo, classify, collectBlocker, collectRun, lastAssistantText, runDecisions, sessionFile, trimAgentBanner, withMemoryNote, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runFileText, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle } from "../cli/team.mts";
 
 const dirs = (...existing: string[]) => (p: string) => existing.includes(p);
@@ -652,6 +653,27 @@ describe("informe desde el fichero de sesión del agente (D17)", () => {
 		expect(sessionFile(undefined)).toBeUndefined();
 	});
 
+	test("lee el transcript de agy: el último PLANNER_RESPONSE con content", () => {
+		// Ejemplo recortado de ~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl.
+		const f = join(import.meta.dir, "fixtures", "agy-transcript.jsonl");
+		const report = lastAssistantText(f)!;
+		expect(report).toBe("Hecho P1: añadí la entrada y sus pruebas.\n\n- `bun test`: 12/12\n- commit `abc1234`");
+		expect(report).not.toContain("Voy a ejecutar");
+		expect(report).not.toContain("verificado");
+	});
+
+	test("sessionFile: transcript de agy por la ruta o por el id de la conversación", () => {
+		expect(sessionFile({ agent: "agy", kind: "path", value: "/x/transcript.jsonl" })).toBe("/x/transcript.jsonl");
+		const agy = join(dir, "antigravity-cli");
+		const logs = join(agy, "brain", "1e91a50c-8e9c", ".system_generated", "logs");
+		mkdirSync(logs, { recursive: true });
+		writeFileSync(join(logs, "transcript.jsonl"), "");
+		expect(sessionFile({ agent: "agy", kind: "id", value: "1e91a50c-8e9c" }, dir, agy)).toBe(join(logs, "transcript.jsonl"));
+		expect(sessionFile({ agent: "agy", kind: "id", value: "no-existe" }, dir, agy)).toBeUndefined();
+		expect(sessionFile({ agent: "agy", kind: "id", value: "../x" }, dir, agy)).toBeUndefined();
+		expect(sessionFile({ agent: "codex", kind: "id", value: "1e91a50c-8e9c" }, dir, agy)).toBeUndefined();
+	});
+
 	test("varios bloques de texto del mismo mensaje se unen", () => {
 		const f = join(dir, "multi.jsonl");
 		writeFileSync(f, JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "Uno." }, { type: "thinking", thinking: "x" }, { type: "text", text: "Dos." }] } }) + "\n");
@@ -694,6 +716,23 @@ describe("recorte del volcado del panel (respaldo D17)", () => {
 		expect(trimAgentBanner(dump)).toBe("Hecho. Implementé el cambio y verifiqué con npm run typecheck.");
 	});
 
+	test("fuera el logo y la bienvenida de agy", () => {
+		const dump = [
+			"",
+			"    ▄▀▀▄",
+			"   ▀▀▀▀▀▀",
+			"  ▀▀▀▀▀▀▀▀",
+			"  ▄▀▀    ▀▀▄",
+			" ▄▀▀      ▀▀▄",
+			"",
+			" Welcome to the Antigravity CLI. You are currently not signed in.",
+			"",
+			" ⣷  Signing in...",
+			"Hecho. Commit abc1234 en la rama.",
+		].join("\n");
+		expect(trimAgentBanner(dump)).toBe("Hecho. Commit abc1234 en la rama.");
+	});
+
 	test("un volcado sin banner se queda tal cual (recortado solo por los bordes)", () => {
 		expect(trimAgentBanner("\ninforme normal\ncon líneas\n\n")).toBe("informe normal\ncon líneas");
 	});
@@ -705,5 +744,13 @@ describe("nota de memoria en el encargo (D18)", () => {
 		expect(t.startsWith("Implementa P5\n\n")).toBe(true);
 		expect(t).toContain("commitea los ficheros de docs/decisions/ en esta rama");
 		expect(t).toContain("No escribas en el plan ni en docs/decisions/runs/");
+	});
+});
+
+describe("preguntas en pantalla", () => {
+	test("pi y agy preguntan si confías en la carpeta", () => {
+		expect(questionIn("Trust project folder?\n> Trust")).toBe("confiar en la carpeta del proyecto");
+		expect(questionIn("Accessing workspace:\n\n/x/wt\n\nDo you trust the contents of this project?\n\n> Yes, I trust this folder\n  No, exit")).toBe("confiar en la carpeta del proyecto");
+		expect(questionIn("Hecho.")).toBeUndefined();
 	});
 });

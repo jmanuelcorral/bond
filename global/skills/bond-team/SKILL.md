@@ -1,6 +1,6 @@
 ---
 name: bond-team
-description: Repartir una tarea entre varios agentes de código (pi, Claude Code, Codex, opencode...) que trabajan en paralelo, cada uno en su rama y su worktree de git, con Herdr. Úsalo solo cuando el usuario pida expresamente un equipo, repartir en worktrees o use /team.
+description: Repartir una tarea entre varios agentes de código (pi, Claude Code, Codex, opencode, Antigravity...) que trabajan en paralelo, cada uno en su rama y su worktree de git, con Herdr. Úsalo solo cuando el usuario pida expresamente un equipo, repartir en worktrees o use /team.
 ---
 
 # Equipo de agentes en worktrees (Herdr)
@@ -30,7 +30,7 @@ y lleva el progreso del plan al integrar cada rama.
    OK** del usuario antes de crear nada.
 4. Con el OK, monta el equipo desde la rama actual:
    `bond team "$(git rev-parse --show-toplevel)" team/a team/b:claude --base "$(git branch --show-current)"`
-   Imprime la tabla de `bond team status`. Si alguna rama sale `bloqueado` (Claude Code o pi
+   Imprime la tabla de `bond team status`. Si alguna rama sale `bloqueado` (Claude Code, pi o agy
    preguntando si confían en la carpeta del worktree), díselo al usuario y espera a que conteste
    él: nunca respondas tú ni mandes un prompt, que su Enter contestaría la pregunta. En pi,
    elegir "Trust parent folder" una vez sirve para todos los worktrees del repo.
@@ -52,7 +52,7 @@ y lleva el progreso del plan al integrar cada rama.
    de rama, mira `git log --oneline <base>..<rama>` y `git diff --stat <base>...<rama>`.
    Con la memoria de decisiones activa, recoge el informe de cada agente con
    `bond team collect <rama>`: toma solo su última respuesta del fichero de sesión que
-   Herdr reporta en `agent_session` (en pi, un `.jsonl`) y, si no puede leerlo, del
+   Herdr reporta en `agent_session` (en pi, un `.jsonl`; en agy, su `transcript.jsonl`) y, si no puede leerlo, del
    panel recortado (sin banner de arranque ni avisos). Guarda el informe, el estado, los
    commits de la rama y las decisiones registradas por ese agente en el run del encargo
    (repetirlo no duplica nada; `--lines <n>` cambia cuánto lee del panel). Sin memoria,

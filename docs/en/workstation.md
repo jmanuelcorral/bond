@@ -252,14 +252,16 @@ if you ran it by hand in another pane.
 
 ### When a minion asks whether you trust the folder
 
-pi and Claude Code ask whether you trust each new folder, and every worktree is a new folder. With
+pi, Claude Code and Antigravity (`agy`) ask whether you trust each new folder, and every worktree is a new folder. With
 four minions that would be four identical dialogs, so bond gives you a hand.
 
 When the agents run in panes and you already trust the main checkout, bond gives the worktree
 that same trust before launching its agent, and the agent starts without asking. You'll see it
 marked as `confianza heredada` (inherited trust). In pi, that means the checkout's closest entry
 in `~/.pi/agent/trust.json` is `true`; in Claude, that the checkout or a parent folder has
-`hasTrustDialogAccepted` in `~/.claude.json`.
+`hasTrustDialogAccepted` in `~/.claude.json`; in `agy`, that the checkout or a parent folder is
+in `trustedWorkspaces` in `~/.gemini/antigravity-cli/settings.json` (bond adds the worktree by
+its exact path).
 
 bond is careful with those files. It touches nothing but that, respects pi's lock and writes
 atomically. And if at some point you said you don't trust a folder, it stays that way. If you'd

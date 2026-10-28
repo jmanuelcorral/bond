@@ -68,16 +68,22 @@ export function agents(timeout?: number): HerdrAgent[] {
 }
 
 /**
- * Preguntas que un agente enseña sin que Herdr lo marque como blocked. pi pregunta si confía en
- * la carpeta del proyecto (cada worktree es una carpeta nueva) y Herdr lo da por idle: el Enter
- * del primer prompt elegiría "Trust" por ti y la tarea se perdería.
+ * Preguntas que un agente enseña sin que Herdr lo marque como blocked. pi y agy preguntan si
+ * confías en la carpeta del proyecto (cada worktree es una carpeta nueva) y Herdr lo da por idle:
+ * el Enter del primer prompt elegiría "Trust" por ti y la tarea se perdería.
  */
-const QUESTIONS: Array<[RegExp, string]> = [[/Trust project folder\?/, "confiar en la carpeta del proyecto"]];
+const QUESTIONS: Array<[RegExp, string]> = [
+	[/Trust project folder\?/, "confiar en la carpeta del proyecto"],
+	[/Do you trust the contents of this project\?/, "confiar en la carpeta del proyecto"],
+];
+
+/** Pregunta conocida en el texto de una pantalla, si la hay. */
+export const questionIn = (screen: string) => QUESTIONS.find(([re]) => re.test(screen))?.[1];
 
 /** Pregunta que espera respuesta en la pantalla del agente, si la hay. */
 export function pendingQuestion(agent: string): string | undefined {
 	const r = run("herdr", ["agent", "read", agent, "--source", "visible", "--lines", "60"], { timeout: 5000 });
-	return r.status === 0 ? QUESTIONS.find(([re]) => re.test(r.stdout))?.[1] : undefined;
+	return r.status === 0 ? questionIn(r.stdout) : undefined;
 }
 
 /** Kinds de agente que admite la versión instalada de Herdr. */

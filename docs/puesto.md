@@ -250,14 +250,16 @@ ejecutaste a mano en otro panel.
 
 ### Cuando un minion pregunta si confías en la carpeta
 
-pi y Claude Code preguntan si confías en cada carpeta nueva, y cada worktree es una carpeta nueva.
+pi, Claude Code y Antigravity (`agy`) preguntan si confías en cada carpeta nueva, y cada worktree es una carpeta nueva.
 Con cuatro minions eso serían cuatro diálogos iguales, así que bond te echa una mano.
 
 Cuando los agentes van en paneles y ya confías en el checkout principal, bond da esa misma
 confianza al worktree antes de lanzar su agente, y este arranca sin preguntar. Lo verás indicado
 como `confianza heredada`. En pi, eso significa que la entrada más cercana del checkout en
 `~/.pi/agent/trust.json` es `true`; en Claude, que el checkout o una carpeta superior tiene
-`hasTrustDialogAccepted` en `~/.claude.json`.
+`hasTrustDialogAccepted` en `~/.claude.json`; en `agy`, que el checkout o una carpeta superior
+está en `trustedWorkspaces` de `~/.gemini/antigravity-cli/settings.json` (bond añade el worktree
+con su ruta exacta).
 
 bond es cuidadoso con esos ficheros. No toca nada más que eso, respeta el cerrojo de pi y escribe
 de forma atómica. Y si en algún momento dijiste que no confías en una carpeta, se queda así. Si

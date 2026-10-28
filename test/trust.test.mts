@@ -2,17 +2,17 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { inheritClaudeTrust, inheritPiTrust, inheritTrust, withLock } from "../cli/trust.mts";
+import { inheritAgyTrust, inheritClaudeTrust, inheritPiTrust, inheritTrust, withLock } from "../cli/trust.mts";
 
 let dir: string;
-let files: { pi: string; claude: string };
+let files: { pi: string; claude: string; agy: string };
 const main = join("/", "src", "repo");
 const wt = join("/", "home", "u", ".herdr", "worktrees", "repo", "feat-a");
 const read = (f: string) => JSON.parse(readFileSync(f, "utf8"));
 
 beforeEach(() => {
 	dir = mkdtempSync(join(tmpdir(), "bond-trust-"));
-	files = { pi: join(dir, "trust.json"), claude: join(dir, ".claude.json") };
+	files = { pi: join(dir, "trust.json"), claude: join(dir, ".claude.json"), agy: join(dir, "settings.json") };
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -94,7 +94,42 @@ describe("Claude Code", () => {
 	});
 });
 
+describe("agy", () => {
+	const settings = (trustedWorkspaces: unknown) => ({ colorScheme: "tokyo night", model: "Gemini", trustedWorkspaces });
+	const key = (p: string) => p.replace(/\\/g, "/");
+
+	test("checkout principal en trustedWorkspaces: añade el worktree y conserva el resto", () => {
+		writeFileSync(files.agy, `${JSON.stringify(settings([key(main), "/otro"]), null, 2)}\n`, { mode: 0o600 });
+		expect(inheritAgyTrust(main, wt, files.agy)).toBe("heredada");
+		expect(read(files.agy)).toEqual(settings([key(main), "/otro", key(wt)]));
+		expect(readFileSync(files.agy, "utf8").endsWith("\n")).toBe(true);
+		if (process.platform !== "win32") expect(statSync(files.agy).mode & 0o777).toBe(0o600);
+		expect(inheritAgyTrust(main, wt, files.agy)).toBe("ya la tenía");
+		expect(read(files.agy).trustedWorkspaces).toHaveLength(3);
+	});
+
+	test("vale una carpeta superior de confianza; el worktree se añade con su ruta exacta", () => {
+		writeFileSync(files.agy, JSON.stringify(settings([key(join("/", "src"))])));
+		expect(inheritAgyTrust(main, wt, files.agy)).toBe("heredada");
+		expect(read(files.agy).trustedWorkspaces).toContain(key(wt));
+	});
+
+	test("sin el checkout principal, sin lista o sin fichero: no toca nada", () => {
+		for (const before of [JSON.stringify(settings(["/otro"])), JSON.stringify({ model: "Gemini" }), JSON.stringify(settings("no es lista"))]) {
+			writeFileSync(files.agy, before);
+			expect(inheritAgyTrust(main, wt, files.agy)).toBe("sin confianza");
+			expect(readFileSync(files.agy, "utf8")).toBe(before);
+		}
+		expect(inheritAgyTrust(main, wt, join(dir, "no-existe.json"))).toBe("sin confianza");
+	});
+
+	test("inheritTrust lo enruta a settings.json de agy", () => {
+		writeFileSync(files.agy, JSON.stringify(settings([key(main)])));
+		expect(inheritTrust("agy", main, wt, files)).toBe("heredada");
+	});
+});
+
 test("otros agentes: no aplica", () => {
 	expect(inheritTrust("codex", main, wt, files)).toBe("no aplica");
-	expect(existsSync(files.pi) || existsSync(files.claude)).toBe(false);
+	expect(existsSync(files.pi) || existsSync(files.claude) || existsSync(files.agy)).toBe(false);
 });

@@ -1,5 +1,5 @@
 // Confianza heredada para los worktrees de bond team: si ya confías en el checkout principal,
-// el worktree de una rama recibe la misma confianza en pi y en Claude Code, y su agente arranca
+// el worktree de una rama recibe la misma confianza en pi, Claude Code y agy, y su agente arranca
 // sin preguntar. Nunca se da confianza que no tenías: sin ella, el agente pregunta como siempre.
 
 import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -11,15 +11,18 @@ export interface TrustFiles {
 	pi: string;
 	/** Claude Code: projects[ruta].hasTrustDialogAccepted. */
 	claude: string;
+	/** agy (Antigravity): trustedWorkspaces, lista de rutas. */
+	agy: string;
 }
 
 export const trustFiles = (): TrustFiles => ({
 	pi: join(AGENT_DIR, "trust.json"),
 	claude: join(process.env.CLAUDE_CONFIG_DIR || HOME, ".claude.json"),
+	agy: join(HOME, ".gemini", "antigravity-cli", "settings.json"),
 });
 
 /** Agentes con confianza automática; el resto pregunta como siempre. */
-export const TRUST_KINDS = ["pi", "claude"];
+export const TRUST_KINDS = ["pi", "claude", "agy"];
 
 export type TrustResult = "heredada" | "ya la tenía" | "sin confianza" | "no aplica";
 
@@ -143,9 +146,28 @@ export function inheritClaudeTrust(main: string, worktree: string, file: string)
 	return "heredada";
 }
 
+/**
+ * agy: si el checkout principal (o una carpeta superior) está en trustedWorkspaces, añade el
+ * worktree. Se relee justo antes de escribir y se escribe de forma atómica, como en Claude.
+ */
+export function inheritAgyTrust(main: string, worktree: string, file: string): TrustResult {
+	const original = existsSync(file) ? readFileSync(file, "utf8") : "";
+	const data = original ? readJson(file) : undefined;
+	const list = data?.trustedWorkspaces;
+	if (!data || !Array.isArray(list)) return "sin confianza";
+	const trusted = new Map(list.filter((p): p is string => typeof p === "string").map((p) => [norm(p), true]));
+	if (nearest(trusted, main) !== true) return "sin confianza";
+	// Solo cuenta la ruta exacta: no está comprobado que agy confíe en las subcarpetas.
+	if (trusted.has(norm(worktree))) return "ya la tenía";
+	data.trustedWorkspaces = [...list, list.some((p) => typeof p === "string" && p.includes("\\")) ? worktree : norm(worktree)];
+	writeJsonAtomic(file, data, original);
+	return "heredada";
+}
+
 /** Confianza del checkout principal para el worktree, según el agente. */
 export function inheritTrust(kind: string, main: string, worktree: string, files: TrustFiles = trustFiles()): TrustResult {
 	if (kind === "pi") return inheritPiTrust(main, worktree, files.pi);
 	if (kind === "claude") return inheritClaudeTrust(main, worktree, files.claude);
+	if (kind === "agy") return inheritAgyTrust(main, worktree, files.agy);
 	return "no aplica";
 }
