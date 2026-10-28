@@ -2,6 +2,7 @@
 name: "2026-10-28-agy-support"
 description: "bond integra Antigravity (agy) como agente: configuración del repo, global, Herdr y memoria de decisiones"
 created_at: "2026-10-28T14:56:32Z"
+last_implementation_at: "2026-10-28T15:26:29Z"
 has_completed_all_phases: false
 ---
 
@@ -128,12 +129,12 @@ Dependencias y riesgos:
   - Prueba real: `agy -p` en un repo con bond ve los MCP del plugin y los comandos
     (`/commit`, `/review`, `/handoff`, `/accept`).
 - Actions:
-  - [ ] Entrada `agy` en `SUPPORTED_AGENTS` y `catalog-agents.mts`.
-  - [ ] Salidas del plugin en `plan()` y traducción de comandos a skills, con pruebas.
-  - [ ] Fila de `agy` en `bond doctor`, con prueba.
-  - [ ] Ayuda, `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
-  - [ ] Run applicable checks and record actual results.
-  - [ ] Present evidence and stop for review before another phase.
+  - [x] Entrada `agy` en `SUPPORTED_AGENTS` y `catalog-agents.mts`.
+  - [x] Salidas del plugin en `plan()` y traducción de comandos a skills, con pruebas.
+  - [x] Fila de `agy` en `bond doctor`, con prueba.
+  - [x] Ayuda, `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
+  - [x] Run applicable checks and record actual results.
+  - [x] Present evidence and stop for review before another phase.
 - Verification: `npm run typecheck && bun test`, `bin/bond sync --check`; a mano, repo temporal
   con `bin/bond init --agents agy --yes`, revisar `.agents/plugins/bond/` y preguntar a
   `agy -p` por sus MCP y comandos.
@@ -200,17 +201,18 @@ Dependencias y riesgos:
 
 | Phase | Implementation | Verification | Review | Evidence |
 | --- | --- | --- | --- | --- |
-| P1 | pending | not_run | pending | none yet |
+| P1 | implemented | passed | accepted | rama `plan/agy-support-p1` (kevin, Claude Code), commit `be7395d`, integrada en `main` por fast-forward; en `main`: typecheck limpio, `bun test` 314/314, `bond sync --check` al día; prueba real: en un repo temporal con `bond init --agents agy`, `agy -p` ve `bond_context7`, `bond_duckduckgo` y `/accept`, `/commit`, `/handoff`, `/review`; decisión del agente `2026-10-28-agy-sin-instrucciones-globales-hasta-el-plugin-global` aceptada; aceptada por el usuario en sesión el 2026-10-28 |
 | P2 | pending | not_run | pending | none yet |
 | P3 | pending | not_run | pending | none yet |
 
 ## Next step
 
-Ejecutar P1 de `docs/plans/2026-10-28-agy-support.md`: da la entrada `agy` de la que dependen P2
-y P3. Tras aceptarla, P2 y P3 pueden ir en paralelo con `plan-team`. Respuesta corta:
-«ejecuta P1».
+P2 y P3 de `docs/plans/2026-10-28-agy-support.md` en paralelo con `plan-team`: las dos dependen
+solo de P1, aceptada. P2 añade además las instrucciones globales de `agy` que P1 dejó fuera
+(decisión `2026-10-28-agy-sin-instrucciones-globales-hasta-el-plugin-global`).
 
 ## Evidence and tracking
 
 - Pruebas previas al plan (2026-10-28): `agy -p` en el repo de bond y en un repo temporal con un
   plugin `.agents/plugins/bond/` y un plugin global de prueba (borrado después).
+- P1: `be7395d` (`feat(agents): support Antigravity (agy) in bond init, sync and doctor`), en `main`; run en `docs/decisions/runs/2026-10-28-kevin-use-the-plan-execute-skill-to-implement-2.md`.

@@ -1,11 +1,11 @@
 ---
 id: "2026-10-28-agy-sin-instrucciones-globales-hasta-el-plugin-global"
 title: "agy sin instrucciones globales hasta el plugin global"
-status: "proposed"
+status: "accepted"
 date: "2026-10-28"
 decided_by: "agent:claude/kevin"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "chat 2026-10-28: «integra P1, acepto, acepta la de kevin, arregla collect y lanza P2 y P3»"
+accepted_via: "agent:claude"
 supersedes: ""
 superseded_by: ""
 links:
