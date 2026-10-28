@@ -1,73 +1,49 @@
 # Cambios
 
-## Sin publicar
+## 1.7.0
 
-- Memoria de decisiones de los agentes: en los repos con la sección `[decisions]` en
-  `.bond/bond.toml`, cada decisión no trivial queda en un fichero de `docs/decisions/` y
-  los commits pueden llevar los trailers opcionales `Agent:` y `Decision:`. `bond init` la propone por defecto
-  (`dir = "docs/decisions"`, ajustable; quita la sección para no usarla) y `bond sync` crea el
-  `README.md` con el formato del registro si falta —después es del repo, como `AGENTS.md`: no
-  lo pisa ni lo da por
-  desfasado—. Un `dir` que salga del repo (ruta absoluta o con `..`) se rechaza. `bond init`
-  solo escribe la sección si `decision-record` está entre las skills elegidas; al actualizar un
-  `bond.toml`, una `[decisions]` que ya tuvieras se conserva aunque desmarques la skill. Nueva skill
-  `decision-record` en el catálogo (marcada por defecto) con el formato de decisiones y de
-  runs, y una regla global en `bond setup` para que también la sigan los agentes que no
-  cargan skills por sí solos. Sin `[decisions]`, nada cambia.
-- Nueva orden `bond decisions` para usar y auditar esa memoria: sin subcomando lista las
-  decisiones (`--status`, `--agent`, `--json`); `add` las registra —bond calcula el id
-  (`YYYY-MM-DD-slug`, `-2` si colisiona), la autoría (en panel de Herdr,
-  `agent:<kind>/<nombre>`; fuera, `user`) y enlaza rama y HEAD; entra
-  siempre como `proposed`—. `accept`, `reject` y `supersede` son solo del usuario: exigen
-  terminal interactiva y confirmación, y se niegan desde el shell de un agente. `show` imprime
-  el fichero entero, `runs` lista los encargos de `<dir>/runs/` y `check` audita frontmatter,
-  ids, sustituciones y trailers `Decision:` (sale con 1 si hay errores). En repos sin
-  `[decisions]`, `add` falla explicando cómo activarla y lo demás sale con 0. En pi, la nueva
-  tool `record_decision` llama a ese mismo `add`: el modelo pasa solo el contenido y bond
-  escribe el registro. `bond doctor` añade una fila de decisiones: errores, propuestas
-  pendientes o memoria limpia. La skill `decision-record` manda ahora usar la herramienta en vez
-  de escribir los ficheros a mano.
-- Las skills del catálogo `plan-create`, `plan-execute`, `git-conventional-commit`,
-  `delivery-review-github` y `convention-document` se integran con esa memoria: al planificar,
-  ejecutar una fase, preparar un PR o documentar una convención, las decisiones se registran
-  con `record_decision` / `bond decisions add` y se enlazan (en el plan, la evidencia, el
-  cuerpo del PR o la documentación). En repos con `[decisions]` se aprovechan los trailers
-  opcionales `Agent:` y `Decision:` cuando el entorno los da; en repos sin memoria las skills
-  no firman nada y se comportan como siempre. Ninguna marca una decisión como `accepted`: eso
-  sigue en `bond decisions accept`. Los apartados del cuerpo que escriben `add` y
-  `record_decision` se alinean con lo que anuncian el README y la plantilla: en inglés
-  (*Context*, *Decision*, *Rejected alternatives*, *Consequences*), con `--consequences`
-  (y `consequences` en el JSON) opcional. La barrera de TTY de `accept` se documenta como
-  evita-aceptaciones-por-descuido-de-agentes, no como medida de seguridad.
-- Equipo y delegaciones con registro guardado: en repos con `[decisions]`, `bond team prompt`
-  guarda el encargo exacto en `<dir>/runs/` antes de mandarlo (`--no-record` lo evita; si la
-  escritura falla, avisa y manda el prompt igual) y la nueva orden `bond team collect <rama>`
-  toma el informe del agente —su última respuesta, del fichero de sesión o del panel
-  recortado— y deja en el run el informe, el
-  estado, los commits de la rama y las decisiones registradas por ese agente; repetirlo
-  reemplaza el informe y recalcula las listas sin duplicar. Sin run creado por `prompt`,
-  `collect` lo crea con `--request "<encargo>"` y `--agent <nombre>` (delegaciones sin
-  equipo). `bond decisions runs` muestra los commits y decisiones de cada run y `show` abre
-  también runs por su id. Las skills `bond-team`, `bond-delegate` y `plan-team` usan estos
-  comandos en vez de escribir el run a mano, y `bond-delegate` sustituye su fichero temporal
-  (`mktemp -d`) por el run cuando la memoria está activa. El agente de la rama nunca escribe
-  su propio run: lo hace bond desde el checkout principal.
-- Correcciones tras probar la memoria con agentes de verdad (P5). La `description` de la skill
-  `decision-record` va ahora entrecomillada: sin comillas, el `(Agent: and Decision:)` del
-  texto rompía el YAML y pi se negaba a cargarla, y `bond catalog check` falla desde ya ante
-  frontmatter de skill que no es YAML válido, señalando la línea y el arreglo. `bond team
-  collect` toma solo la última respuesta del agente de su fichero de sesión (en pi, el
-  `.jsonl` que Herdr reporta en `agent_session`) en lugar del volcado crudo del panel, y si
-  no puede leerlo, cae al panel recortado —sin banner de arranque ni avisos de skills en
-  conflicto—. `bond team prompt` añade al encargo, con memoria activa, una nota: lo que el
-  agente registre en `<dir>/` se commitea en su rama y viaja con el código, y no escribe en
-  el plan ni en `runs/`. Y ya no hay índice compartido: `add`, `accept`, `reject` y
-  `supersede` no reescriben el `<dir>/README.md`, `check` deja de auditarlo y el listado lo
-  da `bond decisions`, así que dos ramas que registran decisiones desde la misma base se
-  fusionan sin conflictos de memoria.
-- `bond team collect` se niega mientras el agente trabaja o espera una respuesta (antes guardaba
-  el panel a medias y daba el run por acabado), y `bond decisions add` ya no repite un enlace que
-  el agente pasa y bond añade también (la rama).
+Memoria de decisiones de los agentes: en un repo con bond, las decisiones, los encargos a otros
+agentes y lo que respondieron quedan por escrito en el repo, para auditar después qué hizo cada
+uno. La escritura la hace bond, no el modelo: funciona también con modelos locales que no
+siguen formatos a mano.
+
+- Se activa por repo con la sección `[decisions]` de `.bond/bond.toml` (`dir = "docs/decisions"`,
+  ajustable dentro del repo). `bond init` la propone cuando eliges la skill `decision-record`,
+  marcada por defecto; al reinicializar, una sección que ya tuvieras se conserva. `bond sync`
+  crea `<dir>/README.md` con el formato si falta; después es del repo. Sin `[decisions]`, nada
+  cambia.
+- `bond decisions add` registra una decisión: el agente pasa el título, el contexto, la decisión
+  y, si las hay, alternativas, consecuencias y enlaces (por flags o JSON con `--stdin`), y bond
+  escribe `<dir>/<YYYY-MM-DD-slug>.md` con su frontmatter, la rama y el HEAD. La autoría la pone
+  bond: en un panel de Herdr, el agente de ese panel (`agent:pi/kevin`); fuera, `user`. Siempre
+  entra como `proposed`.
+- `bond decisions accept`, `reject` y `supersede` son del usuario: piden terminal interactiva y
+  confirmación, y se niegan desde el shell de un agente. Evita aceptaciones por descuido; no es
+  una medida de seguridad (la integridad la da git).
+- Para auditar: `bond decisions` lista (`--status`, `--agent`, `--json`), `show <id>` enseña una
+  decisión o un run, `runs` lista los encargos y `check` valida frontmatter, ids, sustituciones y
+  trailers `Decision:` (sale con 1 si hay errores). `bond doctor` añade una fila con los errores
+  y las decisiones pendientes de aceptar.
+- En pi, la herramienta `record_decision` (Bond Extensions) llama a `bond decisions add`.
+- Encargos e informes: con la memoria activa, `bond team prompt` guarda el encargo exacto en
+  `<dir>/runs/` antes de mandarlo (`--no-record` para no guardarlo; si falla al escribir, avisa
+  y manda el prompt igual) y le pide al agente que commitee en su rama lo que registre. La nueva
+  `bond team collect <rama>` guarda en el run la última respuesta del agente (de su fichero de
+  sesión o, si no se puede, del panel sin el banner de arranque), el estado, los commits de la
+  rama y las decisiones de ese agente; se niega mientras el agente trabaja o espera una respuesta
+  y repetirlo no duplica nada. Con `--request` y `--agent` sirve también para delegaciones sin
+  equipo.
+- Las decisiones viajan con la rama y se revisan con el código; no hay un índice compartido que
+  dé conflictos entre agentes en paralelo.
+- Skills: `decision-record` es nueva; `plan-create`, `plan-execute`, `git-conventional-commit`,
+  `delivery-review-github` y `convention-document` registran y enlazan sus decisiones con la
+  herramienta; `bond-team`, `plan-team` y `bond-delegate` guardan encargos e informes con
+  `prompt` y `collect`. Con la memoria activa, los commits pueden llevar los trailers opcionales
+  `Agent:` y `Decision:`; sin ella, las skills no firman nada. Una regla global de `bond setup`
+  pide usar la memoria en los repos que la tienen.
+- `bond catalog check` falla si el frontmatter de una skill no es YAML válido (por ejemplo, una
+  `description` sin comillas con `: ` dentro), que pi se niega a cargar aunque Claude Code lo
+  tolere.
 
 ## 1.6.3
 
