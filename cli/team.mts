@@ -10,7 +10,7 @@ import { loadDecisions, parseFm, type Parsed, resolveAuthor, slugify } from "./d
 import { chooseAgent, gitRoot, openWorkspace } from "./launch.mts";
 import { agents, defaultAgentArgs, ensureServer, firstFreeName, herdr, type HerdrAgent, insideHerdr, preparePane, questionIn, requireHerdr, serverRunning, startedBlocked, startupNoticeIn, visibleScreen, workspaces } from "./herdr.mts";
 import { repoDecisions } from "./repo.mts";
-import { inheritTrust, TRUST_KINDS } from "./trust.mts";
+import { inheritTrust, TRUST_KINDS, trusts } from "./trust.mts";
 import { act, caution, catchDie, die, dim, isDryRun, ok, run, warn } from "./util.mts";
 
 export const TEAM_HELP = `Uso: bond team [repo] <rama[:agente]>... [opciones] [-- argumentos de los agentes]
@@ -32,9 +32,11 @@ defecto), 2) todo en tu pestaña (filas de 4, aunque se apriete) o 3) un workspa
 de Herdr, un workspace por rama. Dentro, además, un panel estrecho a la derecha del tuyo con la
 tabla en vivo de todas las ramas (bond team status --watch), o el que ya haya.
 
-En paneles, si confías en el checkout principal en pi, Claude Code o agy, cada worktree hereda
-esa confianza (trust.json de pi, ~/.claude.json, trustedWorkspaces de agy) y su agente arranca
-sin preguntar; sin ella, o con otros agentes, pregunta como siempre.
+En paneles, si el orquestador (pi, Claude Code o agy en el panel desde el que lanzas el equipo)
+confía en el checkout principal, todos los agentes del equipo confían en su worktree; si no, cada
+uno hereda la confianza que él mismo tenga en el checkout. bond la escribe en trust.json de pi,
+~/.claude.json o trustedWorkspaces de agy, y el agente arranca sin preguntar; sin ninguna, o con
+otros agentes, pregunta como siempre.
 
 agy arranca con --dangerously-skip-permissions (sin él pide permiso por cada comando); tus
 argumentos tras -- lo sustituyen. Si no está en el PATH pero sí en ~/.local/bin, bond añade esa
@@ -324,9 +326,19 @@ function pendingInTab(root: string, plan: Array<{ branch: string; agent: string 
 	return out;
 }
 
+/**
+ * El orquestador: el agente del panel que lanza el equipo (pi, Claude Code o agy), si confía en el
+ * checkout principal. Su confianza vale para todos los agentes del equipo.
+ */
+function trustingOrchestrator(root: string, anchor: string): string | undefined {
+	const kind = agents(5000).find((a) => a.pane_id === anchor && a.agent)?.agent;
+	return kind && TRUST_KINDS.includes(kind) && trusts(kind, root) ? kind : undefined;
+}
+
 /** Un worktree, un panel y un minion por rama: en la pestaña del que llama hasta `room`, el resto en pestañas nuevas. */
 function openInTab(root: string, anchor: string, here: CallerTab, room: number, pending: Pending, o: TeamArgs): void {
 	const { live } = pending;
+	const orchestrator = o.inheritTrust ? trustingOrchestrator(canonical(root), anchor) : undefined;
 	for (const s of pending.skipped) console.log(`${ok("✓")} ${s.branch}  ${dim(`ya tiene agente (${s.path})`)}`);
 	const todo: Array<{ branch: string; agent: string; path: string }> = [];
 	for (const { branch, agent, path: wtPath } of pending.todo) {
@@ -365,7 +377,7 @@ function openInTab(root: string, anchor: string, here: CallerTab, room: number, 
 			let trusted = false;
 			if (o.inheritTrust && TRUST_KINDS.includes(agent)) {
 				try {
-					trusted = inheritTrust(agent, canonical(root), canonical(path)) === "heredada";
+					trusted = inheritTrust(agent, canonical(root), canonical(path), undefined, !!orchestrator) === "heredada";
 				} catch (e) {
 					warn(`${branch}: no pude heredar la confianza (${(e as Error).message}); ${agent} preguntará`);
 				}

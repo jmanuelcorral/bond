@@ -1,6 +1,7 @@
-// Confianza heredada para los worktrees de bond team: si ya confías en el checkout principal,
-// el worktree de una rama recibe la misma confianza en pi, Claude Code y agy, y su agente arranca
-// sin preguntar. Nunca se da confianza que no tenías: sin ella, el agente pregunta como siempre.
+// Confianza heredada para los worktrees de bond team: si el orquestador (el agente que lanza el
+// equipo) o el propio agente ya confía en el checkout principal, el worktree de una rama recibe esa
+// confianza en pi, Claude Code y agy, y su agente arranca sin preguntar. Sin ninguna de las dos, el
+// agente pregunta como siempre.
 
 import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -43,6 +44,12 @@ const readJson = (file: string): Record<string, unknown> | undefined => {
 	const data = JSON.parse(readFileSync(file, "utf8"));
 	return data && typeof data === "object" && !Array.isArray(data) ? data : undefined;
 };
+
+/** Con la confianza avalada por el orquestador, un fichero que falta se crea con este contenido. */
+function createJson(file: string, data: unknown): void {
+	mkdirSync(dirname(file), { recursive: true });
+	writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`);
+}
 
 /**
  * Escritura atómica: fichero temporal en la misma carpeta y rename, con los permisos del
@@ -94,14 +101,21 @@ export function withLock<T>(file: string, fn: () => T, timeoutMs = 5000): T {
 	}
 }
 
-/** pi: si el checkout principal es de confianza, añade el worktree a trust.json. */
-export function inheritPiTrust(main: string, worktree: string, file: string): TrustResult {
-	if (!existsSync(file)) return "sin confianza";
+/**
+ * pi: si el checkout principal es de confianza (o `vouched`: el orquestador confía en él), añade
+ * el worktree a trust.json.
+ */
+export function inheritPiTrust(main: string, worktree: string, file: string, vouched = false): TrustResult {
+	if (!existsSync(file)) {
+		if (!vouched) return "sin confianza";
+		createJson(file, { [worktree]: true });
+		return "heredada";
+	}
 	return withLock(file, () => {
 		const original = readFileSync(file, "utf8");
 		const data = readJson(file) ?? {};
 		const entries = new Map(Object.entries(data).map(([k, v]) => [norm(k), v]));
-		if (nearest(entries, main) !== true) return "sin confianza";
+		if (!vouched && nearest(entries, main) !== true) return "sin confianza";
 		// Una decisión tuya sobre esa carpeta o una superior se respeta: no se confía por encima de un false.
 		const current = nearest(entries, worktree);
 		if (current === true) return "ya la tenía";
@@ -124,18 +138,20 @@ const claudeProject = () => ({
 });
 
 /**
- * Claude Code: si el checkout principal o una carpeta superior tiene hasTrustDialogAccepted,
- * lo marca para el worktree. Claude reescribe ~/.claude.json mientras está abierto: se relee
- * justo antes de escribir y se escribe de forma atómica.
+ * Claude Code: si el checkout principal o una carpeta superior tiene hasTrustDialogAccepted (o
+ * `vouched`), lo marca para el worktree. Claude reescribe ~/.claude.json mientras está abierto: se
+ * relee justo antes de escribir y se escribe de forma atómica. Sin ~/.claude.json no se crea:
+ * Claude Code no se ha usado en esta máquina.
  */
-export function inheritClaudeTrust(main: string, worktree: string, file: string): TrustResult {
+export function inheritClaudeTrust(main: string, worktree: string, file: string, vouched = false): TrustResult {
 	const original = existsSync(file) ? readFileSync(file, "utf8") : "";
 	const data = original ? readJson(file) : undefined;
+	if (data && vouched && data.projects === undefined) data.projects = {};
 	const projects = data?.projects;
 	if (!data || !projects || typeof projects !== "object") return "sin confianza";
 	const byPath = projects as Record<string, { hasTrustDialogAccepted?: boolean } | undefined>;
 	const accepted = new Map(Object.entries(byPath).map(([k, v]) => [norm(k), v?.hasTrustDialogAccepted === true ? true : undefined]));
-	if (nearest(accepted, main) !== true) return "sin confianza";
+	if (!vouched && nearest(accepted, main) !== true) return "sin confianza";
 	if (nearest(accepted, worktree) === true) return "ya la tenía";
 	// La clave, con las barras de las que ya hay (Claude en Windows guarda C:/...).
 	const key = Object.keys(byPath).some((k) => k.includes("\\")) ? worktree : norm(worktree);
@@ -147,16 +163,21 @@ export function inheritClaudeTrust(main: string, worktree: string, file: string)
 }
 
 /**
- * agy: si el checkout principal (o una carpeta superior) está en trustedWorkspaces, añade el
- * worktree. Se relee justo antes de escribir y se escribe de forma atómica, como en Claude.
+ * agy: si el checkout principal (o una carpeta superior) está en trustedWorkspaces (o `vouched`),
+ * añade el worktree. Se relee justo antes de escribir y se escribe de forma atómica, como en Claude.
  */
-export function inheritAgyTrust(main: string, worktree: string, file: string): TrustResult {
+export function inheritAgyTrust(main: string, worktree: string, file: string, vouched = false): TrustResult {
+	if (vouched && !existsSync(file)) {
+		createJson(file, { trustedWorkspaces: [norm(worktree)] });
+		return "heredada";
+	}
 	const original = existsSync(file) ? readFileSync(file, "utf8") : "";
 	const data = original ? readJson(file) : undefined;
+	if (data && vouched && data.trustedWorkspaces === undefined) data.trustedWorkspaces = [];
 	const list = data?.trustedWorkspaces;
 	if (!data || !Array.isArray(list)) return "sin confianza";
 	const trusted = new Map(list.filter((p): p is string => typeof p === "string").map((p) => [norm(p), true]));
-	if (nearest(trusted, main) !== true) return "sin confianza";
+	if (!vouched && nearest(trusted, main) !== true) return "sin confianza";
 	// Solo cuenta la ruta exacta: no está comprobado que agy confíe en las subcarpetas.
 	if (trusted.has(norm(worktree))) return "ya la tenía";
 	data.trustedWorkspaces = [...list, list.some((p) => typeof p === "string" && p.includes("\\")) ? worktree : norm(worktree)];
@@ -164,10 +185,37 @@ export function inheritAgyTrust(main: string, worktree: string, file: string): T
 	return "heredada";
 }
 
-/** Confianza del checkout principal para el worktree, según el agente. */
-export function inheritTrust(kind: string, main: string, worktree: string, files: TrustFiles = trustFiles()): TrustResult {
-	if (kind === "pi") return inheritPiTrust(main, worktree, files.pi);
-	if (kind === "claude") return inheritClaudeTrust(main, worktree, files.claude);
-	if (kind === "agy") return inheritAgyTrust(main, worktree, files.agy);
+/** ¿Confía `kind` en `dir`? Solo lee: es la confianza del orquestador en el checkout principal. */
+export function trusts(kind: string, dir: string, files: TrustFiles = trustFiles()): boolean {
+	try {
+		if (kind === "pi") {
+			const data = readJson(files.pi) ?? {};
+			return nearest(new Map(Object.entries(data).map(([k, v]) => [norm(k), v])), dir) === true;
+		}
+		if (kind === "claude") {
+			const projects = readJson(files.claude)?.projects;
+			if (!projects || typeof projects !== "object") return false;
+			const byPath = projects as Record<string, { hasTrustDialogAccepted?: boolean } | undefined>;
+			return nearest(new Map(Object.entries(byPath).map(([k, v]) => [norm(k), v?.hasTrustDialogAccepted === true ? true : undefined])), dir) === true;
+		}
+		if (kind === "agy") {
+			const list = readJson(files.agy)?.trustedWorkspaces;
+			if (!Array.isArray(list)) return false;
+			return nearest(new Map(list.filter((p): p is string => typeof p === "string").map((p) => [norm(p), true])), dir) === true;
+		}
+	} catch {
+		// Un fichero ilegible no avala nada.
+	}
+	return false;
+}
+
+/**
+ * Confianza para el worktree, según el agente: la del checkout principal en ese agente o, con
+ * `vouched`, la del orquestador, que ya confía en el checkout principal.
+ */
+export function inheritTrust(kind: string, main: string, worktree: string, files: TrustFiles = trustFiles(), vouched = false): TrustResult {
+	if (kind === "pi") return inheritPiTrust(main, worktree, files.pi, vouched);
+	if (kind === "claude") return inheritClaudeTrust(main, worktree, files.claude, vouched);
+	if (kind === "agy") return inheritAgyTrust(main, worktree, files.agy, vouched);
 	return "no aplica";
 }

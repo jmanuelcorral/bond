@@ -1,13 +1,13 @@
 ---
 id: "2026-10-28-confianza-heredada-para-agy-en-bond-team"
 title: "Confianza heredada para agy en bond team"
-status: "accepted"
+status: "superseded"
 date: "2026-10-28"
 decided_by: "agent:claude"
-accepted_by: "chat 2026-10-28: «aprueba y guarda» (plan de agy) y «acepta A1–A4, commitea y manda P1 a claude»"
+accepted_by: "usuario en sesión el 2026-10-28: «a partir de ahora si el orquestador confia en el repo, hagamos que el resto de agentes confien» y «si funcona con trustedWorkspaces perfecto»"
 accepted_via: "agent:claude"
 supersedes: ""
-superseded_by: ""
+superseded_by: "2026-10-28-la-confianza-del-orquestador-vale-para-todo-el-equipo"
 links:
   - "plan: docs/plans/2026-10-28-agy-support.md#A4"
   - "branch: main"

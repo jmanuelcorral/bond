@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { inheritAgyTrust, inheritClaudeTrust, inheritPiTrust, inheritTrust, withLock } from "../cli/trust.mts";
+import { inheritAgyTrust, inheritClaudeTrust, inheritPiTrust, inheritTrust, trusts, withLock } from "../cli/trust.mts";
 
 let dir: string;
 let files: { pi: string; claude: string; agy: string };
@@ -132,4 +132,48 @@ describe("agy", () => {
 test("otros agentes: no aplica", () => {
 	expect(inheritTrust("codex", main, wt, files)).toBe("no aplica");
 	expect(existsSync(files.pi) || existsSync(files.claude) || existsSync(files.agy)).toBe(false);
+});
+
+describe("con la confianza del orquestador (vouched)", () => {
+	const key = (p: string) => p.replace(/\\/g, "/");
+
+	test("trusts: lee la confianza de cada agente en el checkout principal, sin escribir", () => {
+		writeFileSync(files.pi, JSON.stringify({ [join("/", "src")]: true }));
+		writeFileSync(files.claude, JSON.stringify({ projects: { [key(main)]: { hasTrustDialogAccepted: true } } }));
+		writeFileSync(files.agy, JSON.stringify({ trustedWorkspaces: ["/otro"] }));
+		expect(trusts("pi", main, files)).toBe(true);
+		expect(trusts("claude", main, files)).toBe(true);
+		expect(trusts("agy", main, files)).toBe(false);
+		expect(trusts("codex", main, files)).toBe(false);
+		writeFileSync(files.pi, "{roto");
+		expect(trusts("pi", main, files)).toBe(false);
+	});
+
+	test("agy sin el checkout en trustedWorkspaces: añade el worktree igualmente", () => {
+		writeFileSync(files.agy, JSON.stringify({ model: "Gemini", trustedWorkspaces: ["/otro"] }));
+		expect(inheritTrust("agy", main, wt, files, true)).toBe("heredada");
+		expect(read(files.agy)).toEqual({ model: "Gemini", trustedWorkspaces: ["/otro", key(wt)] });
+		writeFileSync(files.agy, JSON.stringify({ model: "Gemini" }));
+		expect(inheritAgyTrust(main, wt, files.agy, true)).toBe("heredada");
+		expect(read(files.agy).trustedWorkspaces).toEqual([key(wt)]);
+		rmSync(files.agy);
+		expect(inheritAgyTrust(main, wt, files.agy, true)).toBe("heredada");
+		expect(read(files.agy)).toEqual({ trustedWorkspaces: [key(wt)] });
+	});
+
+	test("pi y Claude Code sin confianza propia en el checkout: la reciben", () => {
+		writeFileSync(files.pi, JSON.stringify({ "/otro": true }));
+		expect(inheritTrust("pi", main, wt, files, true)).toBe("heredada");
+		expect(read(files.pi)[wt]).toBe(true);
+		writeFileSync(files.claude, JSON.stringify({ numStartups: 1 }));
+		expect(inheritTrust("claude", main, wt, files, true)).toBe("heredada");
+		expect(read(files.claude).projects[key(wt)]).toMatchObject({ hasTrustDialogAccepted: true });
+	});
+
+	test("respeta un no tuyo en el worktree de pi y no crea ~/.claude.json", () => {
+		writeFileSync(files.pi, JSON.stringify({ [wt]: false }));
+		expect(inheritPiTrust(main, wt, files.pi, true)).toBe("sin confianza");
+		expect(inheritClaudeTrust(main, wt, files.claude, true)).toBe("sin confianza");
+		expect(existsSync(files.claude)).toBe(false);
+	});
 });

@@ -255,9 +255,13 @@ if you ran it by hand in another pane.
 pi, Claude Code and Antigravity (`agy`) ask whether you trust each new folder, and every worktree is a new folder. With
 four minions that would be four identical dialogs, so bond gives you a hand.
 
-When the agents run in panes and you already trust the main checkout, bond gives the worktree
-that same trust before launching its agent, and the agent starts without asking. You'll see it
-marked as `confianza heredada` (inherited trust). In pi, that means the checkout's closest entry
+When the agents run in panes and the orchestrator trusts the main checkout, bond gives each
+agent's worktree that trust before launching it, and the agent starts without asking. The
+orchestrator is pi, Claude Code or `agy` in the pane you launch the team from: if you trust the
+repo through it, the rest of the team does too, even if their agent never opened it. If you launch
+it from a shell, or the orchestrator doesn't trust it, each agent inherits the trust it already
+gives the main checkout. You'll see it marked as `confianza heredada` (inherited trust). In pi,
+trusting means the checkout's closest entry
 in `~/.pi/agent/trust.json` is `true`; in Claude, that the checkout or a parent folder has
 `hasTrustDialogAccepted` in `~/.claude.json`; in `agy`, that the checkout or a parent folder is
 in `trustedWorkspaces` in `~/.gemini/antigravity-cli/settings.json` (bond adds the worktree by
@@ -332,7 +336,8 @@ git branch -d <rama>                     # the branch, once you no longer want i
 
 To make it clear where the line is: bond doesn't merge, rebase or push, doesn't delete branches or
 close workspaces on its own, and doesn't answer agent dialogs for you. The inherited trust of
-`bond team` only repeats the trust you already gave the main checkout. The minions do the work,
+`bond team` only repeats the trust you already gave the main checkout, through the orchestrator
+or through each agent. The minions do the work,
 but the decisions are still yours.
 
 Something unclear, or not working the way it's described here? Open an issue at

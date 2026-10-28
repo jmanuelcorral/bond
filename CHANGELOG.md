@@ -2,6 +2,11 @@
 
 ## Sin publicar
 
+- Confianza del orquestador en `bond team`: si el agente del panel que lanza el equipo (pi,
+  Claude Code o `agy`) confía en el checkout principal, todos los agentes pi, Claude Code y `agy`
+  del equipo arrancan confiando en su worktree, aunque su agente no hubiera abierto nunca el
+  repo. En `agy` se escribe en `trustedWorkspaces`. Sin esa confianza, cada agente hereda la suya
+  como hasta ahora; `--no-trust` lo desactiva.
 - Aceptar al aprobar: `bond decisions add` (y `record_decision` en pi) admite
   `--confirmed-by "<lo que dijo el usuario>"` (`confirmed_by` en el JSON) y registra la
   decisión ya `accepted`, con esa cita y `accepted_via`. Las skills `plan-create`,

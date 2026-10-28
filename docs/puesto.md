@@ -253,9 +253,13 @@ ejecutaste a mano en otro panel.
 pi, Claude Code y Antigravity (`agy`) preguntan si confías en cada carpeta nueva, y cada worktree es una carpeta nueva.
 Con cuatro minions eso serían cuatro diálogos iguales, así que bond te echa una mano.
 
-Cuando los agentes van en paneles y ya confías en el checkout principal, bond da esa misma
-confianza al worktree antes de lanzar su agente, y este arranca sin preguntar. Lo verás indicado
-como `confianza heredada`. En pi, eso significa que la entrada más cercana del checkout en
+Cuando los agentes van en paneles y el orquestador confía en el checkout principal, bond da esa
+confianza al worktree de cada agente antes de lanzarlo, y este arranca sin preguntar. El
+orquestador es pi, Claude Code o `agy` en el panel desde el que lanzas el equipo: si tú confías en
+el repo a través de él, el resto del equipo también, aunque su agente no lo haya abierto nunca. Si
+lo lanzas desde una shell, o el orquestador no confía, cada agente hereda la confianza que él
+mismo tenga en el checkout principal. Lo verás indicado como `confianza heredada`. En pi, confiar
+significa que la entrada más cercana del checkout en
 `~/.pi/agent/trust.json` es `true`; en Claude, que el checkout o una carpeta superior tiene
 `hasTrustDialogAccepted` en `~/.claude.json`; en `agy`, que el checkout o una carpeta superior
 está en `trustedWorkspaces` de `~/.gemini/antigravity-cli/settings.json` (bond añade el worktree
@@ -330,7 +334,8 @@ git branch -d <rama>                     # la rama, cuando ya no la quieras
 
 Para que quede claro dónde está la línea: bond no hace merge, rebase ni push, no borra ramas ni
 cierra workspaces por su cuenta, y no responde por ti a los diálogos de los agentes. La confianza
-heredada de `bond team` solo repite la que tú ya diste al checkout principal. Los minions hacen
+heredada de `bond team` solo repite la que tú ya diste al checkout principal, a través del
+orquestador o de cada agente. Los minions hacen
 el trabajo, pero las decisiones siguen siendo tuyas.
 
 ¿Algo no se entiende o no funciona como aquí se cuenta? Abre un issue en
