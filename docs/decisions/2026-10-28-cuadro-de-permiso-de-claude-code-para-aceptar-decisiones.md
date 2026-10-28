@@ -1,13 +1,13 @@
 ---
 id: "2026-10-28-cuadro-de-permiso-de-claude-code-para-aceptar-decisiones"
 title: "Cuadro de permiso de Claude Code para aceptar decisiones"
-status: "accepted"
+status: "superseded"
 date: "2026-10-28"
 decided_by: "agent:claude"
-accepted_by: "chat 2026-10-28: «acepta D20 y D21»"
+accepted_by: "chat 2026-10-28: «quita el cuadro y acepta al aprobar»"
 accepted_via: "agent:claude"
 supersedes: ""
-superseded_by: ""
+superseded_by: "2026-10-28-aceptar-al-aprobar-y-sin-cuadro-de-permiso"
 links:
   - "plan: docs/plans/2026-10-28-decision-memory.md#D21"
   - "branch: main"
