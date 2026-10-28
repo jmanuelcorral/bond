@@ -68,6 +68,7 @@ collect  Recoge el informe del agente: toma solo su última respuesta del ficher
          registradas por ese agente. Repetirlo reemplaza el informe y recalcula listas: no
          duplica nada. Sin run creado por prompt, lo crea con --request como encargo (para
          delegaciones sin equipo, como bond-delegate); --agent recoge por nombre de agente.
+         Se niega mientras el agente trabaja o espera una respuesta.
 clean    Quita worktrees (carpeta, workspace y agente); las ramas se quedan. Sin ramas, solo
          los integrados que abrió Herdr. Nunca uno con el agente trabajando o con cambios sin
          commitear, salvo con --force. --delete-branch borra además las ramas integradas.
@@ -1166,6 +1167,10 @@ function runCtx(root: string, row: Row): RunCtx | undefined {
 	};
 }
 
+/** Por qué no se puede recoger aún el informe de un agente con ese estado; undefined si se puede. */
+export const collectBlocker = (status?: string) =>
+	status === "working" ? "está trabajando" : status === "blocked" ? "espera una respuesta tuya" : undefined;
+
 function collect(args: string[]): void {
 	requireHerdr();
 	const { positional, opts } = parseCommon(args, [], ["--lines", "--agent", "--request"]);
@@ -1179,7 +1184,11 @@ function collect(args: string[]): void {
 	if (!dec) die("este repo no usa la memoria de decisiones: añade la sección [decisions] a .bond/bond.toml (bond init la propone) y ejecuta bond sync");
 	const row = teamRows(root).find((r) => r.branch === branch);
 	const agent = (opts["--agent"] as string | undefined) || row?.agent?.name || die(`no hay agente en la rama ${branch} y no diste --agent (bond team status)`);
-	const kind = row?.agent?.kind ?? agents(5000).find((a) => a.name === agent)?.agent ?? "";
+	const live = row?.agent ? undefined : agents(5000).find((a) => a.name === agent);
+	const kind = row?.agent?.kind ?? live?.agent ?? "";
+	// Recoger a medias guardaría el panel sin terminar como informe y daría el run por acabado.
+	const busy = collectBlocker(row?.agent?.status ?? live?.agent_status);
+	if (busy) die(`${agent} ${busy}: espera a que termine (herdr agent wait ${agent}) y repite`);
 	const lines = String(opts["--lines"] ?? "200");
 	// D17: el informe sale del fichero de sesión del agente; el panel recortado es el respaldo.
 	const { report, source } = agentReport(agent, () => {

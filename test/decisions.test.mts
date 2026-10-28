@@ -69,6 +69,12 @@ describe("add", () => {
 		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
 	});
 
+	test("no repite un enlace que ya daba el agente", () => {
+		enableMemory();
+		const { rel } = add({ links: ["plan: docs/plans/x.md", "plan: docs/plans/x.md "] });
+		expect(parseFm(read(rel))?.lists.links).toEqual(["plan: docs/plans/x.md"]);
+	});
+
 	test("dos add con el mismo título el mismo día dan <id> y <id>-2", () => {
 		enableMemory();
 		const a = add();

@@ -765,7 +765,8 @@ memoria activa, el texto que recibe el agente lleva además una nota: lo que reg
 (en pi, el `.jsonl` que Herdr reporta en `agent_session`) y, si no es legible, el volcado
 del panel recortado —sin banner de arranque ni avisos— (`--lines <n>`, por defecto 200), y
 guarda el informe, el estado, los commits de la rama y las decisiones cuyo `decided_by` es ese
-agente; repetirlo reemplaza el informe y recalcula las listas, sin duplicar. Sin run creado
+agente; repetirlo reemplaza el informe y recalcula las listas, sin duplicar. Se niega mientras
+el agente trabaja o espera una respuesta, para no guardar un informe a medias. Sin run creado
 por `prompt`, `collect` lo crea con `--request "<encargo>"` y `--agent <nombre>` (delegaciones
 sin equipo, como `bond-delegate`). El agente de la rama nunca escribe su propio run.
 

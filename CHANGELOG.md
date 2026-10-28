@@ -65,6 +65,9 @@
   `supersede` no reescriben el `<dir>/README.md`, `check` deja de auditarlo y el listado lo
   da `bond decisions`, así que dos ramas que registran decisiones desde la misma base se
   fusionan sin conflictos de memoria.
+- `bond team collect` se niega mientras el agente trabaja o espera una respuesta (antes guardaba
+  el panel a medias y daba el run por acabado), y `bond decisions add` ya no repite un enlace que
+  el agente pasa y bond añade también (la rama).
 
 ## 1.6.3
 

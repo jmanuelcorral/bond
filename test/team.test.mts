@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseFm } from "../cli/decisions.mts";
-import { branchInfo, classify, collectRun, lastAssistantText, trimAgentBanner, withMemoryNote, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runFileText, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle } from "../cli/team.mts";
+import { branchInfo, classify, collectBlocker, collectRun, lastAssistantText, trimAgentBanner, withMemoryNote, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runFileText, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle } from "../cli/team.mts";
 
 const dirs = (...existing: string[]) => (p: string) => existing.includes(p);
 
@@ -517,6 +517,14 @@ describe("runs de la memoria de decisiones", () => {
 		expect(p.lists.decisions).toEqual(["2026-10-28-eleccion"]);
 		expect(p.body).toContain("hecho: checks en verde");
 		expect(p.body).toContain("la tarea");
+	});
+
+	test("collect no recoge mientras el agente trabaja o espera una respuesta", () => {
+		expect(collectBlocker("working")).toBe("está trabajando");
+		expect(collectBlocker("blocked")).toBe("espera una respuesta tuya");
+		expect(collectBlocker("idle")).toBeUndefined();
+		expect(collectBlocker("done")).toBeUndefined();
+		expect(collectBlocker(undefined)).toBeUndefined();
 	});
 
 	test("repetir collect no duplica: reemplaza el informe y recalcula listas", () => {

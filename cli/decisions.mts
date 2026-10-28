@@ -210,7 +210,8 @@ export function addDecision(root: string, dirRel: string, in_: AddInput): { id: 
 		accepted_by: "",
 		supersedes: "",
 		superseded_by: "",
-		links: [...(in_.links ?? []).map((l) => l.trim()).filter(Boolean), ...gitLinks(root)],
+		// Sin repetidos: el agente a veces pasa la rama que bond añade de todos modos.
+		links: [...new Set([...(in_.links ?? []).map((l) => l.trim()).filter(Boolean), ...gitLinks(root)])],
 		body: `\n${buildBody(in_)}`,
 		rel: `${dirRel}/${id}.md`,
 	};

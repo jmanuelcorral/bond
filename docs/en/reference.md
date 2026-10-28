@@ -767,7 +767,8 @@ the memory enabled, the text the agent receives also carries a note: whatever it
 the `.jsonl` Herdr reports in `agent_session`) and, when that is not readable, the trimmed pane
 dump —no startup banner or notices— (`--lines <n>`, 200 by default); it stores
 the report, the status, the branch's commits and the decisions whose `decided_by` is that
-agent; collecting again replaces the report and recomputes the lists without duplicating.
+agent; collecting again replaces the report and recomputes the lists without duplicating. It
+refuses while the agent is working or waiting for an answer, so it never stores a half-done report.
 Without a run created by `prompt`, `collect` creates one with `--request "<task>"` and
 `--agent <name>` (delegations without a team, like `bond-delegate`). The branch agent never
 writes its own run.
