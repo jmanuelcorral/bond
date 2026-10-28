@@ -1,11 +1,11 @@
 ---
 id: "2026-10-28-plugin-global-de-agy-con-el-nombre-bond-global"
 title: "Plugin global de agy con el nombre bond-global"
-status: "proposed"
+status: "accepted"
 date: "2026-10-28"
 decided_by: "agent:claude/kevin"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "chat 2026-10-28: «acepta las tres, integra P2 y P3, arregla check y haz la prueba real»"
+accepted_via: "agent:claude"
 supersedes: ""
 superseded_by: ""
 links:

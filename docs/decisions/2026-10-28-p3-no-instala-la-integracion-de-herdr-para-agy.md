@@ -1,11 +1,11 @@
 ---
 id: "2026-10-28-p3-no-instala-la-integracion-de-herdr-para-agy"
 title: "P3 no instala la integración de Herdr para agy"
-status: "proposed"
+status: "accepted"
 date: "2026-10-28"
 decided_by: "agent:claude/stuart"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "chat 2026-10-28: «acepta las tres, integra P2 y P3, arregla check y haz la prueba real»"
+accepted_via: "agent:claude"
 supersedes: ""
 superseded_by: ""
 links:
