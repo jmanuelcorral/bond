@@ -2,6 +2,7 @@
 name: "2026-10-28-decision-memory"
 description: "Cada repo con bond guarda por escrito las decisiones y los encargos de sus agentes, con trazas en git, y bond decisions permite auditarlos"
 created_at: "2026-10-28T09:34:29Z"
+last_implementation_at: "2026-10-28T11:05:00Z"
 has_completed_all_phases: false
 ---
 
@@ -22,6 +23,11 @@ has_completed_all_phases: false
   `cli/doctor.mts`, `cli/main.mts`; `docs/reference.md`; los seis planes de `docs/plans/`.
 - Approval: aprobado por el usuario en sesión el 2026-10-28 («aprueba y guarda»): contenido y
   destino de este plan, con D1–D4 elegidas en sesión y D5–D10 tal como se proponen.
+- Revisión 2 (usuario, 2026-10-28, «integra P1, acepto y revisa el plan así»): los modelos
+  locales no siguen instrucciones de formato, así que la escritura de decisiones pasa a una
+  herramienta de bond (D11–D15). Se reordenan las fases: la antigua P4 (`bond decisions`) pasa a
+  P2 con la parte de escritura; la antigua P2 (skills) pasa a P3 y la antigua P3 (encargos e
+  informes) a P4; ambas dependen ahora de P2.
 
 ## Goal
 
@@ -71,7 +77,7 @@ Decisiones (usuario, 2026-10-28, en sesión):
 
 - **D1 — Registro**: `docs/decisions/`, un fichero Markdown por decisión, que se commitea y se
   revisa en el PR.
-- **D2 — Trazas en git**: trailers en el commit: `Agent: <kind>[/<nombre>]` (el kind, `pi`,
+- **D2 — Trazas en git** (revisada en D15: opcionales): trailers en el commit: `Agent: <kind>[/<nombre>]` (el kind, `pi`,
   `claude`, `codex`..., y el nombre del agente en Herdr si lo hay; nunca un modelo inventado) y
   `Decision: <id>` cuando el commit aplica una decisión.
 - **D3 — Encargos e informes**: se guardan en el repo, en `docs/decisions/runs/`.
@@ -104,10 +110,31 @@ Propuestas en el plan y aprobadas con él (usuario, 2026-10-28):
   `.bond/bond.toml`, registrar las decisiones con `decision-record` y poner los trailers en los
   commits. Así vale también para agentes que no cargan las skills por sí solos.
 
+Revisión 2 (usuario, 2026-10-28): los modelos locales no siguen instrucciones de formato, así que
+lo delicado lo hace bond, no el modelo:
+
+- **D11 — Escritura con herramienta**: `bond decisions add` recibe título, contexto, decisión y
+  alternativas (flags o JSON por stdin) y calcula el id, escribe el fichero con su frontmatter,
+  añade la fila al índice del README y anota rama y HEAD. Siempre entra como `proposed`. La skill
+  `decision-record` dice que se use esta herramienta, no que se escriba el fichero a mano.
+- **D12 — Autoría automática**: `decided_by` lo rellena bond: desde un panel de Herdr
+  (`HERDR_PANE_ID`), el agente de ese panel (`agent:<kind>/<nombre>`); fuera, `user`. El modelo
+  no tiene que saber su nombre.
+- **D13 — Aceptar es del usuario**: `bond decisions accept <id>` exige terminal interactiva y
+  confirmación; desde el shell de un agente (sin TTY) se niega.
+- **D14 — Herramienta en pi**: `record_decision` en las Bond Extensions (como `repo_map`), que
+  llama al mismo código. Los demás agentes usan el CLI por shell. Un servidor MCP queda fuera de
+  este plan.
+- **D15 — Atribución sin depender del modelo**: los runs dicen qué agente trabajó en qué rama, y
+  `bond decisions` atribuye por ahí los commits de esa rama. D2 se revisa: los trailers `Agent:` y
+  `Decision:` se aprovechan cuando aparecen, pero no son obligatorios. Sin hooks de git por
+  defecto (chocan con husky y `core.hooksPath`). El informe del agente lo guarda
+  `bond team collect <rama>` leyendo su panel.
+
 Dependencias y riesgos:
 
-- Dependencia: P2, P3 y P4 dependen de P1 (formato, skill y activación). Entre ellas son
-  independientes y tocan zonas distintas, salvo `CHANGELOG.md` y `docs/reference.md`.
+- Dependencia: P2 depende de P1; P3 y P4 dependen de P2 y entre ellas son independientes (tocan
+  zonas distintas, salvo `CHANGELOG.md` y `docs/reference.md`).
 - Riesgo: ruido, con agentes que registran cada nimiedad. Mitigación: criterio explícito en la
   skill y ejemplos de qué no registrar; `bond decisions` muestra cuántas `proposed` esperan
   revisión.
@@ -118,8 +145,8 @@ Dependencias y riesgos:
   Mitigación: los trailers solo se ponen cuando el repo los pide (`[decisions]` activo); la skill
   de commit lo dice en *Attribution*. `Agent:` nunca lleva modelo ni versión si no los da el
   entorno.
-- Riesgo: un agente no sabe su nombre en Herdr. Mitigación: `bond team prompt` y `bond-delegate`
-  lo incluyen en el encargo; sin él, `Agent: <kind>` a secas.
+- Riesgo: un agente no sabe su nombre en Herdr. Mitigación (D12): bond lo resuelve desde
+  `HERDR_PANE_ID`; el agente no tiene que pasarlo.
 - Riesgo: Windows y rutas. Lo que se guarda usa `/`; pruebas en `test/` como el resto (CI en
   Linux, macOS y Windows).
 - `cli/assets.gen.mts` y `dist/` no se tocan a mano; `.agents/skills/` y `.claude/` se regeneran
@@ -148,131 +175,153 @@ Dependencias y riesgos:
     los trailers de D2 y cómo enlazar plan, commit, PR y run.
   - `bond catalog check catalog` pasa.
 - Actions:
-  - [ ] Leer y validar `[decisions]`; plantilla en `bondToml()`; opción en `bond init`; README en
+  - [x] Leer y validar `[decisions]`; plantilla en `bondToml()`; opción en `bond init`; README en
         `bond sync`; regla en `BOND_RULES`.
-  - [ ] Skill `decision-record` con sus plantillas y entrada en `catalog.toml`; `bond sync` en
+  - [x] Skill `decision-record` con sus plantillas y entrada en `catalog.toml`; `bond sync` en
         este repo.
-  - [ ] Pruebas en `test/repo.test.mts` (init, sync idempotente, `dir` fuera del repo).
-  - [ ] Ayuda de `init`, `docs/reference.md` (configuración por repo, skills del catálogo,
+  - [x] Pruebas en `test/repo.test.mts` (init, sync idempotente, `dir` fuera del repo).
+  - [x] Ayuda de `init`, `docs/reference.md` (configuración por repo, skills del catálogo,
         instrucciones globales) y `## Sin publicar`.
-  - [ ] Run applicable checks and record actual results.
-  - [ ] Present evidence and stop for review before another phase.
+  - [x] Run applicable checks and record actual results.
+  - [x] Present evidence and stop for review before another phase.
 - Verification: en la raíz, `npm run typecheck && bun test` y `bin/bond catalog check catalog`;
   a mano, `bin/bond init` en un repo temporal (`mktemp -d`, `git init`) y `bin/bond sync` dos
   veces para ver el README creado una sola vez.
 - Risks and recovery: sin `[decisions]`, nada cambia; revertir la fase no deja ficheros fuera
   de los repos que la activaron.
 
-### P2: Las skills de planes, ejecución, commits y entrega registran decisiones
+### P2: `bond decisions`: escribir, aceptar y auditar, y `record_decision` en pi
+
+- Outcome: un agente registra una decisión con una sola llamada (`bond decisions add` o la
+  herramienta `record_decision` de pi) y bond escribe el fichero, el índice y la autoría; el
+  usuario la acepta con `bond decisions accept`; `bond decisions` lista y valida la memoria y
+  `bond doctor` avisa si algo está roto.
+- Owning repository: `bond`.
+- Dependencies: P1 (aceptada).
+- Affected contracts: nuevo `cli/decisions.mts` y caso en `cli/main.mts`:
+  - `bond decisions add --title <t> [--context <c>] --decision <d> [--alternatives <a>]
+    [--link <ref>]... [--json]`, o el mismo objeto como JSON por stdin (`--stdin`): escribe
+    `<dir>/<id>.md` con el formato de D6, `status: proposed`, `decided_by` según D12, rama y HEAD
+    en `links`, y la fila en el índice del README; imprime el id (o JSON con id y ruta).
+  - `bond decisions accept <id> [--ref <aceptación>]`: solo con TTY y confirmación (D13); pone
+    `accepted`, `accepted_by` y actualiza el índice. `reject` y `supersede <id> --by <id>` igual.
+  - `bond decisions [--status <s>] [--agent <a>] [--json]`, `show <id>`, `runs [--agent <a>]
+    [--json]` y `check` (frontmatter, id = fichero, duplicados, `superseded_by` que existe,
+    trailers `Decision:` que apuntan a algo que existe, índice al día; código ≠ 0 si hay errores).
+  - Fila en `bond doctor` con las `proposed` pendientes y los errores de `check`.
+  - Herramienta `record_decision` en las Bond Extensions de pi (`extensions/`), con esquema
+    `title`, `context`, `decision`, `alternatives`, `links`, que llama a `bond decisions add`.
+  - La skill `decision-record` (y sus plantillas) pasa a mandar usar la herramienta o el CLI, no
+    escribir el fichero a mano; `bond sync`.
+- Acceptance criteria:
+  - Sin `[decisions]`, `add` falla con un mensaje que dice cómo activarla; `bond decisions` sale
+    con 0 y lo explica; `doctor` no muestra fila.
+  - `add` con solo título y decisión produce un fichero que `check` da por válido y su fila en el
+    índice; dos `add` con el mismo título el mismo día dan `<id>` y `<id>-2`.
+  - Desde un panel de Herdr con agente, `decided_by` es `agent:<kind>/<nombre>`; fuera, `user`.
+  - `accept` sin TTY se niega y no cambia nada; con TTY y confirmación pasa a `accepted`.
+  - `record_decision` en pi crea la misma decisión que el CLI.
+  - `check` detecta cada caso roto nombrando fichero y problema; `--json` estable y documentado.
+  - Funciona sin red, en un repo sin commits y con rutas `/` en Windows.
+- Actions:
+  - [ ] `cli/decisions.mts`, caso y ayuda en `main.mts`, fila en `doctor.mts`.
+  - [ ] Herramienta `record_decision` en `extensions/` y su registro en las Bond Extensions.
+  - [ ] Skill `decision-record` apuntando a la herramienta; `bond sync`.
+  - [ ] Pruebas en `test/decisions.test.mts` y `test/doctor.test.mts`.
+  - [ ] `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
+  - [ ] Run applicable checks and record actual results.
+  - [ ] Present evidence and stop for review before another phase.
+- Verification: `npm run typecheck && bun test`, `bin/bond catalog check catalog`,
+  `bin/bond sync --check`; a mano, en un repo temporal con `[decisions]`: `add` (flags y stdin),
+  `check`, `accept` con y sin TTY (`</dev/null`), y `record_decision` desde pi en un panel de
+  Herdr.
+- Risks and recovery: comando y herramienta nuevos; se quitan sin efecto en el resto. Escribir el
+  índice no puede pisar ediciones a mano fuera de la tabla.
+
+### P3: Las skills de planes, ejecución, commits y entrega registran decisiones con la herramienta
 
 - Outcome: con la memoria activa, al planificar, ejecutar una fase, hacer commit o preparar un PR,
-  las decisiones van a `docs/decisions/` y se enlazan; sin ella, las skills se comportan como hoy.
+  las decisiones se registran con `bond decisions add` / `record_decision` y se enlazan; sin ella,
+  las skills se comportan como hoy.
 - Owning repository: `bond`.
-- Dependencies: P1.
-- Affected contracts: `plan-create` (plantilla: cada decisión con id, quién y fecha; si hay
-  memoria, enlace a `docs/decisions/<id>.md`); `plan-execute` (`progress.md`: puede añadir
-  decisiones surgidas al implementar, como `proposed`, y enlazarlas en la sección de decisiones y
-  en la evidencia); `git-conventional-commit` (*Attribution*: trailers `Agent:` y `Decision:`
+- Dependencies: P2.
+- Affected contracts: `plan-create` (plantilla: cada decisión con id, quién y fecha; con memoria,
+  se registra con la herramienta y el plan enlaza el id); `plan-execute` (`progress.md`: las
+  decisiones que surgen al implementar se registran con la herramienta y se enlazan en la
+  evidencia); `git-conventional-commit` (*Attribution*: trailers `Agent:` y `Decision:` opcionales
   cuando el repo tiene `[decisions]`; cuerpo con el porqué en cambios no triviales);
-  `delivery-review-github` (el PR lista las decisiones y los runs del alcance);
-  `convention-document` (una convención acordada enlaza su decisión).
+  `delivery-review-github` (el PR lista las decisiones y los runs del alcance, sacados de
+  `bond decisions --json`); `convention-document` (una convención acordada enlaza su decisión).
 - Acceptance criteria:
-  - Cada skill tocada referencia `decision-record` por nombre y dice qué hacer si no está
-    instalada (seguir como hoy, sin descargarla).
-  - Ninguna marca una decisión como `accepted` sin aceptación real del usuario.
+  - Cada skill tocada nombra la herramienta y dice qué hacer si no está (seguir como hoy).
+  - Ninguna marca una decisión como `accepted`: eso queda en `bond decisions accept`.
   - `git-conventional-commit` sigue sin firmar por defecto en repos sin `[decisions]`.
   - Las adaptadas de common-skills conservan su `LICENSE` y su nota de origen.
   - `bond sync --check` al día tras el cambio.
 - Actions:
   - [ ] Editar las cinco skills y sus `references/` en `catalog/skills/`; `bond sync`.
-  - [ ] `docs/reference.md` (skills del catálogo) y `## Sin publicar`.
+  - [ ] `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
   - [ ] Run applicable checks and record actual results.
   - [ ] Present evidence and stop for review before another phase.
 - Verification: `npm run typecheck && bun test`, `bin/bond catalog check catalog`,
   `bin/bond sync --check`; revisión del diff de las skills contra los criterios.
 - Risks and recovery: cambios solo de texto en skills; se revierten con el commit.
 
-### P3: Encargos e informes de `bond team`, `plan-team` y `bond-delegate`
+### P4: Encargos e informes de `bond team`, `plan-team` y `bond-delegate`, guardados por bond
 
-- Outcome: con la memoria activa, cada encargo a un agente del equipo o delegado deja un run en
-  `docs/decisions/runs/` con el texto enviado y, al recoger, su informe; los commits de la rama
-  llevan `Agent:` con el nombre del agente.
+- Outcome: con la memoria activa, cada encargo a un agente del equipo deja un run en
+  `docs/decisions/runs/` escrito por `bond team prompt`, y `bond team collect <rama>` le añade el
+  informe leído del panel, los commits y las decisiones registradas por ese agente; las
+  delegaciones de `bond-delegate` quedan igual.
 - Owning repository: `bond`.
-- Dependencies: P1.
-- Affected contracts: `bond team prompt` escribe (o completa) el run en el checkout principal y
-  añade al encargo el nombre del agente y la petición de trailers y de una sección «Decisions» en
-  su informe; nueva opción `bond team prompt --no-record` para no guardarlo; `bond-team` (pasos 5
-  y 7), `plan-team` (pasos de envío, recogida y paso 9) y `bond-delegate` (pasos 7 y 9) guardan el
-  informe en el run y enlazan las decisiones que traiga, como `proposed`; el `mktemp -d` de
-  `bond-delegate` se sustituye por el run cuando la memoria está activa.
+- Dependencies: P2.
+- Affected contracts: `bond team prompt` escribe (o completa) el run en el checkout principal con
+  el frontmatter de D9 (`--no-record` para no guardarlo); nuevo `bond team collect <rama>
+  [--lines <n>]` que guarda *Informe*, `status`, `commits` (de la rama) y `decisions` (las de
+  `decided_by` de ese agente); `bond-team` (pasos 5 y 7), `plan-team` (envío, recogida y paso 9) y
+  `bond-delegate` (pasos 7 y 9) usan estos comandos en vez de escribir el run; el `mktemp -d` de
+  `bond-delegate` se sustituye por el run cuando la memoria está activa. `bond decisions runs` y
+  `show` atribuyen los commits de cada rama a su agente (D15).
 - Acceptance criteria:
-  - `bond team prompt <rama> "..."` en un repo con `[decisions]` crea
-    `docs/decisions/runs/<fecha>-<agente>-<slug>.md` con el encargo exacto y el frontmatter de D9;
-    sin `[decisions]` o con `--no-record`, no escribe nada.
-  - Un segundo `prompt` al mismo agente añade el encargo al mismo run, no crea otro.
-  - El agente de la rama nunca escribe en el run ni en el plan (lo hace el orquestador en el
-    checkout principal).
-  - Tras la recogida, el run tiene *Informe*, `status`, `commits` y `decisions`.
+  - `bond team prompt <rama> "..."` con `[decisions]` crea
+    `docs/decisions/runs/<fecha>-<agente>-<slug>.md` con el encargo exacto; sin `[decisions]` o
+    con `--no-record`, no escribe nada; si falla la escritura, avisa y manda el prompt igual.
+  - Un segundo `prompt` al mismo agente añade el encargo al mismo run.
+  - `bond team collect <rama>` deja el informe, el estado, los commits y las decisiones; repetirlo
+    no duplica nada.
+  - El agente de la rama nunca escribe en el run ni en el plan.
   - Rutas con `/` en lo guardado; pruebas pasan en Windows.
 - Actions:
-  - [ ] Guardado del run en `cli/team.mts` (`prompt`) con su prueba en `test/team.test.mts`.
+  - [ ] Runs en `cli/team.mts` (`prompt`, `collect`) con pruebas en `test/team.test.mts`.
   - [ ] Editar `global/skills/bond-team`, `global/skills/bond-delegate` y
         `catalog/skills/plan-team`; `bond sync`.
-  - [ ] Ayuda de `bond team`, `docs/reference.md` (Herdr y multiagente) y `## Sin publicar`.
+  - [ ] Ayuda de `bond team`, `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
   - [ ] Run applicable checks and record actual results.
   - [ ] Present evidence and stop for review before another phase.
 - Verification: `npm run typecheck && bun test`; a mano, dentro de Herdr, `bin/bond team` con una
-  rama en un repo de prueba con `[decisions]`, un `bond team prompt` y comprobar el run y el
-  trailer `Agent:` del commit de la rama.
-- Risks and recovery: el guardado no puede romper el envío: si falla la escritura, se avisa y el
-  prompt se manda igual.
-
-### P4: `bond decisions` y fila en `bond doctor`
-
-- Outcome: `bond decisions` lista decisiones y runs con filtros y valida la memoria, cruzándola
-  con los trailers de git; `bond doctor` avisa si algo está roto.
-- Owning repository: `bond`.
-- Dependencies: P1.
-- Affected contracts: nuevo `cli/decisions.mts` y caso en `cli/main.mts`:
-  - `bond decisions [--status <s>] [--agent <a>] [--json]`: tabla con id, estado, quién, fecha y
-    título.
-  - `bond decisions show <id>`: la decisión, sus commits (por trailer `Decision:`) y sus runs.
-  - `bond decisions runs [--agent <a>] [--json]`: los encargos y su estado.
-  - `bond decisions check`: frontmatter válido, ids que coinciden con el fichero, sin duplicados,
-    `superseded_by` que apunta a algo que existe, trailers `Decision:` que apuntan a decisiones
-    que existen; sale con código distinto de 0 si hay errores.
-  - Fila en `bond doctor` con el número de `proposed` pendientes y los errores de `check`.
-- Acceptance criteria:
-  - Sin `[decisions]`, `bond decisions` dice cómo activarla y sale con 0; `doctor` no muestra fila.
-  - `check` detecta cada caso roto con un mensaje que nombra el fichero y el problema.
-  - `--json` es estable y se documenta.
-  - Funciona sin red y en un repo sin commits.
-- Actions:
-  - [ ] `cli/decisions.mts`, caso en `main.mts`, fila en `doctor.mts`, pruebas en
-        `test/decisions.test.mts` y `test/doctor.test.mts`.
-  - [ ] Ayuda en `main.mts`, `docs/reference.md` (comandos y `bond doctor`), guía del site si
-        aplica y `## Sin publicar`.
-  - [ ] Run applicable checks and record actual results.
-  - [ ] Present evidence and stop for review before another phase.
-- Verification: `npm run typecheck && bun test`; a mano, `bin/bond decisions`, `show`, `runs` y
-  `check` en un repo temporal con decisiones válidas y rotas; `bin/bond doctor`.
-- Risks and recovery: comando nuevo de solo lectura; se quita sin efecto en el resto.
+  rama en un repo de prueba con `[decisions]`, `bond team prompt`, `bond team collect` y
+  `bond decisions runs`.
+- Risks and recovery: el guardado no puede romper el envío; `collect` solo lee el panel y escribe
+  en el checkout principal.
 
 ## Progress (local plans only)
 
 | Phase | Implementation | Verification | Review | Evidence |
 | --- | --- | --- | --- | --- |
-| P1 | pending | not_run | pending | none yet |
+| P1 | implemented | passed | accepted | rama `plan/decision-memory-p1` (kevin, pi), commits `47c338a` y `6701239`, integrada en `main` por fast-forward; en `main`: `npm run typecheck` limpio, `bun test` 235/235, `bond catalog check catalog` correcto, `bond sync --check` al día; aceptada por el usuario en sesión el 2026-10-28 |
 | P2 | pending | not_run | pending | none yet |
 | P3 | pending | not_run | pending | none yet |
 | P4 | pending | not_run | pending | none yet |
 
 ## Next step
 
-Ejecutar P1 de `docs/plans/2026-10-28-decision-memory.md`: fija el formato, la skill y la
-activación de los que dependen las demás. Tras aceptarla, P2, P3 y P4 se pueden hacer en paralelo
-con `plan-team`. Respuesta corta: «ejecuta P1».
+Ejecutar P2 de `docs/plans/2026-10-28-decision-memory.md`: da la herramienta de la que dependen
+P3 y P4. Tras aceptarla, P3 y P4 pueden ir en paralelo con `plan-team`. Respuesta corta:
+«manda P2 a pi».
 
 ## Evidence and tracking
 
-Sin issues ni PRs todavía.
+- P1: `47c338a` (`feat(decisions): add the agent decision memory format and activation`) y
+  `6701239` (`fix(decisions): tie [decisions] activation to the decision-record skill`), en `main`.
+  En la revisión de la primera entrega falló el criterio «desmarcarla deja el repo como hoy»; se
+  devolvió al agente y lo corrigió en el segundo commit.
