@@ -1,12 +1,13 @@
 ---
 id: "2026-10-28-aceptar-rechazar-y-sustituir-son-del-usuario"
 title: "Aceptar, rechazar y sustituir son del usuario"
-status: "proposed"
+status: "superseded"
 date: "2026-10-28"
 decided_by: "agent:claude"
-accepted_by: ""
+accepted_by: "chat 2026-10-28: «adelante con P6», aprobando registrar una decisión nueva que sustituye a D13"
+accepted_via: "agent:claude"
 supersedes: ""
-superseded_by: ""
+superseded_by: "2026-10-28-aceptar-decisiones-desde-la-conversacion"
 links:
   - "plan: docs/plans/2026-10-28-decision-memory.md#D13"
   - "branch: main"
