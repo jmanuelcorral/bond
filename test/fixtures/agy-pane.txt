@@ -1,0 +1,33 @@
+
+      ▄▀▀▄        Antigravity CLI 1.4.9
+     ▀▀▀▀▀▀       user@example.com (Google AI Pro)
+    ▀▀▀▀▀▀▀▀      Gemini 3.8 Flash (Medium)
+   ▄▀▀    ▀▀▄     /tmp/repo
+  ▄▀▀      ▀▀▄
+
+────────────────────────────────────────────────────────────
+> Reply with exactly two short sentences explaining what a git worktree is. Do not run any tools.
+
+▸ Thought for 3s, 137 tokens
+
+  A Git worktree allows you to check out and work on multiple branches of the same repository simultaneously across separate directories. This lets you handle different tasks or test changes in parallel without needing to switch branches or clone the
+  repository again.
+
+────────────────────────────────────────────────────────────
+> Create a file note.md with one line: hello.
+  Then run ls and reply with one sentence saying what you did.
+
+  [memoria de decisiones] Si registras decisiones con bond, commitea los ficheros de docs/decisions/ en esta rama.
+
+○ Thought for 4.6s (First, the system needs to create a file named "note.md" and populate it with the text "hello". The current working directory is confirmed.)
+● Edited 1 file (note.md)
+● Ran (ls) (ctrl+o to expand)
+
+▸ Thought for 1m 13s, 295 tokens
+
+  I created the file note.md with the content "hello" and executed ls to list the directory contents.
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+>
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+? for shortcuts                                                                                                                                                                                                                              Gemini 3.8 Flash · medium

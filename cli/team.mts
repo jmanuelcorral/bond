@@ -8,7 +8,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { loadDecisions, parseFm, type Parsed, resolveAuthor, slugify } from "./decisions.mts";
 import { chooseAgent, gitRoot, openWorkspace } from "./launch.mts";
-import { agents, ensureServer, firstFreeName, herdr, type HerdrAgent, insideHerdr, pendingQuestion, requireHerdr, serverRunning, workspaces } from "./herdr.mts";
+import { agents, defaultAgentArgs, ensureServer, firstFreeName, herdr, type HerdrAgent, insideHerdr, preparePane, questionIn, requireHerdr, serverRunning, startedBlocked, startupNoticeIn, visibleScreen, workspaces } from "./herdr.mts";
 import { repoDecisions } from "./repo.mts";
 import { inheritTrust, TRUST_KINDS } from "./trust.mts";
 import { act, caution, catchDie, die, dim, isDryRun, ok, run, warn } from "./util.mts";
@@ -35,6 +35,10 @@ tabla en vivo de todas las ramas (bond team status --watch), o el que ya haya.
 En paneles, si confías en el checkout principal en pi, Claude Code o agy, cada worktree hereda
 esa confianza (trust.json de pi, ~/.claude.json, trustedWorkspaces de agy) y su agente arranca
 sin preguntar; sin ella, o con otros agentes, pregunta como siempre.
+
+agy arranca con --dangerously-skip-permissions (sin él pide permiso por cada comando); tus
+argumentos tras -- lo sustituyen. Si no está en el PATH pero sí en ~/.local/bin, bond añade esa
+carpeta al PATH de la shell del panel antes de lanzarlo.
 
   -a, --agent <agente>   Agente para las ramas sin :agente
   -b, --base <ref>       Ref de la que salen las ramas nuevas
@@ -181,7 +185,7 @@ async function create(args: string[]): Promise<void> {
 function openWorkspaces(root: string, plan: Array<{ branch: string; agent: string }>, o: TeamArgs): void {
 	for (const { branch, agent } of plan) {
 		try {
-			const r = openWorkspace({ dir: root, agent, worktree: branch, base: o.base, shell: false, direction: "right", ratio: "0.6", focus: false, trust: o.trust, agentArgs: o.agentArgs });
+			const r = openWorkspace({ dir: root, agent, worktree: branch, base: o.base, shell: false, direction: "right", ratio: "0.6", focus: false, trust: o.trust, agentArgs: defaultAgentArgs(agent, o.agentArgs) });
 			console.log(`${ok("✓")} ${branch}  ${r.reused ? dim(`ya abierto (${r.ws})`) : `${r.agentName} (${agent}) en ${r.agentPane}${r.blocked ? caution(" · espera una respuesta tuya") : ""}`}`);
 		} catch (e) {
 			warn(`${branch}: ${(e as Error).message}`);
@@ -367,12 +371,14 @@ function openInTab(root: string, anchor: string, here: CallerTab, room: number, 
 				}
 			}
 			let blocked = false;
+			const agentArgs = defaultAgentArgs(agent, o.agentArgs);
+			preparePane(pane, agent);
 			try {
-				herdr(["agent", "start", name, "--kind", agent, "--pane", pane, "--timeout", "60000", ...(o.agentArgs.length ? ["--", ...o.agentArgs] : [])]);
-				blocked = pendingQuestion(name) !== undefined;
+				herdr(["agent", "start", name, "--kind", agent, "--pane", pane, "--timeout", "60000", ...(agentArgs.length ? ["--", ...agentArgs] : [])]);
+				blocked = startedBlocked(name, false);
 			} catch {
 				// Suele ser una pregunta del agente (confiar en la carpeta...): no se contesta por ti.
-				blocked = agents().find((a) => a.name === name)?.agent_status === "blocked";
+				blocked = startedBlocked(name, true);
 			}
 			console.log(`${ok("✓")} ${branch}  ${name} (${agent}) en ${pane}${split.tab ? dim(` · ${teamTabLabel(repo, split.tab)}`) : ""}${trusted ? dim(" · confianza heredada") : ""}${blocked ? caution(" · espera una respuesta tuya") : ""}`);
 		} catch (e) {
@@ -471,7 +477,8 @@ export interface Row extends BranchInfo {
 	path: string;
 	state: State;
 	workspace?: string;
-	agent?: { name?: string; kind?: string; status?: string; question?: string; pane?: string };
+	/** notice: Herdr lo da por blocked, pero solo enseña el aviso de arranque de agy. */
+	agent?: { name?: string; kind?: string; status?: string; question?: string; pane?: string; notice?: boolean };
 	/** Lo abrió Herdr (tiene workspace o está en su carpeta de worktrees): clean puede quitarlo solo. */
 	managed: boolean;
 }
@@ -505,15 +512,19 @@ export function teamRows(root: string, base = defaultBase(root)): Row[] {
 			const info = branchInfo(root, base, branch, w.path);
 			const workspace = open.get(w.path);
 			const a = running.find((x) => x.agent && ((workspace && x.workspace_id === workspace) || within(canonical(x.cwd ?? x.foreground_cwd ?? "/"), w.path)));
-			// Herdr da por idle a un agente con una pregunta en pantalla (pi: confiar en la carpeta).
-			const question = a?.name && a.agent_status !== "working" && a.agent_status !== "blocked" ? pendingQuestion(a.name) : undefined;
+			// Herdr da por idle a un agente con una pregunta en pantalla (pi: confiar en la carpeta)
+			// y puede dar por blocked el aviso de arranque de agy, que no es una pregunta.
+			const screen = a?.name && a.agent_status !== "working" ? visibleScreen(a.name) : "";
+			const question = a?.agent_status !== "blocked" ? questionIn(screen) : undefined;
+			const notice = a?.agent_status === "blocked" && startupNoticeIn(screen);
+			const status = notice ? "idle" : a?.agent_status;
 			return {
 				...info,
 				branch,
 				path: w.path,
 				workspace,
-				agent: a ? { name: a.name, kind: a.agent, status: a.agent_status, question, pane: a.pane_id } : undefined,
-				state: classify({ agentStatus: question ? "blocked" : a?.agent_status, ...info }),
+				agent: a ? { name: a.name, kind: a.agent, status, question, pane: a.pane_id, ...(notice ? { notice } : {}) } : undefined,
+				state: classify({ agentStatus: question ? "blocked" : status, ...info }),
 				managed: !!workspace || w.path.includes(herdrDir),
 			};
 		});
@@ -857,6 +868,8 @@ function prompt(args: string[]): void {
 			warn(`run: ${(e as Error).message} (mando el prompt igual)`);
 		}
 	}
+	// Herdr rechaza el prompt de un agente blocked: el aviso de arranque de agy se cierra con Esc.
+	if (row.agent?.notice) run("herdr", ["agent", "send-keys", name, "esc"], { timeout: 5000 });
 	const extra = [...(opts["--wait"] ? ["--wait"] : []), ...(opts["--timeout"] ? ["--timeout", opts["--timeout"] as string] : [])];
 	// Sin límite de tiempo propio: con --wait puede tardar lo que tarde el agente.
 	const r = spawnSync("herdr", ["agent", "prompt", name, task, ...extra], { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
@@ -965,8 +978,8 @@ export function lastAssistantText(file: string): string | undefined {
 	return last;
 }
 
-/** Línea del arranque de agy: el logo (▄▀ y espacios), la bienvenida o el aviso de inicio de sesión. */
-const isAgyBanner = (l: string) => /^[\s▄▀█]*[▄▀█][\s▄▀█]*$/.test(l) || /Welcome to the Antigravity CLI/.test(l) || /^\s*\S?\s*Signing in\.\.\./.test(l) || !l.trim();
+/** Línea del arranque de agy: el logo (▄▀, con la versión, la cuenta y la carpeta a la derecha), la bienvenida o el aviso de inicio de sesión. */
+const isAgyBanner = (l: string) => /^[\s▄▀█]*[▄▀█][\s▄▀█]*(?: {2}.*)?$/.test(l) || /Welcome to the Antigravity CLI/.test(l) || /^\s*\S?\s*Signing in\.\.\./.test(l) || !l.trim();
 
 /**
  * Recorta el volcado del panel de un agente (respaldo de D17): fuera el banner de arranque
@@ -995,6 +1008,47 @@ export function trimAgentBanner(text: string): string {
 		kept.push(lines[j]);
 	}
 	return kept.join("\n").trim();
+}
+
+/** Separador de agy: el que abre cada turno y los que enmarcan la caja de entrada. */
+const isAgySep = (l: string) => /^─{20,}\s*$/.test(l);
+
+/**
+ * Recorta el volcado del panel de agy (respaldo de D17 sin su integración de Herdr): se queda
+ * con la respuesta final del último turno. Cada turno abre con un separador y el encargo
+ * repetido («> ...»); siguen el razonamiento y las herramientas en líneas con ○, ● o ▸ al
+ * principio, y la respuesta, sangrada con dos espacios. Al final, la caja de entrada vacía y
+ * la línea de atajos. Sin encargo a la vista, lo que hay tras el banner de arranque.
+ */
+export function trimAgyPane(text: string): string {
+	const lines = text.split(/\r?\n/);
+	let end = lines.length;
+	for (let k = lines.length - 1; k > 0; k--) {
+		if (/^>\s*$/.test(lines[k]) && isAgySep(lines[k - 1])) {
+			end = k - 1;
+			break;
+		}
+	}
+	let start = -1;
+	for (let k = end - 1; k >= 0; k--) {
+		if (/^> \S/.test(lines[k])) {
+			start = k;
+			break;
+		}
+	}
+	let tool = -1;
+	for (let k = end - 1; k > start; k--) {
+		if (/^[○●▸] /.test(lines[k])) {
+			tool = k;
+			break;
+		}
+	}
+	const rest = tool >= 0 || start >= 0 ? lines.slice(Math.max(tool, start) + 1, end) : trimAgentBanner(lines.slice(0, end).join("\n")).split("\n");
+	const body = rest.filter((l) => !isAgySep(l) && !/^\s*┃/.test(l));
+	return body
+		.map((l) => l.replace(/^ {2}/, ""))
+		.join("\n")
+		.trim();
 }
 
 /**
@@ -1027,7 +1081,7 @@ export function sessionFile(s?: { agent?: string; kind?: string; value?: string 
  * kind "path"; en pi un .jsonl) tomando solo su última respuesta; si no hay sesión legible
  * o sin texto, el volcado del panel recortado. Devuelve el texto y de dónde sale.
  */
-export function agentReport(agent: string, paneRead: () => string): { report: string; source: "sesión" | "panel" } {
+export function agentReport(agent: string, paneRead: () => string, kind?: string): { report: string; source: "sesión" | "panel" } {
 	try {
 		const got = herdr<{ agent?: HerdrAgent }>(["agent", "get", agent], 10_000).agent;
 		const sess = sessionFile(got?.agent_session);
@@ -1036,7 +1090,7 @@ export function agentReport(agent: string, paneRead: () => string): { report: st
 	} catch {
 		// Sin respuesta de Herdr o sin sesión: queda el panel.
 	}
-	return { report: trimAgentBanner(paneRead()), source: "panel" };
+	return { report: kind === "agy" ? trimAgyPane(paneRead()) : trimAgentBanner(paneRead()), source: "panel" };
 }
 
 /** El fichero de un run: frontmatter D9 + secciones Request y Report. */
@@ -1252,7 +1306,7 @@ function collect(args: string[]): void {
 		const rd = run("herdr", ["agent", "read", agent, "--source", "recent-unwrapped", "--lines", lines], { timeout: 20_000 });
 		if (rd.status !== 0) die(`no pude leer el panel de ${agent}: ${(rd.stderr || rd.stdout).trim()}`);
 		return rd.stdout;
-	});
+	}, kind);
 	const ctx: RunCtx = { mainRoot: main, worktree: row?.path ?? main, dir: dec.dir, branch, base: baseLink(main), agent, kind, orchestrator: resolveAuthor().replace(/^agent:/, "") };
 	const out = collectRun(ctx, report, { request: opts["--request"] as string | undefined });
 	console.log(`${ok("~")} ${out.rel}  ${dim(`reported · informe desde la ${source} · ${out.commits.length} commit(s) de ${branch} · ${out.decisions.length} decisión(es) de ${agent}`)}`);

@@ -271,6 +271,21 @@ como `bloqueado` y `prompt` no manda nada, porque su Enter elegiría "Trust" por
 tarea se perdería. Contesta tú en el panel del agente. Un truco en pi: elegir "Trust parent
 folder" una vez sirve para todos los worktrees de ese repo.
 
+### Antigravity (`agy`) en un equipo
+
+Con `bond team <rama>:agy` (y con la skill `bond-delegate`), bond lanza `agy` con
+`--dangerously-skip-permissions`: sin él, `agy` pide permiso para cada comando y el minion no
+avanza. Ejecuta sin preguntar dentro de su worktree; si prefieres otra cosa, pasa tus propios
+argumentos tras `--` y se usan esos en su lugar.
+
+El instalador de `agy` lo deja en `~/.local/bin`, que no siempre está en el PATH de los paneles.
+Si bond no lo encuentra en el PATH pero sí ahí, añade esa carpeta al PATH de la shell del panel
+antes de lanzarlo, así que no hace falta tocar tu configuración.
+
+Al arrancar, `agy` enseña a veces un aviso de novedades («esc to dismiss»). No es una pregunta:
+la rama no sale `bloqueado` por él y `prompt` lo cierra antes de mandar la tarea si Herdr lo
+toma por una. La pregunta de confianza en la carpeta, en cambio, sí bloquea.
+
 ### `bond team clean`: recoger
 
 Cuando ya has revisado e integrado, `clean` quita los worktrees, es decir, la carpeta y su panel o

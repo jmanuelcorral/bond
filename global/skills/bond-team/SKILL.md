@@ -33,7 +33,9 @@ y lleva el progreso del plan al integrar cada rama.
    Imprime la tabla de `bond team status`. Si alguna rama sale `bloqueado` (Claude Code, pi o agy
    preguntando si confían en la carpeta del worktree), díselo al usuario y espera a que conteste
    él: nunca respondas tú ni mandes un prompt, que su Enter contestaría la pregunta. En pi,
-   elegir "Trust parent folder" una vez sirve para todos los worktrees del repo.
+   elegir "Trust parent folder" una vez sirve para todos los worktrees del repo. `agy` arranca
+   con `--dangerously-skip-permissions` (lo pone `bond team` si no pasas otros argumentos tras
+   `--`), así que no pide permiso por cada comando.
 5. Manda a cada rama su subtarea sin esperar, para que trabajen a la vez:
    `bond team prompt <rama> "<mensaje>"` (se niega si el agente espera una respuesta). El mensaje es autocontenido y dice qué hacer,
    qué ficheros tocar y cuáles no, cómo verificarlo, y que al terminar haga **commit en su

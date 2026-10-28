@@ -273,6 +273,21 @@ Herdr doesn't always recognize it as a question, so bond reads the pane. The bra
 and on top of that the task would be lost. Answer it yourself in the agent's pane. A tip for pi:
 choosing "Trust parent folder" once covers all the worktrees of that repo.
 
+### Antigravity (`agy`) in a team
+
+With `bond team <branch>:agy` (and with the `bond-delegate` skill), bond launches `agy` with
+`--dangerously-skip-permissions`: without it, `agy` asks for permission for every command and the
+minion doesn't move forward. It runs without asking inside its worktree; if you'd rather have
+something else, pass your own arguments after `--` and those are used instead.
+
+The `agy` installer puts it in `~/.local/bin`, which isn't always on the panes' PATH. If bond
+doesn't find it on the PATH but does find it there, it adds that folder to the pane shell's PATH
+before launching it, so you don't need to touch your configuration.
+
+On startup, `agy` sometimes shows a what's-new notice ("esc to dismiss"). It isn't a question:
+the branch doesn't show as `bloqueado` because of it, and `prompt` dismisses it before sending the
+task if Herdr takes it for one. The trust-the-folder question, on the other hand, does block.
+
 ### `bond team clean`: tidying up
 
 Once you've reviewed and integrated, `clean` removes the worktrees, meaning the folder and its

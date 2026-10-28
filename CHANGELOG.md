@@ -37,6 +37,16 @@
   toma su última respuesta del `transcript.jsonl` de la conversación cuando Herdr la reporta
   (con `herdr integration install antigravity-cli`) y, si no, del panel sin el logo ni la
   bienvenida de `agy`.
+- Antigravity (`agy`) en equipos, tras probarlo de verdad en Herdr: `bond team <rama>:agy`
+  arranca `agy` aunque solo esté en `~/.local/bin` (añade esa carpeta al PATH de la shell del
+  panel antes de lanzarlo) y con `--dangerously-skip-permissions`, porque sin él pide permiso por
+  cada comando y no avanza (tus argumentos tras `--` lo sustituyen; la skill `bond-delegate` hace
+  lo mismo). El aviso de novedades de `agy` al arrancar («esc to dismiss») ya no deja la rama
+  `bloqueado` ni dice «espera una respuesta tuya»; la pregunta de confianza sí. `bond setup`
+  instala la integración `antigravity-cli` de Herdr (antes la saltaba porque no se llama como el
+  agente) y `bond doctor` la comprueba; con ella, `collect` toma el informe de la conversación de
+  `agy`. Sin ella, del panel queda solo la respuesta final, sin el banner, el encargo repetido ni
+  las líneas de razonamiento y herramientas.
 - `bond decisions check` mira solo los trailers `Decision:` de la rama actual: antes leía los de
   todas las ramas y, con agentes en paralelo, una rama fallaba por las decisiones de otra.
 

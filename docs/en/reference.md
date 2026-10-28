@@ -551,9 +551,11 @@ When the delegate stops at a question (trusting the folder, approving something)
 orchestrator shows it to you and waits for your answer: it doesn't answer for you.
 
 **Herdr integrations.** `bond setup` runs `herdr integration install <agente>` for
-each installed agent that Herdr supports (today: pi, Claude Code, Copilot, opencode; Crush has no
-integration and Herdr detects it by screen). With the integration, the `working`,
-`blocked` or `done` state is reported by the agent itself. `bond doctor` checks them.
+each installed agent that Herdr supports (today: pi, Claude Code, Copilot, opencode and
+Antigravity, whose integration is called `antigravity-cli`; Crush has no integration and Herdr
+detects it by screen). With the integration, the `working`, `blocked` or `done` state is reported
+by the agent itself; `agy`'s gives Herdr its conversation, from which `bond team collect` takes the
+report. `bond doctor` checks them.
 
 **Tested** in a test workspace: a Claude Code (Haiku) orchestrator used `bond-delegate`
 to delegate to Copilot; Copilot stopped at the trust question, Claude showed it and
@@ -576,7 +578,7 @@ respects, so that the agent doesn't receive contradictory instructions:
 | The installed CLI takes precedence over memory | The prompts refer to the skill and to `herdr <grupo>`; they only fix the procedure. |
 | Unique agent names | `/delegate` uses `<rol>-<n>` with the first free `n` in `herdr agent list`. |
 | Split according to the pane's shape | `/delegate` reads its `rect` in `herdr pane layout`: `right` if `width >= 120` and `width >= 2*height`, otherwise `down`. |
-| `agent_not_ready`, `blocked`, `timeout`, `agent_prompt_stalled` | Covered: look at the pane before acting, ask you when there is an approval, never resend blindly. |
+| `agent_not_ready`, `blocked`, `timeout`, `agent_prompt_stalled` | Covered: look at the pane before acting, ask you when there is an approval, never resend blindly. `agy` is the exception for approvals: `bond team` and `/delegate` launch it with `--dangerously-skip-permissions`, because without it it stops at every command (your arguments after `--` replace it). |
 | Incomplete response when reading | Plan B: the delegate writes it to a file under `mktemp -d` and it is read from there. |
 | Don't close what you didn't create; don't run `herdr` without a subcommand | In `AGENTS.md` and in `/delegate` (the pane and the agent stay open). |
 
@@ -624,8 +626,9 @@ is limited by the gateway; with cloud providers, by the quota.
 - the models in the agents that can use custom endpoints (pi, opencode, Crush, Codex);
 - pi's prompt suggestions: the package, its config and `enabledModels` (see
   [pi prompt suggestions](#pi-prompt-suggestions));
-- each one's Herdr integration (if an agent hasn't created its config folder yet, it warns and
-  installs it on the next `setup`);
+- each one's Herdr integration (`antigravity-cli` for `agy`, even if it is only in
+  `~/.local/bin`; if an agent hasn't created its config folder yet, it warns and installs it on
+  the next `setup`);
 - the global skills `bond-delegate` and `bond-team`;
 - your instructions (`~/.bond/AGENTS.md`) and bond's rules, in a block of each agent's global
   instructions file (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
@@ -718,9 +721,9 @@ external things, and exits with 1 if something fails:
 | Check | Typical failure and fix |
 |---|---|
 | Node ≥ 22.18 | update Node |
-| Herdr: binary, server, pi integration | `herdr`; `bond setup` |
+| Herdr: binary, server, pi integration (the other agents' ones, such as `agy`'s `antigravity-cli`: warning) | `herdr`; `bond setup` |
 | pi: binary, `~/.pi/agent` links, `./bond` package in `pi list` | `bond setup` |
-| Antigravity (if it is one of your agents or the repo's): `agy` version; warning if it is not installed, or if it is in `~/.local/bin` but not on the PATH (Herdr and `bond team` would not find it) | install it; add `~/.local/bin` to the PATH |
+| Antigravity (if it is one of your agents or the repo's): `agy` version; warning if it is not installed, or if it is in `~/.local/bin` but not on the PATH (`bond team` still finds it; Herdr and other tools don't) | install it; add `~/.local/bin` to the PATH |
 | Leftovers from bond 0.7: pi config linked to the repo (warning) | `bond migrate` |
 | Herdr skill: only one and up to date with `herdr --skill` | `bond setup`; `npx skills update herdr` |
 | Antigravity's global plugin (if `agy` is one of your agents): `plugin.json`, rules up to date with `~/.bond/AGENTS.md` and linked skills | `bond setup` |
@@ -793,8 +796,9 @@ the memory enabled, the text the agent receives also carries a note: whatever it
 `bond team collect <branch>` takes only the agent's last answer from its session file (for pi,
 the `.jsonl` Herdr reports in `agent_session`; for Claude Code, its transcript by session id; for
 `agy`, the conversation's `transcript.jsonl`, which Herdr only knows with its integration:
-`herdr integration install antigravity-cli`) and, when that is not readable, the trimmed pane
-dump —no startup banner or notices— (`--lines <n>`, 200 by default); it stores
+installed by `bond setup`) and, when that is not readable, the trimmed pane dump —no startup
+banner or notices; for `agy`, only the final answer of the last turn, without the echoed request
+or the reasoning and tool lines— (`--lines <n>`, 200 by default); it stores
 the report, the status, the branch's commits and the decisions whose `decided_by` is that
 agent; collecting again replaces the report and recomputes the lists without duplicating. It
 refuses while the agent is working or waiting for an answer, so it never stores a half-done report.

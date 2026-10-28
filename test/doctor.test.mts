@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { agyCheck, agyPluginCheck, catalogCheck, updateCheck } from "../cli/doctor.mts";
 import { addDecision, decisionsDoctor } from "../cli/decisions.mts";
 import { installedRuntime } from "../cli/runtime.mts";
+import { integrationsFor, parseIntegrationStatus } from "../cli/setup.mts";
 
 describe("runtime instalado (Bond Extensions desde el repo)", () => {
 	let dir: string;
@@ -50,6 +51,37 @@ describe("fila de agy", () => {
 		expect(r.level).toBe("warn");
 		expect(r.detail).toBe("no está instalado");
 		expect(r.fix).toContain("antigravity.google");
+	});
+});
+
+describe("integraciones de Herdr (bond setup y bond doctor)", () => {
+	const status = [
+		"pi: current (v9) (/home/u/.pi/agent/extensions/herdr-agent-state.ts)",
+		"claude: current (v10) (/home/u/.claude/hooks/herdr-agent-state.sh)",
+		"codex: not installed (/home/u/.codex/herdr-agent-state.sh)",
+		"antigravity-cli: not installed (/home/u/.gemini/config/hooks/herdr-agent-state.sh)",
+		"letta (experimental): not installed (/home/u/.letta/hooks/herdr-agent-session.sh)",
+	].join("\n");
+
+	test("antigravity-cli es la integración de agy", () => {
+		const all = parseIntegrationStatus(status);
+		expect(all.find((s) => s.integration === "antigravity-cli")).toEqual({ integration: "antigravity-cli", agent: "agy", state: "not installed" });
+		expect(all.find((s) => s.integration === "pi")).toEqual({ integration: "pi", agent: "pi", state: "current" });
+	});
+
+	test("solo las de tus agentes instalados; agy cuenta aunque solo esté en ~/.local/bin", () => {
+		const all = parseIntegrationStatus(status);
+		const installed = (a: string) => ["pi", "agy", "codex"].includes(a);
+		expect(integrationsFor(all, ["pi", "agy"], installed).map((s) => s.integration)).toEqual(["pi", "antigravity-cli"]);
+		expect(integrationsFor(all, ["pi"], installed).map((s) => s.integration)).toEqual(["pi"]);
+		expect(integrationsFor(all, ["agy"], () => false)).toEqual([]);
+		// Sin agentes elegidos (antes de bond setup), las de todos los instalados.
+		expect(integrationsFor(all, [], installed).map((s) => s.integration)).toEqual(["pi", "codex", "antigravity-cli"]);
+	});
+
+	test("ya actual: nada que instalar", () => {
+		const all = parseIntegrationStatus("antigravity-cli: current (v3) (/home/u/.gemini/config/hooks/herdr-agent-state.sh)");
+		expect(integrationsFor(all, ["agy"], () => true)).toEqual([{ integration: "antigravity-cli", agent: "agy", state: "current" }]);
 	});
 });
 

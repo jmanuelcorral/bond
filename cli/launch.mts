@@ -4,7 +4,7 @@
 
 import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { agents, attach, ensureServer, focusWorkspace, herdr, insideHerdr, pendingQuestion, requireHerdr, slugify, supportedKinds, uniqueAgentName, workspaceByLabel } from "./herdr.mts";
+import { agents, attach, ensureServer, focusWorkspace, herdr, insideHerdr, missingAgentDir, preparePane, requireHerdr, slugify, startedBlocked, supportedKinds, uniqueAgentName, workspaceByLabel } from "./herdr.mts";
 import { caution, die, dim, log, ok, run, warn, which } from "./util.mts";
 
 export const LAUNCH_HELP = `Uso: bond [opciones] [-- argumentos del agente]
@@ -113,13 +113,13 @@ export function openWorkspace(o: OpenOptions): Opened {
 	if (!o.agent) return { ws, label, cwd, agentPane, shellPane, reused: false };
 	// El del checkout principal es gru, el que orquesta; los de worktrees, por agente y rama.
 	const agentName = uniqueAgentName(o.worktree ? slugify(`${o.agent}-${name}-${o.worktree}`) : "gru");
+	preparePane(agentPane, o.agent);
 	try {
 		herdr(["agent", "start", agentName, "--kind", o.agent, "--pane", agentPane, "--timeout", "60000", ...(o.agentArgs.length ? ["--", ...o.agentArgs] : [])]);
-		return { ws, label, cwd, agentPane, shellPane, agentName, reused: false, blocked: pendingQuestion(agentName) !== undefined };
+		return { ws, label, cwd, agentPane, shellPane, agentName, reused: false, blocked: startedBlocked(agentName, false) };
 	} catch {
 		// Suele ser una pregunta del agente (confiar en la carpeta...): no se contesta por ti.
-		const blocked = agents().find((a) => a.name === agentName)?.agent_status === "blocked";
-		return { ws, label, cwd, agentPane, shellPane, agentName, reused: false, blocked };
+		return { ws, label, cwd, agentPane, shellPane, agentName, reused: false, blocked: startedBlocked(agentName, true) };
 	}
 }
 
@@ -172,7 +172,8 @@ export async function chooseAgent(asked: string | undefined, repoDefault: string
 	if (!agent) die("no hay ningún agente instalado (bond setup te dice cómo instalar uno)");
 	const kinds = supportedKinds();
 	if (kinds.length && !kinds.includes(agent)) die(`Herdr no admite el agente '${agent}'. Válidos: ${kinds.join(", ")}`);
-	if (!which(agent)) die(`'${agent}' no está instalado`);
+	// agy fuera del PATH pero en ~/.local/bin vale: preparePane añade su carpeta en el panel.
+	if (!which(agent) && !missingAgentDir(agent)) die(`'${agent}' no está instalado`);
 	return agent;
 }
 

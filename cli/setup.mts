@@ -4,7 +4,7 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { renderSmall } from "../lib/bond-logo.mts";
-import { agyPluginDir } from "./catalog-agents.mts";
+import { agyLocalBin, agyPluginDir } from "./catalog-agents.mts";
 import { assetsPath, ensureBondLink, FROM_SOURCE } from "./runtime.mts";
 import {
 	act,
@@ -238,27 +238,48 @@ export function globalSkills(agy: boolean): void {
 	}
 }
 
-/** Integraciones de Herdr: estado por agente según `herdr integration status`. */
-export function herdrIntegrationStatus(): Array<{ agent: string; state: string }> {
-	return [...run("herdr", ["integration", "status"]).stdout.matchAll(/^([a-z0-9_-]+): (.+?)(?: \(|$)/gm)].map((m) => ({ agent: m[1], state: m[2] }));
+/** Integraciones de Herdr que no se llaman como el agente de bond. */
+const INTEGRATION_AGENT: Record<string, string> = { "antigravity-cli": "agy" };
+
+export interface HerdrIntegration {
+	/** Nombre de la integración en Herdr (antigravity-cli). */
+	integration: string;
+	/** Agente de bond al que sirve (agy). */
+	agent: string;
+	state: string;
 }
 
-function herdrIntegrations(agents: string[]): void {
+/** Integraciones de Herdr: estado por agente según `herdr integration status`. */
+export function parseIntegrationStatus(text: string): HerdrIntegration[] {
+	return [...text.matchAll(/^([a-z0-9_-]+): (.+?)(?: \(|$)/gm)].map((m) => ({ integration: m[1], agent: INTEGRATION_AGENT[m[1]] ?? m[1], state: m[2] }));
+}
+
+export const herdrIntegrationStatus = () => parseIntegrationStatus(run("herdr", ["integration", "status"]).stdout);
+
+/** Si el agente está instalado: en el PATH o, agy, donde lo deja su instalador. */
+export const agentInstalled = (agent: string) => !!which(agent) || (agent === "agy" && existsSync(agyLocalBin()));
+
+/** Las integraciones de tus agentes instalados (todas las de los instalados si aún no los elegiste). */
+export const integrationsFor = (all: HerdrIntegration[], agents: string[], installed: (agent: string) => boolean = agentInstalled) =>
+	all.filter((s) => installed(s.agent) && (!agents.length || agents.includes(s.agent)));
+
+export function herdrIntegrations(agents: string[]): void {
 	// Con la integración, cada agente le cuenta a Herdr su estado real (working, blocked, done)
-	// en vez de que Herdr lo adivine mirando la pantalla. Solo para los agentes instalados.
+	// en vez de que Herdr lo adivine mirando la pantalla; la de agy le da su sesión, de la que
+	// bond team collect saca el informe. Solo para los agentes instalados.
 	log("Integraciones de Herdr");
-	for (const { agent, state } of herdrIntegrationStatus()) {
-		if (!which(agent) || !agents.includes(agent)) continue;
+	for (const { integration, agent, state } of integrationsFor(herdrIntegrationStatus(), agents)) {
+		if (!agents.includes(agent)) continue;
 		if (state.startsWith("current")) {
-			log(`integración ${agent}: ya actual`);
+			log(`integración ${integration}: ya actual`);
 			continue;
 		}
 		// Herdr se niega si el agente aún no creó su carpeta de config (nunca se ha abierto):
 		// es un aviso, no un error; se instala en el siguiente bond setup.
-		act(`herdr integration install ${agent}`, () => {
-			const r = run("herdr", ["integration", "install", agent]);
-			if (r.status === 0) log(`integración ${agent}: instalada`);
-			else warn(`integración ${agent}: ${(r.stderr || r.stdout).trim().split("\n").pop()} (abre ${agent} una vez y repite bond setup)`);
+		act(`herdr integration install ${integration}`, () => {
+			const r = run("herdr", ["integration", "install", integration]);
+			if (r.status === 0) log(`integración ${integration}: instalada`);
+			else warn(`integración ${integration}: ${(r.stderr || r.stdout).trim().split("\n").pop()} (abre ${agent} una vez y repite bond setup)`);
 		});
 	}
 }

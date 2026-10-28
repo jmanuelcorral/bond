@@ -19,6 +19,9 @@ const xdg = () => process.env.XDG_CONFIG_HOME || join(HOME, ".config");
 /** Plugin global de bond para agy: sus reglas (rules/AGENTS.md) y las skills globales. */
 export const agyPluginDir = () => join(HOME, ".gemini", "config", "plugins", "bond");
 
+/** Donde deja agy su instalador, que no siempre está en el PATH de las shells no interactivas. */
+export const agyLocalBin = () => join(HOME, ".local", "bin", process.platform === "win32" ? "agy.exe" : "agy");
+
 export const AGENTS: AgentInfo[] = [
 	{ id: "pi", name: "pi", bin: "pi", install: "npm i -g @earendil-works/pi-coding-agent", url: "https://pi.dev", instructions: () => join(process.env.PI_CODING_AGENT_DIR || join(HOME, ".pi", "agent"), "AGENTS.md") },
 	{ id: "claude", name: "Claude Code", bin: "claude", install: "curl -fsSL https://claude.ai/install.sh | bash", url: "https://code.claude.com/docs", instructions: () => join(HOME, ".claude", "CLAUDE.md") },

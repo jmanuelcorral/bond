@@ -18,12 +18,15 @@ versión instalada. Ejecuta los comandos con tu herramienta de shell: no hay too
   hallazgos accionables.
 - **Modelo** (opcional): si el usuario pide uno, pásalo como argumento del agente tras `--`
   (pi: `--model halo/flash-halogen`; Claude: `--model haiku`).
+- **Argumentos de `agy`**: sin otros del usuario, `-- --dangerously-skip-permissions`; sin él,
+  `agy` pide permiso por cada comando y el delegado no avanza.
 
 ## Procedimiento
 
 1. `test "${HERDR_ENV:-}" = 1`. Si falla, dilo y haz tú la tarea en esta sesión, sin Herdr.
 2. Comprueba el kind: tiene que aparecer en `herdr agent start --help` (possible values) y
-   su ejecutable en el PATH (`command -v <kind>`). Si no, dilo y para.
+   su ejecutable en el PATH (`command -v <kind>`). Con `agy` vale también `~/.local/bin/agy`
+   (donde lo deja su instalador). Si no, dilo y para.
 3. Nombre único: `<rol>-<n>` con el primer `n` (desde 1) que no esté en `herdr agent list`
    (`.result.agents[].name`). Solo `[a-z][a-z0-9_-]`, máximo 32 caracteres.
 4. Dirección: en `herdr pane layout --pane "$HERDR_PANE_ID"`, busca tu panel en
@@ -31,11 +34,15 @@ versión instalada. Ejecuta los comandos con tu herramienta de shell: no hay too
    `right`; si no, `down`.
 5. `herdr pane split --current --direction <dir> --cwd "$PWD" --no-focus` y lee el panel nuevo
    en `.result.pane.pane_id`. Si falla con cualquier error, enséñalo y para.
-6. `herdr agent start <nombre> --kind <kind> --pane <panel> --timeout 90000 [-- args]`.
+6. Si el kind es `agy` y no está en el PATH sino en `~/.local/bin`, antes:
+   `herdr pane run <panel> 'export PATH="$HOME/.local/bin:$PATH"'` (Herdr escribe el
+   ejecutable sin ruta en la shell del panel). Luego
+   `herdr agent start <nombre> --kind <kind> --pane <panel> --timeout 90000 [-- args]`.
    Si devuelve `agent_not_ready` o el agente queda `blocked`, lee el panel
    (`herdr agent read <nombre> --source visible`): suele ser una pregunta del agente
    (confiar en la carpeta, aprobar algo). Enséñasela al usuario y espera su respuesta; no la
-   contestes por él.
+   contestes por él. El aviso de novedades de `agy` al arrancar («esc to dismiss») no es una
+   pregunta: ciérralo con `herdr agent send-keys <nombre> esc` y sigue.
 7. El delegado no ve esta conversación: escríbele un mensaje autocontenido con el objetivo, el
    alcance (ficheros, carpetas o diff), qué debe entregar y las restricciones: sin commit ni
    push, y sin editar ni crear ficheros salvo que la tarea pida cambios de forma expresa.

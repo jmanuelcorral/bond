@@ -4,8 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseFm } from "../cli/decisions.mts";
-import { questionIn } from "../cli/herdr.mts";
-import { branchInfo, classify, collectBlocker, collectRun, lastAssistantText, runDecisions, sessionFile, trimAgentBanner, withMemoryNote, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runFileText, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle } from "../cli/team.mts";
+import { blockedOnStart, defaultAgentArgs, missingAgentDir, questionIn, startupNoticeIn } from "../cli/herdr.mts";
+import { branchInfo, classify, collectBlocker, collectRun, lastAssistantText, runDecisions, sessionFile, trimAgentBanner, trimAgyPane, withMemoryNote, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runFileText, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle } from "../cli/team.mts";
 
 const dirs = (...existing: string[]) => (p: string) => existing.includes(p);
 
@@ -733,8 +733,36 @@ describe("recorte del volcado del panel (respaldo D17)", () => {
 		expect(trimAgentBanner(dump)).toBe("Hecho. Commit abc1234 en la rama.");
 	});
 
+	test("fuera el logo de agy con la versión, la cuenta y la carpeta a la derecha", () => {
+		const dump = ["      ▄▀▀▄        Antigravity CLI 1.4.9", "     ▀▀▀▀▀▀       user@example.com (Google AI Pro)", "  ▄▀▀      ▀▀▄", "", "Hecho."].join("\n");
+		expect(trimAgentBanner(dump)).toBe("Hecho.");
+	});
+
 	test("un volcado sin banner se queda tal cual (recortado solo por los bordes)", () => {
 		expect(trimAgentBanner("\ninforme normal\ncon líneas\n\n")).toBe("informe normal\ncon líneas");
+	});
+});
+
+describe("recorte del panel de agy (respaldo D17)", () => {
+	const fixture = readFileSync(join(import.meta.dir, "fixtures", "agy-pane.txt"), "utf8");
+
+	test("volcado real: solo la respuesta final, sin banner, encargo repetido, herramientas ni caja de entrada", () => {
+		expect(trimAgyPane(fixture)).toBe('I created the file note.md with the content "hello" and executed ls to list the directory contents.');
+	});
+
+	test("la respuesta de varias líneas pierde la sangría de agy", () => {
+		const dump = ["─".repeat(60), "> Haz P1", "", "● Ran (npm test)", "", "  Hecho: P1 implementada.", "", "  - commit abc1234", "─".repeat(80), ">", "─".repeat(80), "? for shortcuts"].join("\n");
+		expect(trimAgyPane(dump)).toBe("Hecho: P1 implementada.\n\n- commit abc1234");
+	});
+
+	test("sin el encargo a la vista (volcado corto): lo que sigue a la última herramienta", () => {
+		const dump = ["  …mitad de un razonamiento", "▸ Thought for 2s", "", "  Listo.", "─".repeat(80), ">", "─".repeat(80), "? for shortcuts"].join("\n");
+		expect(trimAgyPane(dump)).toBe("Listo.");
+	});
+
+	test("recién arrancado, sin turnos: nada (ni el banner ni el aviso de arranque)", () => {
+		const dump = ["      ▄▀▀▄        Antigravity CLI 1.4.9", "  ▄▀▀      ▀▀▄", "", " ┃ Verbosity now defaults to medium", " ┃ esc to dismiss", "─".repeat(80), ">", "─".repeat(80), "? for shortcuts"].join("\n");
+		expect(trimAgyPane(dump)).toBe("");
 	});
 });
 
@@ -752,5 +780,51 @@ describe("preguntas en pantalla", () => {
 		expect(questionIn("Trust project folder?\n> Trust")).toBe("confiar en la carpeta del proyecto");
 		expect(questionIn("Accessing workspace:\n\n/x/wt\n\nDo you trust the contents of this project?\n\n> Yes, I trust this folder\n  No, exit")).toBe("confiar en la carpeta del proyecto");
 		expect(questionIn("Hecho.")).toBeUndefined();
+	});
+
+	const notice = "  ▄▀▀      ▀▀▄\n\n ┃ Verbosity now defaults to medium\n ┃ esc to dismiss\n────────────\n>\n";
+	const trust = "Accessing workspace:\n\nDo you trust the contents of this project?\n\n> Yes, I trust this folder\n  No, exit";
+
+	test("el aviso de arranque de agy no es una pregunta, aunque Herdr lo dé por blocked", () => {
+		expect(startupNoticeIn(notice)).toBe(true);
+		expect(questionIn(notice)).toBeUndefined();
+		expect(blockedOnStart(notice)).toBe(false);
+		expect(blockedOnStart(notice, "blocked")).toBe(false);
+		expect(blockedOnStart(notice, "idle")).toBe(false);
+	});
+
+	test("la pregunta de confianza de agy sí bloquea, y lo que Herdr da por blocked sin el aviso también", () => {
+		expect(startupNoticeIn(trust)).toBe(false);
+		expect(blockedOnStart(trust)).toBe(true);
+		expect(blockedOnStart(`${notice}${trust}`, "idle")).toBe(true);
+		expect(blockedOnStart("Allow this command? [y/n]", "blocked")).toBe(true);
+		expect(blockedOnStart("listo", "idle")).toBe(false);
+	});
+});
+
+describe("arranque de agy en bond team", () => {
+	test("sin argumentos propios, agy sin pedir permiso por cada comando; los demás, sin nada", () => {
+		expect(defaultAgentArgs("agy", [])).toEqual(["--dangerously-skip-permissions"]);
+		expect(defaultAgentArgs("pi", [])).toEqual([]);
+		expect(defaultAgentArgs("claude", [])).toEqual([]);
+	});
+
+	test("con argumentos tras --, se usan esos (también en agy)", () => {
+		expect(defaultAgentArgs("agy", ["--model", "x"])).toEqual(["--model", "x"]);
+		expect(defaultAgentArgs("pi", ["--model", "x"])).toEqual(["--model", "x"]);
+	});
+
+	test("agy en ~/.local/bin y fuera del PATH: falta su carpeta; en el PATH o sin instalar, nada", () => {
+		const dir = mkdtempSync(join(tmpdir(), "bond-agy-bin-"));
+		try {
+			const local = join(dir, "agy");
+			writeFileSync(local, "");
+			expect(missingAgentDir("agy", () => undefined, local)).toBe(dir);
+			expect(missingAgentDir("agy", () => "/usr/bin/agy", local)).toBeUndefined();
+			expect(missingAgentDir("agy", () => undefined, join(dir, "otro"))).toBeUndefined();
+			expect(missingAgentDir("pi", () => undefined, local)).toBeUndefined();
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 });

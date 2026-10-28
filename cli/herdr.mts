@@ -2,6 +2,9 @@
 // Herdr responde JSON con los datos bajo .result; los errores, JSON en stderr.
 
 import { spawn, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname } from "node:path";
+import { agyLocalBin } from "./catalog-agents.mts";
 import { die, run, which } from "./util.mts";
 
 export interface HerdrAgent {
@@ -80,11 +83,57 @@ const QUESTIONS: Array<[RegExp, string]> = [
 /** Pregunta conocida en el texto de una pantalla, si la hay. */
 export const questionIn = (screen: string) => QUESTIONS.find(([re]) => re.test(screen))?.[1];
 
-/** Pregunta que espera respuesta en la pantalla del agente, si la hay. */
-export function pendingQuestion(agent: string): string | undefined {
+/**
+ * Aviso de arranque de agy (novedades de la versión, «esc to dismiss»): no es una pregunta,
+ * aunque Herdr pueda darlo por blocked; el agente acepta el prompt con él en pantalla.
+ */
+export const startupNoticeIn = (screen: string) => /esc to dismiss/.test(screen) && !questionIn(screen);
+
+/**
+ * Si un agente recién arrancado espera una respuesta tuya: una pregunta conocida en pantalla,
+ * o Herdr lo marca blocked (`status`) por algo que no es el aviso de arranque de agy.
+ */
+export const blockedOnStart = (screen: string, status?: string) => questionIn(screen) !== undefined || (status === "blocked" && !startupNoticeIn(screen));
+
+/** Lo que se ve en el panel del agente ("" si Herdr no lo da). */
+export function visibleScreen(agent: string): string {
 	const r = run("herdr", ["agent", "read", agent, "--source", "visible", "--lines", "60"], { timeout: 5000 });
-	return r.status === 0 ? questionIn(r.stdout) : undefined;
+	return r.status === 0 ? r.stdout : "";
 }
+
+/** Pregunta que espera respuesta en la pantalla del agente, si la hay. */
+export const pendingQuestion = (agent: string) => questionIn(visibleScreen(agent));
+
+/** Tras `herdr agent start` (failed: si devolvió error): si el agente espera una respuesta tuya. */
+export function startedBlocked(name: string, failed: boolean): boolean {
+	return blockedOnStart(visibleScreen(name), failed ? agents().find((a) => a.name === name)?.agent_status : undefined);
+}
+
+/**
+ * Carpeta que le falta al PATH para lanzar un agente: el instalador de agy lo deja en
+ * ~/.local/bin, que no siempre está en el PATH de las shells no interactivas (ni en el de
+ * los paneles de Herdr). undefined si el agente está en el PATH o no está ahí.
+ */
+export function missingAgentDir(agent: string, find: (cmd: string) => string | undefined = which, local = agyLocalBin()): string | undefined {
+	if (agent !== "agy" || find("agy") || !existsSync(local)) return undefined;
+	return dirname(local);
+}
+
+/**
+ * `herdr agent start` teclea el ejecutable sin ruta en la shell del panel: si no está en el
+ * PATH, antes se añade su carpeta al PATH de esa shell (sh, bash, zsh). En Windows no.
+ */
+export function preparePane(pane: string, agent: string): void {
+	const dir = missingAgentDir(agent);
+	if (!dir || process.platform === "win32") return;
+	run("herdr", ["pane", "run", pane, `export PATH='${dir.replace(/'/g, "'\\''")}':"$PATH"`]);
+}
+
+/**
+ * Argumentos con los que bond team y bond-delegate lanzan un agente: los tuyos tras `--` o,
+ * sin ellos, agy sin pedir permiso por cada comando (A5: si no, se para en cada uno).
+ */
+export const defaultAgentArgs = (agent: string, given: string[]) => (given.length ? given : agent === "agy" ? ["--dangerously-skip-permissions"] : []);
 
 /** Kinds de agente que admite la versión instalada de Herdr. */
 export function supportedKinds(): string[] {

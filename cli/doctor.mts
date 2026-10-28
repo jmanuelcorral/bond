@@ -8,8 +8,8 @@ import type { UpdateState } from "./config.mts";
 import { enabledModelsCover } from "./suggestions.mts";
 import { assetsPath, BOND_HOME, FROM_SOURCE, installedRuntime, VERSION } from "./runtime.mts";
 import { compareVersions, installMethod } from "./update.mts";
-import { AGY_PLUGIN_JSON, CONTEXT_TOOLS, globalSkillsDir, globalSkillTargets, herdrIntegrationStatus, herdrSkillDir, PI_HERDR_SKILL, SHARED_HERDR_SKILL } from "./setup.mts";
-import { agentInfo, agyPluginDir } from "./catalog-agents.mts";
+import { AGY_PLUGIN_JSON, CONTEXT_TOOLS, globalSkillsDir, globalSkillTargets, herdrIntegrationStatus, herdrSkillDir, integrationsFor, PI_HERDR_SKILL, SHARED_HERDR_SKILL } from "./setup.mts";
+import { agentInfo, agyLocalBin, agyPluginDir } from "./catalog-agents.mts";
 import { AGENT_DIR, bad, catchDie, caution, die, dim, HOME, isCopyOf, linkTarget, ok, REPO_DIR, run, samePath, which } from "./util.mts";
 
 /** Skill global en su sitio: enlazado (o, en Windows, copiado) desde bond. */
@@ -66,11 +66,11 @@ function checkHerdr(): void {
 	const running = /server:[\s\S]*?status: running/.test(status);
 	add(running ? "ok" : "warn", "herdr", `${client}${running ? ", servidor en marcha" : ", servidor parado"}`, running ? undefined : "herdr (lo arranca)");
 	// Integración de Herdr de cada agente instalado: pi es obligatoria; las demás, aviso.
-	const states = herdrIntegrationStatus().filter((s) => which(s.agent) && (!chosen.length || chosen.includes(s.agent)));
-	const current = states.filter((s) => s.state.startsWith("current")).map((s) => s.agent);
+	const states = integrationsFor(herdrIntegrationStatus(), chosen);
+	const current = states.filter((s) => s.state.startsWith("current")).map((s) => s.integration);
 	if (current.length) add("ok", "integraciones herdr", current.join(", "));
 	for (const s of states.filter((x) => !x.state.startsWith("current"))) {
-		add(s.agent === "pi" ? "fail" : "warn", `integración herdr-${s.agent}`, s.state, "bond setup");
+		add(s.agent === "pi" ? "fail" : "warn", `integración herdr-${s.integration}`, s.state, "bond setup");
 	}
 }
 
@@ -102,14 +102,14 @@ function checkPi(): void {
  */
 export function agyCheck(o: { path?: string; version?: string; local?: string }): Check {
 	if (o.path) return { level: "ok", name: "agy", detail: o.version ?? "?" };
-	if (o.local) return { level: "warn", name: "agy", detail: `está en ${o.local}, pero no en el PATH (Herdr y bond team no lo encuentran)`, fix: `añade ${dirname(o.local)} al PATH también de las shells no interactivas (p. ej. en ~/.profile)` };
+	if (o.local) return { level: "warn", name: "agy", detail: `está en ${o.local}, pero no en el PATH (bond team lo encuentra; Herdr y otras herramientas no)`, fix: `añade ${dirname(o.local)} al PATH también de las shells no interactivas (p. ej. en ~/.profile)` };
 	return { level: "warn", name: "agy", detail: "no está instalado", fix: agentInfo("agy")?.install };
 }
 
 async function checkAgy(): Promise<void> {
 	// Solo si es uno de tus agentes, de los del repo o, sin bond setup, si está instalado.
 	const path = which("agy");
-	const installer = join(HOME, ".local", "bin", process.platform === "win32" ? "agy.exe" : "agy");
+	const installer = agyLocalBin();
 	const local = existsSync(installer) ? installer : undefined;
 	const mine = chosen.includes("agy") || (!chosen.length && !!(path || local));
 	if (!mine && !(await repoAgents()).includes("agy")) return;
