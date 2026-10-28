@@ -99,6 +99,9 @@ mcp = ["context7", "duckduckgo"]
 skills = ["code-context"]
 commands = ["commit", "handoff", "review"]
 
+[decisions]                     # the agents' decision memory; remove the section to not use it
+dir = "docs/decisions"          # folder inside the repo (relative), adjustable
+
 [mcp_servers.postgres]           # the repo's own servers; secrets with ${VAR}
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
@@ -106,6 +109,17 @@ args = ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
 
 The repo's own commands: Markdown files in `.bond/commands/` (common syntax: `$ARGUMENTS`,
 `$1`…). Its own skills: folders with `SKILL.md` in `.agents/skills/`.
+
+**Decision memory.** With a `[decisions]` section in `bond.toml`, every non-trivial
+decision —the user's or an agent's— lands in `docs/decisions/` (one file per decision,
+`YYYY-MM-DD-slug.md`) and commits carry the `Agent:` and `Decision:` trailers. `bond sync`
+creates the index `README.md` if missing; after that it belongs to the repo, like `AGENTS.md`
+(it is not registered in the manifest: sync neither overwrites it nor flags it as outdated).
+The `decision-record` skill explains when and how to record decisions and runs. Without the
+section, nothing changes. A `dir` that escapes the repo (absolute path or with `..`) is
+rejected with an error. `bond init` only proposes the section when `decision-record` is among
+the selected skills; on re-init, a `[decisions]` section you already have is kept even if the
+skill is deselected (remove it by hand).
 
 **Instructions and skills.** `AGENTS.md` (`init` creates it if missing; it is yours) and `.agents/skills/`
 are read directly by pi, Copilot, Codex, opencode, Crush and Gemini. The exceptions:
@@ -424,7 +438,9 @@ first time they are seeded with those of a previous installation, if any.
 
 bond's rules (the same for all): Herdr only when you ask for it or a command such as
 `/delegate` or `/team` asks for it; `bond-delegate` and `bond-team` to work with other agents; don't close
-what you didn't create or run `herdr` without a subcommand; nothing private in web searches.
+what you didn't create or run `herdr` without a subcommand; nothing private in web searches;
+and if the repo has a `[decisions]` section in `bond.toml`, record decisions with
+`decision-record` and carry the `Agent:` and `Decision:` trailers in commits.
 
 **Project** instructions go in the repo's `AGENTS.md` (created by `bond init`).
 
@@ -441,6 +457,7 @@ your explicit OK. A missing skill only cuts that step; it is not downloaded.
 | `code-context` | Gather just the right context from the repo and libraries before editing | checked |
 | `git-conventional-commit` | A reviewed commit with Conventional Commits, in English unless the project says otherwise; used by `/commit` | checked |
 | `plan-create` | Plan in verifiable phases in `docs/plans/`; independent phases can run in parallel with `bond team` | checked |
+| `decision-record` | Record non-trivial decisions and agent runs in `docs/decisions/` (id, status, `Agent:`/`Decision:` git trailers); only in repos with `[decisions]` in `bond.toml` | checked |
 | `plan-execute` | Implement an approved phase, with evidence, and propose its commit | checked |
 | `issue-refine-github` | Review an issue before starting: keep it, expand it or split it | optional |
 | `delivery-review-github` | Review the phase, push and open its PR; after the merge, recommend what's next (and `bond team clean` if it came from a worktree) | optional |

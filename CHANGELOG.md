@@ -7,7 +7,9 @@
   commits llevan los trailers `Agent:` y `Decision:`. `bond init` la propone por defecto
   (`dir = "docs/decisions"`, ajustable; quita la sección para no usarla) y `bond sync` crea el
   `README.md` índice si falta —después es del repo, como `AGENTS.md`: no lo pisa ni lo da por
-  desfasado—. Un `dir` que salga del repo (ruta absoluta o con `..`) se rechaza. Nueva skill
+  desfasado—. Un `dir` que salga del repo (ruta absoluta o con `..`) se rechaza. `bond init`
+  solo escribe la sección si `decision-record` está entre las skills elegidas; al actualizar un
+  `bond.toml`, una `[decisions]` que ya tuvieras se conserva aunque desmarques la skill. Nueva skill
   `decision-record` en el catálogo (marcada por defecto) con el formato de decisiones y de
   runs, y una regla global en `bond setup` para que también la sigan los agentes que no
   cargan skills por sí solos. Sin `[decisions]`, nada cambia.

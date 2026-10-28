@@ -890,6 +890,22 @@ Las personales de cada uno van en su configuración global; aquí, solo lo de es
 type Selection = Pick<RepoConfig, "agents" | "default_agent" | "mcp" | "skills" | "commands">;
 const tomlArr = (a: string[]) => `[${a.map((x) => JSON.stringify(x)).join(", ")}]`;
 
+/**
+ * ¿Entre las skills pedidas está decision-record (a secas o catalogo:decision-record)?
+ * Es la que da sentido a la sección [decisions]: sin ella, los agentes no tienen cómo
+ * registrar y bond no debe proponer la memoria.
+ */
+const hasDecisionSkill = (skills: string[]) => skills.some((s) => s.slice(s.lastIndexOf(":") + 1) === "decision-record");
+
+/** La sección [decisions] que bond escribe cuando decision-record está elegida. */
+const DECISIONS_SECTION = `# Memoria de decisiones de los agentes (skill decision-record): las decisiones no triviales
+# quedan en ficheros de esta carpeta y los commits llevan los trailers Agent: y Decision:.
+# bond sync crea el README índice si falta; a partir de ahí es tuyo. Para no usarla,
+# quita esta sección.
+[decisions]
+dir = "docs/decisions"           # carpeta dentro del repo, ajustable
+`;
+
 export function bondToml(cfg: Selection): string {
 	return `# bond: configuración de los agentes de este repo. Tras editarla: bond sync
 # Catálogo disponible: bond init --list
@@ -909,14 +925,7 @@ commands = ${tomlArr(cfg.commands)}      # comandos del catálogo
 # Comandos propios: ficheros Markdown en .bond/commands/ ($ARGUMENTS, $1, $2...).
 # Skills propios: carpetas con SKILL.md en .agents/skills/ (bond los enlaza para Claude).
 
-# Memoria de decisiones de los agentes (skill decision-record): las decisiones no triviales
-# quedan en ficheros de esta carpeta y los commits llevan los trailers Agent: y Decision:.
-# bond sync crea el README índice si falta; a partir de ahí es tuyo. Para no usarla,
-# quita esta sección.
-[decisions]
-dir = "docs/decisions"           # carpeta dentro del repo, ajustable
-
-# Catálogos de tu equipo, además del de bond (se crean con bond catalog create). Lo suyo se
+${hasDecisionSkill(cfg.skills) ? `${DECISIONS_SECTION}\n` : ""}# Catálogos de tu equipo, además del de bond (se crean con bond catalog create). Lo suyo se
 # elige igual, por nombre; si un nombre está en dos catálogos: "catalogo:nombre".
 # [[catalog]]
 # name = "equipo"
@@ -937,6 +946,10 @@ export function updateBondToml(text: string, cfg: Selection): string {
 	t = set(t, "mcp", tomlArr(cfg.mcp));
 	t = set(t, "skills", tomlArr(cfg.skills));
 	t = set(t, "commands", tomlArr(cfg.commands));
+	// [decisions]: si el usuario ya la tiene, se conserva pase lo que pase (no la quitamos en
+	// silencio, aunque se desmarque la skill); si no existe y decision-record está elegida,
+	// se añade al final (una tabla al final no cambia el resto del TOML).
+	if (!/^\s*\[decisions\]/m.test(t) && hasDecisionSkill(cfg.skills)) t = `${t.replace(/\s*$/, "")}\n\n${DECISIONS_SECTION}`;
 	return t;
 }
 

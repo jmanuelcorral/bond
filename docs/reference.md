@@ -116,7 +116,9 @@ trivial —del usuario o de un agente— queda en `docs/decisions/` (un fichero 
 crea el `README.md` índice si falta; después es del repo, como `AGENTS.md` (no se registra
 en el manifiesto y sync no lo pisa). La skill `decision-record` explica cuándo y cómo
 registrar decisiones y runs. Sin la sección, nada cambia. Un `dir` que salga del repo
-(ruta absoluta o con `..`) se rechaza con un error.
+(ruta absoluta o con `..`) se rechaza con un error. `bond init` solo propone la sección si
+`decision-record` está entre las skills elegidas; al re-inicializar, una `[decisions]` que
+ya tuvieras se conserva aunque desmarques la skill (se quita a mano).
 
 **Instrucciones y skills.** `AGENTS.md` (lo crea `init` si falta; es tuyo) y `.agents/skills/`
 los leen directamente pi, Copilot, Codex, opencode, Crush y Gemini. Las excepciones:

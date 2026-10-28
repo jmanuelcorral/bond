@@ -89,6 +89,20 @@ describe("updateBondToml", () => {
 		const out = updateBondToml('agents = ["pi"]\n\n[decisions]\ndir = "docs/adrs"\n', sel);
 		expect(out).toContain('[decisions]\ndir = "docs/adrs"');
 	});
+
+	test("updateBondToml: una [decisions] del usuario se conserva aunque se desmarque la skill", () => {
+		const base = 'agents = ["pi"]\nmcp = []\nskills = ["code-context"]\ncommands = []\n\n[decisions]\ndir = "docs/adrs"\n';
+		const out = updateBondToml(base, { agents: ["pi"], default_agent: "pi", mcp: [], skills: ["code-context"], commands: [] });
+		expect(out).toContain('[decisions]\ndir = "docs/adrs"');
+	});
+
+	test("updateBondToml: añade [decisions] solo si decision-record está elegida", () => {
+		const base = 'agents = ["pi"]\nmcp = []\nskills = ["code-context"]\ncommands = []\n';
+		const added = updateBondToml(base, { agents: ["pi"], default_agent: "pi", mcp: [], skills: ["code-context", "decision-record"], commands: [] });
+		expect(added).toContain('[decisions]\ndir = "docs/decisions"');
+		const untouched = updateBondToml(base, { agents: ["pi"], default_agent: "pi", mcp: [], skills: ["code-context"], commands: [] });
+		expect(untouched).not.toContain("[decisions]");
+	});
 });
 
 describe("memoria de decisiones ([decisions])", () => {
@@ -128,9 +142,30 @@ describe("memoria de decisiones ([decisions])", () => {
 		}
 	});
 
-	test("la plantilla de bond.toml propone [decisions] con dir = docs/decisions", () => {
-		const t = bondTomlTemplate({ agents: ["pi"], default_agent: "pi", mcp: [], skills: [], commands: [] });
-		expect(t).toContain('[decisions]\ndir = "docs/decisions"');
+	test("la plantilla propone [decisions] solo si decision-record está elegida", () => {
+		const withSkill = bondTomlTemplate({ agents: ["pi"], default_agent: "pi", mcp: [], skills: ["decision-record"], commands: [] });
+		expect(withSkill).toContain('[decisions]\ndir = "docs/decisions"');
+		const without = bondTomlTemplate({ agents: ["pi"], default_agent: "pi", mcp: [], skills: ["code-context"], commands: [] });
+		expect(without).not.toContain("[decisions]");
+		// El prefijo de catálogo no esconde la skill: cuenta igual.
+		const prefixed = bondTomlTemplate({ agents: ["pi"], default_agent: "pi", mcp: [], skills: ["bond:decision-record"], commands: [] });
+		expect(prefixed).toContain("[decisions]");
+	});
+
+	test("init sin decision-record: ni [decisions] en bond.toml ni README en el sync", () => {
+		write(".bond/bond.toml", bondTomlTemplate({ agents: ["pi"], default_agent: "pi", mcp: [], skills: ["code-context"], commands: [] }));
+		sync();
+		expect(read(".bond/bond.toml")).not.toContain("[decisions]");
+		expect(existsSync(at("docs/decisions"))).toBe(false);
+		expect(sync({ check: true })).toEqual([]);
+	});
+
+	test("init con decision-record: la sección escrita y el README creado", () => {
+		write(".bond/bond.toml", bondTomlTemplate({ agents: ["pi"], default_agent: "pi", mcp: [], skills: ["decision-record"], commands: [] }));
+		sync();
+		expect(read(".bond/bond.toml")).toContain('[decisions]\ndir = "docs/decisions"');
+		expect(existsSync(at("docs/decisions/README.md"))).toBe(true);
+		expect(sync({ check: true })).toEqual([]);
 	});
 });
 
