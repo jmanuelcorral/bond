@@ -37,7 +37,7 @@ lista las decisiones.
   accept <id>... [--ref <aceptación>] [--confirmed-by "<lo que dijo el usuario>"] [--all-proposed]
             La pasa a "accepted". Es solo del usuario, pero puede hacerlo desde la
             conversación: con --confirmed-by (una referencia a sus palabras) no hace
-            falta terminal y la decisión guarda además accepted_via: quien lo ejecuto
+            falta terminal y la decisión guarda además accepted_via: quién lo ejecutó
             (agent:<kind>/<nombre> desde un panel de Herdr, user fuera). Con terminal y
             sin --confirmed-by, pregunta. Sin una cosa ni otra, se niega. Admite varios
             ids y --all-proposed; un id desconocido o no "proposed" se informa sin
@@ -112,7 +112,7 @@ export interface Decision {
 	date: string;
 	decided_by: string;
 	accepted_by: string;
-	/** Quien ejecuto la aceptacion desde la conversacion (D20): user o agent:<kind>[/<nombre>]. */
+	/** Quién ejecutó la aceptación desde la conversación (D20): user o agent:<kind>[/<nombre>]. */
 	accepted_via: string;
 	supersedes: string;
 	superseded_by: string;
@@ -264,7 +264,7 @@ function patchDecision(root: string, dirRel: string, id: string, patch: Partial<
  * D20 (sustituye a D13): aceptar, rechazar o sustituir es del usuario, pero puede
  * hacerlo desde la conversación: con `--confirmed-by "<referencia>"` no hace falta
  * terminal —la referencia es lo que el usuario dijo— y queda con `accepted_via` quien
- * lo ejecuto (autoría de D12). Con terminal y sin `--confirmed-by`, se pregunta.
+ * lo ejecutó (autoría de D12). Con terminal y sin `--confirmed-by`, se pregunta.
  * Sin ninguna de las dos, se niega: un agente no puede aceptar por su cuenta.
  */
 interface ChangeRequest {
@@ -275,20 +275,20 @@ interface ChangeRequest {
 	ids: string[];
 	allProposed: boolean;
 	confirmedBy?: string;
-	/** Referencia de aceptacion para el modo interactivo (--ref de siempre). */
+	/** Referencia de aceptación para el modo interactivo (--ref de siempre). */
 	ref?: string;
 	/** Para `supersede`: id de la decisión que sustituye. */
 	by?: string;
 }
 
-/** Aplica el cambio a cada decision pedida; informa sin abortar y devuelve si alguna fallo. */
+/** Aplica el cambio a cada decisión pedida; informa sin abortar y devuelve si alguna falló. */
 async function changeStatus(root: string, dirRel: string, req: ChangeRequest): Promise<boolean> {
 	const confirmedBy = req.confirmedBy?.trim();
 	if (req.confirmedBy !== undefined && !confirmedBy) {
-		die("--confirmed-by necesita una referencia no vacia: lo que dijo el usuario (bond decisions --help)");
+		die("--confirmed-by necesita una referencia no vacía: lo que dijo el usuario (bond decisions --help)");
 	}
 	if (confirmedBy === undefined && !hasTty()) {
-		die(`${req.verb} la hace solo el usuario: con terminal interactiva y confirmacion, o desde la conversacion con --confirmed-by "<lo que dijo el usuario>". Desde el shell de un agente sin una cosa ni la otra no se puede (bond decisions --help)`);
+		die(`${req.verb} la hace solo el usuario: con terminal interactiva y confirmación, o desde la conversación con --confirmed-by "<lo que dijo el usuario>". Desde el shell de un agente sin una cosa ni la otra no se puede (bond decisions --help)`);
 	}
 	let ids = [...new Set(req.ids)];
 	if (req.allProposed) {
@@ -336,7 +336,7 @@ async function changeStatus(root: string, dirRel: string, req: ChangeRequest): P
 		}
 		const patch: Partial<Pick<Decision, "status" | "accepted_by" | "accepted_via" | "supersedes" | "superseded_by">> = {};
 		// Con --confirmed-by: la referencia es lo que dijo el usuario y accepted_via quien
-		// lo ejecuto (D20). En interactivo, accepted_by queda con --ref si se dio.
+		// lo ejecutó (D20). En interactivo, accepted_by queda con --ref si se dio.
 		if (confirmedBy) {
 			patch.accepted_by = confirmedBy;
 			patch.accepted_via = resolveAuthor();
@@ -415,7 +415,7 @@ export function checkDecisions(root: string, dirRel: string): DecisionsReport {
 			if (ref && !byId.has(ref)) errors.push(`${rel}: ${key} apunta a "${ref}", que no existe en ${dirRel}/`);
 		}
 		// accepted_via es opcional (las decisiones aceptadas en terminal no lo llevan); si
-		// está, tiene que ser una autoría valida: user o agent:<kind>[/<nombre>] (D20).
+		// está, tiene que ser una autoría válida: user o agent:<kind>[/<nombre>] (D20).
 		const via = p.scalars.accepted_via;
 		if (via && !/^(user|agent:[a-z0-9._-]+(\/[A-Za-z0-9._-]+)?)$/.test(via)) {
 			errors.push(`${rel}: accepted_via "${via}" no es "user" ni "agent:<kind>[/<nombre>]"`);

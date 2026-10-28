@@ -391,8 +391,8 @@ describe("CLI de lista y runs", () => {
 	});
 });
 
-// P6 (D20): aceptar desde la conversacion con --confirmed-by, varios ids y --all-proposed.
-describe("accept/reject/supersede desde la conversacion (D20)", () => {
+// P6 (D20): aceptar desde la conversación con --confirmed-by, varios ids y --all-proposed.
+describe("accept/reject/supersede desde la conversación (D20)", () => {
 	test("--confirmed-by sin terminal acepta y guarda accepted_by y accepted_via", () => {
 		enableMemory();
 		const { id } = add();
@@ -501,7 +501,7 @@ describe("accept/reject/supersede desde la conversacion (D20)", () => {
 		expect(parseFm(read(`docs/decisions/${a.id}.md`))?.scalars.status).toBe("proposed");
 	});
 
-	test("check valida accepted_via si esta y ignora si falta", () => {
+	test("check valida accepted_via si está y lo ignora si falta", () => {
 		enableMemory();
 		// Sin accepted_via (decisiones ya escritas antes de P6): valido.
 		write("docs/decisions/2026-01-01-sin-via.md", `---\nid: "2026-01-01-sin-via"\ntitle: "t"\nstatus: "accepted"\ndate: "2026-01-01"\ndecided_by: "user"\naccepted_by: "sesion"\n---\n`);

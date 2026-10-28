@@ -512,11 +512,11 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 	if (agents.has("claude")) {
 		out.push({ kind: "block", path: "CLAUDE.md", body: "@AGENTS.md", style: "md" });
 		// D21: con memoria de decisiones, cada accept/reject/supersede pasa por el cuadro de
-		// permiso de Claude Code. La clave `ask` que gestiona bond es la union de las reglas
+		// permiso de Claude Code. La clave `ask` que gestiona bond es la unión de las reglas
 		// que el repo ya tenga y las suyas: editar a mano otras reglas se conserva, y quitar
 		// una de bond la trae el sync de vuelta. Sin [decisions], se quitan solo las de bond
 		// (si no quedan reglas, la clave se va con ellas). Se lee el fichero actual en el
-		// momento de planificar para que la fusion sea idempotente y `--check` quede al dia.
+		// momento de planificar para que la fusión sea idempotente y `--check` quede al día.
 		const settingsPath = repoPath(".claude", "settings.json");
 		let existingAsk: unknown[] = [];
 		const curSettings = readText(join(root, settingsPath));
@@ -526,16 +526,16 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 				const ask = (parsed.permissions as Record<string, unknown> | undefined)?.ask;
 				if (Array.isArray(ask)) existingAsk = ask;
 			} catch {
-				// JSON inválido: diffActions lo marcara como conflicto y no lo tocara.
+				// JSON inválido: diffActions lo marcará como conflicto y no lo tocará.
 			}
 		}
 		const withoutBond = existingAsk.filter((r) => !BOND_ASK_RULES.includes(r as string));
 		const hasBondRules = existingAsk.some((r) => BOND_ASK_RULES.includes(r as string));
-		// Si bond ya gestiona la clave (manifiesto), hay que seguir planificandola aunque ya
-		// no quede reglas suyas: si no, la limpieza generica se llevaria tambien las del usuario.
+		// Si bond ya gestiona la clave (manifiesto), hay que seguir planificándola aunque ya
+		// no queden reglas suyas: si no, la limpieza genérica se llevaría también las del usuario.
 		const tracked = (prev.json[settingsPath] ?? []).some((j) => (j.parent ?? "") === "permissions");
 		if (cfg.decisions) {
-			// withoutBond no lleva reglas de bond, asi que la union simple no duplica nada.
+			// withoutBond no lleva reglas de bond, así que la unión simple no duplica nada.
 			out.push({ kind: "json", path: settingsPath, parent: "permissions", entries: { ask: [...withoutBond, ...BOND_ASK_RULES] } });
 		} else if ((hasBondRules || tracked) && withoutBond.length) {
 			// Quitar [decisions]: solo se van las reglas de bond, las del usuario se quedan.
