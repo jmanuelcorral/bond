@@ -55,6 +55,10 @@ Antes de usar una API externa que no estás seguro de conocer en la versión del
 
 Prefiere esto a recordar la API: las APIs cambian entre versiones.
 
+Los nombres de las herramientas MCP dependen del agente: en Antigravity, por ejemplo, salen
+del plugin de bond como `bond_context7` (`resolve-library-id`, `query-docs`) y
+`bond_duckduckgo`. Usa los que tengas.
+
 ## 5. Web: errores, versiones, novedades
 
 - `mcp__duckduckgo__search` para un error literal, una versión publicada o algo reciente.

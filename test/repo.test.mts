@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
-const { syncRepo, updateBondToml, withBlock, loadRepoConfig, bondToml: bondTomlTemplate } = await import("../cli/repo.mts");
+const { syncRepo, updateBondToml, withBlock, loadRepoConfig, bondToml: bondTomlTemplate, agyCommand } = await import("../cli/repo.mts");
 const { catchDie } = await import("../cli/util.mts");
 
 const origCwd = process.cwd();
@@ -204,6 +204,73 @@ describe("sin reglas ask de bond en Claude Code", () => {
 		sync();
 		expect(existsSync(at(".claude/settings.json")) ? ask() : []).toEqual([]);
 		expect(sync({ check: true })).toEqual([]);
+	});
+});
+
+describe("Antigravity (agy)", () => {
+	const plugin = (p: string) => `.agents/plugins/bond/${p}`;
+	const frontmatter = (md: string) => Bun.YAML.parse(/^---\n([\s\S]*?)\n---\n/.exec(md)![1]) as Record<string, string>;
+
+	test("genera el plugin de bond con los MCP y los comandos, y una segunda pasada no cambia nada", () => {
+		bondToml({ agents: ["agy"], commands: ["commit", "review", "handoff", "accept"] });
+		sync();
+		expect(json(plugin("plugin.json"))).toEqual({ name: "bond" });
+		const mcp = json(plugin("mcp_config.json")).mcpServers;
+		expect(mcp.context7).toEqual({ url: "https://mcp.context7.com/mcp" });
+		expect(mcp.duckduckgo).toEqual({ command: "uvx", args: ["duckduckgo-mcp-server==0.7.0"] });
+		for (const c of ["commit", "review", "handoff", "accept"]) {
+			const fm = frontmatter(read(plugin(`skills/${c}/SKILL.md`)));
+			expect(fm.name).toBe(c);
+			expect(fm.description.length).toBeGreaterThan(0);
+		}
+		// Las skills del repo las lee agy de .agents/skills/ por su cuenta.
+		expect(existsSync(at(".agents/skills/code-context/SKILL.md"))).toBe(true);
+		expect(sync({ check: true })).toEqual([]);
+		expect(sync()).toEqual([]);
+	});
+
+	test("quitar agy borra el plugin y deja lo que no es de bond", () => {
+		write(".agents/plugins/mio/plugin.json", "{}\n");
+		bondToml({ agents: ["agy", "pi"] });
+		sync();
+		bondToml({ agents: ["pi"] });
+		sync();
+		expect(existsSync(at(".agents/plugins/bond"))).toBe(false);
+		expect(read(".agents/plugins/mio/plugin.json")).toBe("{}\n");
+		expect(existsSync(at(".agents/skills/code-context/SKILL.md"))).toBe(true);
+		expect(sync({ check: true })).toEqual([]);
+	});
+
+	test("los servidores propios (stdio y url) van al plugin con ${VAR} sin expandir", () => {
+		bondToml({ agents: ["agy"], mcp: [], commands: [] });
+		write(
+			".bond/bond.toml",
+			`${read(".bond/bond.toml")}\n[mcp_servers.db]\ncommand = "npx"\nargs = ["-y", "server-postgres", "\${DATABASE_URL}"]\nenv = { TOKEN = "\${DB_TOKEN}" }\n\n[mcp_servers.api]\nurl = "https://api.example.com/mcp"\nheaders = { Authorization = "Bearer \${API_KEY}" }\n`,
+		);
+		sync();
+		expect(json(plugin("mcp_config.json")).mcpServers).toEqual({
+			db: { command: "npx", args: ["-y", "server-postgres", "${DATABASE_URL}"], env: { TOKEN: "${DB_TOKEN}" } },
+			api: { url: "https://api.example.com/mcp", headers: { Authorization: "Bearer ${API_KEY}" } },
+		});
+		expect(existsSync(at(plugin("skills")))).toBe(false);
+	});
+
+	test("los comandos propios también son skills del plugin", () => {
+		write(".bond/commands/saluda.md", "Saluda a $1 y luego a $2: $@\n");
+		bondToml({ agents: ["agy"], commands: [] });
+		sync();
+		const md = read(plugin("skills/saluda/SKILL.md"));
+		expect(frontmatter(md)).toEqual({ name: "saluda", description: "Comando /saluda del repo" });
+		expect(md).toContain("(la palabra 1 de el texto que el usuario escriba tras `/saluda`)");
+		expect(md).not.toMatch(/\$[1-9@]/);
+	});
+});
+
+describe("agyCommand", () => {
+	test("cambia $ARGUMENTS por el texto que sigue al comando y deja un frontmatter YAML válido", () => {
+		const md = agyCommand("commit", '---\ndescription: "Crea un commit: con \'comillas\' y #"\nargument-hint: "[x]"\n---\nMensaje: $ARGUMENTS\n');
+		expect(md).toBe(`---\nname: "commit"\ndescription: "Crea un commit: con 'comillas' y #"\n---\n\nMensaje: (el texto que el usuario escriba tras \`/commit\`)\n`);
+		expect(Bun.YAML.parse(md.split("---\n")[1])).toEqual({ name: "commit", description: "Crea un commit: con 'comillas' y #" });
 	});
 });
 

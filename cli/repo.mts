@@ -1,6 +1,6 @@
 // `bond init` y `bond sync`: configuración de agentes de un repo, declarada una vez en
-// .bond/bond.toml y generada para cada agente (pi, Claude Code, Copilot, Codex, opencode, Crush
-// y Gemini).
+// .bond/bond.toml y generada para cada agente (pi, Claude Code, Copilot, Codex, opencode, Crush,
+// Gemini y Antigravity).
 //
 // Lo que bond escribe queda apuntado en .bond/manifest.json:
 // - ficheros propios (skills copiados, comandos): con su hash. Si alguien los edita a mano,
@@ -20,7 +20,7 @@ import { ensureFetched, gitKey, type Lock, readLock, repoRelative } from "./cata
 import { assetsPath, ensureBondLink } from "./runtime.mts";
 import { bad, catchingDie, caution, die, dim, isDryRun, log, ok, run, STAMP, warn, which } from "./util.mts";
 
-export const SUPPORTED_AGENTS = ["pi", "claude", "copilot", "codex", "opencode", "crush", "gemini"];
+export const SUPPORTED_AGENTS = ["pi", "claude", "copilot", "codex", "opencode", "crush", "gemini", "agy"];
 /** Catálogo: carpeta del repo o extraída del binario. */
 const catalogPath = (...p: string[]) => assetsPath("catalog", ...p);
 
@@ -443,6 +443,22 @@ function geminiCommand(md: string): string {
 	return `${desc ? `description = ${JSON.stringify(desc)}\n` : ""}prompt = ${prompt}\n`;
 }
 
+/**
+ * Comando en Markdown a skill de Antigravity (/nombre): frontmatter con name y description, y
+ * $ARGUMENTS, $@ y $1... cambiados por una indicación de usar el texto que sigue al comando.
+ */
+export function agyCommand(name: string, md: string): string {
+	const m = /^---\n([\s\S]*?)\n---\n?/.exec(md);
+	const after = `el texto que el usuario escriba tras \`/${name}\``;
+	const body = (m ? md.slice(m[0].length) : md)
+		.replace(/\$ARGUMENTS|\$@/g, `(${after})`)
+		.replace(/\$([1-9])/g, (_, n) => `(la palabra ${n} de ${after})`)
+		.trim();
+	// Cadenas JSON: son YAML válido con comillas dobles, con cualquier carácter dentro.
+	const desc = describe(md) || `Comando /${name} del repo`;
+	return `---\nname: ${JSON.stringify(name)}\ndescription: ${JSON.stringify(desc)}\n---\n\n${body}\n`;
+}
+
 function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 	const out: Output[] = [];
 	const agents = new Set(cfg.agents);
@@ -615,6 +631,25 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 			...ownCommands.map((f) => [f.slice(0, -3), readFileSync(join(ownDir, f), "utf8")] as const),
 		];
 		for (const [name, md] of commands) out.push({ kind: "file", path: repoPath(".gemini", "commands", `${name}.toml`), content: geminiCommand(md) });
+	}
+
+	if (agents.has("agy")) {
+		// Antigravity lee AGENTS.md y .agents/skills/ por su cuenta, pero no MCP ni comandos del
+		// repo: van en un plugin de bond (.agents/plugins/bond/), y cada comando es una skill.
+		const plugin = (...p: string[]) => repoPath(".agents", "plugins", "bond", ...p);
+		out.push({ kind: "file", path: plugin("plugin.json"), content: `${JSON.stringify({ name: "bond" }, null, 2)}\n` });
+		const ag = Object.fromEntries(
+			Object.entries(servers).map(([n, s]) => [
+				n,
+				s.url ? { url: s.url, ...(s.headers ? { headers: s.headers } : {}) } : { command: s.command, args: s.args ?? [], ...(s.env ? { env: s.env } : {}) },
+			]),
+		);
+		out.push({ kind: "file", path: plugin("mcp_config.json"), content: `${JSON.stringify({ mcpServers: ag }, null, 2)}\n` });
+		const commands = [
+			...cfg.tools.commands.map((t) => [t.name, commandText(t)] as const),
+			...ownCommands.map((f) => [f.slice(0, -3), readFileSync(join(ownDir, f), "utf8")] as const),
+		];
+		for (const [name, md] of commands) out.push({ kind: "file", path: plugin("skills", name, "SKILL.md"), content: agyCommand(name, md) });
 	}
 	return out;
 }
@@ -1008,7 +1043,7 @@ export function updateBondToml(text: string, cfg: Selection): string {
 	return t;
 }
 
-const AGENT_NAMES: Record<string, string> = { pi: "pi", claude: "Claude Code", copilot: "Copilot CLI", codex: "Codex", opencode: "opencode", crush: "Crush", gemini: "Gemini CLI" };
+const AGENT_NAMES: Record<string, string> = { pi: "pi", claude: "Claude Code", copilot: "Copilot CLI", codex: "Codex", opencode: "opencode", crush: "Crush", gemini: "Gemini CLI", agy: "Antigravity" };
 
 /** Preguntas de init: agentes (de los instalados), agente por defecto y herramientas del catálogo. */
 async function askSelection(current: Selection, installed: string[], catalogs: Catalog[]): Promise<Selection | undefined> {
@@ -1165,16 +1200,15 @@ export async function init(args: string[]): Promise<void> {
 		opencode: "opencode reconoce el proyecto cuando el repo tiene al menos un commit",
 		gemini: "Gemini pide confiar en la carpeta (security.folderTrust)",
 	};
-	console.log(`
-Siguiente:
-  1. Completa AGENTS.md (instrucciones del proyecto para todos los agentes).
-  2. Commitea la configuración: git add .bond AGENTS.md ${generated.join(" ")}
-  3. La primera vez, cada agente pide confiar en el repo; bond no lo concede por ti:
-${sel.agents
-	.filter((a) => trust[a])
-	.map((a) => `     - ${trust[a]}`)
-	.join("\n")}
-  4. Abre el puesto de trabajo: bond`);
+	// Sin ningún agente que pregunte (p. ej. solo agy), el paso de la confianza no sale.
+	const asks = sel.agents.filter((a) => trust[a]).map((a) => `     - ${trust[a]}`);
+	const steps = [
+		"Completa AGENTS.md (instrucciones del proyecto para todos los agentes).",
+		`Commitea la configuración: git add .bond AGENTS.md ${generated.join(" ")}`,
+		...(asks.length ? [`La primera vez, cada agente pide confiar en el repo; bond no lo concede por ti:\n${asks.join("\n")}`] : []),
+		"Abre el puesto de trabajo: bond",
+	];
+	console.log(`\nSiguiente:\n${steps.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}`);
 }
 
 /** Agente por defecto del repo (default_agent de bond.toml, si es uno de sus agentes). */

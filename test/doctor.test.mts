@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { catalogCheck, updateCheck } from "../cli/doctor.mts";
+import { agyCheck, catalogCheck, updateCheck } from "../cli/doctor.mts";
 import { addDecision, decisionsDoctor } from "../cli/decisions.mts";
 import { installedRuntime } from "../cli/runtime.mts";
 
@@ -30,6 +30,26 @@ describe("runtime instalado (Bond Extensions desde el repo)", () => {
 		mkdirSync(join(dir, "1.5.0", "sub"), { recursive: true });
 		writeFileSync(join(dir, "1.5.0", "sub", ".complete"), "x\n");
 		expect(installedRuntime(join(dir, "1.5.0", "sub"), dir)).toBeUndefined(); // anidado
+	});
+});
+
+describe("fila de agy", () => {
+	test("en el PATH enseña su versión", () => {
+		expect(agyCheck({ path: "/usr/bin/agy", version: "1.4.9" })).toEqual({ level: "ok", name: "agy", detail: "1.4.9" });
+	});
+
+	test("instalado en ~/.local/bin pero fuera del PATH avisa de eso, con el arreglo", () => {
+		const r = agyCheck({ local: join("/home/u", ".local", "bin", "agy") });
+		expect(r.level).toBe("warn");
+		expect(r.detail).toContain("no en el PATH");
+		expect(r.fix).toContain(join("/home/u", ".local", "bin"));
+	});
+
+	test("sin instalar avisa con cómo instalarlo", () => {
+		const r = agyCheck({});
+		expect(r.level).toBe("warn");
+		expect(r.detail).toBe("no está instalado");
+		expect(r.fix).toContain("antigravity.google");
 	});
 });
 

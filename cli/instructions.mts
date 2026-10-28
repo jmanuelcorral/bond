@@ -64,7 +64,7 @@ export function propagate(agents: string[]): Array<{ agent: string; file: string
 	const out = [];
 	for (const id of agents) {
 		const info = agentInfo(id);
-		if (!info) continue;
+		if (!info?.instructions) continue;
 		const file = info.instructions();
 		let isLink = false;
 		try {

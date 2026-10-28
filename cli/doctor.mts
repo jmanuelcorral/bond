@@ -2,24 +2,26 @@
 // de fuera (Herdr, MCP, la pasarela de modelos) responde. Sale con 1 si algo falla.
 
 import { existsSync, readFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { readdirSync, statSync } from "node:fs";
 import type { UpdateState } from "./config.mts";
 import { enabledModelsCover } from "./suggestions.mts";
 import { assetsPath, BOND_HOME, FROM_SOURCE, installedRuntime, VERSION } from "./runtime.mts";
 import { compareVersions, installMethod } from "./update.mts";
 import { CONTEXT_TOOLS, globalSkillsDir, globalSkillTargets, herdrIntegrationStatus, PI_HERDR_SKILL, SHARED_HERDR_SKILL } from "./setup.mts";
-import { AGENT_DIR, bad, catchDie, caution, die, dim, isCopyOf, linkTarget, ok, REPO_DIR, run, samePath, which } from "./util.mts";
+import { agentInfo } from "./catalog-agents.mts";
+import { AGENT_DIR, bad, catchDie, caution, die, dim, HOME, isCopyOf, linkTarget, ok, REPO_DIR, run, samePath, which } from "./util.mts";
 
 /** Skill global en su sitio: enlazado (o, en Windows, copiado) desde bond. */
 const installedSkill = (src: string, dest: string) => (process.platform === "win32" ? isCopyOf(src, dest) : !!linkTarget(dest) && samePath(dest, src));
 
 export const DOCTOR_HELP = `Uso: bond doctor [--quick]
 
-Comprueba la instalación global: Node, Herdr, pi, enlaces de configuración, paquete de pi,
-skill de Herdr, integración, filtro de git, herramientas de contexto, servidores MCP, la
-pasarela de modelos, las sugerencias de prompt de pi, los catálogos del repo, la memoria de
-decisiones (si el repo tiene [decisions]) y el aviso de versión nueva. Sale con 1 si algo falla.
+Comprueba la instalación global: Node, Herdr, pi, Antigravity (agy, si lo usas), enlaces de
+configuración, paquete de pi, skill de Herdr, integración, filtro de git, herramientas de
+contexto, servidores MCP, la pasarela de modelos, las sugerencias de prompt de pi, los
+catálogos del repo, la memoria de decisiones (si el repo tiene [decisions]) y el aviso de
+versión nueva. Sale con 1 si algo falla.
 
   --quick      Se salta lo lento (conectar los servidores MCP, consultar las refs de los
                catálogos por git)
@@ -91,6 +93,37 @@ function checkPi(): void {
 		if (runtime) add("warn", "Bond Extensions", `~/.bond/pi apunta al runtime ${runtime}: pi usa las extensiones instaladas, no las del repo`, "bond setup");
 		else add("fail", "Bond Extensions", "~/.bond/pi apunta a otra versión de bond", "bond setup");
 	}
+}
+
+/**
+ * Fila de Antigravity: su versión si `agy` está en el PATH. Su instalador lo deja en
+ * ~/.local/bin, que no siempre está en el PATH de las shells no interactivas (Herdr, bond
+ * team): si está ahí pero no en el PATH, avisa de eso y no de que falte.
+ */
+export function agyCheck(o: { path?: string; version?: string; local?: string }): Check {
+	if (o.path) return { level: "ok", name: "agy", detail: o.version ?? "?" };
+	if (o.local) return { level: "warn", name: "agy", detail: `está en ${o.local}, pero no en el PATH (Herdr y bond team no lo encuentran)`, fix: `añade ${dirname(o.local)} al PATH también de las shells no interactivas (p. ej. en ~/.profile)` };
+	return { level: "warn", name: "agy", detail: "no está instalado", fix: agentInfo("agy")?.install };
+}
+
+async function checkAgy(): Promise<void> {
+	// Solo si es uno de tus agentes, de los del repo o, sin bond setup, si está instalado.
+	const path = which("agy");
+	const installer = join(HOME, ".local", "bin", process.platform === "win32" ? "agy.exe" : "agy");
+	const local = existsSync(installer) ? installer : undefined;
+	const mine = chosen.includes("agy") || (!chosen.length && !!(path || local));
+	if (!mine && !(await repoAgents()).includes("agy")) return;
+	const version = path ? /\d+\.\d+(?:\.\d+)?/.exec(run("agy", ["--version"], { timeout: 15_000 }).stdout)?.[0] : undefined;
+	add(agyCheck({ path, version, local }));
+}
+
+/** Agentes del bond.toml del repo actual (ninguno fuera de un repo con bond o si no se lee). */
+async function repoAgents(): Promise<string[]> {
+	const top = run("git", ["rev-parse", "--show-toplevel"]);
+	const root = top.status === 0 ? top.stdout.trim() : process.cwd();
+	if (!existsSync(join(root, ".bond", "bond.toml")) || (FROM_SOURCE && !existsSync(join(REPO_DIR, "node_modules", "smol-toml")))) return [];
+	const { loadRepoAgents } = await import("./repo.mts");
+	return catchDie(() => loadRepoAgents(root)).value?.agents ?? [];
 }
 
 function checkHerdrSkill(): void {
@@ -446,6 +479,7 @@ export async function doctor(args: string[]): Promise<void> {
 	checkConfig();
 	checkHerdr();
 	checkPi();
+	await checkAgy();
 	checkHerdrSkill();
 	checkGlobalSkills();
 	checkTools();

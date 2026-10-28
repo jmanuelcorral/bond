@@ -68,7 +68,7 @@ los repos sin bond, pi funciona sin ellas.
 
 Lo que es del proyecto (instrucciones, servidores MCP, skills, comandos) se declara en
 `.bond/bond.toml` y `bond sync` genera lo que lee cada agente: pi, Claude Code, Copilot CLI,
-Codex, opencode, Crush y Gemini CLI.
+Codex, opencode, Crush, Gemini CLI y Antigravity (`agy`).
 
 ```bash
 cd ~/gitrepos/mi-proyecto
@@ -124,7 +124,7 @@ registrar decisiones y runs. Sin la sección, nada cambia. Un `dir` que salga de
 ya tuvieras se conserva aunque desmarques la skill (se quita a mano).
 
 **Instrucciones y skills.** `AGENTS.md` (lo crea `init` si falta; es tuyo) y `.agents/skills/`
-los leen directamente pi, Copilot, Codex, opencode, Crush y Gemini. Las excepciones:
+los leen directamente pi, Copilot, Codex, opencode, Crush, Gemini y Antigravity. Las excepciones:
 
 - Claude Code: `CLAUDE.md` con un bloque `@AGENTS.md` y un symlink por skill en
   `.claude/skills/`.
@@ -141,6 +141,7 @@ los leen directamente pi, Copilot, Codex, opencode, Crush y Gemini. Las excepcio
 | Crush | `.crush.json` → `mcp` | no se generan (ver abajo) | sí (MCP) |
 | Codex | bloque en `.codex/config.toml` (`[mcp_servers.x]`) | no tiene comandos de proyecto | no instalado |
 | Gemini CLI | `.gemini/settings.json` → `mcpServers` (`httpUrl` para HTTP) | `.gemini/commands/*.toml` (`{{args}}`) | no instalado |
+| Antigravity (`agy`) | plugin de bond: `.agents/plugins/bond/mcp_config.json` | skills del plugin: `.agents/plugins/bond/skills/<comando>/SKILL.md` | sí (`agy` 1.4.9) |
 
 Comprobado con los agentes instalados: pi carga el skill y el comando propio y conecta los
 MCP; Claude Code lee `AGENTS.md` a través de `CLAUDE.md`, ve los skills enlazados y ejecuta
@@ -161,6 +162,12 @@ Detalles por agente:
   comandos.
 - **Codex** solo carga `.codex/config.toml` en proyectos de confianza, y no tiene comandos de
   proyecto (solo de usuario y obsoletos en favor de skills).
+- **Antigravity** (`agy`) no lee servidores MCP ni comandos del repo, pero sí plugins: bond
+  genera uno en `.agents/plugins/bond/` (`plugin.json`, `mcp_config.json` y una skill por
+  comando, que se invoca como `/commit`, `/review`...). En las skills, `$ARGUMENTS` y `$1`…
+  pasan a ser una indicación de usar el texto que sigue al comando. `agy` antepone el nombre
+  del plugin a los servidores (`bond_context7`). Quitar `agy` de `agents` borra el plugin; los
+  demás plugins de `.agents/plugins/` no se tocan.
 
 ### Qué toca y qué no
 
@@ -603,7 +610,7 @@ lo limita la pasarela; con proveedores en la nube, la cuota.
    si la pasarela los publica), deja elegir cuáles registrar y prueba qué APIs sirve (chat,
    responses) y si el modelo razona.
 3. **Agentes.** Detecta los instalados (pi, Claude Code, Codex, Copilot CLI, opencode, Crush,
-   Gemini CLI). Ninguno es obligatorio, pero hace falta al menos uno: si no hay ninguno, enseña
+   Gemini CLI, Antigravity). Ninguno es obligatorio, pero hace falta al menos uno: si no hay ninguno, enseña
    cómo instalar cada uno y para. Eliges con cuáles trabajar y cuál es el de por defecto.
 4. **Sugerencias de prompt (pi).** Se proponen activas si el registro de bond tiene un modelo
    barato para pi; si no hay ninguno, salen apagadas con un aviso. El modelo propuesto se ve en
@@ -705,6 +712,7 @@ fuera, y sale con 1 si algo falla:
 | Node ≥ 22.18 | actualizar Node |
 | Herdr: binario, servidor, integración de pi | `herdr`; `bond setup` |
 | pi: binario, enlaces de `~/.pi/agent`, paquete `./bond` en `pi list` | `bond setup` |
+| Antigravity (si es uno de tus agentes o de los del repo): versión de `agy`; aviso si no está instalado o si está en `~/.local/bin` pero fuera del PATH (Herdr y `bond team` no lo verían) | instalarlo; añadir `~/.local/bin` al PATH |
 | Restos de bond 0.7: config de pi enlazada al repo (aviso) | `bond migrate` |
 | Skill de Herdr: uno solo y al día con `herdr --skill` | `bond setup`; `npx skills update herdr` |
 | Filtro de git `pi-settings` | `bond setup` |

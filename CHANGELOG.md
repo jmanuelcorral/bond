@@ -11,6 +11,13 @@
 - Sin cuadro de permiso para aceptar: `bond sync` ya no deja reglas `ask` para `bond decisions
   accept`, `reject` y `supersede` en `.claude/settings.json`, y quita las que dejó la 1.8.0
   conservando las tuyas. Si lo has pedido por chat, no hay que validar el comando otra vez.
+- Antigravity (`agy`) como agente del repo: `bond init --agents agy` y `bond sync` generan un
+  plugin de bond en `.agents/plugins/bond/` con los servidores MCP (del catálogo y los de
+  `[mcp_servers]`) y los comandos del catálogo y propios, cada uno como skill (`/commit`,
+  `/review`...). `agy` ya leía `AGENTS.md` y `.agents/skills/` por su cuenta. Quitar `agy` de
+  `agents` borra el plugin. `bond doctor` enseña la versión de `agy` y avisa si no está
+  instalado o si está en `~/.local/bin` pero fuera del PATH. Las reglas y skills globales para
+  `agy` (`bond setup`) y su uso en `bond team` llegarán aparte.
 
 ## 1.8.0
 
