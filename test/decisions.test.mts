@@ -69,6 +69,14 @@ describe("add", () => {
 		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
 	});
 
+	test("lee decisiones con finales CRLF (checkout en Windows con core.autocrlf)", () => {
+		enableMemory();
+		const { rel } = add();
+		writeFileSync(at(rel), read(rel).replace(/\n/g, "\r\n"));
+		expect(parseFm(read(rel))?.scalars.status).toBe("proposed");
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+	});
+
 	test("no repite un enlace que ya daba el agente", () => {
 		enableMemory();
 		const { rel } = add({ links: ["plan: docs/plans/x.md", "plan: docs/plans/x.md "] });
@@ -223,8 +231,10 @@ describe("accept sin TTY (D13)", () => {
 });
 
 // Con terminal (pseudo-tty de `script`) se comprueba la confirmación: solo con "y" cambia.
-// POSIX: `script -qec` no existe en Windows, donde ya cubre el caso de arriba (sin TTY).
-(process.platform === "win32" ? describe.skip : describe)("accept con TTY (D13)", () => {
+// Solo Linux: `script -qec` es de util-linux; el `script` de macOS (BSD) tiene otra sintaxis y
+// no da terminal con la entrada por tubería, y en Windows no hay. El caso sin TTY, de arriba,
+// se prueba en todos.
+(process.platform === "linux" ? describe : describe.skip)("accept con TTY (D13)", () => {
 	const withTty = (args: string[], answer: string) => {
 		const cmd = [process.execPath, MAIN, "decisions", ...args].map((s) => (/[ \t]/.test(s) ? `'${s}'` : s)).join(" ");
 		return spawnSync("script", ["-qec", cmd, "/dev/null"], {

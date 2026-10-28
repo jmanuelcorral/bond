@@ -217,6 +217,18 @@ describe("fila de decisiones en doctor", () => {
 		expect(r?.fix).toBe("bond sync");
 	});
 
+	// Como en macOS (/var -> /private/var): la raíz llega por un symlink y la carpeta aún no existe.
+	(process.platform === "win32" ? test.skip : test)("con la raíz detrás de un symlink, también avisa de que falta", () => {
+		toml('agents = ["pi"]\nmcp = []\nskills = []\ncommands = []\n\n[decisions]\ndir = "docs/decisions"\n');
+		const link = `${dir}-link`;
+		symlinkSync(dir, link);
+		try {
+			expect(decisionsDoctor(link)?.fix).toBe("bond sync");
+		} finally {
+			rmSync(link, { force: true });
+		}
+	});
+
 	test("con el directorio creado y sin decisiones, ok con cero", () => {
 		toml('agents = ["pi"]\nmcp = []\nskills = []\ncommands = []\n\n[decisions]\ndir = "docs/decisions"\n');
 		mkdirSync(join(dir, "docs/decisions"), { recursive: true });

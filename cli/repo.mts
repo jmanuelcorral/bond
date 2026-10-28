@@ -392,8 +392,10 @@ function parseDecisions(root: string, v: unknown): { dir: string } | undefined {
 	if (typeof v !== "object" || v === null || Array.isArray(v)) die('bond.toml: decisions tiene que ser una tabla: [decisions] con dir = "docs/decisions"');
 	const d = v as Record<string, unknown>;
 	const dir = typeof d.dir === "string" && d.dir.trim() ? d.dir.trim() : "docs/decisions";
-	const rel = repoRelative(root, resolve(root, dir));
-	if (isAbsolute(dir) || isAbsolute(rel) || rel === "." || rel.startsWith("..")) {
+	// Sin realpath: la carpeta puede no existir aún, y resolver solo la raíz (en macOS /var ->
+	// /private/var; en Windows, rutas cortas) daría una ruta relativa con .. falsa.
+	const rel = relative(resolve(root), resolve(root, dir)).split(sep).join("/") || ".";
+	if (isAbsolute(dir) || isAbsolute(rel) || rel === "." || rel === ".." || rel.startsWith("../")) {
 		die(`bond.toml: decisions.dir ${JSON.stringify(dir)} tiene que ser una carpeta dentro del repo: relativa, sin .. y sin ruta absoluta`);
 	}
 	return { dir: dir.split(sep).join("/") };

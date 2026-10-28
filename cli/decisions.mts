@@ -72,7 +72,8 @@ const q = (s: string) => JSON.stringify(s);
  * arranca con `---` o no cierra.
  */
 export function parseFm(text: string): Parsed | undefined {
-	const lines = text.split("\n");
+	// CRLF: en Windows, git con core.autocrlf deja así los ficheros al hacer checkout.
+	const lines = text.replace(/\r\n?/g, "\n").split("\n");
 	if (lines[0]?.trim() !== "---") return undefined;
 	const end = lines.findIndex((l, i) => i > 0 && l.trim() === "---");
 	if (end < 0) return undefined;
