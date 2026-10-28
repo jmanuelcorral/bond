@@ -50,6 +50,7 @@ you see? Open an [issue on GitHub](https://github.com/jmanuelcorral/bond/issues)
 | Models from your endpoints | `~/.pi/agent/models.json`, `~/.config/opencode/opencode.jsonc`, `~/.config/crush/crushrc` (block), `~/.codex/config.toml` (block) |
 | Your instructions + bond's rules | A block in each agent's global instructions file |
 | Skills `bond-delegate`, `bond-team` | `~/.agents/skills/` and `~/.claude/skills/` |
+| Rules and skills for Antigravity (`agy`) | Global plugin `~/.gemini/config/plugins/bond/` (only if `agy` is one of your agents) |
 | Herdr integration | Installed by `herdr integration install <agente>` |
 
 **In each repo**: `.bond/bond.toml` (what you ask for), `.bond/lock.json` (the commit of each git catalog), `.bond/manifest.json` (what bond generated),
@@ -533,7 +534,8 @@ what makes `/delegate` possible.
 Delegation and teams are **global skills** (`global/skills/`), because they depend on
 Herdr, a machine-level tool, just like the `herdr` skill. `bond setup` links them in
 `~/.agents/skills/` (read by pi, Codex, Copilot, opencode, Crush and Gemini) and in
-`~/.claude/skills/` (Claude Code), so any agent can orchestrate any other:
+`~/.claude/skills/` (Claude Code), and for Antigravity in its global bond plugin
+(`~/.gemini/config/plugins/bond/skills/`), so any agent can orchestrate any other:
 
 | Skill | What it does | How to ask for it |
 |---|---|---|
@@ -629,7 +631,12 @@ is limited by the gateway; with cloud providers, by the quota.
   instructions file (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
   `~/.copilot/copilot-instructions.md`, `~/.config/opencode/AGENTS.md`, `~/.config/crush/CRUSH.md`,
   `~/.gemini/GEMINI.md`, `~/.pi/agent/AGENTS.md`). Anything outside the block is left untouched. To
-  change them: edit `~/.bond/AGENTS.md` and run `bond setup` again.
+  change them: edit `~/.bond/AGENTS.md` and run `bond setup` again;
+- for Antigravity (`agy`), which doesn't see `~/.agents/skills` and has no global instructions
+  file of its own, a global bond plugin in `~/.gemini/config/plugins/bond/`: `plugin.json` (named
+  `bond-global`, so it doesn't clash with the repo's `bond` plugin), the rules in
+  `rules/AGENTS.md` and the skills `bond-delegate`, `bond-team` and `herdr` in `skills/` (linked;
+  copied on Windows). Nothing else in `~/.gemini/config/` is touched.
 
 **Where it stores everything: `~/.bond/`** (never in a project):
 
@@ -716,6 +723,7 @@ external things, and exits with 1 if something fails:
 | Antigravity (if it is one of your agents or the repo's): `agy` version; warning if it is not installed, or if it is in `~/.local/bin` but not on the PATH (Herdr and `bond team` would not find it) | install it; add `~/.local/bin` to the PATH |
 | Leftovers from bond 0.7: pi config linked to the repo (warning) | `bond migrate` |
 | Herdr skill: only one and up to date with `herdr --skill` | `bond setup`; `npx skills update herdr` |
+| Antigravity's global plugin (if `agy` is one of your agents): `plugin.json`, rules up to date with `~/.bond/AGENTS.md` and linked skills | `bond setup` |
 | `pi-settings` git filter | `bond setup` |
 | `rg`, `fd`, `ast-grep`, `uvx`, `jq` (warning) | install the missing one |
 | Connected MCP servers (`pi mcp list`) | see troubleshooting; `--quick` skips it |
@@ -1030,6 +1038,7 @@ package manager.
 ```bash
 rm -r ~/.bond                     # global config, keys, instructions and runtime
 rm -r ~/.agents/skills/bond-delegate ~/.agents/skills/bond-team ~/.claude/skills/bond-*
+rm -r ~/.gemini/config/plugins/bond  # Antigravity's (agy) global plugin, if you use it
 ```
 
 What bond wrote in each agent (models, instructions block) stays: it is yours. In

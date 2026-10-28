@@ -16,8 +16,14 @@
   `[mcp_servers]`) y los comandos del catálogo y propios, cada uno como skill (`/commit`,
   `/review`...). `agy` ya leía `AGENTS.md` y `.agents/skills/` por su cuenta. Quitar `agy` de
   `agents` borra el plugin. `bond doctor` enseña la versión de `agy` y avisa si no está
-  instalado o si está en `~/.local/bin` pero fuera del PATH. Las reglas y skills globales para
-  `agy` (`bond setup`) y su uso en `bond team` llegarán aparte.
+  instalado o si está en `~/.local/bin` pero fuera del PATH. Su uso en `bond team` llegará
+  aparte.
+- `bond setup` con Antigravity (`agy`): deja un plugin global de bond en
+  `~/.gemini/config/plugins/bond/` con tus instrucciones y las reglas de bond
+  (`rules/AGENTS.md`) y las skills `bond-delegate`, `bond-team` y `herdr`, así que `agy` las
+  carga en cualquier repo. No toca nada más de `~/.gemini/config/`; sin `agy` entre tus agentes,
+  no crea nada. El plugin se llama `bond-global` para que conviva con el plugin `bond` del repo
+  (con el mismo nombre, `agy` solo cargaba el del repo). `bond doctor` dice si está al día.
 - `bond team collect` con agentes Claude Code: toma el informe de su transcript
   (`~/.claude/projects/*/<sesión>.jsonl`, por el id que da Herdr) en vez del panel; cuenta como
   decisiones del agente solo las firmadas `agent:<kind>/<nombre>` que no estaban en la base

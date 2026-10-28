@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agyCheck, catalogCheck, updateCheck } from "../cli/doctor.mts";
+import { agyCheck, agyPluginCheck, catalogCheck, updateCheck } from "../cli/doctor.mts";
 import { addDecision, decisionsDoctor } from "../cli/decisions.mts";
 import { installedRuntime } from "../cli/runtime.mts";
 
@@ -50,6 +50,21 @@ describe("fila de agy", () => {
 		expect(r.level).toBe("warn");
 		expect(r.detail).toBe("no está instalado");
 		expect(r.fix).toContain("antigravity.google");
+	});
+});
+
+describe("fila del plugin global de agy", () => {
+	const skills = ["bond-delegate", "bond-team", "herdr"];
+
+	test("al día enseña sus skills", () => {
+		expect(agyPluginCheck({ manifest: true, rules: true, skills, missing: [] })).toEqual({ level: "ok", name: "plugin agy", detail: "reglas y skills al día (bond-delegate, bond-team, herdr)" });
+	});
+
+	test("sin manifiesto, con reglas desfasadas o skills sin enlazar falla con bond setup", () => {
+		const r = agyPluginCheck({ manifest: false, rules: false, skills, missing: ["herdr"] });
+		expect(r.level).toBe("fail");
+		expect(r.detail).toBe("falta plugin.json; reglas desfasadas o sin escribir; faltan skills: herdr");
+		expect(r.fix).toBe("bond setup");
 	});
 });
 

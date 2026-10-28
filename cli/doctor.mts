@@ -8,8 +8,8 @@ import type { UpdateState } from "./config.mts";
 import { enabledModelsCover } from "./suggestions.mts";
 import { assetsPath, BOND_HOME, FROM_SOURCE, installedRuntime, VERSION } from "./runtime.mts";
 import { compareVersions, installMethod } from "./update.mts";
-import { CONTEXT_TOOLS, globalSkillsDir, globalSkillTargets, herdrIntegrationStatus, PI_HERDR_SKILL, SHARED_HERDR_SKILL } from "./setup.mts";
-import { agentInfo } from "./catalog-agents.mts";
+import { AGY_PLUGIN_JSON, CONTEXT_TOOLS, globalSkillsDir, globalSkillTargets, herdrIntegrationStatus, herdrSkillDir, PI_HERDR_SKILL, SHARED_HERDR_SKILL } from "./setup.mts";
+import { agentInfo, agyPluginDir } from "./catalog-agents.mts";
 import { AGENT_DIR, bad, catchDie, caution, die, dim, HOME, isCopyOf, linkTarget, ok, REPO_DIR, run, samePath, which } from "./util.mts";
 
 /** Skill global en su sitio: enlazado (o, en Windows, copiado) desde bond. */
@@ -141,12 +141,38 @@ function checkHerdrSkill(): void {
 function checkGlobalSkills(): void {
 	const missing: string[] = [];
 	for (const name of readdirSync(globalSkillsDir())) {
-		for (const dest of globalSkillTargets(name)) if (!installedSkill(join(globalSkillsDir(), name), dest)) missing.push(dest.replace(process.env.HOME ?? "", "~"));
+		for (const dest of globalSkillTargets(name, false)) if (!installedSkill(join(globalSkillsDir(), name), dest)) missing.push(dest.replace(process.env.HOME ?? "", "~"));
 	}
 	if (missing.length) add("fail", "skills globales", `faltan: ${missing.join(", ")}`, "bond setup");
 	else add("ok", "skills globales", `${readdirSync(globalSkillsDir()).join(", ")} (~/.agents/skills, ~/.claude/skills)`);
 }
 
+/** Fila del plugin global de bond para agy: manifiesto, reglas al día y skills enlazadas. */
+export function agyPluginCheck(o: { manifest: boolean; rules: boolean; skills: string[]; missing: string[] }): Check {
+	const problems = [...(o.manifest ? [] : ["falta plugin.json"]), ...(o.rules ? [] : ["reglas desfasadas o sin escribir"]), ...(o.missing.length ? [`faltan skills: ${o.missing.join(", ")}`] : [])];
+	if (problems.length) return { level: "fail", name: "plugin agy", detail: problems.join("; "), fix: "bond setup" };
+	return { level: "ok", name: "plugin agy", detail: `reglas y skills al día (${o.skills.join(", ")})` };
+}
+
+async function checkAgyPlugin(): Promise<void> {
+	// Solo si agy es uno de tus agentes: bond setup crea el plugin en ~/.gemini/config/plugins/bond.
+	// Sin dependencias no se puede leer el bloque (lo dice la fila de dependencias).
+	if (!chosen.includes("agy") || (FROM_SOURCE && !existsSync(join(REPO_DIR, "node_modules", "smol-toml")))) return;
+	const { blockCurrent } = await import("./instructions.mts");
+	const dir = agyPluginDir();
+	const manifest = join(dir, "plugin.json");
+	const skills: Array<[string, string]> = readdirSync(globalSkillsDir()).map((n) => [n, join(globalSkillsDir(), n)]);
+	const herdr = herdrSkillDir();
+	if (herdr) skills.push(["herdr", herdr]);
+	add(
+		agyPluginCheck({
+			manifest: existsSync(manifest) && readFileSync(manifest, "utf8") === AGY_PLUGIN_JSON,
+			rules: blockCurrent(join(dir, "rules", "AGENTS.md")),
+			skills: skills.map(([n]) => n),
+			missing: skills.filter(([n, src]) => !installedSkill(src, join(dir, "skills", n))).map(([n]) => n),
+		}),
+	);
+}
 
 function checkTools(): void {
 	const missing = CONTEXT_TOOLS.filter(([c]) => !which(c));
@@ -482,6 +508,7 @@ export async function doctor(args: string[]): Promise<void> {
 	await checkAgy();
 	checkHerdrSkill();
 	checkGlobalSkills();
+	await checkAgyPlugin();
 	checkTools();
 	if (!quick) checkMcp();
 	await checkModels();

@@ -4,6 +4,7 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { renderSmall } from "../lib/bond-logo.mts";
+import { agyPluginDir } from "./catalog-agents.mts";
 import { assetsPath, ensureBondLink, FROM_SOURCE } from "./runtime.mts";
 import {
 	act,
@@ -35,7 +36,8 @@ Configura bond en esta máquina (una vez; se puede repetir para cambiar algo):
   3. Agentes: con cuáles trabajar (de los instalados; hace falta al menos uno) y cuál por
      defecto.
   4. Aplica: modelos en cada agente, sugerencias de prompt en pi, integraciones de Herdr,
-     skills globales y tus instrucciones (~/.bond/AGENTS.md) en cada agente.
+     skills globales y tus instrucciones (~/.bond/AGENTS.md) en cada agente (en
+     Antigravity, en un plugin global: ~/.gemini/config/plugins/bond).
 
   --yes            Sin preguntas: usa lo detectado y lo ya configurado
   --no-suggestions No activar las sugerencias de prompt de pi
@@ -96,7 +98,9 @@ export async function setup(args: string[]): Promise<void> {
 		if (s.enabled) log(`pi: sugerencias de prompt con ${s.model}`);
 	}
 	if (herdr) herdrSkill();
-	globalSkills();
+	const agy = agents.includes("agy");
+	if (agy) agyPlugin();
+	globalSkills(agy);
 	contextTools();
 	if (herdr) herdrIntegrations(agents);
 	if (withHerdrConfig && herdr) herdrConfig();
@@ -178,17 +182,55 @@ function contextTools(): void {
 /** Skills globales (bond-delegate, bond-team): del repo o extraídos del binario. */
 export const globalSkillsDir = () => assetsPath("global", "skills");
 
-/** Destinos de los skills globales: ~/.agents/skills (pi, Codex, Copilot, opencode, Crush, Gemini) y ~/.claude/skills (Claude Code). */
-export function globalSkillTargets(name: string): string[] {
-	return [join(HOME, ".agents", "skills", name), join(HOME, ".claude", "skills", name)];
+/**
+ * Destinos de los skills globales: ~/.agents/skills (pi, Codex, Copilot, opencode, Crush, Gemini),
+ * ~/.claude/skills (Claude Code) y, si agy es uno de tus agentes (su plugin global existe), las
+ * skills del plugin.
+ */
+export function globalSkillTargets(name: string, agy = existsSync(join(agyPluginDir(), "plugin.json"))): string[] {
+	return [join(HOME, ".agents", "skills", name), join(HOME, ".claude", "skills", name), ...(agy ? [join(agyPluginDir(), "skills", name)] : [])];
 }
 
-function globalSkills(): void {
+/**
+ * Manifiesto del plugin global de agy: sin él, agy no carga la carpeta. Su nombre no puede ser
+ * «bond», el del plugin del repo: con dos plugins del mismo nombre, agy solo carga el del repo.
+ */
+export const AGY_PLUGIN_JSON = `${JSON.stringify({ name: "bond-global" }, null, 2)}\n`;
+
+/** Carpeta del skill de Herdr instalado (el compartido o el de pi). */
+export function herdrSkillDir(): string | undefined {
+	return [SHARED_HERDR_SKILL, PI_HERDR_SKILL].filter((f) => existsSync(f)).map((f) => dirname(f))[0];
+}
+
+/**
+ * Plugin global de bond para agy: el manifiesto y el skill de Herdr. agy no ve ~/.agents/skills
+ * ni tiene un fichero de instrucciones global propio, así que lo de bond va en esta carpeta (las
+ * skills de bond las enlaza globalSkills y las reglas, propagate) y nada más de ~/.gemini/config
+ * se toca.
+ */
+export function agyPlugin(): void {
+	const manifest = join(agyPluginDir(), "plugin.json");
+	if (!existsSync(manifest) || readFileSync(manifest, "utf8") !== AGY_PLUGIN_JSON) {
+		act(`escribir ${manifest}`, () => {
+			mkdirSync(dirname(manifest), { recursive: true });
+			writeFileSync(manifest, AGY_PLUGIN_JSON);
+		});
+	}
+	log(`plugin global de agy: ${agyPluginDir()}`);
+	// Enlaza al skill de Herdr que ya hay en la máquina: uno solo que actualizar.
+	const herdr = herdrSkillDir();
+	if (!herdr) return;
+	const dest = join(agyPluginDir(), "skills", "herdr");
+	act(`mkdir -p ${dirname(dest)}`, () => mkdirSync(dirname(dest), { recursive: true }));
+	(process.platform === "win32" ? copyPath : linkPath)(herdr, dest);
+}
+
+export function globalSkills(agy: boolean): void {
 	// bond-delegate y bond-team son de Herdr, una herramienta de la máquina: van a nivel de
 	// usuario, como el skill herdr, para cualquier agente y en cualquier repo.
 	log("Skills globales de bond (multiagente con Herdr)");
 	for (const name of readdirSync(globalSkillsDir())) {
-		for (const dest of globalSkillTargets(name)) {
+		for (const dest of globalSkillTargets(name, agy)) {
 			act(`mkdir -p ${dirname(dest)}`, () => mkdirSync(dirname(dest), { recursive: true }));
 			// En Windows, copia: los symlinks necesitan permisos especiales.
 			(process.platform === "win32" ? copyPath : linkPath)(join(globalSkillsDir(), name), dest);

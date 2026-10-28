@@ -16,6 +16,9 @@ export interface AgentInfo {
 
 const xdg = () => process.env.XDG_CONFIG_HOME || join(HOME, ".config");
 
+/** Plugin global de bond para agy: sus reglas (rules/AGENTS.md) y las skills globales. */
+export const agyPluginDir = () => join(HOME, ".gemini", "config", "plugins", "bond");
+
 export const AGENTS: AgentInfo[] = [
 	{ id: "pi", name: "pi", bin: "pi", install: "npm i -g @earendil-works/pi-coding-agent", url: "https://pi.dev", instructions: () => join(process.env.PI_CODING_AGENT_DIR || join(HOME, ".pi", "agent"), "AGENTS.md") },
 	{ id: "claude", name: "Claude Code", bin: "claude", install: "curl -fsSL https://claude.ai/install.sh | bash", url: "https://code.claude.com/docs", instructions: () => join(HOME, ".claude", "CLAUDE.md") },
@@ -24,8 +27,7 @@ export const AGENTS: AgentInfo[] = [
 	{ id: "opencode", name: "opencode", bin: "opencode", install: "curl -fsSL https://opencode.ai/install | bash", url: "https://opencode.ai", instructions: () => join(xdg(), "opencode", "AGENTS.md") },
 	{ id: "crush", name: "Crush", bin: "crush", install: "brew install charmbracelet/tap/crush", url: "https://github.com/charmbracelet/crush", instructions: () => join(xdg(), "crush", "CRUSH.md") },
 	{ id: "gemini", name: "Gemini CLI", bin: "gemini", install: "npm i -g @google/gemini-cli", url: "https://github.com/google-gemini/gemini-cli", instructions: () => join(HOME, ".gemini", "GEMINI.md") },
-	// Las instrucciones globales de agy irán en un plugin global de bond (pendiente).
-	{ id: "agy", name: "Antigravity", bin: "agy", install: "curl -fsSL https://antigravity.google/cli/install.sh | bash", url: "https://antigravity.google" },
+	{ id: "agy", name: "Antigravity", bin: "agy", install: "curl -fsSL https://antigravity.google/cli/install.sh | bash", url: "https://antigravity.google", instructions: () => join(agyPluginDir(), "rules", "AGENTS.md") },
 ];
 
 export const agentInfo = (id: string) => AGENTS.find((a) => a.id === id);

@@ -58,6 +58,15 @@ function blockBody(): string {
 	return `${personal ? `${personal}\n\n` : ""}${BOND_RULES}`;
 }
 
+const BLOCK_NOTE = "generado por bond setup; no editar: cambia ~/.bond/AGENTS.md";
+
+/** El fichero tiene el bloque de bond y está al día con ~/.bond/AGENTS.md y las reglas. */
+export function blockCurrent(file: string): boolean {
+	if (!existsSync(file)) return false;
+	const current = readFileSync(file, "utf8");
+	return withBlock(current, blockBody(), "md", BLOCK_NOTE) === current;
+}
+
 /** Escribe el bloque de bond en el fichero de instrucciones global de cada agente. */
 export function propagate(agents: string[]): Array<{ agent: string; file: string; result: "actualizado" | "al día" | "omitido"; why?: string }> {
 	const body = blockBody();
@@ -77,7 +86,7 @@ export function propagate(agents: string[]): Array<{ agent: string; file: string
 			continue;
 		}
 		const current = existsSync(file) ? readFileSync(file, "utf8") : "";
-		const next = withBlock(current, body, "md", "generado por bond setup; no editar: cambia ~/.bond/AGENTS.md");
+		const next = withBlock(current, body, "md", BLOCK_NOTE);
 		if (next === current) {
 			out.push({ agent: id, file, result: "al día" as const });
 			continue;
