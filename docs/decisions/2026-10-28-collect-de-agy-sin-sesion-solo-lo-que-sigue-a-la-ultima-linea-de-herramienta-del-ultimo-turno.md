@@ -1,11 +1,11 @@
 ---
 id: "2026-10-28-collect-de-agy-sin-sesion-solo-lo-que-sigue-a-la-ultima-linea-de-herramienta-del-ultimo-turno"
 title: "collect de agy sin sesión: solo lo que sigue a la última línea de herramienta del último turno"
-status: "proposed"
+status: "accepted"
 date: "2026-10-28"
 decided_by: "agent:claude/kevin"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "usuario en sesión el 2026-10-28: «integra P4, acepto, acepta las dos»"
+accepted_via: "agent:claude"
 supersedes: ""
 superseded_by: ""
 links:

@@ -1,11 +1,11 @@
 ---
 id: "2026-10-28-agy-fuera-del-path-bond-anade-local-bin-al-path-de-la-shell-del-panel"
 title: "agy fuera del PATH: bond añade ~/.local/bin al PATH de la shell del panel"
-status: "proposed"
+status: "accepted"
 date: "2026-10-28"
 decided_by: "agent:claude/kevin"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "usuario en sesión el 2026-10-28: «integra P4, acepto, acepta las dos»"
+accepted_via: "agent:claude"
 supersedes: ""
 superseded_by: ""
 links:

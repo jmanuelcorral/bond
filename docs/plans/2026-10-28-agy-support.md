@@ -229,14 +229,14 @@ Dependencias y riesgos:
   - Con la integración, `collect` toma el informe de la sesión de `agy`; sin ella, el panel sin
     el banner ni el encargo repetido (prueba con un volcado real en `test/fixtures/`).
 - Actions:
-  - [ ] Binario de `agy` en `~/.local/bin` para `bond team`, con prueba.
-  - [ ] Aviso de arranque fuera de la detección de preguntas, con prueba.
-  - [ ] `--dangerously-skip-permissions` por defecto para `agy` en `bond team` y `bond-delegate`.
-  - [ ] Integración `antigravity-cli` en `bond setup` y `bond doctor`, con prueba.
-  - [ ] Recorte del panel de `agy` en `collect`, con prueba.
-  - [ ] `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
-  - [ ] Run applicable checks and record actual results.
-  - [ ] Present evidence and stop for review before another phase.
+  - [x] Binario de `agy` en `~/.local/bin` para `bond team`, con prueba.
+  - [x] Aviso de arranque fuera de la detección de preguntas, con prueba.
+  - [x] `--dangerously-skip-permissions` por defecto para `agy` en `bond team` y `bond-delegate`.
+  - [x] Integración `antigravity-cli` en `bond setup` y `bond doctor`, con prueba.
+  - [x] Recorte del panel de `agy` en `collect`, con prueba.
+  - [x] `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
+  - [x] Run applicable checks and record actual results.
+  - [x] Present evidence and stop for review before another phase.
 - Verification: `npm run typecheck && bun test`, `bin/bond sync --check`; tras integrar, el
   orquestador repite la prueba real en Herdr (repo temporal con `[decisions]`, `bond team
   <rama>:agy` sin tocar el PATH, `prompt`, `collect`, `bond decisions runs`).
@@ -250,7 +250,7 @@ Dependencias y riesgos:
 | P1 | implemented | passed | accepted | rama `plan/agy-support-p1` (kevin, Claude Code), commit `be7395d`, integrada en `main` por fast-forward; en `main`: typecheck limpio, `bun test` 314/314, `bond sync --check` al día; prueba real: en un repo temporal con `bond init --agents agy`, `agy -p` ve `bond_context7`, `bond_duckduckgo` y `/accept`, `/commit`, `/handoff`, `/review`; decisión del agente `2026-10-28-agy-sin-instrucciones-globales-hasta-el-plugin-global` aceptada; aceptada por el usuario en sesión el 2026-10-28 |
 | P2 | implemented | passed | accepted | rama `plan/agy-support-p2` (kevin, Claude Code), commit `f1b6c01`, integrada en `main` por fast-forward; prueba real con HOME temporal (reglas y skills globales en `agy`); decisión del agente `2026-10-28-plugin-global-de-agy-con-el-nombre-bond-global` aceptada; aceptada por el usuario en sesión el 2026-10-28 |
 | P3 | implemented | passed | accepted | rama `plan/agy-support-p3` (stuart, Claude Code), commit `ce80ecb` rebasado como `8dd58c9`, integrada en `main`; en `main` con P2: `bun test` 331/331; prueba real en Herdr: `agy` registra su decisión como `agent:agy/kevin`, la commitea en su rama con trailers y `collect` la atribuye; hallazgos en P4; aceptada por el usuario en sesión el 2026-10-28 |
-| P4 | pending | not_run | pending | none yet |
+| P4 | implemented | passed | accepted | rama `plan/agy-support-p4` (kevin, Claude Code), commit `cd5746a`, integrada en `main` por fast-forward; en `main`: typecheck limpio, `bun test` 344/344, `bond sync --check` al día; decisiones del agente `2026-10-28-agy-fuera-del-path-bond-anade-local-bin-al-path-de-la-shell-del-panel` y `2026-10-28-collect-de-agy-sin-sesion-solo-lo-que-sigue-a-la-ultima-linea-de-herramienta-del-ultimo-turno` aceptadas; aceptada por el usuario en sesión el 2026-10-28; prueba real del orquestador: pendiente |
 
 ## Next step
 
