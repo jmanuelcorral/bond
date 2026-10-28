@@ -6,6 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { catalogCheck, updateCheck } from "../cli/doctor.mts";
+import { addDecision, decisionsDoctor } from "../cli/decisions.mts";
 import { installedRuntime } from "../cli/runtime.mts";
 
 describe("runtime instalado (Bond Extensions desde el repo)", () => {
@@ -186,4 +187,60 @@ describe("bond doctor", () => {
 		expect(row).toContain("runtime 9.9.0");
 		expect(row).not.toContain("✗");
 	}, 30_000);
+});
+
+// La fila de la memoria de decisiones en bond doctor (cli/decisions.mts: decisionsDoctor).
+describe("fila de decisiones en doctor", () => {
+	let dir: string;
+	beforeEach(() => {
+		dir = mkdtempSync(join(tmpdir(), "bond-doc-dec-"));
+		delete process.env.HERDR_ENV;
+		delete process.env.HERDR_PANE_ID;
+	});
+	afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+	const toml = (s: string) => {
+		mkdirSync(join(dir, ".bond"), { recursive: true });
+		writeFileSync(join(dir, ".bond", "bond.toml"), s);
+	};
+
+	test("sin [decisions] no muestra fila", () => {
+		toml('agents = ["pi"]\nmcp = []\nskills = []\ncommands = []\n');
+		expect(decisionsDoctor(dir)).toBeUndefined();
+	});
+
+	test("con [decisions] pero sin el directorio, avisa de que falta (bond sync)", () => {
+		toml('agents = ["pi"]\nmcp = []\nskills = []\ncommands = []\n\n[decisions]\ndir = "docs/decisions"\n');
+		const r = decisionsDoctor(dir);
+		expect(r?.level).toBe("warn");
+		expect(r?.detail).toContain("no existe");
+		expect(r?.fix).toBe("bond sync");
+	});
+
+	test("con el directorio creado y sin decisiones, ok con cero", () => {
+		toml('agents = ["pi"]\nmcp = []\nskills = []\ncommands = []\n\n[decisions]\ndir = "docs/decisions"\n');
+		mkdirSync(join(dir, "docs/decisions"), { recursive: true });
+		writeFileSync(join(dir, "docs/decisions/README.md"), "# Decisiones\n\n## Índice\n\n| ID | Estado | Quién | Fecha | Título |\n|---|---|---|---|---|\n");
+		const r = decisionsDoctor(dir);
+		expect(r?.level).toBe("ok");
+		expect(r?.detail).toContain("0 decisiones");
+	});
+
+	test("propuestas pendientes avisan", () => {
+		toml('agents = ["pi"]\nmcp = []\nskills = []\ncommands = []\n\n[decisions]\ndir = "docs/decisions"\n');
+		addDecision(dir, "docs/decisions", { title: "Algo", decision: "Se propone algo" });
+		const r = decisionsDoctor(dir);
+		expect(r?.level).toBe("warn");
+		expect(r?.detail).toContain("1 propuesta(s)");
+		expect(r?.fix).toContain("bond decisions accept");
+	});
+
+	test("errores de la memoria hacen la fila fail", () => {
+		toml('agents = ["pi"]\nmcp = []\nskills = []\ncommands = []\n\n[decisions]\ndir = "docs/decisions"\n');
+		mkdirSync(join(dir, "docs/decisions"), { recursive: true });
+		writeFileSync(join(dir, "docs/decisions/2026-01-01-rota.md"), "# sin frontmatter\n");
+		const r = decisionsDoctor(dir);
+		expect(r?.level).toBe("fail");
+		expect(r?.fix).toBe("bond decisions check");
+	});
 });

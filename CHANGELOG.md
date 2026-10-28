@@ -13,6 +13,19 @@
   `decision-record` en el catálogo (marcada por defecto) con el formato de decisiones y de
   runs, y una regla global en `bond setup` para que también la sigan los agentes que no
   cargan skills por sí solos. Sin `[decisions]`, nada cambia.
+- Nueva orden `bond decisions` para usar y auditar esa memoria: sin subcomando lista las
+  decisiones (`--status`, `--agent`, `--json`); `add` las registra —bond calcula el id
+  (`YYYY-MM-DD-slug`, `-2` si colisiona), la autoría (en panel de Herdr,
+  `agent:<kind>/<nombre>`; fuera, `user`), enlaza rama y HEAD y actualiza el índice; entra
+  siempre como `proposed`—. `accept`, `reject` y `supersede` son solo del usuario: exigen
+  terminal interactiva y confirmación, y se niegan desde el shell de un agente. `show` imprime
+  el fichero entero, `runs` lista los encargos de `<dir>/runs/` y `check` audita frontmatter,
+  ids, sustituciones, trailers `Decision:` e índice (sale con 1 si hay errores). En repos sin
+  `[decisions]`, `add` falla explicando cómo activarla y lo demás sale con 0. En pi, la nueva
+  tool `record_decision` llama a ese mismo `add`: el modelo pasa solo el contenido y bond
+  escribe el registro. `bond doctor` añade una fila de decisiones: errores, propuestas
+  pendientes o memoria limpia. La skill `decision-record` manda ahora usar la herramienta en vez
+  de escribir los ficheros a mano.
 
 ## 1.6.3
 

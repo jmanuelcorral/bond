@@ -1,9 +1,11 @@
 # Decision file template
 
-One decision per file: `<dir>/YYYY-MM-DD-<slug>.md`. The **id** is the filename without
-extension (e.g. `2026-10-28-decision-ids`). Same id taken on the same day: suffix `-2`.
-Write the body in the language established by the project; the section names below are the
-convention (Context / Decision / Rejected alternatives / Consequences).
+bond writes this file for you (`record_decision` or `bond decisions add`); this template
+documents the format it produces and the section conventions, so you can review and link
+records. One decision per file: `<dir>/YYYY-MM-DD-<slug>.md`. The **id** is the filename
+without extension (e.g. `2026-10-28-decision-ids`). Same id taken on the same day: suffix
+`-2`. Write the body content in the language established by the project; the section names
+below are the convention (Context / Decision / Rejected alternatives / Consequences).
 
 ```markdown
 ---

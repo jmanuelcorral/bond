@@ -18,6 +18,7 @@ you see? Open an [issue on GitHub](https://github.com/jmanuelcorral/bond/issues)
 | `bond status` | Live agents in Herdr |
 | `bond sessions` | pi sessions and how to resume them |
 | `bond sync` | Regenerates the repo's agent config from `.bond/bond.toml` |
+| `bond decisions` | The repo's decision memory: list, `add`, `accept`, `show`, `runs`, `check` ([below](#bond-decisions)) |
 | `bond catalog create\|check` | Sets up a repo as your own catalog of skills, commands and MCP, and checks it ([below](#your-own-catalog-bond-catalog)) |
 | `bond catalog add\|list\|update\|remove\|clean` | Uses your team's catalog in the repo, via git (with the commit pinned) or via a folder ([below](#git-catalogs-bond-catalog-add)) |
 | `bond models list\|probe\|sync` | Global endpoints and models, and their config in each agent |
@@ -57,10 +58,11 @@ you see? Open an [issue on GitHub](https://github.com/jmanuelcorral/bond/issues)
 ## Bond Extensions (pi)
 
 The bond repo is also a pi package (`package.json` → `"pi"`): the extensions
-`status-line.ts` (status footer), `bond-header.ts` (header) and `repo-map.ts` (tool `repo_map`),
-and the commands `/delegate`, `/team` (`prompts/`) and `/review`, `/commit`, `/handoff`
-(`catalog/commands/`). They are loaded **per repo**: `bond init` adds `"packages": ["~/.bond/pi"]` to
-`.pi/settings.json` when the repo uses pi. In repos without bond, pi works without them.
+`status-line.ts` (status footer), `bond-header.ts` (header), `repo-map.ts` (tool `repo_map`)
+and `record-decision.ts` (tool `record_decision`), and the commands `/delegate`, `/team`
+(`prompts/`) and `/review`, `/commit`, `/handoff` (`catalog/commands/`). They are loaded
+**per repo**: `bond init` adds `"packages": ["~/.bond/pi"]` to `.pi/settings.json` when the
+repo uses pi. In repos without bond, pi works without them.
 
 ## Per-repo configuration (`bond init` and `bond sync`)
 
@@ -713,6 +715,39 @@ external things, and exits with 1 if something fails:
 | Updates: installation method, last check, pending version, skipped version and whether it asks at startup (informational; warning if there is a pending one not skipped; never having checked doesn't fail) | `bond update`; `bond update --skip vX.Y.Z` |
 | pi prompt suggestions: model, installed package, `enabledModels` and whether the extension's config matches `config.toml`; other extensions that replace the editor (warning, never failure) | `bond setup` |
 | Repo catalogs (`[[catalog]]` in `bond.toml`): for each one, the commit pinned in `.bond/lock.json`, whether it is downloaded in `~/.bond/catalogs` and whether the ref has a newer commit (the network is queried; with `--quick`, «sin verificar»); a local catalog shows its folder | `bond catalog update <nombre>` |
+| Decision memory (only when the repo has `[decisions]`): file errors and proposals awaiting acceptance; warns when the folder is missing | `bond decisions check`; `bond decisions accept <id>`; `bond sync` |
+
+## `bond decisions`
+
+`cli/decisions.mts`. The repo's decision memory: what was decided, by whom and why, in
+versioned Markdown files. It is enabled by the `[decisions]` section in `.bond/bond.toml`
+(`bond init` proposes it together with the `decision-record` skill; `bond sync` creates the
+index `<dir>/README.md`). In a repo without `[decisions]`, `add` fails explaining how to
+enable it and everything else exits 0 saying the memory is not in use.
+
+| Command | What it does |
+|---|---|
+| `bond decisions` | Lists the repo's decisions, newest first; `--status <status>`, `--agent <substring>`, `--json` |
+| `bond decisions add` | Records a decision: `--title`, `--context`, `--decision`, `--alternatives`, `--link "kind: value"` (repeatable); or with `--stdin`, the same object as JSON. bond computes the id (`YYYY-MM-DD-slug`, `-2` on collision), the authorship and the branch/HEAD links, writes `<dir>/<id>.md` and updates the index. It always enters as `proposed` |
+| `bond decisions accept <id>` | Moves it to `accepted` (`--ref <acceptance>`). Requires an interactive terminal and confirmation: refused from an agent's shell (no TTY) |
+| `bond decisions reject <id>` | Moves it to `rejected`; same confirmation |
+| `bond decisions supersede <id> --by <new>` | The old one becomes `superseded` and the new one references it in `supersedes`; same confirmation |
+| `bond decisions show <id>` | The decision's whole file |
+| `bond decisions runs` | The runs (delegated tasks) in `<dir>/runs/`; `--agent <substring>`, `--json` |
+| `bond decisions check` | Audits the memory: frontmatter, id vs filename, duplicates, broken supersession references, `Decision:` trailers and the index (missing or orphan rows, stale status). Exits 1 on errors |
+
+Authorship (`decided_by`): inside a Herdr pane it is `agent:<kind>/<name>` —bond looks up the
+pane's agent, so an agent never needs to know its own name—; outside Herdr, or with no agent
+in the pane, `user`. Acceptance belongs to the user alone: `accept`, `reject` and `supersede`
+require a TTY on both input and output and ask for confirmation.
+
+pi has the `record_decision` tool (`extensions/record-decision.ts`), which calls this same
+`bond decisions add --stdin`: the model passes only the content and bond writes the record,
+the id and the index. `bond doctor` adds a decisions row: errors (failure), proposals awaiting
+acceptance (warning) or a clean memory.
+
+The file and index format is documented in the `decision-record` skill
+(`catalog/skills/decision-record/`).
 
 ## Herdr snippet
 

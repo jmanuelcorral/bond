@@ -365,6 +365,23 @@ export function loadRepoConfig(root: string, over: { toml?: string; lock?: Lock 
 }
 
 /**
+ * La sección [decisions] del repo sin exigir el resto de la config: undefined si no hay
+ * repo, ni bond.toml, ni sección. Con bond.toml inválido, muere como loadRepoConfig.
+ * La usan `bond decisions` y `bond doctor` para no arrastrar el resto de la config.
+ */
+export function repoDecisions(root: string): { dir: string } | undefined {
+	const file = join(bondDir(root), "bond.toml");
+	if (!existsSync(file)) return undefined;
+	let raw: Record<string, unknown>;
+	try {
+		raw = parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+	} catch (e) {
+		die(`.bond/bond.toml no es TOML válido: ${(e as Error).message}`);
+	}
+	return parseDecisions(root, raw.decisions);
+}
+
+/**
  * Sección [decisions] del bond.toml: la memoria de decisiones del repo (skill
  * decision-record). Sin la sección, nada cambia. Con ella, `dir` es la carpeta donde van
  * las decisiones y los runs (por defecto docs/decisions); tiene que quedar dentro del repo:
@@ -819,7 +836,7 @@ export function sync(args: string[]): void {
 }
 
 /** El README índice que bond deja en la carpeta de decisiones cuando no existe. */
-function decisionsReadme(): string {
+export function decisionsReadme(): string {
 	return `# Decisiones
 
 Memoria de decisiones de este repo (bond). Cada decisión no trivial —del usuario o de un

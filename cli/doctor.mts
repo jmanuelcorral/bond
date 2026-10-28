@@ -18,8 +18,8 @@ export const DOCTOR_HELP = `Uso: bond doctor [--quick]
 
 Comprueba la instalación global: Node, Herdr, pi, enlaces de configuración, paquete de pi,
 skill de Herdr, integración, filtro de git, herramientas de contexto, servidores MCP, la
-pasarela de modelos, las sugerencias de prompt de pi, los catálogos del repo y el aviso de
-versión nueva. Sale con 1 si algo falla.
+pasarela de modelos, las sugerencias de prompt de pi, los catálogos del repo, la memoria de
+decisiones (si el repo tiene [decisions]) y el aviso de versión nueva. Sale con 1 si algo falla.
 
   --quick      Se salta lo lento (conectar los servidores MCP, consultar las refs de los
                catálogos por git)
@@ -283,6 +283,19 @@ async function checkCatalogs(quick: boolean): Promise<void> {
 	}
 }
 
+/**
+ * Fila de la memoria de decisiones: errores de `bond decisions check` y propuestas
+ * pendientes de aceptación. Sin la sección [decisions] en el repo, no muestra fila.
+ */
+async function checkDecisionsRow(): Promise<void> {
+	const top = run("git", ["rev-parse", "--show-toplevel"]);
+	const root = top.status === 0 ? top.stdout.trim() : process.cwd();
+	if (!existsSync(join(root, ".bond", "bond.toml")) || (FROM_SOURCE && !existsSync(join(REPO_DIR, "node_modules", "smol-toml")))) return;
+	const { decisionsDoctor } = await import("./decisions.mts");
+	const r = decisionsDoctor(root);
+	if (r) add(r);
+}
+
 function checkBond(): void {
 	const p = which("bond");
 	if (!FROM_SOURCE) return add(p ? "ok" : "warn", "bond en el PATH", p ?? "no está (instálalo con tu gestor de paquetes)");
@@ -439,6 +452,7 @@ export async function doctor(args: string[]): Promise<void> {
 	if (!quick) checkMcp();
 	await checkModels();
 	await checkRepo();
+	await checkDecisionsRow();
 	await checkCatalogs(quick);
 	checkBond();
 	await checkUpdate();

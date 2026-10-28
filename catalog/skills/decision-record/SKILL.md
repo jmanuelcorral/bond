@@ -1,6 +1,6 @@
 ---
 name: decision-record
-description: Record non-trivial decisions (the user's or an agent's) as dated Markdown files in the repo's decision memory when .bond/bond.toml has a [decisions] section, with the id/status/frontmatter format, git trailers (Agent: and Decision:), and linked delegation runs. Use when a contract, dependency, scope, or design alternative is settled, or when asked to record a decision. Do not use in repos without the [decisions] section.
+description: Record non-trivial decisions (the user's or an agent's) in the repo's decision memory when .bond/bond.toml has a [decisions] section, using the record_decision tool (pi) or `bond decisions add` — never by hand-writing files — plus git trailers (Agent: and Decision:) and linked runs. Use when a contract, dependency, scope, or design alternative is settled, or when asked to record a decision. Do not use in repos without the [decisions] section.
 user-invocable: true
 disable-model-invocation: false
 ---
@@ -19,6 +19,10 @@ or the agent's internal reasoning: a record states what was decided, by whom, an
 its final form. Only the user can set a decision's status to `accepted`; an agent never
 marks its own decision accepted, and never rewrites the user's records except to link them.
 
+**Never write decision files by hand.** Local models do not follow file formats reliably;
+bond's tooling does the writing (id computation, frontmatter, authorship, index). You pass
+the content; bond writes the record.
+
 ## When to record — and when not to
 
 Record when a choice is non-trivial, i.e. it changes or fixes any of:
@@ -30,38 +34,43 @@ Record when a choice is non-trivial, i.e. it changes or fixes any of:
 
 Do **not** record: routine implementation details, obvious refactors, preferences already
 documented in `AGENTS.md`, anything reversible without a trace, or one-off observations. If
-in doubt, leave it out; noise is worse than a gap, and `bond decisions` counts how many
-`proposed` records await review.
+in doubt, leave it out; noise is worse than a gap, and `bond decisions check` (and
+`bond doctor`) count how many `proposed` records await review.
 
 ## Procedure
 
 1. Confirm the repo has `[decisions]` in `.bond/bond.toml` and read its `dir`. Create
    nothing outside it. If the directory or its `README.md` is missing, run `bond sync`.
 2. Decide whether the fact meets the criteria above. If it does not, say so briefly and stop.
-3. Read the [decision template](references/decision-template.md). Create one file per
-   decision: `<dir>/YYYY-MM-DD-<slug>.md` (today's actual UTC date, short kebab slug).
-   The **id** is the filename without extension. If a file with the same id already exists,
-   append `-2`, `-3`, … If the decision supersedes an existing one, set `supersedes` here
-   and `superseded_by` in the old file (and update its `status`).
-4. Set the frontmatter honestly:
-   - `status`: `proposed` when an agent decided it and the user has not confirmed it yet;
-     `accepted` only with a real, referenced acceptance from the user (session, PR review,
-     issue comment). `rejected` and `superseded` when applicable.
-   - `decided_by`: `user`, or `agent:<kind>` (e.g. `agent:pi`, `agent:claude`) adding
-     `/<name>` when the agent's Herdr pane name is known. Never invent a model name.
-   - `links`: the plan and phase, the commit(s) implementing it, the PR, and the run file
-     when it came from a delegation. Use what exists; leave the rest empty rather than
-     fabric references.
-5. Fill the body: Context, Decision, Rejected alternatives, Consequences. Keep it short and
-   durable; write in the language established by the project.
+3. Record it with the tool, passing only the content — never by writing the file yourself:
+   - in pi: the `record_decision` tool (`title`, `context`, `decision`, `alternatives`, `links`);
+   - anywhere else (or from a script): `bond decisions add --title "..." --context "..."
+     --decision "..." --alternatives "..." --link "kind: value"` (repeat `--link` per
+     reference), or the same object as JSON on stdin with `--stdin`.
+   bond computes the id (`YYYY-MM-DD-slug`, suffix `-2` on same-day collision), the
+   authorship (`decided_by` from your Herdr pane — you do not need to know your own name;
+   outside Herdr it is `user`), links the current branch and HEAD, writes
+   `<dir>/<id>.md` in the format documented in the
+   [decision template](references/decision-template.md), and updates the index in
+   `<dir>/README.md`. Every tool-made decision enters as `proposed`.
+4. Status is not yours to raise: `record_decision` and `add` always create `proposed`.
+   Only the user moves a decision to `accepted` (`bond decisions accept <id>`, interactive
+   terminal and confirmation required); `reject` and `supersede <id> --by <new>` work the
+   same way. Never fabricate `accepted_by`, and never invent a model name in any field.
+5. Fill the content well: context in two or three factual sentences, the decision stated so
+   it can be applied without rereading the conversation, only real rejected alternatives
+   with their cost. Write in the language established by the project. `links` entries are
+   `kind: value` strings (plan, phase, commit, pr, run); omit what does not exist yet
+   rather than leaving dangling references.
 6. When the decision is implemented in the same work, add the git trailers to the commit
    (see the `git-conventional-commit` skill, which honors trailers the project asks for):
    - `Agent: <kind>[/<name>]` — who made the commit;
    - `Decision: <id>` — the decision the commit applies.
    Only add trailers in repos with decision memory enabled.
-7. Update the index table in `<dir>/README.md` with the new row (newest first). If the
-   README has no table, leave it; do not fight concurrent edits — re-read before writing.
-8. Report the created file, its status, and any links. If the decision awaits user
+7. Check the record if in doubt: `bond decisions show <id>` and `bond decisions check`
+   report broken files, duplicate ids, dangling references and index drift (non-zero exit
+   on errors). Do not fight concurrent edits by hand; re-run the tool instead.
+8. Report the created id, its status, and any links. If the decision awaits user
    acceptance, say so ("proposed, awaiting your acceptance"). Do not present a `proposed`
    decision as agreed.
 

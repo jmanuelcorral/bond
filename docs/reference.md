@@ -18,6 +18,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 | `bond status` | Agentes vivos en Herdr |
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
 | `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
+| `bond decisions` | Memoria de decisiones del repo: lista, `add`, `accept`, `show`, `runs`, `check` ([abajo](#bond-decisions)) |
 | `bond catalog create\|check` | Prepara un repo como catálogo propio de skills, comandos y MCP, y lo comprueba ([abajo](#catálogo-propio-bond-catalog)) |
 | `bond catalog add\|list\|update\|remove\|clean` | Usa en el repo el catálogo de tu equipo, por git (con el commit fijado) o por carpeta ([abajo](#catálogos-por-git-bond-catalog-add)) |
 | `bond models list\|probe\|sync` | Endpoints y modelos globales, y su config en cada agente |
@@ -57,10 +58,11 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 ## Bond Extensions (pi)
 
 El repo de bond es también un paquete de pi (`package.json` → `"pi"`): las extensiones
-`status-line.ts` (pie de estado), `bond-header.ts` (cabecera) y `repo-map.ts` (tool `repo_map`),
-y los comandos `/delegate`, `/team` (`prompts/`) y `/review`, `/commit`, `/handoff`
-(`catalog/commands/`). Se cargan **por repo**: `bond init` añade `"packages": ["~/.bond/pi"]` a
-`.pi/settings.json` cuando el repo usa pi. En los repos sin bond, pi funciona sin ellas.
+`status-line.ts` (pie de estado), `bond-header.ts` (cabecera), `repo-map.ts` (tool `repo_map`)
+y `record-decision.ts` (tool `record_decision`), y los comandos `/delegate`, `/team`
+(`prompts/`) y `/review`, `/commit`, `/handoff` (`catalog/commands/`). Se cargan **por repo**:
+`bond init` añade `"packages": ["~/.bond/pi"]` a `.pi/settings.json` cuando el repo usa pi. En
+los repos sin bond, pi funciona sin ellas.
 
 ## Configuración por repo (`bond init` y `bond sync`)
 
@@ -712,6 +714,39 @@ fuera, y sale con 1 si algo falla:
 | Actualizaciones: método de instalación, última comprobación, versión pendiente, omitida y si se pregunta al arrancar (informativa; aviso si hay una pendiente sin omitir; no haber mirado nunca no falla) | `bond update`; `bond update --skip vX.Y.Z` |
 | Sugerencias de prompt de pi: modelo, paquete instalado, `enabledModels` y si el config de la extensión coincide con `config.toml`; otras extensiones que reemplacen el editor (aviso, nunca fallo) | `bond setup` |
 | Catálogos del repo (`[[catalog]]` en `bond.toml`): por cada uno, el commit fijado en `.bond/lock.json`, si está descargado en `~/.bond/catalogs` y si la ref tiene un commit más nuevo (se consulta la red; con `--quick`, «sin verificar»); un catálogo local sale con su carpeta | `bond catalog update <nombre>` |
+| Memoria de decisiones (solo si el repo tiene `[decisions]`): errores de los ficheros y propuestas pendientes; sin el directorio, avisa | `bond decisions check`; `bond decisions accept <id>`; `bond sync` |
+
+## `bond decisions`
+
+`cli/decisions.mts`. La memoria de decisiones del repo: qué se decidió, quién y por qué, en
+ficheros Markdown versionados. Se activa con la sección `[decisions]` de `.bond/bond.toml`
+(`bond init` la propone con la skill `decision-record`; `bond sync` crea el `<dir>/README.md`
+con el índice). En un repo sin `[decisions]`, `add` falla diciendo cómo activarla y lo demás
+sale con 0 explicando que no se usa la memoria.
+
+| Comando | Qué hace |
+|---|---|
+| `bond decisions` | Lista las decisiones, las más recientes primero; `--status <estado>`, `--agent <subcadena>`, `--json` |
+| `bond decisions add` | Registra una decisión: `--title`, `--context`, `--decision`, `--alternatives`, `--link "tipo: valor"` (repetible); o con `--stdin`, el mismo objeto en JSON. Bond calcula el id (`YYYY-MM-DD-slug`, `-2` si colisiona), la autoría y los enlaces de rama y HEAD, escribe `<dir>/<id>.md` y actualiza el índice. Entra siempre como `proposed` |
+| `bond decisions accept <id>` | La pasa a `accepted` (`--ref <aceptación>`). Exige terminal interactiva y confirmación: desde el shell de un agente (sin TTY) se niega |
+| `bond decisions reject <id>` | La pasa a `rejected`; misma confirmación |
+| `bond decisions supersede <id> --by <nueva>` | La vieja queda `superseded` y la nueva la referencia en `supersedes`; misma confirmación |
+| `bond decisions show <id>` | El fichero entero de la decisión |
+| `bond decisions runs` | Los runs (encargos a agentes) en `<dir>/runs/`; `--agent <subcadena>`, `--json` |
+| `bond decisions check` | Audita la memoria: frontmatter, id contra nombre de fichero, duplicados, referencias de sustitución rotas, trailers `Decision:` e índice (filas que faltan, huérfanas, estado desfasado). Sale con 1 si hay errores |
+
+La autoría (`decided_by`): en un panel de Herdr, `agent:<kind>/<nombre>` —bond mira el agente
+del panel, el agente no necesita saber su propio nombre—; fuera de Herdr o sin agente en el
+panel, `user`. Aceptar es solo del usuario: `accept`, `reject` y `supersede` exigen TTY en la
+entrada y la salida, y piden confirmación.
+
+pi tiene la tool `record_decision` (`extensions/record-decision.ts`), que llama a este mismo
+`bond decisions add --stdin`: el modelo pasa solo el contenido y bond escribe el registro, el
+id y el índice. `bond doctor` añade la fila de decisiones: errores (fallo), propuestas
+pendientes (aviso) o la memoria limpia.
+
+El formato de los ficheros y del índice lo documenta la skill `decision-record`
+(`catalog/skills/decision-record/`).
 
 ## Snippet de Herdr
 

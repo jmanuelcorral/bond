@@ -1,0 +1,317 @@
+// bond decisions (cli/decisions.mts): la memoria de decisiones del repo. Cada prueba
+// trabaja en un repo git temporal con [decisions]. Se ejecuta desde el código fuente,
+// así que el catálogo y el README plantilla son los del repo.
+
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
+const { addDecision, checkDecisions, decisions, loadDecisions, parseFm, resolveAuthor, slugify } = await import("../cli/decisions.mts");
+const { catchDie } = await import("../cli/util.mts");
+
+const origCwd = process.cwd();
+const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
+let repo: string;
+
+/** Lanza bond como proceso hijo sin Herdr: die() termina con código y mensaje en stderr. */
+const bond = (args: string[], cwd = repo) =>
+	spawnSync(process.execPath, [MAIN, ...args], {
+		cwd,
+		env: { ...process.env, NO_COLOR: "1", HERDR_ENV: "", HERDR_PANE_ID: "" },
+		encoding: "utf8",
+		stdio: ["ignore", "pipe", "pipe"],
+	});
+
+beforeEach(() => {
+	repo = realpathSync(mkdtempSync(join(tmpdir(), "bond-dec-")));
+	spawnSync("git", ["init", "-q"], { cwd: repo });
+	process.chdir(repo);
+	// Autoría determinista: fuera de Herdr es "user" (el caso de panel se comprueba a mano).
+	delete process.env.HERDR_ENV;
+	delete process.env.HERDR_PANE_ID;
+});
+
+afterEach(() => {
+	process.chdir(origCwd);
+	rmSync(repo, { recursive: true, force: true });
+});
+
+const at = (p: string) => join(repo, p);
+const read = (p: string) => readFileSync(at(p), "utf8");
+const write = (p: string, s: string) => {
+	mkdirSync(join(at(p), ".."), { recursive: true });
+	writeFileSync(at(p), s);
+};
+
+function enableMemory(dir = "docs/decisions"): void {
+	write(".bond/bond.toml", `agents = ["pi"]\nmcp = []\nskills = []\ncommands = []\n\n[decisions]\ndir = "${dir}"\n`);
+}
+
+const add = (over: Partial<Parameters<typeof addDecision>[2]> = {}) =>
+	addDecision(repo, "docs/decisions", { title: "Preferir bun", decision: "Usar bun como runtime de pruebas.", ...over });
+
+describe("add", () => {
+	test("con solo título y decisión crea un fichero válido y su fila en el índice", () => {
+		enableMemory();
+		const { id, rel } = add();
+		expect(id).toBe(`${new Date().toISOString().slice(0, 10)}-preferir-bun`);
+		expect(rel).toBe(`docs/decisions/${id}.md`);
+		const fm = parseFm(read(rel));
+		expect(fm?.scalars.status).toBe("proposed");
+		expect(fm?.scalars.decided_by).toBe("user");
+		expect(fm?.scalars.title).toBe("Preferir bun");
+		expect(fm?.body).toContain("## Decision");
+		expect(read("docs/decisions/README.md")).toContain(`| ${id} | proposed | user`);
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+	});
+
+	test("dos add con el mismo título el mismo día dan <id> y <id>-2", () => {
+		enableMemory();
+		const a = add();
+		const b = add();
+		expect(b.id).toBe(`${a.id}-2`);
+		expect(existsSync(at(b.rel))).toBe(true);
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+	});
+
+	test("enlaza rama y HEAD cuando el repo tiene commits", () => {
+		enableMemory();
+		write("a.txt", "x");
+		spawnSync("git", ["add", "a.txt"], { cwd: repo });
+		spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "inicio"], { cwd: repo });
+		const { id } = add();
+		const links = parseFm(read(`docs/decisions/${id}.md`))?.lists.links ?? [];
+		expect(links.some((l) => l.startsWith("branch: "))).toBe(true);
+		expect(links.some((l) => l.startsWith("head: "))).toBe(true);
+	});
+
+	test("funciona en un repo sin commits", () => {
+		enableMemory();
+		const { id } = add();
+		const links = parseFm(read(`docs/decisions/${id}.md`))?.lists.links ?? [];
+		expect(links).toEqual([]);
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+	});
+
+	test("los links del usuario se guardan tal cual", () => {
+		enableMemory();
+		const { id } = add({ links: ["plan: docs/plans/x.md#p2", "  ", "pr: https://github.com/o/r/pull/1"] });
+		expect(parseFm(read(`docs/decisions/${id}.md`))?.lists.links).toEqual(["plan: docs/plans/x.md#p2", "pr: https://github.com/o/r/pull/1"]);
+	});
+
+	test("el índice conserva lo que hay fuera de la tabla", () => {
+		enableMemory();
+		write("docs/decisions/README.md", "# Decisiones\n\n## Índice\n\n| ID | Estado | Quién | Fecha | Título |\n|---|---|---|---|---|\n\nNota mía bajo la tabla.\n");
+		const { id } = add();
+		const readme = read("docs/decisions/README.md");
+		expect(readme).toContain(`| ${id} | proposed |`);
+		expect(readme).toContain("Nota mía bajo la tabla.");
+	});
+
+	test("sin tabla en el README no la inventa: lo dice el check", () => {
+		enableMemory();
+		write("docs/decisions/README.md", "# Mis decisiones, sin tabla\n");
+		add();
+		const rep = checkDecisions(repo, "docs/decisions");
+		expect(rep.errors.some((e) => e.includes("no hay tabla"))).toBe(true);
+	});
+
+	test("sin [decisions], add falla diciendo cómo activarla", () => {
+		write(".bond/bond.toml", 'agents = ["pi"]\nmcp = []\nskills = []\ncommands = []\n');
+		const r = bond(["decisions", "add", "--title", "x", "--decision", "y"]);
+		expect(r.status).toBe(1);
+		expect(r.stderr).toContain("[decisions]");
+		expect(existsSync(at("docs/decisions"))).toBe(false);
+	});
+
+	test("add necesita título y decisión", () => {
+		enableMemory();
+		expect(catchDie(() => addDecision(repo, "docs/decisions", { title: "", decision: "d" } as never)).error).toContain("título");
+		expect(catchDie(() => addDecision(repo, "docs/decisions", { title: "t", decision: "" } as never)).error).toContain("decisión");
+	});
+});
+
+describe("autoría (D12)", () => {
+	test("fuera de Herdr es user", () => {
+		expect(resolveAuthor()).toBe("user");
+	});
+
+	test("en Herdr sin agente en el panel, user", () => {
+		process.env.HERDR_ENV = "1";
+		process.env.HERDR_PANE_ID = "pane-que-no-existe-9999";
+		expect(resolveAuthor()).toBe("user");
+		delete process.env.HERDR_ENV;
+		delete process.env.HERDR_PANE_ID;
+	});
+});
+
+describe("accept sin TTY (D13)", () => {
+	test("se niega y no cambia nada", () => {
+		enableMemory();
+		const { id } = add();
+		const before = read(`docs/decisions/${id}.md`);
+		// Con stdio en tubería la entrada no es terminal: es el caso del shell de un agente.
+		const r = bond(["decisions", "accept", id]);
+		expect(r.status).toBe(1);
+		expect(r.stderr).toContain("terminal interactiva");
+		expect(read(`docs/decisions/${id}.md`)).toBe(before);
+	});
+});
+
+// Con terminal (pseudo-tty de `script`) se comprueba la confirmación: solo con "y" cambia.
+// POSIX: `script -qec` no existe en Windows, donde ya cubre el caso de arriba (sin TTY).
+(process.platform === "win32" ? describe.skip : describe)("accept con TTY (D13)", () => {
+	const withTty = (args: string[], answer: string) => {
+		const cmd = [process.execPath, MAIN, "decisions", ...args].map((s) => (/[ \t]/.test(s) ? `'${s}'` : s)).join(" ");
+		return spawnSync("script", ["-qec", cmd, "/dev/null"], {
+			cwd: repo,
+			input: answer,
+			encoding: "utf8",
+			env: { ...process.env, NO_COLOR: "1", HERDR_ENV: "", HERDR_PANE_ID: "" },
+		});
+	};
+
+	test("con \"y\" pasa a accepted y actualiza el índice", () => {
+		enableMemory();
+		const { id } = add();
+		const r = withTty(["accept", id, "--ref", "sesion de prueba"], "y\n");
+		expect(r.status).toBe(0);
+		const fm = parseFm(read(`docs/decisions/${id}.md`));
+		expect(fm?.scalars.status).toBe("accepted");
+		expect(fm?.scalars.accepted_by).toBe("sesion de prueba");
+		expect(read("docs/decisions/README.md")).toContain(`| ${id} | accepted |`);
+	});
+
+	test("con \"n\" no cambia nada", () => {
+		enableMemory();
+		const { id } = add();
+		const before = read(`docs/decisions/${id}.md`);
+		const r = withTty(["reject", id], "n\n");
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain("cancelado");
+		expect(read(`docs/decisions/${id}.md`)).toBe(before);
+	});
+});
+
+describe("check", () => {
+	const broken = (name: string, body: string) => `docs/decisions/${name}.md`;
+
+	test("detecta status inválido", () => {
+		enableMemory();
+		write(broken("2026-01-01-a", ""), `---\nid: "2026-01-01-a"\ntitle: "t"\nstatus: "final"\ndate: "2026-01-01"\ndecided_by: "user"\n---\n`);
+		expect(checkDecisions(repo, "docs/decisions").errors.some((e) => e.includes("status") && e.includes("2026-01-01-a"))).toBe(true);
+	});
+
+	test("detecta id que no coincide con el fichero", () => {
+		enableMemory();
+		write(broken("2026-01-01-a", ""), `---\nid: "2026-01-01-otra"\ntitle: "t"\nstatus: "proposed"\ndate: "2026-01-01"\ndecided_by: "user"\n---\n`);
+		expect(checkDecisions(repo, "docs/decisions").errors.some((e) => e.includes("no coincide"))).toBe(true);
+	});
+
+	test("detecta ids duplicadas", () => {
+		enableMemory();
+		const fm = (id: string, f: string) => `---\nid: "${id}"\ntitle: "t"\nstatus: "proposed"\ndate: "2026-01-01"\ndecided_by: "user"\n---\n`;
+		write(broken("2026-01-01-a", ""), fm("2026-01-01-a", "a"));
+		write(broken("2026-01-01-b", ""), fm("2026-01-01-a", "b"));
+		expect(checkDecisions(repo, "docs/decisions").errors.some((e) => e.includes("duplicada"))).toBe(true);
+	});
+
+	test("detecta superseded_by que no existe", () => {
+		enableMemory();
+		write(broken("2026-01-01-a", ""), `---\nid: "2026-01-01-a"\ntitle: "t"\nstatus: "superseded"\ndate: "2026-01-01"\ndecided_by: "user"\nsuperseded_by: "2026-01-02-fantasma"\n---\n`);
+		expect(checkDecisions(repo, "docs/decisions").errors.some((e) => e.includes("superseded_by") && e.includes("no existe"))).toBe(true);
+	});
+
+	test("detecta un fichero sin frontmatter", () => {
+		enableMemory();
+		write(broken("2026-01-01-a", ""), "# solo texto\n");
+		expect(checkDecisions(repo, "docs/decisions").errors.some((e) => e.includes("frontmatter"))).toBe(true);
+	});
+
+	test("detecta filas huérfanas en el índice", () => {
+		enableMemory();
+		const { id } = add();
+		const readme = read("docs/decisions/README.md");
+		const row = `| ${id} | proposed | user`;
+		expect(readme).toContain(row);
+		// huérfana: una fila más en la tabla para una decisión que no existe.
+		write("docs/decisions/README.md", readme.replace(row, `${row} | 2026-01-01 | Nadie |\n| 2026-01-01-huerfana | proposed | user | 2026-01-01 | Nadie |`));
+		const rep = checkDecisions(repo, "docs/decisions");
+		expect(rep.errors.some((e) => e.includes("huerfana") && e.includes("no existe"))).toBe(true);
+	});
+
+	test("detecta trailers Decision: que no apuntan a nada", () => {
+		enableMemory();
+		add();
+		spawnSync("git", ["add", "-A"], { cwd: repo });
+		spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "aplica algo\n\nDecision: 1999-01-01-no-existe"], { cwd: repo });
+		expect(checkDecisions(repo, "docs/decisions").errors.some((e) => e.includes("Decision:") && e.includes("1999-01-01-no-existe"))).toBe(true);
+	});
+
+	test("un trailer Decision: válido no da error", () => {
+		enableMemory();
+		const { id } = add();
+		spawnSync("git", ["add", "-A"], { cwd: repo });
+		spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", `aplica lo suyo\n\nDecision: ${id}`], { cwd: repo });
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+	});
+
+	test("el índice desfasado (estado distinto) es error", () => {
+		enableMemory();
+		const { id } = add();
+		write("docs/decisions/README.md", read("docs/decisions/README.md").replace(`| ${id} | proposed |`, `| ${id} | accepted |`));
+		expect(checkDecisions(repo, "docs/decisions").errors.some((e) => e.includes("el índice dice"))).toBe(true);
+	});
+});
+
+describe("CLI de lista y runs", () => {
+	const capture = async (args: string[]) => {
+		const lines: string[] = [];
+		const orig = console.log;
+		console.log = (...a: unknown[]) => lines.push(a.join(" "));
+		try {
+			await decisions(args);
+		} finally {
+			console.log = orig;
+		}
+		return lines.join("\n");
+	};
+
+	test("--json de la lista es estable y filtra por estado y agente", async () => {
+		enableMemory();
+		add({ title: "Una" });
+		add({ title: "Dos" });
+		const all = JSON.parse(await capture(["--json"]));
+		expect(all.length).toBe(2);
+		expect(Object.keys(all[0]).sort().join(",")).toBe("accepted_by,body,date,decided_by,id,links,rel,status,superseded_by,supersedes,title");
+		expect(JSON.parse(await capture(["--json", "--status", "accepted"])).length).toBe(0);
+		expect(JSON.parse(await capture(["--json", "--agent", "user"])).length).toBe(2);
+	});
+
+	test("runs lista los ficheros de <dir>/runs con su frontmatter", async () => {
+		enableMemory();
+		write("docs/decisions/runs/2026-01-01-worker-2-tarea.md", `---\nagent: "worker-2"\nkind: "pi"\nbranch: "feat/x"\nstatus: "sent"\ncommits: []\ndecisions: []\n---\n\n## Request\n\nhaz algo\n`);
+		const out = JSON.parse(await capture(["runs", "--json"]));
+		expect(out.length).toBe(1);
+		expect(out[0].file).toBe("docs/decisions/runs/2026-01-01-worker-2-tarea.md");
+		expect(out[0].agent).toBe("worker-2");
+		expect(JSON.parse(await capture(["runs", "--json", "--agent", "claude"])).length).toBe(0);
+	});
+
+	test("sin [decisions], la lista sale con 0 y lo explica", () => {
+		write(".bond/bond.toml", 'agents = ["pi"]\nmcp = []\nskills = []\ncommands = []\n');
+		const r = bond(["decisions"]);
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain("no usa la memoria de decisiones");
+	});
+});
+
+describe("slugify", () => {
+	test("pasa a minúsculas, quita acentos y deja guiones", () => {
+		expect(slugify("Preferir Bun — decisión difícil")).toBe("preferir-bun-decision-dificil");
+		expect(slugify("  spaces & symbols!! ")).toBe("spaces-symbols");
+	});
+});

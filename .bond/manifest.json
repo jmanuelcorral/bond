@@ -2,8 +2,8 @@
   "files": {
     ".agents/skills/code-context/SKILL.md": "4789650da602b192fe18703c79b347be12904aaca4a77f871ff922aacac9ca75",
     ".agents/skills/code-context/scripts/repo-map": "7790b2f69bfa04d80fd8d75b1cd0e6ffb3c7d28e9a390a3c4d10ce127883ec84",
-    ".agents/skills/decision-record/SKILL.md": "2df0292f11b54d59c97bf45fd9c5eec7821874b30cabbdbce4eaf86d92de3060",
-    ".agents/skills/decision-record/references/decision-template.md": "116eb1498bdc9a260a5ac6d2c8294929340ea2170979a20872b7a11b38f7bbab",
+    ".agents/skills/decision-record/SKILL.md": "befab5aecdcdfda450cc0e5e7a3fe774703476beb3813256e58b49689788f68a",
+    ".agents/skills/decision-record/references/decision-template.md": "ae62ed33c376effd62895e6be580efff841537a3418571ad50ad8964b807f50b",
     ".agents/skills/decision-record/references/run-template.md": "bb9332a5f27f7fa9444823dbdbb4ec1c872fbc169ce2d4ffae879b706df84b1e",
     ".agents/skills/git-conventional-commit/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
     ".agents/skills/git-conventional-commit/SKILL.md": "8f065caef56ca834f1459119261062e0ba98689b47e8eaadf6238f223471d426",

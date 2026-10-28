@@ -29,6 +29,7 @@ Máquina
 Repo
   init         Prepara el repo para los agentes: .bond/bond.toml, AGENTS.md y su config
   sync         Regenera la config de cada agente desde .bond/bond.toml
+  decisions  Memoria de decisiones del repo: add, accept, show, runs, check
   catalog      Catálogo propio de skills, comandos y MCP para el equipo (create, check)
 
 Trabajo diario (Herdr)
@@ -105,6 +106,10 @@ async function main(argv: string[]): Promise<void> {
 			const r = await import("./repo.mts");
 			if (wantsHelp) return console.log(cmd === "init" ? r.INIT_HELP : r.SYNC_HELP);
 			return cmd === "init" ? r.init(rest) : r.sync(rest);
+		}
+		case "decisions": {
+			const d = await import("./decisions.mts");
+			return wantsHelp ? console.log(d.DECISIONS_HELP) : d.decisions(rest);
 		}
 		case "catalog": {
 			const c = await import("./catalog.mts");
