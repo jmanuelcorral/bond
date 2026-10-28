@@ -1,26 +1,28 @@
 # Cambios
 
-## Sin publicar
+## 1.8.0
 
+Aceptar decisiones sin salir de la conversación con tu agente: le dices cuáles aceptas y queda
+constancia de que lo pediste tú y de quién lo ejecutó.
+
+- `bond decisions accept`, `reject` y `supersede` admiten `--confirmed-by "<lo que dijo el
+  usuario>"` y con él no necesitan terminal. La decisión guarda esa referencia en `accepted_by`
+  y en `accepted_via` quién lo ejecutó (`agent:<kind>/<nombre>` desde un panel de Herdr, `user`
+  fuera); `check` valida su formato. Aceptan varios ids y `--all-proposed`: un id desconocido o
+  que no está `proposed` se informa sin cortar los demás, y la salida es distinta de 0 si alguno
+  falla. Sin terminal y sin `--confirmed-by` se siguen negando, y un `--confirmed-by` vacío se
+  rechaza.
+- Comando nuevo del catálogo, `/accept`: enseña las decisiones `proposed`, te pregunta cuáles
+  quieres y solo entonces las acepta, rechaza o sustituye citando tus palabras.
+- En Claude Code, con `[decisions]`, `bond sync` añade a `.claude/settings.json` reglas `ask`
+  para `accept`, `reject` y `supersede`: cada una pasa por el cuadro de permiso de Claude Code.
+  Se fusionan con las reglas del repo sin pisarlas, y al quitar `[decisions]` solo se van las de
+  bond.
+- `bond decisions supersede` dejaba en `supersedes` de la decisión nueva su propio id en lugar
+  del de la sustituida.
 - El comentario de `[decisions]` que escribe `bond init` en `.bond/bond.toml` ya no habla de un
   índice en el README (desde la 1.7.0 no lo hay) y dice que los trailers `Agent:` y `Decision:`
   son opcionales.
-- Aceptar decisiones desde la conversación: `bond decisions accept <id>...`, `reject` y
-  `supersede` admiten `--confirmed-by "<lo que dijo el usuario>"` y no necesitan terminal con
-  él. La decisión guarda esa referencia en `accepted_by` y en `accepted_via` quién ejecutó
-  (`agent:<kind>/<nombre>` desde un panel de Herdr, `user` fuera); `check` valida su formato.
-  Sin terminal y sin `--confirmed-by`, se siguen negando: un agente no acepta por su cuenta,
-  pero puede ejecutar el comando citando al usuario. Admiten varios ids y `--all-proposed`; un
-  id desconocido o no `proposed` se informa sin abortar los demás (salida != 0 si alguno
-  falló) y `--confirmed-by` vacío se rechaza. `supersede` arregla además `supersedes` de la
-  nueva: refería a sí misma en vez de a la decisión sustituida.
-- Nuevo comando del catálogo `/accept` (`catalog/commands/accept.md`): lista las `proposed`,
-  pregunta cuáles quieres y solo entonces ejecuta el comando correspondiente citando tus
-  palabras en `--confirmed-by`.
-- Con `[decisions]` y Claude Code, `bond sync` deja reglas `ask` en `.claude/settings.json`
-  para `accept`, `reject` y `supersede`: cada ejecución pasa por el cuadro de permiso de
-  Claude. La fusión conserva las reglas y claves que el repo ya tenga; quitar una de bond la
-  trae el sync de vuelta, y al quitar `[decisions]` solo se van las de bond.
 
 ## 1.7.0
 
