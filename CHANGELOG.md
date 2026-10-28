@@ -18,6 +18,12 @@
   `agents` borra el plugin. `bond doctor` enseña la versión de `agy` y avisa si no está
   instalado o si está en `~/.local/bin` pero fuera del PATH. Las reglas y skills globales para
   `agy` (`bond setup`) y su uso en `bond team` llegarán aparte.
+- `bond team collect` con agentes Claude Code: toma el informe de su transcript
+  (`~/.claude/projects/*/<sesión>.jsonl`, por el id que da Herdr) en vez del panel; cuenta como
+  decisiones del agente solo las firmadas `agent:<kind>/<nombre>` que no estaban en la base
+  (antes sumaba las del orquestador del mismo tipo y las ya existentes); y compara con la base
+  guardada al mandar el encargo, así que recoger después de integrar la rama sigue mostrando sus
+  commits y decisiones.
 
 ## 1.8.0
 

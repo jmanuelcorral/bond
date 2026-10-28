@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseFm } from "../cli/decisions.mts";
-import { branchInfo, classify, collectBlocker, collectRun, lastAssistantText, trimAgentBanner, withMemoryNote, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runFileText, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle } from "../cli/team.mts";
+import { branchInfo, classify, collectBlocker, collectRun, lastAssistantText, runDecisions, sessionFile, trimAgentBanner, withMemoryNote, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runFileText, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle } from "../cli/team.mts";
 
 const dirs = (...existing: string[]) => (p: string) => existing.includes(p);
 
@@ -488,6 +488,33 @@ describe("runs de la memoria de decisiones", () => {
 		expect(existsSync(join(wt, "docs"))).toBe(false);
 	});
 
+	test("solo cuenta las decisiones nuevas de la rama firmadas agent:<kind>/<nombre>", () => {
+		const dec = join(wt, "docs", "decisions");
+		mkdirSync(dec, { recursive: true });
+		// Ya en la base: no es de esta rama aunque la firme kevin.
+		mkdirSync(join(repo, "docs", "decisions"), { recursive: true });
+		decisionFile(join(repo, "docs", "decisions"), "2026-10-28-vieja", "agent:pi/kevin");
+		g("add", "docs/decisions/2026-10-28-vieja.md");
+		g("commit", "-qm", "base: vieja");
+		decisionFile(dec, "2026-10-28-vieja", "agent:pi/kevin");
+		// Del mismo tipo pero sin nombre (como un orquestador): no es suya.
+		decisionFile(dec, "2026-10-28-del-orquestador", "agent:pi");
+		decisionFile(dec, "2026-10-28-nueva", "agent:pi/kevin");
+		expect(runDecisions(ctx())).toEqual(["2026-10-28-nueva"]);
+	});
+
+	test("collect tras integrar la rama sigue contando sus commits (usa la base del encargo)", () => {
+		recordRequest(ctx(), "la tarea", "2026-10-28T10:00:00Z");
+		writeFileSync(join(wt, "b.txt"), "b\n");
+		gw("add", "b.txt");
+		gw("commit", "-qm", "feat: b");
+		g("merge", "-q", "--ff-only", "feat/a");
+		// La base de ahora (main) ya contiene feat/a; la del encargo, no.
+		const out = collectRun(ctx(), "hecho", { ts: "2026-10-28T11:00:00Z" });
+		expect(out.commits).toHaveLength(1);
+		expect(out.commits[0]).toContain("feat: b");
+	});
+
 	test("un segundo prompt al mismo agente añade el encargo al mismo run", () => {
 		const rel = recordRequest(ctx(), "primera tarea", "2026-10-28T10:00:00Z");
 		expect(recordRequest(ctx(), "segunda tarea", "2026-10-28T10:30:00Z")).toBe(rel);
@@ -597,6 +624,32 @@ describe("informe desde el fichero de sesión del agente (D17)", () => {
 		const f = join(dir, "vacia.jsonl");
 		writeFileSync(f, JSON.stringify({ type: "message", message: { role: "user", content: [{ type: "text", text: "solo usuario" }] } }) + "\n");
 		expect(lastAssistantText(f)).toBeUndefined();
+	});
+
+	test("lee también el transcript de Claude Code (type assistant)", () => {
+		const f = join(dir, "claude.jsonl");
+		writeFileSync(
+			f,
+			[
+				JSON.stringify({ type: "user", message: { role: "user", content: "haz P1" } }),
+				JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", name: "Bash" }] } }),
+				JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "thinking", thinking: "x" }] } }),
+				JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Informe final de P1." }] } }),
+			].join("\n") + "\n",
+		);
+		expect(lastAssistantText(f)).toBe("Informe final de P1.");
+	});
+
+	test("sessionFile: ruta de pi tal cual y transcript de Claude Code por su id", () => {
+		expect(sessionFile({ agent: "pi", kind: "path", value: "/x/s.jsonl" })).toBe("/x/s.jsonl");
+		const claude = join(dir, "claude-cfg");
+		mkdirSync(join(claude, "projects", "-repo-wt"), { recursive: true });
+		const f = join(claude, "projects", "-repo-wt", "4a3b80a5-a1ea.jsonl");
+		writeFileSync(f, "");
+		expect(sessionFile({ agent: "claude", kind: "id", value: "4a3b80a5-a1ea" }, claude)).toBe(f);
+		expect(sessionFile({ agent: "claude", kind: "id", value: "no-existe" }, claude)).toBeUndefined();
+		expect(sessionFile({ agent: "claude", kind: "id", value: "../x" }, claude)).toBeUndefined();
+		expect(sessionFile(undefined)).toBeUndefined();
 	});
 
 	test("varios bloques de texto del mismo mensaje se unen", () => {

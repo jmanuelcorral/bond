@@ -945,7 +945,8 @@ export function lastAssistantText(file: string): string | undefined {
 		} catch {
 			continue;
 		}
-		if (e.type !== "message" || e.message?.role !== "assistant") continue;
+		// pi: type "message"; Claude Code: type "assistant". En los dos, message.role.
+		if ((e.type !== "message" && e.type !== "assistant") || e.message?.role !== "assistant") continue;
 		const parts = Array.isArray(e.message.content) ? (e.message.content as Array<{ type?: string; text?: unknown }>) : [];
 		const txt = parts
 			.filter((p) => p?.type === "text" && typeof p.text === "string" && (p.text as string).trim())
@@ -987,6 +988,24 @@ export function trimAgentBanner(text: string): string {
 }
 
 /**
+ * Fichero de sesión de un agente según lo que da Herdr: pi da la ruta; Claude Code, el id de la
+ * sesión, cuyo transcript está en <config>/projects/<carpeta del proyecto>/<id>.jsonl.
+ */
+export function sessionFile(s?: { agent?: string; kind?: string; value?: string }, claudeDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude")): string | undefined {
+	if (!s?.value) return undefined;
+	if (s.kind === "path") return s.value;
+	if (s.kind !== "id" || s.agent !== "claude" || !/^[\w-]+$/.test(s.value)) return undefined;
+	const projects = join(claudeDir, "projects");
+	let dirs: string[] = [];
+	try {
+		dirs = readdirSync(projects);
+	} catch {
+		return undefined;
+	}
+	return dirs.map((d) => join(projects, d, `${s.value}.jsonl`)).find((f) => existsSync(f));
+}
+
+/**
  * Informe de un agente (D17): primero su fichero de sesión (Herdr lo da en `agent_session`,
  * kind "path"; en pi un .jsonl) tomando solo su última respuesta; si no hay sesión legible
  * o sin texto, el volcado del panel recortado. Devuelve el texto y de dónde sale.
@@ -994,7 +1013,7 @@ export function trimAgentBanner(text: string): string {
 export function agentReport(agent: string, paneRead: () => string): { report: string; source: "sesión" | "panel" } {
 	try {
 		const got = herdr<{ agent?: HerdrAgent }>(["agent", "get", agent], 10_000).agent;
-		const sess = got?.agent_session?.kind === "path" ? got.agent_session.value : undefined;
+		const sess = sessionFile(got?.agent_session);
 		const fromSession = sess ? lastAssistantText(sess) : undefined;
 		if (fromSession) return { report: fromSession, source: "sesión" };
 	} catch {
@@ -1095,8 +1114,11 @@ export function collectRun(ctx: RunCtx, report: string, o: { request?: string; t
 	const dir = runsDirAbs(ctx.mainRoot, ctx.dir);
 	mkdirSync(dir, { recursive: true });
 	const run_ = loadRuns(ctx.mainRoot, ctx.dir).find((r) => r.fm.scalars.branch === ctx.branch && (!ctx.agent || r.fm.scalars.agent === ctx.agent));
-	const commits = branchCommits(ctx);
-	const decisions = runDecisions(ctx);
+	// La base es la que se guardó al mandar el encargo, no la de ahora: si la rama ya se
+	// integró, la base actual la contiene y no quedarían commits ni decisiones suyas.
+	const at = run_?.fm.scalars.base ? { ...ctx, base: run_.fm.scalars.base } : ctx;
+	const commits = branchCommits(at);
+	const decisions = runDecisions(at);
 	let name: string;
 	let request: string;
 	let fm: RunFm;
@@ -1118,20 +1140,38 @@ export function collectRun(ctx: RunCtx, report: string, o: { request?: string; t
 }
 
 /** Commits de la rama respecto a la base del run, del más antiguo al más nuevo (`hash mensaje`). */
+/**
+ * Base del run para comparar: el commit guardado al mandar el encargo (`main@abc1234`) y, si
+ * no lo hay, el nombre de la rama. El commit importa: tras integrar, la rama base ya contiene
+ * el trabajo del agente y compararla con ella no dejaría ni commits ni decisiones.
+ */
+export const runBase = (base: string) => {
+	const [ref, sha] = base.split("@");
+	return sha || ref || "";
+};
+
 function branchCommits(ctx: RunCtx): string[] {
-	const baseRef = ctx.base.split("@")[0] ?? "";
+	const baseRef = runBase(ctx.base);
 	if (!baseRef) return [];
 	const r = git(ctx.mainRoot, ["log", "--format=%h %s", `${baseRef}..${ctx.branch}`]);
 	if (r.status !== 0) return [];
 	return r.stdout.split("\n").filter(Boolean).reverse();
 }
 
-/** Decisiones del worktree de la rama registradas por este agente (decided_by, D15). */
-function runDecisions(ctx: RunCtx): string[] {
+/**
+ * Decisiones que este agente ha registrado en su rama (D15, D18): firmadas exactamente
+ * `agent:<kind>/<nombre>` y que no estaban ya en la base. `agent:<kind>` a secas no vale: es
+ * la firma de otro agente del mismo tipo sin nombre, como el orquestador.
+ */
+export function runDecisions(ctx: RunCtx): string[] {
 	if (!ctx.kind) return [];
-	const who = new Set([`agent:${ctx.kind}/${ctx.agent}`, `agent:${ctx.kind}`]);
+	const who = `agent:${ctx.kind}/${ctx.agent}`;
+	const baseRef = runBase(ctx.base);
+	const inBase = new Set(
+		baseRef ? git(ctx.mainRoot, ["ls-tree", "-r", "--name-only", baseRef, "--", ctx.dir]).stdout.split("\n").filter(Boolean) : [],
+	);
 	return loadDecisions(ctx.worktree, ctx.dir)
-		.filter((d) => who.has(d.decided_by))
+		.filter((d) => d.decided_by === who && !inBase.has(`${ctx.dir}/${d.id}.md`))
 		.map((d) => d.id);
 }
 
