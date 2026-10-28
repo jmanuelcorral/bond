@@ -114,7 +114,7 @@ The repo's own commands: Markdown files in `.bond/commands/` (common syntax: `$A
 
 **Decision memory.** With a `[decisions]` section in `bond.toml`, every non-trivial
 decision —the user's or an agent's— lands in `docs/decisions/` (one file per decision,
-`YYYY-MM-DD-slug.md`) and commits carry the `Agent:` and `Decision:` trailers. `bond sync`
+`YYYY-MM-DD-slug.md`) and commits may carry the optional `Agent:` and `Decision:` trailers. `bond sync`
 creates the `README.md` with the record format if missing; after that it belongs to the repo,
 like `AGENTS.md`
 (it is not registered in the manifest: sync neither overwrites it nor flags it as outdated).

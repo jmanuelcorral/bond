@@ -1,5 +1,11 @@
 # Cambios
 
+## Sin publicar
+
+- El comentario de `[decisions]` que escribe `bond init` en `.bond/bond.toml` ya no habla de un
+  índice en el README (desde la 1.7.0 no lo hay) y dice que los trailers `Agent:` y `Decision:`
+  son opcionales.
+
 ## 1.7.0
 
 Memoria de decisiones de los agentes: en un repo con bond, las decisiones, los encargos a otros

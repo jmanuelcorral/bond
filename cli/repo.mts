@@ -813,7 +813,7 @@ export function syncRepo(opts: { check?: boolean; force?: boolean; quiet?: boole
 		}
 	}
 	writeFileSync(join(bondDir(root), "manifest.json"), `${JSON.stringify(next, null, 2)}\n`);
-	// Memoria de decisiones: crea el README índice si falta. Como AGENTS.md, no se registra en
+	// Memoria de decisiones: crea el README (formato) si falta. Como AGENTS.md, no se registra en
 	// el manifiesto: a partir de aquí es del repo y sync no lo pisa ni lo da por desfasado.
 	let decisionsReadmeCreated = false;
 	if (cfg.decisions) {
@@ -837,7 +837,7 @@ export function sync(args: string[]): void {
 	if (args.includes("--check") && actions.length) process.exitCode = 1;
 }
 
-/** El README índice que bond deja en la carpeta de decisiones cuando no existe. */
+/** El README (formato del registro) que bond deja en la carpeta de decisiones cuando no existe. */
 export function decisionsReadme(): string {
 	return `# Decisiones
 
@@ -918,9 +918,9 @@ const hasDecisionSkill = (skills: string[]) => skills.some((s) => s.slice(s.last
 
 /** La sección [decisions] que bond escribe cuando decision-record está elegida. */
 const DECISIONS_SECTION = `# Memoria de decisiones de los agentes (skill decision-record): las decisiones no triviales
-# quedan en ficheros de esta carpeta y los commits llevan los trailers Agent: y Decision:.
-# bond sync crea el README índice si falta; a partir de ahí es tuyo. Para no usarla,
-# quita esta sección.
+# quedan en ficheros de esta carpeta (bond decisions add) y los commits pueden llevar los
+# trailers Agent: y Decision:. bond sync crea el README con el formato si falta; a partir de
+# ahí es tuyo. Para no usarla, quita esta sección.
 [decisions]
 dir = "docs/decisions"           # carpeta dentro del repo, ajustable
 `;

@@ -114,7 +114,7 @@ Comandos propios del repo: ficheros Markdown en `.bond/commands/` (sintaxis com�
 
 **Memoria de decisiones.** Con la sección `[decisions]` en `bond.toml`, cada decisión no
 trivial —del usuario o de un agente— queda en `docs/decisions/` (un fichero por decisión,
-`YYYY-MM-DD-slug.md`) y los commits llevan los trailers `Agent:` y `Decision:`. `bond sync`
+`YYYY-MM-DD-slug.md`) y los commits pueden llevar los trailers opcionales `Agent:` y `Decision:`. `bond sync`
 crea el `README.md` con el formato del registro si falta; después es del repo, como
 `AGENTS.md` (no se registra en el manifiesto y sync no lo pisa). No hay índice compartido:
 el listado lo da `bond decisions`. La skill `decision-record` explica cuándo y cómo
