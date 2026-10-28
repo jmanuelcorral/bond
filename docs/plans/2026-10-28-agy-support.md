@@ -2,7 +2,7 @@
 name: "2026-10-28-agy-support"
 description: "bond integra Antigravity (agy) como agente: configuración del repo, global, Herdr y memoria de decisiones"
 created_at: "2026-10-28T14:56:32Z"
-last_implementation_at: "2026-10-28T15:26:29Z"
+last_implementation_at: "2026-10-28T16:56:49Z"
 has_completed_all_phases: false
 ---
 
@@ -88,6 +88,15 @@ Aprobadas con el plan y aceptadas en la memoria de decisiones (usuario, 2026-10-
 - **A4 — Confianza en equipos**: como con pi y Claude Code, un worktree de `bond team` hereda la
   confianza si el checkout principal está en `trustedWorkspaces` (`--no-trust` la desactiva). Registro: `docs/decisions/2026-10-28-confianza-heredada-para-agy-en-bond-team.md`.
 
+Revisión 2 (usuario, 2026-10-28), tras la prueba real con `agy` en Herdr; aceptadas al aprobarlas:
+
+- **A5 — `agy` sin preguntas en equipos**: `bond team` y `bond-delegate` lanzan `agy` con
+  `--dangerously-skip-permissions` por defecto (sin él pide permiso por cada comando y no
+  avanza). Registro: `docs/decisions/2026-10-28-agy-arranca-en-equipos-y-delegaciones-con-dangerously-skip-permissions.md`.
+- **A6 — Integración de Herdr para `agy`**: `bond setup` instala la integración `antigravity-cli`
+  de Herdr, para que `collect` lea la sesión de `agy`. Sustituye a la decisión de P3 de no
+  instalarla. Registro: `docs/decisions/2026-10-28-bond-setup-instala-la-integracion-de-herdr-para-agy.md`.
+
 Dependencias y riesgos:
 
 - P2 no depende de P1 (zonas distintas: `cli/setup.mts`/`cli/instructions.mts` frente a
@@ -160,12 +169,12 @@ Dependencias y riesgos:
   - Prueba real: `agy -p` en un repo cualquiera cita una regla de `BOND_RULES` y lista
     `bond-delegate` y `bond-team`.
 - Actions:
-  - [ ] Plugin global en `bond setup` y en `propagate`, con pruebas.
-  - [ ] Fila o detalle en `bond doctor`, con prueba.
-  - [ ] `docs/reference.md` (setup, instrucciones globales, desinstalar), `docs/en/reference.md`
+  - [x] Plugin global en `bond setup` y en `propagate`, con pruebas.
+  - [x] Fila o detalle en `bond doctor`, con prueba.
+  - [x] `docs/reference.md` (setup, instrucciones globales, desinstalar), `docs/en/reference.md`
         y `## Sin publicar`.
-  - [ ] Run applicable checks and record actual results.
-  - [ ] Present evidence and stop for review before another phase.
+  - [x] Run applicable checks and record actual results.
+  - [x] Present evidence and stop for review before another phase.
 - Verification: `npm run typecheck && bun test`; a mano, `bin/bond setup` con `agy` y
   `agy -p` como en el criterio; revisar que `~/.gemini/config/` solo cambia en `plugins/bond/`.
 - Risks and recovery: todo queda en una carpeta propia; se quita borrándola.
@@ -187,32 +196,75 @@ Dependencias y riesgos:
     `collect` deja en el run su última respuesta, sin el arranque del TUI.
   - Prueba real con un agente `agy` en un repo temporal con `[decisions]`, como la de pi.
 - Actions:
-  - [ ] Confianza para `agy` en `bond team`, con pruebas.
-  - [ ] `collect` para `agy` (sesión o panel), con pruebas y un ejemplo de sesión en `test/`.
-  - [ ] Skills y documentación, `## Sin publicar`.
-  - [ ] Run applicable checks and record actual results.
-  - [ ] Present evidence and stop for review before another phase.
+  - [x] Confianza para `agy` en `bond team`, con pruebas.
+  - [x] `collect` para `agy` (sesión o panel), con pruebas y un ejemplo de sesión en `test/`.
+  - [x] Skills y documentación, `## Sin publicar`.
+  - [x] Run applicable checks and record actual results.
+  - [x] Present evidence and stop for review before another phase.
 - Verification: `npm run typecheck && bun test`; a mano, dentro de Herdr, la prueba real del
   criterio (la hace el orquestador tras integrar).
 - Risks and recovery: si Herdr no da la sesión de `agy`, el panel recortado queda como única
   fuente; se documenta.
+
+### P4: Ajustes tras la prueba real con `agy` en Herdr
+
+- Outcome: `bond team <rama>:agy` funciona sin tocar el PATH ni contestar permisos, sin falsos
+  «espera una respuesta tuya», y `collect` guarda solo la respuesta final de `agy`.
+- Owning repository: `bond`.
+- Dependencies: P3 (aceptada).
+- Affected contracts: búsqueda del binario de `agy` en `bond team`/`bond-delegate` (también en
+  `~/.local/bin`, como ya hace `bond doctor`); detección de preguntas de `agy` en `cli/herdr.mts`
+  (el aviso de arranque «esc to dismiss» no es una pregunta); argumentos por defecto de `agy` en
+  `bond team` y en la skill `bond-delegate` (A5); `bond setup` y `bond doctor` con la integración
+  `antigravity-cli` de Herdr (A6); recorte del panel para `agy` en `collect` (banner y encargo
+  repetido) como respaldo.
+- Acceptance criteria:
+  - Con `~/.local/bin` fuera del PATH, `bond team <rama>:agy` arranca `agy` (ruta completa).
+  - El aviso de arranque de `agy` no marca la rama `bloqueado` ni dice «espera una respuesta
+    tuya»; la pregunta de confianza sí.
+  - `bond team <rama>:agy` lanza `agy --dangerously-skip-permissions` salvo que se pasen
+    argumentos propios tras `--`; `bond-delegate` igual.
+  - `bond setup` con `agy` y Herdr instala `antigravity-cli` (`herdr integration status` la da
+    `current`) y `bond doctor` la muestra; repetirlo no hace nada.
+  - Con la integración, `collect` toma el informe de la sesión de `agy`; sin ella, el panel sin
+    el banner ni el encargo repetido (prueba con un volcado real en `test/fixtures/`).
+- Actions:
+  - [ ] Binario de `agy` en `~/.local/bin` para `bond team`, con prueba.
+  - [ ] Aviso de arranque fuera de la detección de preguntas, con prueba.
+  - [ ] `--dangerously-skip-permissions` por defecto para `agy` en `bond team` y `bond-delegate`.
+  - [ ] Integración `antigravity-cli` en `bond setup` y `bond doctor`, con prueba.
+  - [ ] Recorte del panel de `agy` en `collect`, con prueba.
+  - [ ] `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
+  - [ ] Run applicable checks and record actual results.
+  - [ ] Present evidence and stop for review before another phase.
+- Verification: `npm run typecheck && bun test`, `bin/bond sync --check`; tras integrar, el
+  orquestador repite la prueba real en Herdr (repo temporal con `[decisions]`, `bond team
+  <rama>:agy` sin tocar el PATH, `prompt`, `collect`, `bond decisions runs`).
+- Risks and recovery: `--dangerously-skip-permissions` deja a `agy` ejecutar sin preguntar en
+  el worktree; se desactiva pasando otros argumentos tras `--`.
 
 ## Progress (local plans only)
 
 | Phase | Implementation | Verification | Review | Evidence |
 | --- | --- | --- | --- | --- |
 | P1 | implemented | passed | accepted | rama `plan/agy-support-p1` (kevin, Claude Code), commit `be7395d`, integrada en `main` por fast-forward; en `main`: typecheck limpio, `bun test` 314/314, `bond sync --check` al día; prueba real: en un repo temporal con `bond init --agents agy`, `agy -p` ve `bond_context7`, `bond_duckduckgo` y `/accept`, `/commit`, `/handoff`, `/review`; decisión del agente `2026-10-28-agy-sin-instrucciones-globales-hasta-el-plugin-global` aceptada; aceptada por el usuario en sesión el 2026-10-28 |
-| P2 | pending | not_run | pending | none yet |
-| P3 | pending | not_run | pending | none yet |
+| P2 | implemented | passed | accepted | rama `plan/agy-support-p2` (kevin, Claude Code), commit `f1b6c01`, integrada en `main` por fast-forward; prueba real con HOME temporal (reglas y skills globales en `agy`); decisión del agente `2026-10-28-plugin-global-de-agy-con-el-nombre-bond-global` aceptada; aceptada por el usuario en sesión el 2026-10-28 |
+| P3 | implemented | passed | accepted | rama `plan/agy-support-p3` (stuart, Claude Code), commit `ce80ecb` rebasado como `8dd58c9`, integrada en `main`; en `main` con P2: `bun test` 331/331; prueba real en Herdr: `agy` registra su decisión como `agent:agy/kevin`, la commitea en su rama con trailers y `collect` la atribuye; hallazgos en P4; aceptada por el usuario en sesión el 2026-10-28 |
+| P4 | pending | not_run | pending | none yet |
 
 ## Next step
 
-P2 y P3 de `docs/plans/2026-10-28-agy-support.md` en paralelo con `plan-team`: las dos dependen
-solo de P1, aceptada. P2 añade además las instrucciones globales de `agy` que P1 dejó fuera
-(decisión `2026-10-28-agy-sin-instrucciones-globales-hasta-el-plugin-global`).
+Ejecutar P4 de `docs/plans/2026-10-28-agy-support.md` con un agente Claude Code; después, la prueba
+real del orquestador en Herdr.
 
 ## Evidence and tracking
 
 - Pruebas previas al plan (2026-10-28): `agy -p` en el repo de bond y en un repo temporal con un
   plugin `.agents/plugins/bond/` y un plugin global de prueba (borrado después).
 - P1: `be7395d` (`feat(agents): support Antigravity (agy) in bond init, sync and doctor`), en `main`; run en `docs/decisions/runs/2026-10-28-kevin-use-the-plan-execute-skill-to-implement-2.md`.
+- P2: `f1b6c01`; P3: `8dd58c9`, en `main`.
+- Prueba real en Herdr (2026-10-28), repo temporal con `[decisions]`, `bond team team/nota2:agy`:
+  `agy` registró `2026-10-28-redactar-note-md-en-espanol` (`agent:agy/kevin`) y la commiteó en
+  su rama (`e7351bc`, trailers `Agent:` y `Decision:`); `collect` contó 1 commit y 1 decisión.
+  Hallazgos: `agy` fuera del PATH, falso «espera una respuesta tuya» con el aviso de arranque,
+  bloqueos por permisos sin `--dangerously-skip-permissions`, informe del panel con el banner.

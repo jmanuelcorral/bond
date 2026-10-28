@@ -1,13 +1,13 @@
 ---
 id: "2026-10-28-p3-no-instala-la-integracion-de-herdr-para-agy"
 title: "P3 no instala la integración de Herdr para agy"
-status: "accepted"
+status: "superseded"
 date: "2026-10-28"
 decided_by: "agent:claude/stuart"
-accepted_by: "chat 2026-10-28: «acepta las tres, integra P2 y P3, arregla check y haz la prueba real»"
+accepted_by: "chat 2026-10-28: «acepta P3, añade P4 y mándala a claude», aprobando los arreglos propuestos tras la prueba real"
 accepted_via: "agent:claude"
 supersedes: ""
-superseded_by: ""
+superseded_by: "2026-10-28-bond-setup-instala-la-integracion-de-herdr-para-agy"
 links:
   - "plan: docs/plans/2026-10-28-agy-support.md#P3"
   - "branch: plan/agy-support-p3"
