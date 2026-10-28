@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { branchInfo, classify, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, renderWatch, type Row, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle } from "../cli/team.mts";
+import { parseFm } from "../cli/decisions.mts";
+import { branchInfo, classify, collectRun, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runFileText, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle } from "../cli/team.mts";
 
 const dirs = (...existing: string[]) => (p: string) => existing.includes(p);
 
@@ -429,5 +430,129 @@ describe("cerrar al terminar", () => {
 		expect(idleTables([row("a", "integrada")], panes, "fluzo", "w2:p1")).toEqual(["w1:p3"]);
 		// Queda un minion abierto: la tabla sigue.
 		expect(idleTables([row("b", "lista", { agent: kevin })], panes, "fluzo", "w1:p1")).toEqual([]);
+	});
+});
+
+// --- runs: encargos e informes en la memoria de decisiones -----------------------------------
+
+describe("runs de la memoria de decisiones", () => {
+	let wt: string;
+	const today = new Date().toISOString().slice(0, 10);
+	const gw = (...args: string[]) => {
+		const r = spawnSync("git", ["-C", wt, ...args], { encoding: "utf8" });
+		if (r.status !== 0) throw new Error(`git -C wt ${args.join(" ")}: ${r.stderr}`);
+		return r.stdout.trim();
+	};
+	const ctx = (): RunCtx => ({
+		mainRoot: repo,
+		worktree: wt,
+		dir: "docs/decisions",
+		branch: "feat/a",
+		base: `main@${g("rev-parse", "--short", "main")}`,
+		agent: "kevin",
+		kind: "pi",
+		orchestrator: "user",
+	});
+	const runPath = (rel: string) => join(repo, ...rel.split("/"));
+	const decisionFile = (dir: string, id: string, decidedBy: string) =>
+		writeFileSync(join(dir, `${id}.md`), `---\nid: ${JSON.stringify(id)}\ntitle: "x"\nstatus: "proposed"\ndate: "2026-10-28"\ndecided_by: ${JSON.stringify(decidedBy)}\n---\n\n## Decision\n\nx\n`);
+
+	beforeEach(() => {
+		wt = mkdtempSync(join(tmpdir(), "bond-team-wt-"));
+		rmSync(wt, { recursive: true, force: true }); // git worktree add la quiere inexistente
+		g("worktree", "add", "-q", "-b", "feat/a", wt);
+	});
+	afterEach(() => rmSync(wt, { recursive: true, force: true }));
+
+	test("recordRequest crea el run con el encargo exacto y el frontmatter D9", () => {
+		const rel = recordRequest(ctx(), "arregla el login", "2026-10-28T10:00:00Z");
+		expect(rel).toBe(`docs/decisions/runs/${today}-kevin-arregla-el-login.md`);
+		const text = readFileSync(runPath(rel), "utf8");
+		const p = parseFm(text)!;
+		expect(p.scalars).toMatchObject({
+			agent: "kevin",
+			kind: "pi",
+			branch: "feat/a",
+			base: ctx().base,
+			orchestrator: "user",
+			status: "sent",
+			started_at: "2026-10-28T10:00:00Z",
+			finished_at: "",
+		});
+		expect(p.lists.commits).toEqual([]);
+		expect(p.lists.decisions).toEqual([]);
+		expect(text).toContain("## Request");
+		expect(text).toContain("## Report");
+		expect(text).toContain("arregla el login");
+		// El run se guarda en el checkout principal, nunca en el worktree del agente.
+		expect(existsSync(join(wt, "docs"))).toBe(false);
+	});
+
+	test("un segundo prompt al mismo agente añade el encargo al mismo run", () => {
+		const rel = recordRequest(ctx(), "primera tarea", "2026-10-28T10:00:00Z");
+		expect(recordRequest(ctx(), "segunda tarea", "2026-10-28T10:30:00Z")).toBe(rel);
+		const text = readFileSync(runPath(rel), "utf8");
+		expect(text).toContain("primera tarea");
+		expect(text).toContain("segunda tarea");
+		expect(text).toContain("**2026-10-28T10:30:00Z**");
+		expect(readdirSync(join(repo, "docs", "decisions", "runs"))).toHaveLength(1);
+	});
+
+	test("collectRun guarda informe, estado, commits de la rama y decisiones del agente", () => {
+		recordRequest(ctx(), "la tarea", "2026-10-28T10:00:00Z");
+		writeFileSync(join(wt, "a.txt"), "a\n");
+		gw("add", "a.txt");
+		gw("commit", "-qm", "feat: a");
+		mkdirSync(join(wt, "docs", "decisions"), { recursive: true });
+		decisionFile(join(wt, "docs", "decisions"), "2026-10-28-eleccion", "agent:pi/kevin");
+		decisionFile(join(wt, "docs", "decisions"), "2026-10-28-ajena", "user");
+		const out = collectRun(ctx(), "hecho: checks en verde", { ts: "2026-10-28T11:00:00Z" });
+		expect(out.commits).toHaveLength(1);
+		expect(out.commits[0]).toContain("feat: a");
+		expect(out.decisions).toEqual(["2026-10-28-eleccion"]);
+		const p = parseFm(readFileSync(runPath(out.rel), "utf8"))!;
+		expect(p.scalars.status).toBe("reported");
+		expect(p.scalars.finished_at).toBe("2026-10-28T11:00:00Z");
+		expect(p.lists.commits).toEqual(out.commits);
+		expect(p.lists.decisions).toEqual(["2026-10-28-eleccion"]);
+		expect(p.body).toContain("hecho: checks en verde");
+		expect(p.body).toContain("la tarea");
+	});
+
+	test("repetir collect no duplica: reemplaza el informe y recalcula listas", () => {
+		recordRequest(ctx(), "la tarea", "2026-10-28T10:00:00Z");
+		const first = collectRun(ctx(), "informe uno", { ts: "2026-10-28T11:00:00Z" });
+		const second = collectRun(ctx(), "informe dos", { ts: "2026-10-28T12:00:00Z" });
+		expect(second.rel).toBe(first.rel);
+		expect(readdirSync(join(repo, "docs", "decisions", "runs"))).toHaveLength(1);
+		const text = readFileSync(runPath(second.rel), "utf8");
+		expect(text).toContain("informe dos");
+		expect(text).not.toContain("informe uno");
+		expect(text.match(/## Report/g)).toHaveLength(1);
+		expect(text).toContain("la tarea");
+	});
+
+	test("collectRun crea el run con el encargo si no había (delegación sin bond team prompt)", () => {
+		const out = collectRun(ctx(), "informe del delegado", { request: "revisa los cambios sin commitear" });
+		expect(out.rel).toBe(`docs/decisions/runs/${today}-kevin-revisa-los-cambios-sin-commitear.md`);
+		const text = readFileSync(runPath(out.rel), "utf8");
+		expect(text).toContain("revisa los cambios sin commitear");
+		expect(text).toContain("informe del delegado");
+		expect(parseFm(text)!.scalars.status).toBe("reported");
+	});
+
+	test("un encargo nuevo tras recoger, con el mismo slug, sale con sufijo -2", () => {
+		recordRequest(ctx(), "misma tarea", "2026-10-28T10:00:00Z");
+		collectRun(ctx(), "informe", { ts: "2026-10-28T11:00:00Z" });
+		const rel = recordRequest(ctx(), "Misma tarea", "2026-10-28T12:00:00Z");
+		expect(rel).toBe(`docs/decisions/runs/${today}-kevin-misma-tarea-2.md`);
+	});
+
+	test("runFileText y parseFm round-trip con las listas de commits y decisiones", () => {
+		const fm = { agent: "kevin", kind: "pi", branch: "feat/a", base: "main@abc", orchestrator: "user", started_at: "s", finished_at: "f", status: "reported", commits: ["aaa un commit | con barra"], decisions: ["2026-10-28-x"] };
+		const p = parseFm(runFileText(fm, "encargo", "informe"))!;
+		expect(p.lists.commits).toEqual(fm.commits);
+		expect(p.lists.decisions).toEqual(fm.decisions);
+		expect(p.scalars.status).toBe("reported");
 	});
 });

@@ -14,7 +14,7 @@ you see? Open an [issue on GitHub](https://github.com/jmanuelcorral/bond/issues)
 | `bond init` | Once per repo: agents, default agent and tools; generates each agent's config ([below](#per-repo-configuration-bond-init-and-bond-sync)) |
 | `bond` | Inside a repo: opens its workstation in Herdr ([workstation.md](workstation.md)) |
 | `bond dev <dir>` | The same for another directory |
-| `bond team` | One agent per branch, each in its own worktree (in Herdr, 4 in your tab and the rest in new tabs, or whatever you choose); `status` (`--watch`: live table grouped by status, which closes on its own when no work is pending), `prompt`, `clean` (removing the last one also closes the table) ([workstation.md](workstation.md#bond-team)) |
+| `bond team` | One agent per branch, each in its own worktree (in Herdr, 4 in your tab and the rest in new tabs, or whatever you choose); `status` (`--watch`: live table grouped by status, which closes on its own when no work is pending), `prompt` (with `[decisions]` it records the request in a run; `--no-record` skips it), `collect` (stores the agent's report from its pane into the run), `clean` (removing the last one also closes the table) ([workstation.md](workstation.md#bond-team)) |
 | `bond status` | Live agents in Herdr |
 | `bond sessions` | pi sessions and how to resume them |
 | `bond sync` | Regenerates the repo's agent config from `.bond/bond.toml` |
@@ -732,8 +732,8 @@ enable it and everything else exits 0 saying the memory is not in use.
 | `bond decisions accept <id>` | Moves it to `accepted` (`--ref <acceptance>`). Requires an interactive terminal and confirmation: refused from an agent's shell (no TTY) |
 | `bond decisions reject <id>` | Moves it to `rejected`; same confirmation |
 | `bond decisions supersede <id> --by <new>` | The old one becomes `superseded` and the new one references it in `supersedes`; same confirmation |
-| `bond decisions show <id>` | The decision's whole file |
-| `bond decisions runs` | The runs (delegated tasks) in `<dir>/runs/`; `--agent <substring>`, `--json` |
+| `bond decisions show <id>` | The decision's whole file (or the run's, if the id is one in `<dir>/runs/`) |
+| `bond decisions runs` | The runs (delegated tasks) in `<dir>/runs/`, with their branch commits and that agent's decisions; `--agent <substring>`, `--json` |
 | `bond decisions check` | Audits the memory: frontmatter, id vs filename, duplicates, broken supersession references, `Decision:` trailers and the index (missing or orphan rows, stale status). Exits 1 on errors |
 
 Authorship (`decided_by`): inside a Herdr pane it is `agent:<kind>/<name>` —bond looks up the
@@ -754,6 +754,16 @@ link decisions with this tool (`record_decision` or `bond decisions add`) while 
 executing a phase, committing, preparing a PR or documenting a convention. None of them
 marks a decision `accepted`: that stays with `bond decisions accept`. Without the memory,
 or if the tool or command is unavailable, the skills behave as they always did.
+
+Runs (requests and reports) are written by bond, not by the model: `bond team prompt <branch>`
+stores the exact request in the main checkout's `<dir>/runs/<date>-<agent>-<slug>.md` before
+sending it (`--no-record` skips it; if saving fails it warns and sends the prompt anyway), and
+`bond team collect <branch>` reads the agent's pane (`--lines <n>`, 200 by default) and stores
+the report, the status, the branch's commits and the decisions whose `decided_by` is that
+agent; collecting again replaces the report and recomputes the lists without duplicating.
+Without a run created by `prompt`, `collect` creates one with `--request "<task>"` and
+`--agent <name>` (delegations without a team, like `bond-delegate`). The branch agent never
+writes its own run.
 
 The file and index format is documented in the `decision-record` skill
 (`catalog/skills/decision-record/`).

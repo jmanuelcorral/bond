@@ -38,7 +38,10 @@ y lleva el progreso del plan al integrar cada rama.
    `bond team prompt <rama> "<mensaje>"` (se niega si el agente espera una respuesta). El mensaje es autocontenido y dice qué hacer,
    qué ficheros tocar y cuáles no, cómo verificarlo, y que al terminar haga **commit en su
    rama** con un mensaje en inglés, **sin push**. Ese commit es parte de lo que pide el
-   usuario al pedir el equipo.
+   usuario al pedir el equipo. Si el repo tiene la memoria de decisiones activa
+   (`[decisions]` en `.bond/bond.toml`), `bond team prompt` guarda el encargo exacto en
+   un run de `docs/decisions/runs/` (evítalo con `--no-record`); si la escritura falla,
+   avisa y manda el prompt igual: el envío no depende del registro.
 6. Espera a cada uno: `herdr agent wait <agente> --timeout 1800000` (el nombre del agente de
    cada rama sale en `bond team status`). Si alguno queda
    `blocked`, lee su panel y pregunta al usuario antes de responder. Si hay `timeout`, mira
@@ -46,8 +49,12 @@ y lleva el progreso del plan al integrar cada rama.
    local compartido puede haber errores 429: si un agente se rinde sin commits, reenvíale la
    tarea cuando acabe otro.
 7. Revisa: `bond team status` da por rama el estado, los commits y los ficheros. Sin cambiar
-   de rama, mira `git log --oneline <base>..<rama>` y `git diff --stat <base>...<rama>`, y lee
-   el informe de cada agente con `herdr agent read <agente> --source recent-unwrapped --lines 120`.
+   de rama, mira `git log --oneline <base>..<rama>` y `git diff --stat <base>...<rama>`.
+   Con la memoria de decisiones activa, recoge el informe de cada agente con
+   `bond team collect <rama>`: lee su panel y guarda el informe, el estado, los commits de
+   la rama y las decisiones registradas por ese agente en el run del encargo (repetirlo no
+   duplica nada; `--lines <n>` cambia cuánto lee del panel). Sin memoria, lee el informe con
+   `herdr agent read <agente> --source recent-unwrapped --lines 120`.
 8. Resume por rama: qué hizo, commits, ficheros, verificación y conflictos probables entre
    ramas. Propón un orden de integración.
 

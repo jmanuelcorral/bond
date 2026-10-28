@@ -3,17 +3,20 @@
 // hacen falta (clean). Las ramas no se tocan: nada de merge, push ni borrado sin pedirlo.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, realpathSync, rmdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
+import { loadDecisions, parseFm, type Parsed, resolveAuthor, slugify } from "./decisions.mts";
 import { chooseAgent, gitRoot, openWorkspace } from "./launch.mts";
 import { agents, ensureServer, firstFreeName, herdr, type HerdrAgent, insideHerdr, pendingQuestion, requireHerdr, serverRunning, workspaces } from "./herdr.mts";
+import { repoDecisions } from "./repo.mts";
 import { inheritTrust, TRUST_KINDS } from "./trust.mts";
-import { act, caution, die, dim, isDryRun, ok, run, warn } from "./util.mts";
+import { act, caution, catchDie, die, dim, isDryRun, ok, run, warn } from "./util.mts";
 
 export const TEAM_HELP = `Uso: bond team [repo] <rama[:agente]>... [opciones] [-- argumentos de los agentes]
        bond team status [repo] [--base <ref>] [--json | --watch [--keep-open]]
-       bond team prompt <rama> <tarea> [--wait] [--timeout <ms>]
+       bond team prompt <rama> <tarea> [--wait] [--timeout <ms>] [--no-record]
+       bond team collect <rama> [--lines <n>] [--agent <nombre>] [--request <encargo>]
        bond team clean [repo] [rama...] [--base <ref>] [--force] [--delete-branch] [--keep-table] [--dry-run]
 
 Abre un worktree y un agente por rama. Sin [repo], el repo del directorio actual. El agente de
@@ -54,6 +57,14 @@ status   Cada worktree del repo: estado, agente, commits por delante de la base 
          sin commitear, lista, o un agente abierto sin commits aún), avisa y se cierra sola;
          no si es el panel enfocado ni con --keep-open.
 prompt   Manda una tarea al agente de esa rama (herdr agent prompt); --wait espera a que acabe.
+         Con la memoria de decisiones activa ([decisions] en bond.toml), guarda el encargo
+         exacto en <dir>/runs/ (--no-record para no guardarlo); si la escritura falla,
+         avisa y manda el prompt igual.
+collect  Recoge el informe del agente (herdr agent read) y lo guarda en el run de esa rama
+         de la memoria de decisiones, con el estado, los commits de la rama y las decisiones
+         registradas por ese agente. Repetirlo reemplaza el informe y recalcula listas: no
+         duplica nada. Sin run creado por prompt, lo crea con --request como encargo (para
+         delegaciones sin equipo, como bond-delegate); --agent recoge por nombre de agente.
 clean    Quita worktrees (carpeta, workspace y agente); las ramas se quedan. Sin ramas, solo
          los integrados que abrió Herdr. Nunca uno con el agente trabajando o con cambios sin
          commitear, salvo con --force. --delete-branch borra además las ramas integradas.
@@ -819,14 +830,28 @@ function openWatch(root: string, anchor: string, base?: string): void {
 
 function prompt(args: string[]): void {
 	requireHerdr();
-	const { positional, opts } = parseCommon(args, ["--wait"], ["--timeout"]);
+	const { positional, opts } = parseCommon(args, ["--wait", "--no-record"], ["--timeout"]);
 	const [branch, ...words] = positional;
-	if (!branch || !words.length) die('uso: bond team prompt <rama> "la tarea" [--wait] [--timeout <ms>]');
-	const rows = teamRows(repoOf());
+	if (!branch || !words.length) die('uso: bond team prompt <rama> "la tarea" [--wait] [--timeout <ms>] [--no-record]');
+	const root = repoOf();
+	const rows = teamRows(root);
 	const row = rows.find((r) => r.branch === branch) ?? die(`no hay worktree para ${branch} (bond team status)`);
 	const name = row.agent?.name ?? die(`${branch} no tiene un agente en marcha (bond team ${branch} para abrirlo)`);
 	// Con una pregunta en pantalla, el Enter del prompt la contestaría por ti y la tarea se perdería.
 	if (row.state === "bloqueado") die(`${name} espera una respuesta tuya${row.agent?.question ? ` (${row.agent.question})` : ""}: contéstale en su panel (herdr workspace focus ${row.workspace}) y repite`);
+	// La memoria de decisiones: el encargo queda en el run antes de mandar, y si escribir
+	// falla no puede cortar el envío (D9).
+	let runRel: string | undefined;
+	if (!opts["--no-record"]) {
+		const ctx = runCtx(root, row);
+		if (ctx) {
+			try {
+				runRel = recordRequest(ctx, words.join(" "));
+			} catch (e) {
+				warn(`run: ${(e as Error).message} (mando el prompt igual)`);
+			}
+		}
+	}
 	const extra = [...(opts["--wait"] ? ["--wait"] : []), ...(opts["--timeout"] ? ["--timeout", opts["--timeout"] as string] : [])];
 	// Sin límite de tiempo propio: con --wait puede tardar lo que tarde el agente.
 	const r = spawnSync("herdr", ["agent", "prompt", name, words.join(" "), ...extra], { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
@@ -837,7 +862,238 @@ function prompt(args: string[]): void {
 		// Salida no JSON.
 	}
 	if (r.status !== 0 || parsed.error) die(`${name}: ${parsed.error?.message ?? (r.stderr || r.stdout).trim()}`);
-	console.log(`${ok("✓")} ${branch} → ${name}${opts["--wait"] ? `  ${dim(parsed.result?.agent?.agent_status ?? "")}` : ""}`);
+	console.log(`${ok("✓")} ${branch} → ${name}${runRel ? `  ${dim(`run: ${runRel}`)}` : ""}${opts["--wait"] ? `  ${dim(parsed.result?.agent?.agent_status ?? "")}` : ""}`);
+}
+
+// --- runs: encargos e informes en la memoria de decisiones -----------------------------------
+//
+// Con [decisions] activo, cada encargo que se manda desde aquí queda en
+// <dir>/runs/YYYY-MM-DD-<agente>-<slug>.md (D9), escrito por bond en el checkout principal:
+// el texto exacto del encargo al mandar (prompt) y el informe leído del panel al recoger
+// (collect), más los commits de la rama y las decisiones registradas por ese agente (D15).
+// El agente de la rama nunca escribe su run: reporta en su respuesta y bond lo guarda aquí.
+
+const utcNow = () => `${new Date().toISOString().slice(0, 19)}Z`;
+const utcToday = () => new Date().toISOString().slice(0, 10);
+const q = (s: string) => JSON.stringify(s);
+const fmList = (k: string, xs: string[]) => (xs.length ? `${k}:\n${xs.map((x) => `  - ${q(x)}`).join("\n")}` : `${k}: []`);
+
+export interface RunFm {
+	agent: string;
+	kind: string;
+	branch: string;
+	/** Base del run, `main@abc1234`: rama y commit desde el que salió el trabajo. */
+	base: string;
+	/** Quién mandó el encargo: `kind/nombre` en un panel de Herdr, `user` fuera. */
+	orchestrator: string;
+	started_at: string;
+	finished_at: string;
+	/** sent | reported | integrated | failed */
+	status: string;
+	commits: string[];
+	decisions: string[];
+}
+
+export interface RunCtx {
+	/** Checkout principal: donde se guardan los runs (nunca en el worktree del agente). */
+	mainRoot: string;
+	/** Worktree de la rama: de sus ficheros salen las decisiones del agente. */
+	worktree: string;
+	/** Carpeta de decisiones relativa ([decisions] dir), con `/`. */
+	dir: string;
+	branch: string;
+	base: string;
+	agent: string;
+	kind: string;
+	orchestrator: string;
+}
+
+const REPORT_HEADER = "## Report";
+
+/** El fichero de un run: frontmatter D9 + secciones Request y Report. */
+export function runFileText(fm: RunFm, request: string, report: string): string {
+	return `---\nagent: ${q(fm.agent)}\nkind: ${q(fm.kind)}\nbranch: ${q(fm.branch)}\nbase: ${q(fm.base)}\norchestrator: ${q(fm.orchestrator)}\nstarted_at: ${q(fm.started_at)}\nfinished_at: ${q(fm.finished_at)}\nstatus: ${q(fm.status)}\n${fmList("commits", fm.commits)}\n${fmList("decisions", fm.decisions)}\n---\n\n## Request\n\n${request.trim()}\n\n${REPORT_HEADER}\n\n${report.trim()}\n`;
+}
+
+const fmOf = (p: Parsed): RunFm => ({
+	agent: p.scalars.agent ?? "",
+	kind: p.scalars.kind ?? "",
+	branch: p.scalars.branch ?? "",
+	base: p.scalars.base ?? "",
+	orchestrator: p.scalars.orchestrator ?? "",
+	started_at: p.scalars.started_at ?? "",
+	finished_at: p.scalars.finished_at ?? "",
+	status: p.scalars.status ?? "sent",
+	commits: p.lists.commits ?? [],
+	decisions: p.lists.decisions ?? [],
+});
+
+interface RunOnDisk {
+	name: string;
+	rel: string;
+	fm: Parsed;
+	request: string;
+	report: string;
+}
+
+function readRun(name: string, rel: string, text: string): RunOnDisk | undefined {
+	const p = parseFm(text);
+	if (!p) return undefined;
+	const ri = p.body.indexOf(REPORT_HEADER);
+	const request = (ri < 0 ? p.body : p.body.slice(0, ri)).replace(/^\s*## Request\s*\n+/, "").trim();
+	const report = ri < 0 ? "" : p.body.slice(ri + REPORT_HEADER.length).replace(/^\n+/, "").trim();
+	return { name, rel, fm: p, request, report };
+}
+
+/** Los runs de <dir>/runs/, del más reciente al más antiguo (el nombre lleva la fecha). */
+export function loadRuns(root: string, dirRel: string): RunOnDisk[] {
+	const dir = runsDirAbs(root, dirRel);
+	if (!existsSync(dir)) return [];
+	return readdirSync(dir)
+		.filter((f) => f.endsWith(".md") && f !== "README.md")
+		.sort()
+		.reverse()
+		.map((f) => readRun(f, `${dirRel}/runs/${f}`, readFileSync(join(dir, f), "utf8")))
+		.filter((r): r is RunOnDisk => !!r);
+}
+
+export const runsDirAbs = (root: string, dirRel: string) => join(root, ...dirRel.split("/"), "runs");
+
+/** Nombre libre del fichero de run: `<fecha>-<agente>-<slug>`, con sufijo `-2` si existe. */
+function freeRunName(dir: string, ctx: RunCtx, describe: string): string {
+	const cut = (s: string) => slugify(s).replace(/-+$/, "").slice(0, 40).replace(/-+$/, "");
+	const stem = `${utcToday()}-${slugify(ctx.agent) || "agent"}-${cut(describe) || cut(ctx.branch) || "task"}`;
+	for (let n = 1; ; n++) {
+		const name = n === 1 ? `${stem}.md` : `${stem}-${n}.md`;
+		if (!existsSync(join(dir, name))) return name;
+	}
+}
+
+/**
+ * Guarda un encargo: si el agente tiene un run abierto (status "sent") en esta rama, añade
+ * el texto a su sección Request con la marca de tiempo; si no, crea el fichero nuevo.
+ * Devuelve la ruta relativa del run.
+ */
+export function recordRequest(ctx: RunCtx, task: string, ts = utcNow()): string {
+	const dir = runsDirAbs(ctx.mainRoot, ctx.dir);
+	mkdirSync(dir, { recursive: true });
+	const text = task.trim();
+	if (!text) die("el encargo está vacío (bond team prompt <rama> \"la tarea\")");
+	const open = loadRuns(ctx.mainRoot, ctx.dir).find((r) => r.fm.scalars.branch === ctx.branch && r.fm.scalars.agent === ctx.agent && r.fm.scalars.status === "sent");
+	if (open) {
+		const request = `${open.request}\n\n---\n\n**${ts}**\n\n${text}`;
+		writeFileSync(join(dir, open.name), runFileText(fmOf(open.fm), request, open.report));
+		return open.rel;
+	}
+	const name = freeRunName(dir, ctx, text);
+	const fm: RunFm = { agent: ctx.agent, kind: ctx.kind, branch: ctx.branch, base: ctx.base, orchestrator: ctx.orchestrator, started_at: ts, finished_at: "", status: "sent", commits: [], decisions: [] };
+	writeFileSync(join(dir, name), runFileText(fm, `**${ts}**\n\n${text}`, ""));
+	return `${ctx.dir}/runs/${name}`;
+}
+
+/**
+ * Recoge el informe de la rama: lo guarda en su run (lo crea si no hay, con `request` como
+ * encargo, para delegaciones sin `bond team prompt`), con status "reported", finished_at,
+ * los commits de la rama y las decisiones cuyo decided_by es este agente. Repetirlo
+ * reemplaza el informe y recalcula las listas: no duplica nada.
+ */
+export function collectRun(ctx: RunCtx, report: string, o: { request?: string; ts?: string } = {}): { rel: string; commits: string[]; decisions: string[] } {
+	const ts = o.ts ?? utcNow();
+	const dir = runsDirAbs(ctx.mainRoot, ctx.dir);
+	mkdirSync(dir, { recursive: true });
+	const run_ = loadRuns(ctx.mainRoot, ctx.dir).find((r) => r.fm.scalars.branch === ctx.branch && (!ctx.agent || r.fm.scalars.agent === ctx.agent));
+	const commits = branchCommits(ctx);
+	const decisions = runDecisions(ctx);
+	let name: string;
+	let request: string;
+	let fm: RunFm;
+	if (run_) {
+		name = run_.name;
+		request = run_.request;
+		fm = fmOf(run_.fm);
+	} else {
+		name = freeRunName(dir, ctx, o.request ?? ctx.branch);
+		request = o.request?.trim() || "(encargo no registrado)";
+		fm = { agent: ctx.agent, kind: ctx.kind, branch: ctx.branch, base: ctx.base, orchestrator: ctx.orchestrator, started_at: ts, finished_at: "", status: "sent", commits: [], decisions: [] };
+	}
+	fm.status = "reported";
+	fm.finished_at = ts;
+	fm.commits = commits;
+	fm.decisions = decisions;
+	writeFileSync(join(dir, name), runFileText(fm, request, report.trim()));
+	return { rel: `${ctx.dir}/runs/${name}`, commits, decisions };
+}
+
+/** Commits de la rama respecto a la base del run, del más antiguo al más nuevo (`hash mensaje`). */
+function branchCommits(ctx: RunCtx): string[] {
+	const baseRef = ctx.base.split("@")[0] ?? "";
+	if (!baseRef) return [];
+	const r = git(ctx.mainRoot, ["log", "--format=%h %s", `${baseRef}..${ctx.branch}`]);
+	if (r.status !== 0) return [];
+	return r.stdout.split("\n").filter(Boolean).reverse();
+}
+
+/** Decisiones del worktree de la rama registradas por este agente (decided_by, D15). */
+function runDecisions(ctx: RunCtx): string[] {
+	if (!ctx.kind) return [];
+	const who = new Set([`agent:${ctx.kind}/${ctx.agent}`, `agent:${ctx.kind}`]);
+	return loadDecisions(ctx.worktree, ctx.dir)
+		.filter((d) => who.has(d.decided_by))
+		.map((d) => d.id);
+}
+
+/** Enlace de la base actual: `main@abc1234`; cadena vacía si no se puede resolver. */
+function baseLink(root: string): string {
+	try {
+		const b = defaultBase(root);
+		const short = git(root, ["rev-parse", "--short", b]).stdout.trim();
+		return short ? `${b}@${short}` : b;
+	} catch {
+		return "";
+	}
+}
+
+/**
+ * Contexto de runs del repo y su rama, o undefined si el repo no usa la memoria de
+ * decisiones (sin [decisions] o sin bond.toml). Con bond.toml inválido, también undefined:
+ * prompt no puede quedarse parado por eso.
+ */
+function runCtx(root: string, row: Row): RunCtx | undefined {
+	const main = gitWorktrees(root).find((w) => w.main)?.path ?? root;
+	const { value: dec, error } = catchDie(() => repoDecisions(main));
+	if (error !== undefined || !dec) return undefined;
+	return {
+		mainRoot: main,
+		worktree: row.path,
+		dir: dec.dir,
+		branch: row.branch,
+		base: baseLink(main),
+		agent: row.agent?.name ?? row.agent?.kind ?? "",
+		kind: row.agent?.kind ?? "",
+		orchestrator: resolveAuthor().replace(/^agent:/, ""),
+	};
+}
+
+function collect(args: string[]): void {
+	requireHerdr();
+	const { positional, opts } = parseCommon(args, [], ["--lines", "--agent", "--request"]);
+	const usage = "uso: bond team collect <rama> [--lines <n>] [--agent <nombre>] [--request <encargo>]";
+	const branch = positional[0] ?? die(usage);
+	if (positional.length > 1) die(usage);
+	const root = repoOf();
+	const main = gitWorktrees(root).find((w) => w.main)?.path ?? root;
+	const { value: dec, error } = catchDie(() => repoDecisions(main));
+	if (error !== undefined) die(`no pude leer [decisions] de ${main}: ${error}`);
+	if (!dec) die("este repo no usa la memoria de decisiones: añade la sección [decisions] a .bond/bond.toml (bond init la propone) y ejecuta bond sync");
+	const row = teamRows(root).find((r) => r.branch === branch);
+	const agent = (opts["--agent"] as string | undefined) || row?.agent?.name || die(`no hay agente en la rama ${branch} y no diste --agent (bond team status)`);
+	const kind = row?.agent?.kind ?? agents(5000).find((a) => a.name === agent)?.agent ?? "";
+	const lines = String(opts["--lines"] ?? "200");
+	const rd = run("herdr", ["agent", "read", agent, "--source", "recent-unwrapped", "--lines", lines], { timeout: 20_000 });
+	if (rd.status !== 0) die(`no pude leer el panel de ${agent}: ${(rd.stderr || rd.stdout).trim()}`);
+	const ctx: RunCtx = { mainRoot: main, worktree: row?.path ?? main, dir: dec.dir, branch, base: baseLink(main), agent, kind, orchestrator: resolveAuthor().replace(/^agent:/, "") };
+	const out = collectRun(ctx, rd.stdout, { request: opts["--request"] as string | undefined });
+	console.log(`${ok("~")} ${out.rel}  ${dim(`reported · ${out.commits.length} commit(s) de ${branch} · ${out.decisions.length} decisión(es) de ${agent}`)}`);
 }
 
 // --- quitar worktrees -----------------------------------------------------------------------
@@ -954,6 +1210,7 @@ export async function team(args: string[]): Promise<void> {
 	const [sub, ...rest] = args;
 	if (sub === "status") return status(rest);
 	if (sub === "prompt") return prompt(rest);
+	if (sub === "collect") return collect(rest);
 	if (sub === "clean") return clean(rest);
 	return create(args);
 }

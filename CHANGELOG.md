@@ -38,6 +38,18 @@
   (*Context*, *Decision*, *Rejected alternatives*, *Consequences*), con `--consequences`
   (y `consequences` en el JSON) opcional. La barrera de TTY de `accept` se documenta como
   evita-aceptaciones-por-descuido-de-agentes, no como medida de seguridad.
+- Equipo y delegaciones con registro guardado: en repos con `[decisions]`, `bond team prompt`
+  guarda el encargo exacto en `<dir>/runs/` antes de mandarlo (`--no-record` lo evita; si la
+  escritura falla, avisa y manda el prompt igual) y la nueva orden `bond team collect <rama>`
+  lee el panel del agente (`--lines <n>`, 200 por defecto) y deja en el run el informe, el
+  estado, los commits de la rama y las decisiones registradas por ese agente; repetirlo
+  reemplaza el informe y recalcula las listas sin duplicar. Sin run creado por `prompt`,
+  `collect` lo crea con `--request "<encargo>"` y `--agent <nombre>` (delegaciones sin
+  equipo). `bond decisions runs` muestra los commits y decisiones de cada run y `show` abre
+  también runs por su id. Las skills `bond-team`, `bond-delegate` y `plan-team` usan estos
+  comandos en vez de escribir el run a mano, y `bond-delegate` sustituye su fichero temporal
+  (`mktemp -d`) por el run cuando la memoria está activa. El agente de la rama nunca escribe
+  su propio run: lo hace bond desde el checkout principal.
 
 ## 1.6.3
 

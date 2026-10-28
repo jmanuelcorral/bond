@@ -39,12 +39,22 @@ versión instalada. Ejecuta los comandos con tu herramienta de shell: no hay too
 7. El delegado no ve esta conversación: escríbele un mensaje autocontenido con el objetivo, el
    alcance (ficheros, carpetas o diff), qué debe entregar y las restricciones: sin commit ni
    push, y sin editar ni crear ficheros salvo que la tarea pida cambios de forma expresa.
-   `herdr agent prompt <nombre> "<mensaje>" --wait --timeout 900000`.
+   `herdr agent prompt <nombre> "<mensaje>" --wait --timeout 900000`. Si el repo tiene la
+   memoria de decisiones activa (`[decisions]` en `.bond/bond.toml`), guarda ese mensaje
+   exacto: es el encargo que recogerás en el paso 9 con `--request`.
 8. Si vuelve `blocked`, lee el panel, enséñale al usuario qué pide y espera; con su respuesta,
    contesta y sigue. Si vuelve `timeout` o `agent_prompt_stalled`, mira `herdr agent get` y
    `herdr agent read` antes de decidir: nunca reenvíes la tarea a ciegas.
-9. Lee la respuesta: `herdr agent read <nombre> --source recent-unwrapped --lines 200`. Si no
-   se ve completa, pídele que la escriba en un fichero Markdown dentro de un directorio creado
+9. Lee y guarda la respuesta. Con la memoria de decisiones activa, hazlo con
+   `bond team collect "$(git branch --show-current)" --agent <nombre> --request "<mensaje exacto del paso 7>" --lines 200`:
+   bond deja el encargo y el informe en un run de `docs/decisions/runs/` (el fichero lo
+   escribe bond desde el checkout principal; tú no lo redactas a mano). Si el informe no
+   cabe o quieres corregirlo, vuelve a recoger con `--lines` mayor: el run guarda el último
+   informe, sin duplicar. Si el delegado debe entregar texto largo, pídele que registre lo
+   que sea una decisión con `bond decisions add` (skill `decision-record`) y que el resto lo
+   resuma en su respuesta. Sin memoria, lee con
+   `herdr agent read <nombre> --source recent-unwrapped --lines 200` y, si no se ve
+   completa, pídele que la escriba en un fichero Markdown dentro de un directorio creado
    con `mktemp -d` (fuera del repo) y que responda solo con la ruta; lee ese fichero.
 10. Resume el resultado (con `fichero:línea` cuando aplique) y di el nombre, el kind y el
     panel del delegado.

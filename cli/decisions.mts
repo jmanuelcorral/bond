@@ -37,8 +37,10 @@ lista las decisiones.
   reject <id> [--ref <motivo>]     La pasa a "rejected" (misma confirmación).
   supersede <id> --by <nueva>     La sustituye: la vieja queda "superseded" y la
                                   nueva la referencia en "supersedes".
-  show <id>                       El fichero entero de la decisión.
-  runs [--agent <a>] [--json]     Los runs (encargos a agentes) de <dir>/runs/.
+  show <id>                       El fichero entero de una decisión (o de un run, si el
+                                  id es de uno en <dir>/runs/).
+  runs [--agent <a>] [--json]     Los runs (encargos a agentes) de <dir>/runs/, con los
+                                  commits de su rama y las decisiones de ese agente.
   check                           Audita la memoria: frontmatter, ids, duplicados,
                                   sustituciones, trailers Decision: e índice. Sale
                                   con 1 si hay errores.
@@ -63,7 +65,7 @@ const q = (s: string) => JSON.stringify(s);
 
 /**
  * Frontmatter YAML de un fichero de decisión o de un run: claves escalares `k: "v"` y
- * listas (`links:` con items `- "x"`, o inline `[]`). Devuelve undefined si el texto no
+ * listas (`clave:` con items `- "x"`, o inline `[]`). Devuelve undefined si el texto no
  * arranca con `---` o no cierra.
  */
 export function parseFm(text: string): Parsed | undefined {
@@ -81,7 +83,7 @@ export function parseFm(text: string): Parsed | undefined {
 		const m = /^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
 		if (!m) return undefined;
 		const [, key, raw] = m;
-		if (raw === "" && key === "links") { listKey = key; lists[key] = []; continue; }
+		if (raw === "") { listKey = key; lists[key] = []; continue; }
 		listKey = undefined;
 		if (raw === "[]") { lists[key] = []; continue; }
 		scalars[key] = unq(raw.trim());
@@ -514,7 +516,9 @@ export async function decisions(args: string[]): Promise<void> {
 		}
 		case "show": {
 			const id = a.pos[0] ?? die("uso: bond decisions show <id>");
-			const f = findDecisionFile(root, dec.dir, id);
+			const own = join(dirAbs(root, dec.dir), `${id}.md`);
+			const asRun = join(dirAbs(root, dec.dir), "runs", `${id}.md`);
+			const f = existsSync(own) ? own : existsSync(asRun) ? asRun : findDecisionFile(root, dec.dir, id);
 			return console.log(readFileSync(f, "utf8").trimEnd());
 		}
 		case "runs": {
@@ -531,7 +535,8 @@ export async function decisions(args: string[]): Promise<void> {
 			const filtered = a.opts["--agent"] ? runs.filter((r) => who(r.fm).includes(a.opts["--agent"]!)) : runs;
 			if (a.json) return console.log(JSON.stringify(filtered.map((r) => ({ file: r.file, ...r.fm.scalars, commits: r.fm.lists.commits ?? [], decisions: r.fm.lists.decisions ?? [] }))));
 			if (!filtered.length) return console.log(dim(`sin runs en ${dec.dir}/runs/`));
-			for (const r of filtered) console.log(`${r.file}  ${dim(`${r.fm.scalars.kind ?? "?"}/${r.fm.scalars.agent ?? "?"} · ${r.fm.scalars.branch ?? "?"} · ${r.fm.scalars.status ?? "?"}`)}`);
+			const n = (xs?: string[]) => xs?.length ?? 0;
+			for (const r of filtered) console.log(`${r.file}  ${dim(`${r.fm.scalars.kind ?? "?"}/${r.fm.scalars.agent ?? "?"} · ${r.fm.scalars.branch ?? "?"} · ${r.fm.scalars.status ?? "?"} · ${n(r.fm.lists.commits)} commit(s) · ${n(r.fm.lists.decisions)} decisión(es)`)}`);
 			return;
 		}
 		case "check": {

@@ -14,7 +14,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 | `bond init` | Una vez por repo: agentes, agente por defecto y herramientas; genera la config de cada agente ([abajo](#configuración-por-repo-bond-init-y-bond-sync)) |
 | `bond` | Dentro de un repo: abre su puesto de trabajo en Herdr ([puesto.md](puesto.md)) |
 | `bond dev <dir>` | Lo mismo para otro directorio |
-| `bond team` | Un agente por rama, cada uno en su worktree (en Herdr, 4 en tu pestaña y el resto en pestañas nuevas, o lo que elijas); `status` (`--watch`: tabla en vivo agrupada por estado, que se cierra sola sin trabajo pendiente), `prompt`, `clean` (al quitar el último, cierra también la tabla) ([puesto.md](puesto.md#bond-team)) |
+| `bond team` | Un agente por rama, cada uno en su worktree (en Herdr, 4 en tu pestaña y el resto en pestañas nuevas, o lo que elijas); `status` (`--watch`: tabla en vivo agrupada por estado, que se cierra sola sin trabajo pendiente), `prompt` (con `[decisions]` guarda el encargo en un run; `--no-record` para no guardarlo), `collect` (recoge el informe del panel al run), `clean` (al quitar el último, cierra también la tabla) ([puesto.md](puesto.md#bond-team)) |
 | `bond status` | Agentes vivos en Herdr |
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
 | `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
@@ -731,8 +731,8 @@ sale con 0 explicando que no se usa la memoria.
 | `bond decisions accept <id>` | La pasa a `accepted` (`--ref <aceptación>`). Exige terminal interactiva y confirmación: desde el shell de un agente (sin TTY) se niega |
 | `bond decisions reject <id>` | La pasa a `rejected`; misma confirmación |
 | `bond decisions supersede <id> --by <nueva>` | La vieja queda `superseded` y la nueva la referencia en `supersedes`; misma confirmación |
-| `bond decisions show <id>` | El fichero entero de la decisión |
-| `bond decisions runs` | Los runs (encargos a agentes) en `<dir>/runs/`; `--agent <subcadena>`, `--json` |
+| `bond decisions show <id>` | El fichero entero de la decisión (o del run si el id es de uno en `<dir>/runs/`) |
+| `bond decisions runs` | Los runs (encargos a agentes) en `<dir>/runs/`, con los commits de su rama y las decisiones de ese agente; `--agent <subcadena>`, `--json` |
 | `bond decisions check` | Audita la memoria: frontmatter, id contra nombre de fichero, duplicados, referencias de sustitución rotas, trailers `Decision:` e índice (filas que faltan, huérfanas, estado desfasado). Sale con 1 si hay errores |
 
 La autoría (`decided_by`): en un panel de Herdr, `agent:<kind>/<nombre>` —bond mira el agente
@@ -752,6 +752,15 @@ enlazan decisiones con esta herramienta (`record_decision` o `bond decisions add
 planificar, ejecutar, commitear, preparar un PR o documentar una convención. Ninguna marca
 una decisión como `accepted`: eso queda en `bond decisions accept`. Sin memoria, o si la
 herramienta o el comando no están disponibles, las skills se comportan como siempre.
+
+Los runs (encargos e informes) los escribe bond, no el modelo: `bond team prompt <rama>` deja
+el encargo exacto en `<dir>/runs/<fecha>-<agente>-<slug>.md` del checkout principal antes de
+mandarlo (`--no-record` lo evita; si la escritura falla, avisa y manda el prompt igual), y
+`bond team collect <rama>` lee el panel del agente (`--lines <n>`, por defecto 200) y guarda
+el informe, el estado, los commits de la rama y las decisiones cuyo `decided_by` es ese
+agente; repetirlo reemplaza el informe y recalcula las listas, sin duplicar. Sin run creado
+por `prompt`, `collect` lo crea con `--request "<encargo>"` y `--agent <nombre>` (delegaciones
+sin equipo, como `bond-delegate`). El agente de la rama nunca escribe su propio run.
 
 El formato de los ficheros y del índice lo documenta la skill `decision-record`
 (`catalog/skills/decision-record/`).
