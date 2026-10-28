@@ -1,5 +1,17 @@
 # Cambios
 
+## Sin publicar
+
+- Memoria de decisiones de los agentes: en los repos con la sección `[decisions]` en
+  `.bond/bond.toml`, cada decisión no trivial queda en un fichero de `docs/decisions/` y los
+  commits llevan los trailers `Agent:` y `Decision:`. `bond init` la propone por defecto
+  (`dir = "docs/decisions"`, ajustable; quita la sección para no usarla) y `bond sync` crea el
+  `README.md` índice si falta —después es del repo, como `AGENTS.md`: no lo pisa ni lo da por
+  desfasado—. Un `dir` que salga del repo (ruta absoluta o con `..`) se rechaza. Nueva skill
+  `decision-record` en el catálogo (marcada por defecto) con el formato de decisiones y de
+  runs, y una regla global en `bond setup` para que también la sigan los agentes que no
+  cargan skills por sí solos. Sin `[decisions]`, nada cambia.
+
 ## 1.6.3
 
 - `bond team status` da por `integrada` una rama que entró en la base por fast-forward o con un

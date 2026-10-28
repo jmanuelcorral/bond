@@ -23,7 +23,10 @@ const BOND_RULES = `## Bond: Herdr y otros agentes
   \`bond-delegate\` y \`bond-team\`.
 - No cierres workspaces, paneles, agentes ni sesiones que no hayas creado tú. No ejecutes
   \`herdr\` sin subcomando.
-- No mandes código ni datos privados a búsquedas web: busca el mensaje de error, no el fichero.`;
+- No mandes código ni datos privados a búsquedas web: busca el mensaje de error, no el fichero.
+- Si el repo tiene una sección \`[decisions]\` en \`.bond/bond.toml\` (memoria de decisiones),
+  registra las decisiones no triviales con el skill \`decision-record\` y pon los trailers
+  \`Agent:\` y \`Decision:\` en los commits.`;
 
 const PERSONAL_TEMPLATE = `# Mis instrucciones para todos los agentes
 

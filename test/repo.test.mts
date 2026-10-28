@@ -8,7 +8,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
-const { syncRepo, updateBondToml, withBlock } = await import("../cli/repo.mts");
+const { syncRepo, updateBondToml, withBlock, loadRepoConfig, bondToml: bondTomlTemplate } = await import("../cli/repo.mts");
+const { catchDie } = await import("../cli/util.mts");
 
 const origCwd = process.cwd();
 let repo: string;
@@ -32,11 +33,11 @@ const write = (p: string, s: string) => {
 };
 const json = (p: string) => JSON.parse(read(p));
 
-function bondToml(o: { agents: string[]; mcp?: string[]; skills?: string[]; commands?: string[] }): void {
+function bondToml(o: { agents: string[]; mcp?: string[]; skills?: string[]; commands?: string[]; decisions?: string }): void {
 	const arr = (a: string[]) => JSON.stringify(a);
 	write(
 		".bond/bond.toml",
-		`agents = ${arr(o.agents)}\nmcp = ${arr(o.mcp ?? ["context7", "duckduckgo"])}\nskills = ${arr(o.skills ?? ["code-context"])}\ncommands = ${arr(o.commands ?? ["review", "commit"])}\n`,
+		`agents = ${arr(o.agents)}\nmcp = ${arr(o.mcp ?? ["context7", "duckduckgo"])}\nskills = ${arr(o.skills ?? ["code-context"])}\ncommands = ${arr(o.commands ?? ["review", "commit"])}\n${o.decisions ? `\n${o.decisions}\n` : ""}`,
 	);
 }
 
@@ -82,6 +83,54 @@ describe("updateBondToml", () => {
 	test("una clave que falta va antes de la primera tabla", () => {
 		const out = updateBondToml(`agents = ["pi"]\n\n[mcp_servers.db]\ncommand = "x"\n`, sel);
 		expect(out.indexOf("commands = ")).toBeLessThan(out.indexOf("[mcp_servers.db]"));
+	});
+
+	test("conserva la sección [decisions]", () => {
+		const out = updateBondToml('agents = ["pi"]\n\n[decisions]\ndir = "docs/adrs"\n', sel);
+		expect(out).toContain('[decisions]\ndir = "docs/adrs"');
+	});
+});
+
+describe("memoria de decisiones ([decisions])", () => {
+	test("sync crea el README de decisiones si falta y no lo pisa si existe", () => {
+		bondToml({ agents: ["pi"], decisions: '[decisions]\ndir = "docs/decisions"' });
+		sync();
+		expect(read("docs/decisions/README.md")).toContain("Memoria de decisiones");
+		// Es del repo, como AGENTS.md: no entra en el manifiesto de bond.
+		expect(json(".bond/manifest.json").files["docs/decisions/README.md"]).toBeUndefined();
+		write("docs/decisions/README.md", "# mi índice\n");
+		sync();
+		expect(read("docs/decisions/README.md")).toBe("# mi índice\n");
+		expect(sync({ check: true })).toEqual([]);
+	});
+
+	test("un dir propio funciona", () => {
+		bondToml({ agents: ["pi"], decisions: '[decisions]\ndir = "docs/adrs"' });
+		sync();
+		expect(existsSync(at("docs/adrs/README.md"))).toBe(true);
+		expect(existsSync(at("docs/decisions"))).toBe(false);
+	});
+
+	test("sin [decisions] no se crea nada", () => {
+		bondToml({ agents: ["pi"] });
+		sync();
+		expect(existsSync(at("docs/decisions"))).toBe(false);
+		expect(existsSync(at("docs/adrs"))).toBe(false);
+		expect(sync({ check: true })).toEqual([]);
+	});
+
+	test("un dir que sale del repo se rechaza con un error claro", () => {
+		for (const dir of ["../outside", "/tmp/decisions", ".."]) {
+			bondToml({ agents: ["pi"], decisions: `[decisions]\ndir = "${dir}"` });
+			const r = catchDie(() => loadRepoConfig(repo));
+			expect(r.error).toContain("decisions.dir");
+			expect(r.error).toContain("dentro del repo");
+		}
+	});
+
+	test("la plantilla de bond.toml propone [decisions] con dir = docs/decisions", () => {
+		const t = bondTomlTemplate({ agents: ["pi"], default_agent: "pi", mcp: [], skills: [], commands: [] });
+		expect(t).toContain('[decisions]\ndir = "docs/decisions"');
 	});
 });
 

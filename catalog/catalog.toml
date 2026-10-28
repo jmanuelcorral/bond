@@ -13,6 +13,9 @@ summary = "Create one reviewed, scoped Conventional Commit"
 [skills.plan-create]
 summary = "Plan a task as verifiable phases in docs/plans"
 
+[skills.decision-record]
+summary = "Record non-trivial decisions and agent runs in docs/decisions, with git trailers"
+
 [skills.plan-execute]
 summary = "Implement one approved plan phase, with evidence"
 

@@ -30,7 +30,9 @@ Prepara el repo actual para tus agentes. Pregunta con cuáles integrarlo (de los
 partiendo de los elegidos en bond setup), cuál abre \`bond\` por defecto y qué herramientas del
 catálogo usar: el de bond y los de tu equipo declarados con [[catalog]] en bond.toml. Crea
 .bond/bond.toml, un AGENTS.md (si falta) y la config de cada agente; con pi, además las Bond
-Extensions. En un repo ya inicializado, permite cambiar la selección.
+Extensions. En un repo ya inicializado, permite cambiar la selección. Propone además la
+memoria de decisiones (sección \`[decisions]\` de bond.toml, carpeta \`docs/decisions\` con
+la skill \`decision-record\`): quita la sección para no usarla.
 
   --agents <a,b>      Agentes, sin preguntar (${SUPPORTED_AGENTS.join(", ")})
   --default <a>       Agente por defecto
@@ -302,6 +304,8 @@ export interface RepoConfig {
 	catalogs: Catalog[];
 	/** Lo pedido, resuelto a su catálogo. */
 	tools: Record<Kind, Tool[]>;
+	/** Memoria de decisiones del repo ([decisions] en bond.toml); undefined si no la usa. */
+	decisions?: { dir: string };
 }
 
 export function repoRoot(): string {
@@ -356,7 +360,26 @@ export function loadRepoConfig(root: string, over: { toml?: string; lock?: Lock 
 	for (const [name, s] of Object.entries(cfg.mcp_servers)) {
 		if (!s.command && !s.url) die(`bond.toml: mcp_servers.${name} necesita command o url`);
 	}
+	cfg.decisions = parseDecisions(root, raw.decisions);
 	return cfg;
+}
+
+/**
+ * Sección [decisions] del bond.toml: la memoria de decisiones del repo (skill
+ * decision-record). Sin la sección, nada cambia. Con ella, `dir` es la carpeta donde van
+ * las decisiones y los runs (por defecto docs/decisions); tiene que quedar dentro del repo:
+ * una ruta absoluta o con .. que salga de él se rechaza.
+ */
+function parseDecisions(root: string, v: unknown): { dir: string } | undefined {
+	if (v === undefined) return undefined;
+	if (typeof v !== "object" || v === null || Array.isArray(v)) die('bond.toml: decisions tiene que ser una tabla: [decisions] con dir = "docs/decisions"');
+	const d = v as Record<string, unknown>;
+	const dir = typeof d.dir === "string" && d.dir.trim() ? d.dir.trim() : "docs/decisions";
+	const rel = repoRelative(root, resolve(root, dir));
+	if (isAbsolute(dir) || isAbsolute(rel) || rel === "." || rel.startsWith("..")) {
+		die(`bond.toml: decisions.dir ${JSON.stringify(dir)} tiene que ser una carpeta dentro del repo: relativa, sin .. y sin ruta absoluta`);
+	}
+	return { dir: dir.split(sep).join("/") };
 }
 
 // --- plan: lo que debería existir ---------------------------------------------------------
@@ -771,7 +794,19 @@ export function syncRepo(opts: { check?: boolean; force?: boolean; quiet?: boole
 		}
 	}
 	writeFileSync(join(bondDir(root), "manifest.json"), `${JSON.stringify(next, null, 2)}\n`);
-	if (!actions.length) say(ok("al día"));
+	// Memoria de decisiones: crea el README índice si falta. Como AGENTS.md, no se registra en
+	// el manifiesto: a partir de aquí es del repo y sync no lo pisa ni lo da por desfasado.
+	let decisionsReadmeCreated = false;
+	if (cfg.decisions) {
+		const readme = join(root, ...cfg.decisions.dir.split("/"), "README.md");
+		if (!existsSync(readme)) {
+			mkdirSync(dirname(readme), { recursive: true });
+			writeFileSync(readme, decisionsReadme());
+			say(`${ok("+")} ${repoPath(cfg.decisions.dir, "README.md")}${dim("  índice de decisiones: a partir de aquí es tuyo")}`);
+			decisionsReadmeCreated = true;
+		}
+	}
+	if (!actions.length && !decisionsReadmeCreated) say(ok("al día"));
 	const conflicts = actions.filter((a) => a.sign === "!");
 	if (conflicts.length) warn(`${conflicts.length} conflicto(s): revisa los marcados con ! (o bond sync --force)`);
 	return actions;
@@ -781,6 +816,53 @@ export function sync(args: string[]): void {
 	for (const a of args) if (!["--check", "--force", "--dry-run"].includes(a)) die(`opción desconocida: ${a} (bond sync --help)`);
 	const actions = syncRepo({ check: args.includes("--check"), force: args.includes("--force") });
 	if (args.includes("--check") && actions.length) process.exitCode = 1;
+}
+
+/** El README índice que bond deja en la carpeta de decisiones cuando no existe. */
+function decisionsReadme(): string {
+	return `# Decisiones
+
+Memoria de decisiones de este repo (bond). Cada decisión no trivial —del usuario o de un
+agente— queda aquí en un fichero Markdown versionado con git, para poder auditar después qué
+se decidió, quién y por qué. La skill \`decision-record\` explica cuándo y cómo registrarla.
+
+## Índice
+
+| ID | Estado | Quién | Fecha | Título |
+|---|---|---|---|---|
+
+<!-- Una fila por decisión, la más reciente primero. -->
+
+## Formato
+
+Un fichero por decisión: \`YYYY-MM-DD-slug.md\`; el id es el nombre del fichero sin extensión
+(si el mismo slug se repite el mismo día, sufijo \`-2\`).
+
+\`\`\`yaml
+---
+id: "2026-01-01-ejemplo"
+title: "Título corto de la decisión"
+status: "proposed"   # proposed | accepted | rejected | superseded
+date: "2026-01-01"
+decided_by: "user"   # user | agent:<kind>[/<nombre>]
+accepted_by: ""      # referencia a la aceptación del usuario, si la hay
+supersedes: ""       # id de la decisión que esta sustituye
+superseded_by: ""    # id de la decisión que la sustituye
+links: []            # plan, fase, commits, PR, run
+---
+\`\`\`
+
+Cuerpo: *Contexto*, *Decisión*, *Alternativas descartadas*, *Consecuencias*.
+
+Una decisión tomada por un agente sin confirmar entra como \`proposed\`; solo el usuario la
+pasa a \`accepted\`.
+
+## Runs
+
+En \`runs/\` quedan los encargos hechos a agentes (equipos con \`bond team\`, delegaciones):
+un fichero por run, \`YYYY-MM-DD-<agente>-<slug>.md\`, con el texto exacto enviado y el
+informe recibido. Los escribe el orquestador, nunca el agente de la rama.
+`;
 }
 
 // --- init ---------------------------------------------------------------------------------
@@ -808,7 +890,7 @@ Las personales de cada uno van en su configuración global; aquí, solo lo de es
 type Selection = Pick<RepoConfig, "agents" | "default_agent" | "mcp" | "skills" | "commands">;
 const tomlArr = (a: string[]) => `[${a.map((x) => JSON.stringify(x)).join(", ")}]`;
 
-function bondToml(cfg: Selection): string {
+export function bondToml(cfg: Selection): string {
 	return `# bond: configuración de los agentes de este repo. Tras editarla: bond sync
 # Catálogo disponible: bond init --list
 
@@ -826,6 +908,13 @@ commands = ${tomlArr(cfg.commands)}      # comandos del catálogo
 
 # Comandos propios: ficheros Markdown en .bond/commands/ ($ARGUMENTS, $1, $2...).
 # Skills propios: carpetas con SKILL.md en .agents/skills/ (bond los enlaza para Claude).
+
+# Memoria de decisiones de los agentes (skill decision-record): las decisiones no triviales
+# quedan en ficheros de esta carpeta y los commits llevan los trailers Agent: y Decision:.
+# bond sync crea el README índice si falta; a partir de ahí es tuyo. Para no usarla,
+# quita esta sección.
+[decisions]
+dir = "docs/decisions"           # carpeta dentro del repo, ajustable
 
 # Catálogos de tu equipo, además del de bond (se crean con bond catalog create). Lo suyo se
 # elige igual, por nombre; si un nombre está en dos catálogos: "catalogo:nombre".

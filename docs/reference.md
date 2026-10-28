@@ -99,6 +99,9 @@ mcp = ["context7", "duckduckgo"]
 skills = ["code-context"]
 commands = ["commit", "handoff", "review"]
 
+[decisions]                     # memoria de decisiones de los agentes; quita la sección para no usarla
+dir = "docs/decisions"          # carpeta dentro del repo (relativa), ajustable
+
 [mcp_servers.postgres]           # servidores propios del repo; secretos con ${VAR}
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
@@ -106,6 +109,14 @@ args = ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
 
 Comandos propios del repo: ficheros Markdown en `.bond/commands/` (sintaxis común: `$ARGUMENTS`,
 `$1`…). Skills propios: carpetas con `SKILL.md` en `.agents/skills/`.
+
+**Memoria de decisiones.** Con la sección `[decisions]` en `bond.toml`, cada decisión no
+trivial —del usuario o de un agente— queda en `docs/decisions/` (un fichero por decisión,
+`YYYY-MM-DD-slug.md`) y los commits llevan los trailers `Agent:` y `Decision:`. `bond sync`
+crea el `README.md` índice si falta; después es del repo, como `AGENTS.md` (no se registra
+en el manifiesto y sync no lo pisa). La skill `decision-record` explica cuándo y cómo
+registrar decisiones y runs. Sin la sección, nada cambia. Un `dir` que salga del repo
+(ruta absoluta o con `..`) se rechaza con un error.
 
 **Instrucciones y skills.** `AGENTS.md` (lo crea `init` si falta; es tuyo) y `.agents/skills/`
 los leen directamente pi, Copilot, Codex, opencode, Crush y Gemini. Las excepciones:
@@ -424,7 +435,9 @@ primera vez se siembran con las de una instalación anterior, si la hay.
 
 Reglas de bond (iguales para todos): Herdr solo cuando lo pides o lo pide un comando como
 `/delegate` o `/team`; `bond-delegate` y `bond-team` para trabajar con otros agentes; no cerrar
-lo que no creaste ni ejecutar `herdr` sin subcomando; nada privado a búsquedas web.
+lo que no creaste ni ejecutar `herdr` sin subcomando; nada privado a búsquedas web; y si el
+repo tiene `[decisions]` en `bond.toml`, registrar las decisiones con `decision-record` y
+llevar los trailers `Agent:` y `Decision:` en los commits.
 
 Las instrucciones **del proyecto** van en el `AGENTS.md` del repo (lo crea `bond init`).
 
@@ -441,6 +454,7 @@ tu OK explícito. Una skill que falta corta solo ese paso; no se descarga.
 | `code-context` | Reunir el contexto justo del repo y de las librerías antes de editar | marcada |
 | `git-conventional-commit` | Un commit revisado con Conventional Commits, en inglés salvo que el proyecto diga otra cosa; la usa `/commit` | marcada |
 | `plan-create` | Plan por fases verificables en `docs/plans/`; las fases independientes pueden ir en paralelo con `bond team` | marcada |
+| `decision-record` | Registrar decisiones no triviales y runs de agentes en `docs/decisions/` (id, estado, trailers `Agent:`/`Decision:`); solo en repos con `[decisions]` en `bond.toml` | marcada |
 | `plan-execute` | Implementar una fase aprobada, con evidencia, y proponer su commit | marcada |
 | `issue-refine-github` | Revisar una issue antes de empezar: dejarla, ampliarla o partirla | opcional |
 | `delivery-review-github` | Revisar la fase, hacer push y abrir su PR; tras el merge, recomendar lo siguiente (y `bond team clean` si venía de un worktree) | opcional |
