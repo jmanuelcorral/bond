@@ -1,12 +1,35 @@
 # Cambios
 
-## Sin publicar
+## 1.9.0
 
+Antigravity (`agy`) entra en bond como un agente más, también en equipos, y aceptar decisiones
+deja de pedirte una segunda validación: lo que apruebas en la conversación queda aceptado.
+
+- Antigravity (`agy`) como agente del repo: `bond init --agents agy` y `bond sync` generan un
+  plugin de bond en `.agents/plugins/bond/` con los servidores MCP (del catálogo y los de
+  `[mcp_servers]`) y los comandos del catálogo y propios, cada uno como skill (`/commit`,
+  `/review`...). `agy` ya leía `AGENTS.md` y `.agents/skills/` por su cuenta. Quitar `agy` de
+  `agents` borra el plugin. `bond doctor` enseña la versión de `agy` y avisa si no está
+  instalado o si está en `~/.local/bin` pero fuera del PATH.
+- `bond setup` con `agy`: deja un plugin global, `bond-global`, en
+  `~/.gemini/config/plugins/bond/` con tus instrucciones, las reglas de bond y las skills
+  `bond-delegate`, `bond-team` y `herdr`, así que `agy` las carga en cualquier repo. Instala
+  también la integración `antigravity-cli` de Herdr, y `bond doctor` comprueba las dos cosas. No
+  toca nada más de `~/.gemini/config/`; sin `agy` entre tus agentes, no crea nada.
+- `agy` en equipos y delegaciones (`bond team <rama>:agy`, skill `bond-delegate`):
+  - arranca aunque solo esté en `~/.local/bin` (bond añade esa carpeta al PATH de la shell del
+    panel) y con `--dangerously-skip-permissions`, porque sin él pide permiso por cada comando y
+    no avanza; tus argumentos tras `--` lo sustituyen;
+  - si `agy` pregunta si confías en la carpeta, la rama sale `bloqueado` y `prompt` no manda
+    nada; el aviso de novedades al arrancar («esc to dismiss») ya no cuenta como pregunta;
+  - `bond team collect` toma su respuesta de la conversación de `agy` (con la integración de
+    Herdr) o, si no, del panel, sin el banner, el encargo repetido ni las líneas de herramientas.
 - Confianza del orquestador en `bond team`: si el agente del panel que lanza el equipo (pi,
   Claude Code o `agy`) confía en el checkout principal, todos los agentes pi, Claude Code y `agy`
   del equipo arrancan confiando en su worktree, aunque su agente no hubiera abierto nunca el
-  repo. En `agy` se escribe en `trustedWorkspaces`. Sin esa confianza, cada agente hereda la suya
-  como hasta ahora; `--no-trust` lo desactiva.
+  repo (en `agy`, en `trustedWorkspaces` de `~/.gemini/antigravity-cli/settings.json`). Sin esa
+  confianza, cada agente hereda la que él mismo daba al checkout, como hasta ahora; `--no-trust`
+  lo desactiva.
 - Aceptar al aprobar: `bond decisions add` (y `record_decision` en pi) admite
   `--confirmed-by "<lo que dijo el usuario>"` (`confirmed_by` en el JSON) y registra la
   decisión ya `accepted`, con esa cita y `accepted_via`. Las skills `plan-create`,
@@ -16,42 +39,11 @@
 - Sin cuadro de permiso para aceptar: `bond sync` ya no deja reglas `ask` para `bond decisions
   accept`, `reject` y `supersede` en `.claude/settings.json`, y quita las que dejó la 1.8.0
   conservando las tuyas. Si lo has pedido por chat, no hay que validar el comando otra vez.
-- Antigravity (`agy`) como agente del repo: `bond init --agents agy` y `bond sync` generan un
-  plugin de bond en `.agents/plugins/bond/` con los servidores MCP (del catálogo y los de
-  `[mcp_servers]`) y los comandos del catálogo y propios, cada uno como skill (`/commit`,
-  `/review`...). `agy` ya leía `AGENTS.md` y `.agents/skills/` por su cuenta. Quitar `agy` de
-  `agents` borra el plugin. `bond doctor` enseña la versión de `agy` y avisa si no está
-  instalado o si está en `~/.local/bin` pero fuera del PATH. Su uso en `bond team` llegará
-  aparte.
-- `bond setup` con Antigravity (`agy`): deja un plugin global de bond en
-  `~/.gemini/config/plugins/bond/` con tus instrucciones y las reglas de bond
-  (`rules/AGENTS.md`) y las skills `bond-delegate`, `bond-team` y `herdr`, así que `agy` las
-  carga en cualquier repo. No toca nada más de `~/.gemini/config/`; sin `agy` entre tus agentes,
-  no crea nada. El plugin se llama `bond-global` para que conviva con el plugin `bond` del repo
-  (con el mismo nombre, `agy` solo cargaba el del repo). `bond doctor` dice si está al día.
 - `bond team collect` con agentes Claude Code: toma el informe de su transcript
-  (`~/.claude/projects/*/<sesión>.jsonl`, por el id que da Herdr) en vez del panel; cuenta como
-  decisiones del agente solo las firmadas `agent:<kind>/<nombre>` que no estaban en la base
-  (antes sumaba las del orquestador del mismo tipo y las ya existentes); y compara con la base
-  guardada al mandar el encargo, así que recoger después de integrar la rama sigue mostrando sus
-  commits y decisiones.
-- Antigravity (`agy`) en equipos y delegaciones: `bond team <rama>:agy` da al worktree la
-  confianza que ya tenía el checkout principal en `trustedWorkspaces` de
-  `~/.gemini/antigravity-cli/settings.json` (`--no-trust` lo evita), y si `agy` pregunta si
-  confías en la carpeta, la rama sale `bloqueado` y `prompt` no manda nada. `bond team collect`
-  toma su última respuesta del `transcript.jsonl` de la conversación cuando Herdr la reporta
-  (con `herdr integration install antigravity-cli`) y, si no, del panel sin el logo ni la
-  bienvenida de `agy`.
-- Antigravity (`agy`) en equipos, tras probarlo de verdad en Herdr: `bond team <rama>:agy`
-  arranca `agy` aunque solo esté en `~/.local/bin` (añade esa carpeta al PATH de la shell del
-  panel antes de lanzarlo) y con `--dangerously-skip-permissions`, porque sin él pide permiso por
-  cada comando y no avanza (tus argumentos tras `--` lo sustituyen; la skill `bond-delegate` hace
-  lo mismo). El aviso de novedades de `agy` al arrancar («esc to dismiss») ya no deja la rama
-  `bloqueado` ni dice «espera una respuesta tuya»; la pregunta de confianza sí. `bond setup`
-  instala la integración `antigravity-cli` de Herdr (antes la saltaba porque no se llama como el
-  agente) y `bond doctor` la comprueba; con ella, `collect` toma el informe de la conversación de
-  `agy`. Sin ella, del panel queda solo la respuesta final, sin el banner, el encargo repetido ni
-  las líneas de razonamiento y herramientas.
+  (`~/.claude/projects/*/<sesión>.jsonl`) en vez del panel; cuenta como decisiones del agente
+  solo las firmadas `agent:<kind>/<nombre>` que no estaban en la base (antes sumaba las del
+  orquestador del mismo tipo y las ya existentes); y compara con la base guardada al mandar el
+  encargo, así que recoger después de integrar la rama sigue mostrando sus commits y decisiones.
 - `bond decisions check` mira solo los trailers `Decision:` de la rama actual: antes leía los de
   todas las ramas y, con agentes en paralelo, una rama fallaba por las decisiones de otra.
 
