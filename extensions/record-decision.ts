@@ -1,7 +1,7 @@
 /**
  * Tool record_decision: registra una decisión no trivial en la memoria de decisiones del
  * repo ([decisions] en .bond/bond.toml) llamando a `bond decisions add` por shell: bond
- * calcula el id, la autoría (desde el panel de Herdr) y la fila del índice. La decisión
+ * calcula el id y la autoría (desde el panel de Herdr) y escribe el fichero. La decisión
  * entra como "proposed": solo el usuario la acepta con `bond decisions accept`.
  *
  * Es una tool y no solo una skill porque los modelos locales no siguen formatos a mano:
@@ -25,7 +25,7 @@ const recordDecisionTool = defineTool({
 	name: "record_decision",
 	label: "Record decision",
 	description:
-		"Record a non-trivial decision (yours or the user's) in this repository's decision memory via `bond decisions add`. Requires the repo to enable [decisions] in .bond/bond.toml. bond writes the decision file, its id and the index row; the decision always enters as proposed and only the user can accept it. Do not use for routine details.",
+		"Record a non-trivial decision (yours or the user's) in this repository's decision memory via `bond decisions add`. Requires the repo to enable [decisions] in .bond/bond.toml. bond writes the decision file with its computed id; the decision always enters as proposed and only the user can accept it. Do not use for routine details.",
 	promptSnippet: "record_decision: store a non-trivial decision in the repo's decision memory (bond)",
 	promptGuidelines: [
 		"When a non-trivial decision is made in this session (a contract, dependency, scope or design alternative is settled) and the repo has decision memory ([decisions] in .bond/bond.toml), record it with record_decision instead of writing files under docs/decisions by hand.",

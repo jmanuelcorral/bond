@@ -48,9 +48,11 @@ versión instalada. Ejecuta los comandos con tu herramienta de shell: no hay too
 9. Lee y guarda la respuesta. Con la memoria de decisiones activa, hazlo con
    `bond team collect "$(git branch --show-current)" --agent <nombre> --request "<mensaje exacto del paso 7>" --lines 200`:
    bond deja el encargo y el informe en un run de `docs/decisions/runs/` (el fichero lo
-   escribe bond desde el checkout principal; tú no lo redactas a mano). Si el informe no
-   cabe o quieres corregirlo, vuelve a recoger con `--lines` mayor: el run guarda el último
-   informe, sin duplicar. Si el delegado debe entregar texto largo, pídele que registre lo
+   escribe bond desde el checkout principal; tú no lo redactas a mano). El informe sale del
+   fichero de sesión del agente (su última respuesta, sin banner ni razonamiento) y, si no
+   es legible, del panel recortado. Si el informe no cabe o quieres corregirlo, vuelve a
+   recoger con `--lines` mayor: el run guarda el último informe, sin duplicar. Si el
+   delegado debe entregar texto largo, pídele que registre lo
    que sea una decisión con `bond decisions add` (skill `decision-record`) y que el resto lo
    resuma en su respuesta. Sin memoria, lee con
    `herdr agent read <nombre> --source recent-unwrapped --lines 200` y, si no se ve

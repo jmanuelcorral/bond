@@ -51,10 +51,12 @@ y lleva el progreso del plan al integrar cada rama.
 7. Revisa: `bond team status` da por rama el estado, los commits y los ficheros. Sin cambiar
    de rama, mira `git log --oneline <base>..<rama>` y `git diff --stat <base>...<rama>`.
    Con la memoria de decisiones activa, recoge el informe de cada agente con
-   `bond team collect <rama>`: lee su panel y guarda el informe, el estado, los commits de
-   la rama y las decisiones registradas por ese agente en el run del encargo (repetirlo no
-   duplica nada; `--lines <n>` cambia cuánto lee del panel). Sin memoria, lee el informe con
-   `herdr agent read <agente> --source recent-unwrapped --lines 120`.
+   `bond team collect <rama>`: toma solo su última respuesta del fichero de sesión que
+   Herdr reporta en `agent_session` (en pi, un `.jsonl`) y, si no puede leerlo, del
+   panel recortado (sin banner de arranque ni avisos). Guarda el informe, el estado, los
+   commits de la rama y las decisiones registradas por ese agente en el run del encargo
+   (repetirlo no duplica nada; `--lines <n>` cambia cuánto lee del panel). Sin memoria,
+   lee el informe con `herdr agent read <agente> --source recent-unwrapped --lines 120`.
 8. Resume por rama: qué hizo, commits, ficheros, verificación y conflictos probables entre
    ramas. Propón un orden de integración.
 

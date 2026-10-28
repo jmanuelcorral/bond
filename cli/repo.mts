@@ -819,7 +819,7 @@ export function syncRepo(opts: { check?: boolean; force?: boolean; quiet?: boole
 		if (!existsSync(readme)) {
 			mkdirSync(dirname(readme), { recursive: true });
 			writeFileSync(readme, decisionsReadme());
-			say(`${ok("+")} ${repoPath(cfg.decisions.dir, "README.md")}${dim("  índice de decisiones: a partir de aquí es tuyo")}`);
+			say(`${ok("+")} ${repoPath(cfg.decisions.dir, "README.md")}${dim("  formato de decisiones: a partir de aquí es tuyo (el listado lo da bond decisions)")}`);
 			decisionsReadmeCreated = true;
 		}
 	}
@@ -843,12 +843,9 @@ Memoria de decisiones de este repo (bond). Cada decisión no trivial —del usua
 agente— queda aquí en un fichero Markdown versionado con git, para poder auditar después qué
 se decidió, quién y por qué. La skill \`decision-record\` explica cuándo y cómo registrarla.
 
-## Índice
-
-| ID | Estado | Quién | Fecha | Título |
-|---|---|---|---|---|
-
-<!-- Una fila por decisión, la más reciente primero. -->
+No hay índice que mantener: el listado lo da \`bond decisions\` (también con \`--json\`).
+Registrar, aceptar o sustituir decisiones no reescribe este README, así que dos ramas
+paralelas que registran decisiones se fusionan sin conflictos de memoria.
 
 ## Formato
 

@@ -54,7 +54,7 @@ const add = (over: Partial<Parameters<typeof addDecision>[2]> = {}) =>
 	addDecision(repo, "docs/decisions", { title: "Preferir bun", decision: "Usar bun como runtime de pruebas.", ...over });
 
 describe("add", () => {
-	test("con solo título y decisión crea un fichero válido y su fila en el índice", () => {
+	test("con solo título y decisión crea un fichero válido sin tocar el README (D19)", () => {
 		enableMemory();
 		const { id, rel } = add();
 		expect(id).toBe(`${new Date().toISOString().slice(0, 10)}-preferir-bun`);
@@ -64,7 +64,8 @@ describe("add", () => {
 		expect(fm?.scalars.decided_by).toBe("user");
 		expect(fm?.scalars.title).toBe("Preferir bun");
 		expect(fm?.body).toContain("## Decision");
-		expect(read("docs/decisions/README.md")).toContain(`| ${id} | proposed | user`);
+		// Sin índice compartido: add no crea ni reescribe el README; el listado lo da bond decisions.
+		expect(existsSync(at("docs/decisions/README.md"))).toBe(false);
 		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
 	});
 
@@ -102,21 +103,15 @@ describe("add", () => {
 		expect(parseFm(read(`docs/decisions/${id}.md`))?.lists.links).toEqual(["plan: docs/plans/x.md#p2", "pr: https://github.com/o/r/pull/1"]);
 	});
 
-	test("el índice conserva lo que hay fuera de la tabla", () => {
+	test("add no toca un README existente, ni con una tabla de índice vieja (D19)", () => {
 		enableMemory();
-		write("docs/decisions/README.md", "# Decisiones\n\n## Índice\n\n| ID | Estado | Quién | Fecha | Título |\n|---|---|---|---|---|\n\nNota mía bajo la tabla.\n");
+		const before = "# Decisiones\n\n## Índice\n\n| ID | Estado | Quién | Fecha | Título |\n|---|---|---|---|---|\n| 2020-01-01-vieja | accepted | user | 2020-01-01 | Vieja |\n\nNota mía bajo la tabla.\n";
+		write("docs/decisions/README.md", before);
 		const { id } = add();
-		const readme = read("docs/decisions/README.md");
-		expect(readme).toContain(`| ${id} | proposed |`);
-		expect(readme).toContain("Nota mía bajo la tabla.");
-	});
-
-	test("sin tabla en el README no la inventa: lo dice el check", () => {
-		enableMemory();
-		write("docs/decisions/README.md", "# Mis decisiones, sin tabla\n");
-		add();
-		const rep = checkDecisions(repo, "docs/decisions");
-		expect(rep.errors.some((e) => e.includes("no hay tabla"))).toBe(true);
+		expect(read("docs/decisions/README.md")).toBe(before);
+		expect(existsSync(at(`docs/decisions/${id}.md`))).toBe(true);
+		// Y check la ignora: una tabla desfasada ya no es un error de la memoria.
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
 	});
 
 	test("sin [decisions], add falla diciendo cómo activarla", () => {
@@ -234,7 +229,7 @@ describe("accept sin TTY (D13)", () => {
 		});
 	};
 
-	test("con \"y\" pasa a accepted y actualiza el índice", () => {
+	test("con \"y\" pasa a accepted sin escribir ningún índice (D19)", () => {
 		enableMemory();
 		const { id } = add();
 		const r = withTty(["accept", id, "--ref", "sesion de prueba"], "y\n");
@@ -242,7 +237,7 @@ describe("accept sin TTY (D13)", () => {
 		const fm = parseFm(read(`docs/decisions/${id}.md`));
 		expect(fm?.scalars.status).toBe("accepted");
 		expect(fm?.scalars.accepted_by).toBe("sesion de prueba");
-		expect(read("docs/decisions/README.md")).toContain(`| ${id} | accepted |`);
+		expect(existsSync(at("docs/decisions/README.md"))).toBe(false);
 	});
 
 	test("con \"n\" no cambia nada", () => {
@@ -291,18 +286,6 @@ describe("check", () => {
 		expect(checkDecisions(repo, "docs/decisions").errors.some((e) => e.includes("frontmatter"))).toBe(true);
 	});
 
-	test("detecta filas huérfanas en el índice", () => {
-		enableMemory();
-		const { id } = add();
-		const readme = read("docs/decisions/README.md");
-		const row = `| ${id} | proposed | user`;
-		expect(readme).toContain(row);
-		// huérfana: una fila más en la tabla para una decisión que no existe.
-		write("docs/decisions/README.md", readme.replace(row, `${row} | 2026-01-01 | Nadie |\n| 2026-01-01-huerfana | proposed | user | 2026-01-01 | Nadie |`));
-		const rep = checkDecisions(repo, "docs/decisions");
-		expect(rep.errors.some((e) => e.includes("huerfana") && e.includes("no existe"))).toBe(true);
-	});
-
 	test("detecta trailers Decision: que no apuntan a nada", () => {
 		enableMemory();
 		add();
@@ -318,12 +301,35 @@ describe("check", () => {
 		spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", `aplica lo suyo\n\nDecision: ${id}`], { cwd: repo });
 		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
 	});
+});
 
-	test("el índice desfasado (estado distinto) es error", () => {
+describe("sin índice compartido: ramas paralelas (D19)", () => {
+	const git = (...args: string[]) =>
+		spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...args], { cwd: repo, encoding: "utf8" });
+
+	test("dos add en ramas distintas desde la misma base se fusionan sin conflicto", () => {
 		enableMemory();
-		const { id } = add();
-		write("docs/decisions/README.md", read("docs/decisions/README.md").replace(`| ${id} | proposed |`, `| ${id} | accepted |`));
-		expect(checkDecisions(repo, "docs/decisions").errors.some((e) => e.includes("el índice dice"))).toBe(true);
+		write("docs/decisions/README.md", "# Decisiones\n\nFormato del registro.\n");
+		git("add", "-A");
+		git("commit", "-qm", "base: README de decisiones");
+		const base = git("rev-parse", "--abbrev-ref", "HEAD").stdout.trim();
+
+		git("checkout", "-q", "-b", "feat/a");
+		addDecision(repo, "docs/decisions", { title: "Decision A", decision: "La A." });
+		git("add", "-A");
+		git("commit", "-qm", "record decision A");
+
+		git("checkout", "-q", base);
+		addDecision(repo, "docs/decisions", { title: "Decision B", decision: "La B." });
+		git("add", "-A");
+		git("commit", "-qm", "record decision B");
+
+		const m = git("merge", "--no-edit", "feat/a");
+		expect(m.status).toBe(0);
+		const today = new Date().toISOString().slice(0, 10);
+		expect(existsSync(at(`docs/decisions/${today}-decision-a.md`))).toBe(true);
+		expect(existsSync(at(`docs/decisions/${today}-decision-b.md`))).toBe(true);
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
 	});
 });
 

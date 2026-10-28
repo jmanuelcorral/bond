@@ -1,6 +1,6 @@
 ---
 name: decision-record
-description: Record non-trivial decisions (the user's or an agent's) in the repo's decision memory when .bond/bond.toml has a [decisions] section, using the record_decision tool (pi) or `bond decisions add` — never by hand-writing files — plus git trailers (Agent: and Decision:) and linked runs. Use when a contract, dependency, scope, or design alternative is settled, or when asked to record a decision. Do not use in repos without the [decisions] section.
+description: "Record non-trivial decisions (the user's or an agent's) in the repo's decision memory when .bond/bond.toml has a [decisions] section, using the record_decision tool (pi) or `bond decisions add` — never by hand-writing files — plus git trailers (\"Agent:\" and \"Decision:\") and linked runs. Use when a contract, dependency, scope, or design alternative is settled, or when asked to record a decision. Do not use in repos without the [decisions] section."
 user-invocable: true
 disable-model-invocation: false
 ---
@@ -20,7 +20,7 @@ its final form. Only the user can set a decision's status to `accepted`; an agen
 marks its own decision accepted, and never rewrites the user's records except to link them.
 
 **Never write decision files by hand.** Local models do not follow file formats reliably;
-bond's tooling does the writing (id computation, frontmatter, authorship, index). You pass
+bond's tooling does the writing (id computation, frontmatter, authorship). You pass
 the content; bond writes the record.
 
 ## When to record — and when not to
@@ -49,10 +49,11 @@ in doubt, leave it out; noise is worse than a gap, and `bond decisions check` (a
      reference), or the same object as JSON on stdin with `--stdin`.
    bond computes the id (`YYYY-MM-DD-slug`, suffix `-2` on same-day collision), the
    authorship (`decided_by` from your Herdr pane — you do not need to know your own name;
-   outside Herdr it is `user`), links the current branch and HEAD, writes
+   outside Herdr it is `user`), links the current branch and HEAD, and writes
    `<dir>/<id>.md` in the format documented in the
-   [decision template](references/decision-template.md), and updates the index in
-   `<dir>/README.md`. Every tool-made decision enters as `proposed`.
+   [decision template](references/decision-template.md). There is no shared index file:
+   `bond decisions` lists the records, so parallel branches never conflict over a README.
+   Every tool-made decision enters as `proposed`.
 4. Status is not yours to raise: `record_decision` and `add` always create `proposed`.
    Only the user moves a decision to `accepted` (`bond decisions accept <id>`, interactive
    terminal and confirmation required); `reject` and `supersede <id> --by <new>` work the
@@ -68,9 +69,13 @@ in doubt, leave it out; noise is worse than a gap, and `bond decisions check` (a
    - `Decision: <id>` — the decision the commit applies.
    Only add trailers in repos with decision memory enabled.
 7. Check the record if in doubt: `bond decisions show <id>` and `bond decisions check`
-   report broken files, duplicate ids, dangling references and index drift (non-zero exit
-   on errors). Do not fight concurrent edits by hand; re-run the tool instead.
-8. Report the created id, its status, and any links. If the decision awaits user
+   report broken files, duplicate ids and dangling references (non-zero exit on errors).
+   Do not fight concurrent edits by hand; re-run the tool instead.
+8. Decisions travel with the branch. In a worktree or feature branch, the files you record
+   under `<dir>/` belong to that branch: commit them together with the work they belong to
+   so they integrate and get reviewed in the PR. Never write in the plan or in `<dir>/runs/`
+   from a branch agent.
+9. Report the created id, its status, and any links. If the decision awaits user
    acceptance, say so ("proposed, awaiting your acceptance"). Do not present a `proposed`
    decision as agreed.
 
@@ -78,8 +83,11 @@ in doubt, leave it out; noise is worse than a gap, and `bond decisions check` (a
 
 Runs are the requests sent to agents by `bond team` / `bond-delegate` and their reports,
 stored under `<dir>/runs/`. The **orchestrator** writes them in the main checkout; the
-branch agent never writes its own run (it reports in its answer instead). When collecting a
-report in a repo with decision memory, save it with the
+branch agent never writes its own run (it reports in its answer instead). `bond team
+collect` takes the report from the agent's session file (for pi, the `.jsonl` Herdr
+reports in `agent_session`) and keeps only its last answer; when no session file is
+readable it falls back to the agent's pane, trimmed of the startup banner and notices.
+When collecting a report by hand in a repo with decision memory, save it with the
 [run template](references/run-template.md): `<dir>/runs/YYYY-MM-DD-<agent>-<slug>.md`,
 with the exact request text, the report trimmed to its final part and free of secrets, and
 `decisions:` linking any decisions the report brought (as `proposed`).

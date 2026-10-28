@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
-const { catalogSlug, frontmatter, validateCatalog } = await import("../cli/catalog.mts");
+const { catalogSlug, frontmatter, strictFrontmatter, validateCatalog } = await import("../cli/catalog.mts");
 
 const ROOT = join(import.meta.dir, "..");
 const MAIN = join(ROOT, "cli", "main.mts");
@@ -161,6 +161,19 @@ describe("bond catalog check", () => {
 		expect(r.out).toContain("0 skills, 0 comandos, 1 servidor MCP, 1 aviso");
 	});
 
+	test("frontmatter con YAML inválido: error claro, con línea y arreglo (D16)", () => {
+		write("skills/rota/SKILL.md", "---\nname: rota\ndescription: Record decisions with git trailers (Agent: and Decision:) and runs.\n---\n# Rota\n");
+		const r = bond(["catalog", "check"]);
+		expect(r.code).toBe(1);
+		expect(r.err).toContain("skills/rota/SKILL.md: frontmatter no es YAML válido");
+		expect(r.err).toContain('línea 3: valor sin comillas en description contiene ": "');
+		expect(r.err).toContain("entrecomillalo");
+		// La misma skill entrecomillada pasa.
+		write("skills/rota/SKILL.md", '---\nname: rota\ndescription: "Record decisions with git trailers (\\"Agent:\\" and \\"Decision:\\") and runs."\n---\n# Rota\n');
+		const ok = bond(["catalog", "check"]);
+		expect(ok.code).toBe(0);
+	});
+
 	test("sin catalog.toml no es un catálogo", () => {
 		rmSync(at("catalog.toml"));
 		const r = bond(["catalog", "check"]);
@@ -186,6 +199,24 @@ describe("el catálogo de bond", () => {
 });
 
 describe("ayudantes", () => {
+	test("strictFrontmatter: YAML simple, comillas, bloques y comentarios pasan", () => {
+		expect(strictFrontmatter('---\nname: x\ndescription: "a: b"\n---\n')).toEqual([]);
+		expect(strictFrontmatter("---\nname: x\ndescription: |\n  texto con: de todo\n  incluso esto: sí\n---\n")).toEqual([]);
+		expect(strictFrontmatter("---\n# comentario\nname: x\ndescription: y z\n---\n")).toEqual([]);
+		expect(strictFrontmatter("---\nname: x\nuser-invocable: true\n---\n")).toEqual([]);
+	});
+
+	test("strictFrontmatter: lo que pi rechaza, con la línea señalada", () => {
+		const errs = strictFrontmatter("---\nname: x\ndescription: trailers (Agent: and Decision:) here.\n---\n");
+		expect(errs.length).toBe(1);
+		expect(errs[0]).toContain("línea 3");
+		expect(errs[0]).toContain("description");
+		expect(strictFrontmatter("---\nname: x:\n---\n")[0]).toContain("línea 2");
+		expect(strictFrontmatter("---\nsin clave esta línea\n---\n")[0]).toContain('no es "clave: valor"');
+		expect(strictFrontmatter("---\ndescription: \"sin cerrar\n---\n")[0]).toContain("comilla sin cerrar");
+		expect(strictFrontmatter("sin frontmatter")[0]).toContain("sin frontmatter");
+	});
+
 	test("frontmatter: una línea, comillas y bloques", () => {
 		expect(frontmatter('---\nname: x\ndescription: "hola"\n---\n')).toEqual({ name: "x", description: "hola" });
 		expect(frontmatter("---\ndescription: |\n  uno\n  dos\nname: y\n---\n")).toEqual({ description: "uno dos", name: "y" });

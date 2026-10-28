@@ -14,7 +14,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 | `bond init` | Una vez por repo: agentes, agente por defecto y herramientas; genera la config de cada agente ([abajo](#configuración-por-repo-bond-init-y-bond-sync)) |
 | `bond` | Dentro de un repo: abre su puesto de trabajo en Herdr ([puesto.md](puesto.md)) |
 | `bond dev <dir>` | Lo mismo para otro directorio |
-| `bond team` | Un agente por rama, cada uno en su worktree (en Herdr, 4 en tu pestaña y el resto en pestañas nuevas, o lo que elijas); `status` (`--watch`: tabla en vivo agrupada por estado, que se cierra sola sin trabajo pendiente), `prompt` (con `[decisions]` guarda el encargo en un run; `--no-record` para no guardarlo), `collect` (recoge el informe del panel al run), `clean` (al quitar el último, cierra también la tabla) ([puesto.md](puesto.md#bond-team)) |
+| `bond team` | Un agente por rama, cada uno en su worktree (en Herdr, 4 en tu pestaña y el resto en pestañas nuevas, o lo que elijas); `status` (`--watch`: tabla en vivo agrupada por estado, que se cierra sola sin trabajo pendiente), `prompt` (con `[decisions]` guarda el encargo en un run; `--no-record` para no guardarlo), `collect` (guarda en el run la última respuesta del agente: de su sesión, o del panel recortado), `clean` (al quitar el último, cierra también la tabla) ([puesto.md](puesto.md#bond-team)) |
 | `bond status` | Agentes vivos en Herdr |
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
 | `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
@@ -115,8 +115,9 @@ Comandos propios del repo: ficheros Markdown en `.bond/commands/` (sintaxis com�
 **Memoria de decisiones.** Con la sección `[decisions]` en `bond.toml`, cada decisión no
 trivial —del usuario o de un agente— queda en `docs/decisions/` (un fichero por decisión,
 `YYYY-MM-DD-slug.md`) y los commits llevan los trailers `Agent:` y `Decision:`. `bond sync`
-crea el `README.md` índice si falta; después es del repo, como `AGENTS.md` (no se registra
-en el manifiesto y sync no lo pisa). La skill `decision-record` explica cuándo y cómo
+crea el `README.md` con el formato del registro si falta; después es del repo, como
+`AGENTS.md` (no se registra en el manifiesto y sync no lo pisa). No hay índice compartido:
+el listado lo da `bond decisions`. La skill `decision-record` explica cuándo y cómo
 registrar decisiones y runs. Sin la sección, nada cambia. Un `dir` que salga del repo
 (ruta absoluta o con `..`) se rechaza con un error. `bond init` solo propone la sección si
 `decision-record` está entre las skills elegidas; al re-inicializar, una `[decisions]` que
@@ -721,19 +722,21 @@ fuera, y sale con 1 si algo falla:
 `cli/decisions.mts`. La memoria de decisiones del repo: qué se decidió, quién y por qué, en
 ficheros Markdown versionados. Se activa con la sección `[decisions]` de `.bond/bond.toml`
 (`bond init` la propone con la skill `decision-record`; `bond sync` crea el `<dir>/README.md`
-con el índice). En un repo sin `[decisions]`, `add` falla diciendo cómo activarla y lo demás
+con el formato del registro). No hay índice compartido: el listado lo da `bond decisions`, así
+que dos ramas paralelas que registran decisiones se fusionan sin conflictos. En un repo sin
+`[decisions]`, `add` falla diciendo cómo activarla y lo demás
 sale con 0 explicando que no se usa la memoria.
 
 | Comando | Qué hace |
 |---|---|
 | `bond decisions` | Lista las decisiones, las más recientes primero; `--status <estado>`, `--agent <subcadena>`, `--json` |
-| `bond decisions add` | Registra una decisión: `--title`, `--context`, `--decision`, `--alternatives`, `--consequences`, `--link "tipo: valor"` (repetible); o con `--stdin`, el mismo objeto en JSON (incluido `consequences`). Bond calcula el id (`YYYY-MM-DD-slug`, `-2` si colisiona), la autoría y los enlaces de rama y HEAD, escribe `<dir>/<id>.md` con los apartados en inglés (*Context*, *Decision*, *Rejected alternatives*, *Consequences* — este solo si se pasan consecuencias) y actualiza el índice. Entra siempre como `proposed` |
+| `bond decisions add` | Registra una decisión: `--title`, `--context`, `--decision`, `--alternatives`, `--consequences`, `--link "tipo: valor"` (repetible); o con `--stdin`, el mismo objeto en JSON (incluido `consequences`). Bond calcula el id (`YYYY-MM-DD-slug`, `-2` si colisiona), la autoría y los enlaces de rama y HEAD, escribe `<dir>/<id>.md` con los apartados en inglés (*Context*, *Decision*, *Rejected alternatives*, *Consequences* — este solo si se pasan consecuencias). No toca ningún índice: el listado lo da esta orden. Entra siempre como `proposed` |
 | `bond decisions accept <id>` | La pasa a `accepted` (`--ref <aceptación>`). Exige terminal interactiva y confirmación: desde el shell de un agente (sin TTY) se niega |
 | `bond decisions reject <id>` | La pasa a `rejected`; misma confirmación |
 | `bond decisions supersede <id> --by <nueva>` | La vieja queda `superseded` y la nueva la referencia en `supersedes`; misma confirmación |
 | `bond decisions show <id>` | El fichero entero de la decisión (o del run si el id es de uno en `<dir>/runs/`) |
 | `bond decisions runs` | Los runs (encargos a agentes) en `<dir>/runs/`, con los commits de su rama y las decisiones de ese agente; `--agent <subcadena>`, `--json` |
-| `bond decisions check` | Audita la memoria: frontmatter, id contra nombre de fichero, duplicados, referencias de sustitución rotas, trailers `Decision:` e índice (filas que faltan, huérfanas, estado desfasado). Sale con 1 si hay errores |
+| `bond decisions check` | Audita la memoria: frontmatter, id contra nombre de fichero, duplicados, referencias de sustitución rotas y trailers `Decision:`. El README no se audita: no hay índice que mantener al día. Sale con 1 si hay errores |
 
 La autoría (`decided_by`): en un panel de Herdr, `agent:<kind>/<nombre>` —bond mira el agente
 del panel, el agente no necesita saber su propio nombre—; fuera de Herdr o sin agente en el
@@ -742,8 +745,8 @@ entrada y la salida, y piden confirmación. La barrera de TTY evita que un agent
 descuido; no es una medida de seguridad: la integridad de los registros la da git.
 
 pi tiene la tool `record_decision` (`extensions/record-decision.ts`), que llama a este mismo
-`bond decisions add --stdin`: el modelo pasa solo el contenido y bond escribe el registro, el
-id y el índice. `bond doctor` añade la fila de decisiones: errores (fallo), propuestas
+`bond decisions add --stdin`: el modelo pasa solo el contenido y bond escribe el registro con
+su id. `bond doctor` añade la fila de decisiones: errores (fallo), propuestas
 pendientes (aviso) o la memoria limpia.
 
 Con la memoria activa, las skills del catálogo `plan-create`, `plan-execute`,
@@ -755,14 +758,18 @@ herramienta o el comando no están disponibles, las skills se comportan como sie
 
 Los runs (encargos e informes) los escribe bond, no el modelo: `bond team prompt <rama>` deja
 el encargo exacto en `<dir>/runs/<fecha>-<agente>-<slug>.md` del checkout principal antes de
-mandarlo (`--no-record` lo evita; si la escritura falla, avisa y manda el prompt igual), y
-`bond team collect <rama>` lee el panel del agente (`--lines <n>`, por defecto 200) y guarda
-el informe, el estado, los commits de la rama y las decisiones cuyo `decided_by` es ese
+mandarlo (`--no-record` lo evita; si la escritura falla, avisa y manda el prompt igual); con
+memoria activa, el texto que recibe el agente lleva además una nota: lo que registre en
+`<dir>/` se commitea en su rama, y no escribe en el plan ni en `<dir>/runs/`.
+`bond team collect <rama>` toma solo la última respuesta del agente de su fichero de sesión
+(en pi, el `.jsonl` que Herdr reporta en `agent_session`) y, si no es legible, el volcado
+del panel recortado —sin banner de arranque ni avisos— (`--lines <n>`, por defecto 200), y
+guarda el informe, el estado, los commits de la rama y las decisiones cuyo `decided_by` es ese
 agente; repetirlo reemplaza el informe y recalcula las listas, sin duplicar. Sin run creado
 por `prompt`, `collect` lo crea con `--request "<encargo>"` y `--agent <nombre>` (delegaciones
 sin equipo, como `bond-delegate`). El agente de la rama nunca escribe su propio run.
 
-El formato de los ficheros y del índice lo documenta la skill `decision-record`
+El formato de los ficheros lo documenta la skill `decision-record`
 (`catalog/skills/decision-record/`).
 
 ## Snippet de Herdr

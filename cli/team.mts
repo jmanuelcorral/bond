@@ -59,9 +59,12 @@ status   Cada worktree del repo: estado, agente, commits por delante de la base 
 prompt   Manda una tarea al agente de esa rama (herdr agent prompt); --wait espera a que acabe.
          Con la memoria de decisiones activa ([decisions] en bond.toml), guarda el encargo
          exacto en <dir>/runs/ (--no-record para no guardarlo); si la escritura falla,
-         avisa y manda el prompt igual.
-collect  Recoge el informe del agente (herdr agent read) y lo guarda en el run de esa rama
-         de la memoria de decisiones, con el estado, los commits de la rama y las decisiones
+         avisa y manda el prompt igual. Con memoria, el encargo lleva además una nota: lo
+         que el agente registre en <dir>/ se commitea en su rama (viaja con el código).
+collect  Recoge el informe del agente: toma solo su última respuesta del fichero de sesión
+         que Herdr da en agent_session (en pi, un .jsonl) y, si no puede leerlo, del panel
+         recortado (sin banner de arranque ni avisos). Lo guarda en el run de esa rama de la
+         memoria de decisiones, con el estado, los commits de la rama y las decisiones
          registradas por ese agente. Repetirlo reemplaza el informe y recalcula listas: no
          duplica nada. Sin run creado por prompt, lo crea con --request como encargo (para
          delegaciones sin equipo, como bond-delegate); --agent recoge por nombre de agente.
@@ -840,21 +843,21 @@ function prompt(args: string[]): void {
 	// Con una pregunta en pantalla, el Enter del prompt la contestaría por ti y la tarea se perdería.
 	if (row.state === "bloqueado") die(`${name} espera una respuesta tuya${row.agent?.question ? ` (${row.agent.question})` : ""}: contéstale en su panel (herdr workspace focus ${row.workspace}) y repite`);
 	// La memoria de decisiones: el encargo queda en el run antes de mandar, y si escribir
-	// falla no puede cortar el envío (D9).
+	// falla no puede cortar el envío (D9). Con memoria activa, el texto enviado lleva
+	// además la nota de D18: las decisiones viajan con la rama.
+	const ctx = runCtx(root, row);
+	const task = ctx ? withMemoryNote(words.join(" "), ctx.dir) : words.join(" ");
 	let runRel: string | undefined;
-	if (!opts["--no-record"]) {
-		const ctx = runCtx(root, row);
-		if (ctx) {
-			try {
-				runRel = recordRequest(ctx, words.join(" "));
-			} catch (e) {
-				warn(`run: ${(e as Error).message} (mando el prompt igual)`);
-			}
+	if (ctx && !opts["--no-record"]) {
+		try {
+			runRel = recordRequest(ctx, task);
+		} catch (e) {
+			warn(`run: ${(e as Error).message} (mando el prompt igual)`);
 		}
 	}
 	const extra = [...(opts["--wait"] ? ["--wait"] : []), ...(opts["--timeout"] ? ["--timeout", opts["--timeout"] as string] : [])];
 	// Sin límite de tiempo propio: con --wait puede tardar lo que tarde el agente.
-	const r = spawnSync("herdr", ["agent", "prompt", name, words.join(" "), ...extra], { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
+	const r = spawnSync("herdr", ["agent", "prompt", name, task, ...extra], { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
 	let parsed: { result?: { agent?: { agent_status?: string } }; error?: { message?: string } } = {};
 	try {
 		parsed = JSON.parse(r.stdout || r.stderr || "{}");
@@ -909,6 +912,95 @@ export interface RunCtx {
 }
 
 const REPORT_HEADER = "## Report";
+
+/**
+ * Nota que bond añade al encargo con la memoria de decisiones activa (D18): las
+ * decisiones viajan con la rama. Lo que el agente registra en <dir>/ debe commitearse en
+ * su rama para que se integre y se revise con el código en el PR.
+ */
+export const withMemoryNote = (task: string, dir: string) =>
+	`${task}\n\n[memoria de decisiones] Si registras decisiones con bond, commitea los ficheros de ${dir}/ en esta rama junto con tu trabajo: viajan con la rama y se revisan con el código. No escribas en el plan ni en ${dir}/runs/.`;
+
+/**
+ * Última respuesta de texto del asistente en una sesión .jsonl de pi (D17). Cada línea es
+ * un evento JSON; los mensajes del asistente llevan bloques `thinking`/`text`/`toolCall`:
+ * sale el texto de los bloques `text` del último mensaje con él, saltando los que solo
+ * tienen razonamiento o llamadas a herramientas. undefined si el fichero no se puede leer
+ * o no hay ninguna respuesta con texto.
+ */
+export function lastAssistantText(file: string): string | undefined {
+	let text: string;
+	try {
+		text = readFileSync(file, "utf8");
+	} catch {
+		return undefined;
+	}
+	let last: string | undefined;
+	for (const line of text.split("\n")) {
+		if (!line.includes('"assistant"')) continue;
+		let e: { type?: string; message?: { role?: string; content?: unknown } };
+		try {
+			e = JSON.parse(line);
+		} catch {
+			continue;
+		}
+		if (e.type !== "message" || e.message?.role !== "assistant") continue;
+		const parts = Array.isArray(e.message.content) ? (e.message.content as Array<{ type?: string; text?: unknown }>) : [];
+		const txt = parts
+			.filter((p) => p?.type === "text" && typeof p.text === "string" && (p.text as string).trim())
+			.map((p) => (p.text as string).trim())
+			.join("\n\n")
+			.trim();
+		if (txt) last = txt;
+	}
+	return last;
+}
+
+/**
+ * Recorta el volcado del panel de un agente (respaldo de D17): fuera el banner de arranque
+ * de pi (arte ASCII, versión, «licence to code») y los avisos de skills en conflicto, que
+ * no forman parte del informe. El volcado puede traer más cosas (eco del encargo, salidas de
+ * herramientas): se quita lo que sabemos que no es respuesta y lo demás se guarda tal cual.
+ */
+export function trimAgentBanner(text: string): string {
+	const lines = text.split("\n");
+	let i = 0;
+	while (i < lines.length && !lines[i].trim()) i++;
+	while (i < lines.length && (/[╱╲]{3}/.test(lines[i]) || /\bpi v\d/.test(lines[i]) || /licence to code/i.test(lines[i]))) i++;
+	const kept: string[] = [];
+	for (let j = i; j < lines.length; j++) {
+		// Aviso de skills en conflicto: de la cabecera hasta el bloque en blanco que lo cierra
+		// (el aviso trae dentro el fragmento de YAML señalado, con líneas sueltas).
+		if (/^\s*\[Skill conflicts?\]/.test(lines[j])) {
+			let blanks = 0;
+			while (j < lines.length && blanks < 2) {
+				if (lines[j].trim() === "") blanks++;
+				j++;
+			}
+			j--; // el for externo vuelve a incrementar
+			continue;
+		}
+		kept.push(lines[j]);
+	}
+	return kept.join("\n").trim();
+}
+
+/**
+ * Informe de un agente (D17): primero su fichero de sesión (Herdr lo da en `agent_session`,
+ * kind "path"; en pi un .jsonl) tomando solo su última respuesta; si no hay sesión legible
+ * o sin texto, el volcado del panel recortado. Devuelve el texto y de dónde sale.
+ */
+export function agentReport(agent: string, paneRead: () => string): { report: string; source: "sesión" | "panel" } {
+	try {
+		const got = herdr<{ agent?: HerdrAgent }>(["agent", "get", agent], 10_000).agent;
+		const sess = got?.agent_session?.kind === "path" ? got.agent_session.value : undefined;
+		const fromSession = sess ? lastAssistantText(sess) : undefined;
+		if (fromSession) return { report: fromSession, source: "sesión" };
+	} catch {
+		// Sin respuesta de Herdr o sin sesión: queda el panel.
+	}
+	return { report: trimAgentBanner(paneRead()), source: "panel" };
+}
 
 /** El fichero de un run: frontmatter D9 + secciones Request y Report. */
 export function runFileText(fm: RunFm, request: string, report: string): string {
@@ -1089,11 +1181,15 @@ function collect(args: string[]): void {
 	const agent = (opts["--agent"] as string | undefined) || row?.agent?.name || die(`no hay agente en la rama ${branch} y no diste --agent (bond team status)`);
 	const kind = row?.agent?.kind ?? agents(5000).find((a) => a.name === agent)?.agent ?? "";
 	const lines = String(opts["--lines"] ?? "200");
-	const rd = run("herdr", ["agent", "read", agent, "--source", "recent-unwrapped", "--lines", lines], { timeout: 20_000 });
-	if (rd.status !== 0) die(`no pude leer el panel de ${agent}: ${(rd.stderr || rd.stdout).trim()}`);
+	// D17: el informe sale del fichero de sesión del agente; el panel recortado es el respaldo.
+	const { report, source } = agentReport(agent, () => {
+		const rd = run("herdr", ["agent", "read", agent, "--source", "recent-unwrapped", "--lines", lines], { timeout: 20_000 });
+		if (rd.status !== 0) die(`no pude leer el panel de ${agent}: ${(rd.stderr || rd.stdout).trim()}`);
+		return rd.stdout;
+	});
 	const ctx: RunCtx = { mainRoot: main, worktree: row?.path ?? main, dir: dec.dir, branch, base: baseLink(main), agent, kind, orchestrator: resolveAuthor().replace(/^agent:/, "") };
-	const out = collectRun(ctx, rd.stdout, { request: opts["--request"] as string | undefined });
-	console.log(`${ok("~")} ${out.rel}  ${dim(`reported · ${out.commits.length} commit(s) de ${branch} · ${out.decisions.length} decisión(es) de ${agent}`)}`);
+	const out = collectRun(ctx, report, { request: opts["--request"] as string | undefined });
+	console.log(`${ok("~")} ${out.rel}  ${dim(`reported · informe desde la ${source} · ${out.commits.length} commit(s) de ${branch} · ${out.decisions.length} decisión(es) de ${agent}`)}`);
 }
 
 // --- quitar worktrees -----------------------------------------------------------------------

@@ -96,6 +96,54 @@ export function frontmatter(md: string): Record<string, string> | undefined {
 	return out;
 }
 
+/**
+ * Validación YAML estricta del frontmatter de una skill. `frontmatter()` es tolerante y
+ * saca los campos pase lo que pase; esto comprueba que el bloque es YAML de verdad, porque
+ * pi rechaza cargar una skill con frontmatter inválido (Claude Code lo tolera). Un valor
+ * plano sin comillas no puede contener `: ` ni terminar en `:` (p. ej. `Agent: and
+ * Decision:` dentro de una description), y no hay continuaciones multilínea fuera de los
+ * bloques escalares `|` / `>`. Devuelve los errores encontrados (vacío si todo vale).
+ */
+export function strictFrontmatter(md: string): string[] {
+	const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(md);
+	if (!m) return ["sin frontmatter (--- ... ---)"];
+	const errors: string[] = [];
+	const lines = m[1].split(/\r?\n/);
+	let inBlock = false;
+	let blockIndent = 0;
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+		const n = i + 2; // línea 1 del fichero es el `---` de apertura
+		if (!line.trim()) {
+			inBlock = false;
+			continue;
+		}
+		const indent = /^ */.exec(line)![0].length;
+		if (inBlock && indent > blockIndent) continue; // contenido literal del bloque escalar
+		inBlock = false;
+		if (/^\s*#/.test(line)) continue;
+		const kv = /^([A-Za-z0-9_-]+):(.*)$/.exec(line);
+		if (!kv) {
+			errors.push(`línea ${n}: no es "clave: valor" ni comentario`);
+			continue;
+		}
+		const v = kv[2].trim();
+		if (v === "") continue; // valor vacío: nulo o bloque que sigue
+		if (/^[|>][+-]?\d*$/.test(v)) {
+			inBlock = true;
+			blockIndent = indent;
+			continue;
+		}
+		if ((v.startsWith('"') && v.endsWith('"') && v.length > 1) || (v.startsWith("'") && v.endsWith("'") && v.length > 1)) continue;
+		if (v.startsWith('"') || v.startsWith("'")) {
+			errors.push(`línea ${n}: comilla sin cerrar en ${kv[1]}`);
+			continue;
+		}
+		if (v.includes(": ") || v.endsWith(":")) errors.push(`línea ${n}: valor sin comillas en ${kv[1]} contiene ": " (YAML lo rechaza); entrecomillalo ("...")`);
+	}
+	return errors;
+}
+
 export interface CatalogReport {
 	name?: string;
 	skills: string[];
@@ -139,11 +187,14 @@ export function validateCatalog(dir: string): CatalogReport {
 				continue;
 			}
 			r.skills.push(d);
-			const fm = frontmatter(readFileSync(file, "utf8"));
+			const text = readFileSync(file, "utf8");
+			const fm = frontmatter(text);
 			if (!fm) err(`skills/${d}/SKILL.md: falta el frontmatter (--- name y description ---)`);
 			else {
 				if (fm.name !== d) err(`skills/${d}/SKILL.md: name ${fm.name ? `"${fm.name}"` : "vacío"}, tiene que ser "${d}" (el nombre de la carpeta)`);
 				if (!fm.description) err(`skills/${d}/SKILL.md: falta description (el agente la usa para decidir cuándo cargarla)`);
+				// YAML estricto: con frontmatter inválido pi no carga la skill (Claude Code lo tolera).
+				for (const e of strictFrontmatter(text)) err(`skills/${d}/SKILL.md: frontmatter no es YAML válido: ${e}`);
 			}
 			if (!NAME.test(d)) err(`skills/${d}: nombre no válido (minúsculas, dígitos, - o _)`);
 		}

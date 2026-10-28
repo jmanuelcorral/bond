@@ -14,7 +14,7 @@ you see? Open an [issue on GitHub](https://github.com/jmanuelcorral/bond/issues)
 | `bond init` | Once per repo: agents, default agent and tools; generates each agent's config ([below](#per-repo-configuration-bond-init-and-bond-sync)) |
 | `bond` | Inside a repo: opens its workstation in Herdr ([workstation.md](workstation.md)) |
 | `bond dev <dir>` | The same for another directory |
-| `bond team` | One agent per branch, each in its own worktree (in Herdr, 4 in your tab and the rest in new tabs, or whatever you choose); `status` (`--watch`: live table grouped by status, which closes on its own when no work is pending), `prompt` (with `[decisions]` it records the request in a run; `--no-record` skips it), `collect` (stores the agent's report from its pane into the run), `clean` (removing the last one also closes the table) ([workstation.md](workstation.md#bond-team)) |
+| `bond team` | One agent per branch, each in its own worktree (in Herdr, 4 in your tab and the rest in new tabs, or whatever you choose); `status` (`--watch`: live table grouped by status, which closes on its own when no work is pending), `prompt` (with `[decisions]` it records the request in a run; `--no-record` skips it), `collect` (stores the agent's last answer into the run: from its session file, or from the trimmed pane), `clean` (removing the last one also closes the table) ([workstation.md](workstation.md#bond-team)) |
 | `bond status` | Live agents in Herdr |
 | `bond sessions` | pi sessions and how to resume them |
 | `bond sync` | Regenerates the repo's agent config from `.bond/bond.toml` |
@@ -115,7 +115,8 @@ The repo's own commands: Markdown files in `.bond/commands/` (common syntax: `$A
 **Decision memory.** With a `[decisions]` section in `bond.toml`, every non-trivial
 decision —the user's or an agent's— lands in `docs/decisions/` (one file per decision,
 `YYYY-MM-DD-slug.md`) and commits carry the `Agent:` and `Decision:` trailers. `bond sync`
-creates the index `README.md` if missing; after that it belongs to the repo, like `AGENTS.md`
+creates the `README.md` with the record format if missing; after that it belongs to the repo,
+like `AGENTS.md`
 (it is not registered in the manifest: sync neither overwrites it nor flags it as outdated).
 The `decision-record` skill explains when and how to record decisions and runs. Without the
 section, nothing changes. A `dir` that escapes the repo (absolute path or with `..`) is
@@ -722,19 +723,21 @@ external things, and exits with 1 if something fails:
 `cli/decisions.mts`. The repo's decision memory: what was decided, by whom and why, in
 versioned Markdown files. It is enabled by the `[decisions]` section in `.bond/bond.toml`
 (`bond init` proposes it together with the `decision-record` skill; `bond sync` creates the
-index `<dir>/README.md`). In a repo without `[decisions]`, `add` fails explaining how to
+`<dir>/README.md` with the record format). There is no shared index: `bond decisions` is the
+listing, so two parallel branches recording decisions merge without conflicts. In a repo
+without `[decisions]`, `add` fails explaining how to
 enable it and everything else exits 0 saying the memory is not in use.
 
 | Command | What it does |
 |---|---|
 | `bond decisions` | Lists the repo's decisions, newest first; `--status <status>`, `--agent <substring>`, `--json` |
-| `bond decisions add` | Records a decision: `--title`, `--context`, `--decision`, `--alternatives`, `--consequences`, `--link "kind: value"` (repeatable); or with `--stdin`, the same object as JSON (including `consequences`). bond computes the id (`YYYY-MM-DD-slug`, `-2` on collision), the authorship and the branch/HEAD links, writes `<dir>/<id>.md` with English sections (*Context*, *Decision*, *Rejected alternatives*, *Consequences* — the last only when consequences are provided) and updates the index. It always enters as `proposed` |
+| `bond decisions add` | Records a decision: `--title`, `--context`, `--decision`, `--alternatives`, `--consequences`, `--link "kind: value"` (repeatable); or with `--stdin`, the same object as JSON (including `consequences`). bond computes the id (`YYYY-MM-DD-slug`, `-2` on collision), the authorship and the branch/HEAD links, writes `<dir>/<id>.md` with English sections (*Context*, *Decision*, *Rejected alternatives*, *Consequences* — the last only when consequences are provided). It touches no index: this command is the listing. It always enters as `proposed` |
 | `bond decisions accept <id>` | Moves it to `accepted` (`--ref <acceptance>`). Requires an interactive terminal and confirmation: refused from an agent's shell (no TTY) |
 | `bond decisions reject <id>` | Moves it to `rejected`; same confirmation |
 | `bond decisions supersede <id> --by <new>` | The old one becomes `superseded` and the new one references it in `supersedes`; same confirmation |
 | `bond decisions show <id>` | The decision's whole file (or the run's, if the id is one in `<dir>/runs/`) |
 | `bond decisions runs` | The runs (delegated tasks) in `<dir>/runs/`, with their branch commits and that agent's decisions; `--agent <substring>`, `--json` |
-| `bond decisions check` | Audits the memory: frontmatter, id vs filename, duplicates, broken supersession references, `Decision:` trailers and the index (missing or orphan rows, stale status). Exits 1 on errors |
+| `bond decisions check` | Audits the memory: frontmatter, id vs filename, duplicates, broken supersession references and `Decision:` trailers. The README is not audited: there is no index to keep current. Exits 1 on errors |
 
 Authorship (`decided_by`): inside a Herdr pane it is `agent:<kind>/<name>` —bond looks up the
 pane's agent, so an agent never needs to know its own name—; outside Herdr, or with no agent
@@ -744,8 +747,8 @@ agent from accepting by accident; it is not a security measure — git provides 
 integrity.
 
 pi has the `record_decision` tool (`extensions/record-decision.ts`), which calls this same
-`bond decisions add --stdin`: the model passes only the content and bond writes the record,
-the id and the index. `bond doctor` adds a decisions row: errors (failure), proposals awaiting
+`bond decisions add --stdin`: the model passes only the content and bond writes the record
+with its computed id. `bond doctor` adds a decisions row: errors (failure), proposals awaiting
 acceptance (warning) or a clean memory.
 
 With the memory enabled, the catalog skills `plan-create`, `plan-execute`,
@@ -757,15 +760,19 @@ or if the tool or command is unavailable, the skills behave as they always did.
 
 Runs (requests and reports) are written by bond, not by the model: `bond team prompt <branch>`
 stores the exact request in the main checkout's `<dir>/runs/<date>-<agent>-<slug>.md` before
-sending it (`--no-record` skips it; if saving fails it warns and sends the prompt anyway), and
-`bond team collect <branch>` reads the agent's pane (`--lines <n>`, 200 by default) and stores
+sending it (`--no-record` skips it; if saving fails it warns and sends the prompt anyway); with
+the memory enabled, the text the agent receives also carries a note: whatever it records under
+`<dir>/` gets committed on its branch, and it writes nothing in the plan or in `<dir>/runs/`.
+`bond team collect <branch>` takes only the agent's last answer from its session file (for pi,
+the `.jsonl` Herdr reports in `agent_session`) and, when that is not readable, the trimmed pane
+dump —no startup banner or notices— (`--lines <n>`, 200 by default); it stores
 the report, the status, the branch's commits and the decisions whose `decided_by` is that
 agent; collecting again replaces the report and recomputes the lists without duplicating.
 Without a run created by `prompt`, `collect` creates one with `--request "<task>"` and
 `--agent <name>` (delegations without a team, like `bond-delegate`). The branch agent never
 writes its own run.
 
-The file and index format is documented in the `decision-record` skill
+The file format is documented in the `decision-record` skill
 (`catalog/skills/decision-record/`).
 
 ## Herdr snippet

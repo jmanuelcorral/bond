@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseFm } from "../cli/decisions.mts";
-import { branchInfo, classify, collectRun, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runFileText, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle } from "../cli/team.mts";
+import { branchInfo, classify, collectRun, lastAssistantText, trimAgentBanner, withMemoryNote, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runFileText, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle } from "../cli/team.mts";
 
 const dirs = (...existing: string[]) => (p: string) => existing.includes(p);
 
@@ -554,5 +554,95 @@ describe("runs de la memoria de decisiones", () => {
 		expect(p.lists.commits).toEqual(fm.commits);
 		expect(p.lists.decisions).toEqual(fm.decisions);
 		expect(p.scalars.status).toBe("reported");
+	});
+});
+
+describe("informe desde el fichero de sesión del agente (D17)", () => {
+	let dir: string;
+	beforeEach(() => {
+		dir = realpathSync(mkdtempSync(join(tmpdir(), "bond-sess-")));
+	});
+	afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+	// Un .jsonl de sesión de pi de ejemplo: eventos JSON por línea; los mensajes del
+	// asistente traen bloques thinking/toolCall/text; el informe es solo el texto final.
+	const sample = [
+		JSON.stringify({ type: "session", id: "s1" }),
+		JSON.stringify({ type: "message", message: { role: "user", content: [{ type: "text", text: "haz X" }] } }),
+		JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "thinking", thinking: "pienso" }, { type: "toolCall", name: "read" }] } }),
+		JSON.stringify({ type: "message", message: { role: "toolResult", content: [{ type: "text", text: "salida" }] } }),
+		JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "Primera respuesta." }] } }),
+		JSON.stringify({ type: "message", message: { role: "user", content: [{ type: "text", text: "y ahora?" }] } }),
+		"línea rota {no es json",
+		JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "thinking", thinking: "más" }, { type: "text", text: "Hecho X: fichero creado y verificado." }] } }),
+		JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "bash" }] } }),
+	].join("\n");
+
+	test("saca solo la última respuesta con texto del asistente", () => {
+		const f = join(dir, "sesion.jsonl");
+		writeFileSync(f, sample + "\n");
+		expect(lastAssistantText(f)).toBe("Hecho X: fichero creado y verificado.");
+	});
+
+	test("sin fichero legible o sin texto del asistente, undefined", () => {
+		expect(lastAssistantText(join(dir, "no-existe.jsonl"))).toBeUndefined();
+		const f = join(dir, "vacia.jsonl");
+		writeFileSync(f, JSON.stringify({ type: "message", message: { role: "user", content: [{ type: "text", text: "solo usuario" }] } }) + "\n");
+		expect(lastAssistantText(f)).toBeUndefined();
+	});
+
+	test("varios bloques de texto del mismo mensaje se unen", () => {
+		const f = join(dir, "multi.jsonl");
+		writeFileSync(f, JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "Uno." }, { type: "thinking", thinking: "x" }, { type: "text", text: "Dos." }] } }) + "\n");
+		expect(lastAssistantText(f)).toBe("Uno.\n\nDos.");
+	});
+
+	test("el informe de la sesión llega al run sin banner ni razonamiento", () => {
+		const f = join(dir, "collect.jsonl");
+		writeFileSync(f, sample + "\n");
+		const out = collectRun(
+			{ mainRoot: dir, worktree: dir, dir: "docs/decisions", branch: "feat/a", base: "main@abc", agent: "kevin", kind: "pi", orchestrator: "user" },
+			lastAssistantText(f)!,
+			{ request: "haz X" },
+		);
+		const text = readFileSync(join(dir, ...out.rel.split("/")), "utf8");
+		expect(text).toContain("Hecho X: fichero creado y verificado.");
+		expect(text).not.toContain("pienso");
+		expect(text).not.toContain("toolCall");
+		expect(text).not.toContain("╱");
+	});
+});
+
+describe("recorte del volcado del panel (respaldo D17)", () => {
+	test("fuera el banner de arranque de pi y los avisos de skills en conflicto", () => {
+		const dump = [
+			"╱╱╱╱╱╱ 007 pi v1.4.0 ╲╲╲╲╲╲",
+			"╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱",
+			"licence to code · /delegate for team mode · /help for help",
+			"",
+			"[Skill conflicts]",
+			"  /home/x/.agents/skills/decision-record/SKILL.md",
+			"    Nested mappings are not allowed in compact mappings at line 2, column 14:",
+			"",
+			"description: Record ... trailers (Agent: and Decision:) and runs.",
+			"             ^",
+			"",
+			"",
+			"Hecho. Implementé el cambio y verifiqué con npm run typecheck.",
+		].join("\n");
+		expect(trimAgentBanner(dump)).toBe("Hecho. Implementé el cambio y verifiqué con npm run typecheck.");
+	});
+
+	test("un volcado sin banner se queda tal cual (recortado solo por los bordes)", () => {
+		expect(trimAgentBanner("\ninforme normal\ncon líneas\n\n")).toBe("informe normal\ncon líneas");
+	});
+});
+
+describe("nota de memoria en el encargo (D18)", () => {
+	test("con memoria, el encargo pide commitear las decisiones en la rama", () => {
+		const t = withMemoryNote("Implementa P5", "docs/decisions");
+		expect(t.startsWith("Implementa P5\n\n")).toBe(true);
+		expect(t).toContain("commitea los ficheros de docs/decisions/ en esta rama");
+		expect(t).toContain("No escribas en el plan ni en docs/decisions/runs/");
 	});
 });

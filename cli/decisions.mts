@@ -1,15 +1,16 @@
 // `bond decisions`: la memoria de decisiones del repo (sección [decisions] de
 // .bond/bond.toml). Los agentes registran con `add` (o la herramienta `record_decision`
-// de pi, que llama a este mismo código): bond calcula el id, la autoría (D12), escribe
-// el fichero con el formato de D6 y la fila del índice. Aceptar es solo del usuario:
-// `accept` exige terminal interactiva y confirmación (D13). `check` audita los registros
-// para que la memoria no se rompa con el uso.
+// de pi, que llama a este mismo código): bond calcula el id, la autoría (D12) y escribe
+// el fichero con el formato de D6. No hay índice compartido (D19): el listado lo da esta
+// orden, así que dos ramas paralelas que registran decisiones no chocan al fusionarse.
+// Aceptar es solo del usuario: `accept` exige terminal interactiva y confirmación (D13).
+// `check` audita los registros para que la memoria no se rompa con el uso.
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { join } from "node:path";
 import { agents } from "./herdr.mts";
-import { decisionsReadme, repoDecisions, repoRoot } from "./repo.mts";
+import { repoDecisions, repoRoot } from "./repo.mts";
 import { bad, catchDie, die, dim, ok, run } from "./util.mts";
 
 export const STATUSES = ["proposed", "accepted", "rejected", "superseded"];
@@ -24,9 +25,10 @@ lista las decisiones.
   add --title <t> [--context <c>] --decision <d> [--alternatives <a>]
       [--consequences <c>] [--link <ref>]... [--json]
             Registra una decisión: bond calcula el id (YYYY-MM-DD-slug), la autoría
-            (desde el panel de Herdr, agent:<kind>/<nombre>; fuera, user) y la añade
-            al índice. Siempre entra como "proposed". El cuerpo queda con los apartados
-            en inglés: Context / Decision / Rejected alternatives / Consequences
+            (desde el panel de Herdr, agent:<kind>/<nombre>; fuera, user) y escribe el
+            fichero. No toca ningún índice: el listado lo da esta orden (así las ramas
+            paralelas no chocan). Siempre entra como "proposed". El cuerpo queda con los
+            apartados en inglés: Context / Decision / Rejected alternatives / Consequences
             (este solo si pasas --consequences). Con --stdin, el mismo objeto en JSON
             por la entrada estándar: {"title","context","decision","alternatives",
             "consequences","links"}.
@@ -42,8 +44,9 @@ lista las decisiones.
   runs [--agent <a>] [--json]     Los runs (encargos a agentes) de <dir>/runs/, con los
                                   commits de su rama y las decisiones de ese agente.
   check                           Audita la memoria: frontmatter, ids, duplicados,
-                                  sustituciones, trailers Decision: e índice. Sale
-                                  con 1 si hay errores.
+                                  sustituciones y trailers Decision:. Sale con 1 si hay
+                                  errores. El README no se audita: no hay índice que
+                                  mantener al día.
 
   --json     Salida JSON estable en lista, add, runs y check.
   -h, --help Esta ayuda.
@@ -186,7 +189,7 @@ function buildBody(in_: AddInput): string {
 	return section("Context", in_.context) + section("Decision", in_.decision) + section("Rejected alternatives", in_.alternatives) + section("Consequences", in_.consequences);
 }
 
-/** Registra una decisión: fichero con el formato de D6 + fila en el índice. */
+/** Registra una decisión: fichero con el formato de D6. No toca el README (D19). */
 export function addDecision(root: string, dirRel: string, in_: AddInput): { id: string; rel: string; decided_by: string } {
 	const title = in_.title?.trim();
 	const decision = in_.decision?.trim();
@@ -212,46 +215,7 @@ export function addDecision(root: string, dirRel: string, in_: AddInput): { id: 
 		rel: `${dirRel}/${id}.md`,
 	};
 	writeFileSync(join(dir, `${id}.md`), decisionFile(d));
-	upsertIndex(root, dirRel, d);
 	return { id, rel: `${dirRel}/${id}.md`, decided_by };
-}
-
-// --- índice -------------------------------------------------------------------------------
-
-const cell = (s: string) => s.replaceAll("|", "\\|");
-const indexRow = (d: Decision) => `| ${d.id} | ${d.status} | ${cell(d.decided_by)} | ${d.date} | ${cell(d.title)} |`;
-
-interface IndexTable {
-	header: number;
-	sep: number;
-	rows: Array<{ line: number; id: string; status: string }>;
-}
-
-/** La tabla del índice del README: cabecera `| ID | ... |`, separador y filas. */
-function findIndex(lines: string[]): IndexTable | undefined {
-	const header = lines.findIndex((l) => /^\|\s*ID\s*\|/i.test(l));
-	if (header < 0 || header + 1 >= lines.length || !/^\|[\s:-]+\|/.test(lines[header + 1])) return undefined;
-	const rows: IndexTable["rows"] = [];
-	for (let i = header + 2; i < lines.length && /^\|/.test(lines[i]); i++) {
-		const cols = lines[i].split("|").map((c) => c.trim());
-		const id = (cols[1] ?? "").replace(/^`|`$/g, "");
-		if (id) rows.push({ line: i, id, status: cols[2] ?? "" });
-	}
-	return { header, sep: header + 1, rows };
-}
-
-/** Inserta (o reemplaza si ya estaba) la fila de una decisión bajo la cabecera del índice. */
-function upsertIndex(root: string, dirRel: string, d: Decision): void {
-	const readme = join(dirAbs(root, dirRel), "README.md");
-	if (!existsSync(readme)) writeFileSync(readme, decisionsReadme());
-	const lines = readFileSync(readme, "utf8").split("\n");
-	const t = findIndex(lines);
-	if (!t) return; // índice sin tabla: no lo tocamos, cada repo es libre de editarlo
-	const row = indexRow(d);
-	const existing = t.rows.find((r) => r.id === d.id);
-	if (existing) lines[existing.line] = row;
-	else lines.splice(t.sep + 1, 0, row);
-	writeFileSync(readme, lines.join("\n"));
 }
 
 // --- cambiar estado ------------------------------------------------------------------------
@@ -284,7 +248,7 @@ async function confirmChange(verb: string, id: string): Promise<void> {
 	}
 }
 
-/** Reescribe una decisión cambiando estado y (si se da) accepted_by, y refresca el índice. */
+/** Reescribe una decisión cambiando estado y (si se da) accepted_by. */
 function patchDecision(root: string, dirRel: string, id: string, patch: Partial<Pick<Decision, "status" | "accepted_by" | "supersedes" | "superseded_by">>): Decision {
 	const f = findDecisionFile(root, dirRel, id);
 	const p = parseFm(readFileSync(f, "utf8"));
@@ -292,7 +256,6 @@ function patchDecision(root: string, dirRel: string, id: string, patch: Partial<
 	const d = { ...(decisionFields(p) as Omit<Decision, "rel">), rel: `${dirRel}/${id}.md` };
 	Object.assign(d, patch);
 	writeFileSync(f, decisionFile(d));
-	upsertIndex(root, dirRel, d);
 	return d;
 }
 
@@ -353,26 +316,8 @@ export function checkDecisions(root: string, dirRel: string): DecisionsReport {
 	for (const t of decisionTrailers(root)) {
 		if (!byId.has(t)) errors.push(`trailers Decision: apuntan a "${t}", que no existe en ${dirRel}/`);
 	}
-	// Índice: cada decisión, una fila con el estado del fichero; sin filas huérfanas.
-	const readme = join(dir, "README.md");
-	if (!existsSync(readme)) errors.push(`${dirRel}/README.md: no existe el índice (bond sync lo crea)`);
-	else {
-		const t = findIndex(readFileSync(readme, "utf8").split("\n"));
-		if (!t) errors.push(`${dirRel}/README.md: no hay tabla de índice (| ID | Estado | ... |)`);
-		else {
-			const seen = new Map<string, number>();
-			for (const r of t.rows) seen.set(r.id, (seen.get(r.id) ?? 0) + 1);
-			for (const [id, { rel }] of byId) {
-				const n = seen.get(id) ?? 0;
-				if (n === 0) errors.push(`${rel}: sin fila en el índice`);
-				else if (n > 1) errors.push(`${rel}: ${n} filas en el índice para la misma decisión`);
-				const row = t.rows.find((r) => r.id === id);
-				const status = byId.get(id)?.p.scalars.status;
-				if (row && status && row.status !== status) errors.push(`${rel}: el índice dice "${row.status}" y el fichero "${status}"`);
-			}
-			for (const r of t.rows) if (!byId.has(r.id)) errors.push(`${dirRel}/README.md: fila del índice para "${r.id}", que no existe en ${dirRel}/`);
-		}
-	}
+	// El README no se audita (D19): no hay índice que mantener al día; los que se crearon
+	// con tabla siguen siendo válidos.
 	return { errors, counts, total: byId.size };
 }
 
