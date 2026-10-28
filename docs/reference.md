@@ -748,12 +748,13 @@ cita y `accepted_via` quién ejecutó (`check` valida su formato). Sin una cosa 
 niegan: un agente no acepta por su cuenta; lo que sí puede es ejecutar el comando citando al
 usuario, con el comando `/accept` como guía. La barrera evita aceptaciones por descuido; no
 es una medida de seguridad: la integridad de los registros la da git, y una aceptación
-indebida se ve en el diff y se revierte con `supersede` o `git revert`. En Claude Code, con
-`[decisions]` activo, `bond sync` deja además en `.claude/settings.json` reglas `ask` para
-`accept`, `reject` y `supersede` (`Bash(bond decisions accept:*)`…): cada ejecución pasa
-por su cuadro de permiso. La clave `ask` que gestiona bond es la unión de las que el repo ya
-tenga y las suyas: otras claves y reglas se conservan, y quitar una de bond la trae el sync
-de vuelta.
+indebida se ve en el diff y se revierte con `supersede` o `git revert`. Aceptar al aprobar:
+si el usuario ya aprobó la decisión en la conversación (por ejemplo, al aprobar el plan que
+la contiene), se registra directamente aceptada con `bond decisions add ... --confirmed-by
+"<lo que dijo>"` (o `confirmed_by` en `record_decision`), sin volver a pedirle que la acepte;
+solo quedan `proposed` las que un agente toma por su cuenta. No hay cuadro de permiso aparte:
+las reglas `ask` que la 1.8.0 dejaba en `.claude/settings.json` las quita `bond sync`,
+conservando las del usuario.
 
 pi tiene la tool `record_decision` (`extensions/record-decision.ts`), que llama a este mismo
 `bond decisions add --stdin`: el modelo pasa solo el contenido y bond escribe el registro con

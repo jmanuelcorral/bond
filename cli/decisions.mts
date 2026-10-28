@@ -25,15 +25,17 @@ lista las decisiones.
   (lista) [--status <s>] [--agent <a>] [--json]
             Decisiones del repo, las más recientes primero.
   add --title <t> [--context <c>] --decision <d> [--alternatives <a>]
-      [--consequences <c>] [--link <ref>]... [--json]
+      [--consequences <c>] [--link <ref>]... [--confirmed-by <ref>] [--json]
             Registra una decisión: bond calcula el id (YYYY-MM-DD-slug), la autoría
             (desde el panel de Herdr, agent:<kind>/<nombre>; fuera, user) y escribe el
             fichero. No toca ningún índice: el listado lo da esta orden (así las ramas
-            paralelas no chocan). Siempre entra como "proposed". El cuerpo queda con los
+            paralelas no chocan). Entra como "proposed"; con --confirmed-by "<lo que
+            dijo el usuario>" (porque ya la aprobó, por ejemplo con el plan) entra
+            "accepted" con esa cita y accepted_via. El cuerpo queda con los
             apartados en inglés: Context / Decision / Rejected alternatives / Consequences
             (este solo si pasas --consequences). Con --stdin, el mismo objeto en JSON
             por la entrada estándar: {"title","context","decision","alternatives",
-            "consequences","links"}.
+            "consequences","links","confirmed_by"}.
   accept <id>... [--ref <aceptación>] [--confirmed-by "<lo que dijo el usuario>"] [--all-proposed]
             La pasa a "accepted". Es solo del usuario, pero puede hacerlo desde la
             conversación: con --confirmed-by (una referencia a sus palabras) no hace
@@ -193,6 +195,8 @@ export interface AddInput {
 	alternatives?: string;
 	consequences?: string;
 	links?: string[];
+	/** Lo que dijo el usuario al aprobarla: la registra ya `accepted` (aceptar al aprobar). */
+	confirmed_by?: string;
 }
 
 const section = (name: string, text?: string) => (text && text.trim() ? `\n## ${name}\n\n${text.trim()}\n` : "");
@@ -202,7 +206,7 @@ function buildBody(in_: AddInput): string {
 }
 
 /** Registra una decisión: fichero con el formato de D6. No toca el README (D19). */
-export function addDecision(root: string, dirRel: string, in_: AddInput): { id: string; rel: string; decided_by: string } {
+export function addDecision(root: string, dirRel: string, in_: AddInput): { id: string; rel: string; decided_by: string; status: string } {
 	const title = in_.title?.trim();
 	const decision = in_.decision?.trim();
 	if (!title) die('add necesita un título (--title "..." o "title" en el JSON)');
@@ -213,14 +217,18 @@ export function addDecision(root: string, dirRel: string, in_: AddInput): { id: 
 	let id = base;
 	for (let n = 2; existsSync(join(dir, `${id}.md`)); n++) id = `${base}-${n}`;
 	const decided_by = resolveAuthor();
+	// Aceptar al aprobar: si el usuario ya la aprobó (por ejemplo, con el plan), entra
+	// aceptada con su cita; si no, queda proposed para que la revise.
+	const confirmed = in_.confirmed_by === undefined ? undefined : in_.confirmed_by.trim();
+	if (confirmed === "") die("--confirmed-by necesita una referencia no vacía: lo que dijo el usuario (bond decisions --help)");
 	const d: Decision = {
 		id,
 		title,
-		status: "proposed",
+		status: confirmed ? "accepted" : "proposed",
 		date: utcToday(),
 		decided_by,
-		accepted_by: "",
-		accepted_via: "",
+		accepted_by: confirmed ?? "",
+		accepted_via: confirmed ? decided_by : "",
 		supersedes: "",
 		superseded_by: "",
 		// Sin repetidos: el agente a veces pasa la rama que bond añade de todos modos.
@@ -229,7 +237,7 @@ export function addDecision(root: string, dirRel: string, in_: AddInput): { id: 
 		rel: `${dirRel}/${id}.md`,
 	};
 	writeFileSync(join(dir, `${id}.md`), decisionFile(d));
-	return { id, rel: `${dirRel}/${id}.md`, decided_by };
+	return { id, rel: `${dirRel}/${id}.md`, decided_by, status: d.status };
 }
 
 // --- cambiar estado ------------------------------------------------------------------------
@@ -508,11 +516,13 @@ async function runAdd(root: string, dir: string, a: Args): Promise<void> {
 			die(`--stdin no es JSON válido: ${(e as Error).message}`);
 		}
 		input.links = [...(input.links ?? []), ...a.links];
+		if (a.opts["--confirmed-by"] !== undefined) input.confirmed_by = a.opts["--confirmed-by"];
 	} else {
-		input = { title: a.opts["--title"] ?? "", context: a.opts["--context"], decision: a.opts["--decision"] ?? "", alternatives: a.opts["--alternatives"], consequences: a.opts["--consequences"], links: a.links };
+		input = { title: a.opts["--title"] ?? "", context: a.opts["--context"], decision: a.opts["--decision"] ?? "", alternatives: a.opts["--alternatives"], consequences: a.opts["--consequences"], links: a.links, confirmed_by: a.opts["--confirmed-by"] };
 	}
-	const { id, rel, decided_by } = addDecision(root, dir, input);
-	if (a.json) console.log(JSON.stringify({ id, path: rel, status: "proposed", decided_by }));
+	const { id, rel, decided_by, status } = addDecision(root, dir, input);
+	if (a.json) console.log(JSON.stringify({ id, path: rel, status, decided_by }));
+	else if (status === "accepted") console.log(`${ok("+")} ${rel}  ${dim(`accepted · ${input.confirmed_by?.trim()} · via ${decided_by}`)}`);
 	else console.log(`${ok("+")} ${rel}  ${dim(`proposed · decidido por ${decided_by} · acepta con: bond decisions accept ${id}`)}`);
 }
 

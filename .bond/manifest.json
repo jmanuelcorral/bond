@@ -2,19 +2,19 @@
   "files": {
     ".agents/skills/code-context/SKILL.md": "4789650da602b192fe18703c79b347be12904aaca4a77f871ff922aacac9ca75",
     ".agents/skills/code-context/scripts/repo-map": "7790b2f69bfa04d80fd8d75b1cd0e6ffb3c7d28e9a390a3c4d10ce127883ec84",
-    ".agents/skills/decision-record/SKILL.md": "a2e8ec43dfa8264a30c97fca264e04b1a460de060248c2b2ec9b352f9e2b27ed",
-    ".agents/skills/decision-record/references/decision-template.md": "2b13e7a8a0e703135f68721139772d1914ed2e00f0f6e43f1fe24c068f353a6f",
+    ".agents/skills/decision-record/SKILL.md": "a055b7e7070f9b25d912b6708413041dc95ac08b3fd54909488154b61817e3e3",
+    ".agents/skills/decision-record/references/decision-template.md": "d1ce5cdc861f3bc6c1d52f57b98535055ef287a56a97ddd8bad5ce05507f278b",
     ".agents/skills/decision-record/references/run-template.md": "bb9332a5f27f7fa9444823dbdbb4ec1c872fbc169ce2d4ffae879b706df84b1e",
     ".agents/skills/git-conventional-commit/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
     ".agents/skills/git-conventional-commit/SKILL.md": "8f065caef56ca834f1459119261062e0ba98689b47e8eaadf6238f223471d426",
     ".agents/skills/git-conventional-commit/references/commit-messages.md": "ad9ba0cb98cf9ada79305d8ce57e169cde9b79fa50849a1e98af24be0586aa0d",
     ".agents/skills/plan-create/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
-    ".agents/skills/plan-create/SKILL.md": "2cbd898bc8d910dc2a1f35feab7af3885deea64726b21a621242209a007c9ed0",
-    ".agents/skills/plan-create/references/plan-template.md": "37e11f04d12740dd8f9207255e6feda503c808205c02505ee171f474988d9dfe",
+    ".agents/skills/plan-create/SKILL.md": "cf7fc85dc2258366cc6e61e7993e1ab21874c8f5ba8e584fd9ca306ab7461bb3",
+    ".agents/skills/plan-create/references/plan-template.md": "0006aaa4718b90ed8f08f56e1b08e8d56a7ee886c82b677b4b76e322719224bb",
     ".agents/skills/plan-execute/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
     ".agents/skills/plan-execute/SKILL.md": "801fe404ab3b421e7152e2e22973abc30cc3c7da3efe37063f5ebd84d3479c20",
     ".agents/skills/plan-execute/references/execution.md": "9b2d0bd91bbc55a7afa46663d647daaeaf8e880a405bcd055867d227df355c66",
-    ".agents/skills/plan-execute/references/progress.md": "1f22be886f6302c207c3a57e223195a05945f7e1cf76c333e98985d7abebe9a3",
+    ".agents/skills/plan-execute/references/progress.md": "eda5ad5178c9e289ec063e2db230fd9d142072fd744aadd892e120b85b39eb34",
     ".agents/skills/issue-refine-github/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
     ".agents/skills/issue-refine-github/SKILL.md": "45269eacf5f71e355b50cd8605e2789d0551ab204eb3906fd289c24482da5f54",
     ".agents/skills/issue-refine-github/references/refinement.md": "7218143e7fd18f10446e2ff6a9680b207145c99fbc9d12a18d993c5c44a65279",
@@ -29,7 +29,7 @@
     ".agents/skills/release-prepare-github/references/publication.md": "ee228179772e7ab7aabbe25d5859ee8f180c5fe77bf5ad7c03ba2a7c77674cce",
     ".agents/skills/release-prepare-github/references/release-manifest.md": "a28827a05315e3cc00056902154286e68ebc6295e18da42653c720ade043b47e",
     ".agents/skills/convention-document/LICENSE": "e9a6a5b0fc0dd43dac8d92d5f812df9c5c09782091d78aa1819ea2747dcae721",
-    ".agents/skills/convention-document/SKILL.md": "f37446eb85a68e755db99143df48b0e0b50f5f6dbe3faebfb49579d8327f6ca1",
+    ".agents/skills/convention-document/SKILL.md": "545740787db6a88a5419dce58839d7545882158421c4a1685ecc122e00028d4d",
     ".agents/skills/convention-document/references/document-template.md": "9464ea600229cf99f87e9d09a265410fe384171b7a55ffac9449a7286c6ece4c",
     ".agents/skills/plan-team/SKILL.md": "2bb7717d8706fb35efcb4d55d792eab76b9492c110620a7451f15f027c32dbcc",
     ".claude/commands/commit.md": "242baf393b4748ebd266962b44e40813c35d4ffdd89558f0d34fe7c9db0321ae",
@@ -74,14 +74,6 @@
         "keys": [
           "context7",
           "duckduckgo"
-        ]
-      }
-    ],
-    ".claude/settings.json": [
-      {
-        "parent": "permissions",
-        "keys": [
-          "ask"
         ]
       }
     ]

@@ -46,8 +46,9 @@ things that stop being allowed.
 
 ## Field rules
 
-- `status` starts as `proposed` for agent-made decisions. Only the user's real acceptance
-  moves it to `accepted`, with `accepted_by` naming where it happened.
+- `status` starts as `proposed` for agent-made decisions. Only the user's real approval
+  makes it `accepted` — at record time (`--confirmed-by` on `add`, when the user already
+  approved it) or later with `accept` — with `accepted_by` quoting it.
 - `accepted_via` is optional: it appears when the acceptance ran from the conversation with
   `--confirmed-by` (D20) and records who executed it (`user` outside Herdr,
   `agent:<kind>[/<name>]` from a Herdr pane). Decisions accepted in an interactive

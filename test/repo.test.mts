@@ -169,66 +169,41 @@ describe("memoria de decisiones ([decisions])", () => {
 	});
 });
 
-// P6 (D21): con [decisions] y claude, bond sync deja reglas `ask` en .claude/settings.json
-// para que cada accept/reject/supersede pase por el cuadro de permiso de Claude Code.
-describe("reglas ask de Claude Code con [decisions] (D21)", () => {
+// Las reglas `ask` de la 1.8.0 (D21) se quitaron: aceptar por chat basta. sync ya no las crea y
+// limpia las que quedaran, sin tocar las del usuario.
+describe("sin reglas ask de bond en Claude Code", () => {
 	const ask = () => (json(".claude/settings.json").permissions?.ask ?? []) as string[];
+	const OLD = ["Bash(bond decisions accept:*)", "Bash(bond decisions reject:*)", "Bash(bond decisions supersede:*)"];
 
-	test("con [decisions] y claude se crean las tres reglas y sync --check queda al dia", () => {
+	test("con [decisions] y claude no se crea .claude/settings.json", () => {
 		bondToml({ agents: ["pi", "claude"], decisions: '[decisions]\ndir = "docs/decisions"' });
 		sync();
-		expect(ask()).toEqual(["Bash(bond decisions accept:*)", "Bash(bond decisions reject:*)", "Bash(bond decisions supersede:*)"]);
+		expect(existsSync(at(".claude/settings.json"))).toBe(false);
 		expect(sync({ check: true })).toEqual([]);
-		expect(sync()).toEqual([]);
 	});
 
-	test("se fusionan con las reglas ask y demas claves que el repo ya tenga, sin pisarlas", () => {
-		write(".claude/settings.json", JSON.stringify({ permissions: { allow: ["Bash(npm test:*)"], ask: ["Bash(git push:*)"] }, model: "opus" }, null, 2) + "\n");
+	test("un repo de la 1.8.0 pierde las reglas de bond y conserva las suyas y las demás claves", () => {
+		write(".claude/settings.json", JSON.stringify({ permissions: { allow: ["Bash(npm test:*)"], ask: ["Bash(git push:*)", ...OLD] }, model: "opus" }, null, 2) + "\n");
 		bondToml({ agents: ["claude"], decisions: '[decisions]\ndir = "docs/decisions"' });
 		sync();
 		const s = json(".claude/settings.json");
+		expect(s.permissions.ask).toEqual(["Bash(git push:*)"]);
 		expect(s.permissions.allow).toEqual(["Bash(npm test:*)"]);
 		expect(s.model).toBe("opus");
-		expect(s.permissions.ask).toEqual(["Bash(git push:*)", "Bash(bond decisions accept:*)", "Bash(bond decisions reject:*)", "Bash(bond decisions supersede:*)"]);
-		// Idempotente: no duplica las propias y no hay acciones pendientes.
-		sync();
-		expect(ask().filter((r) => r.startsWith("Bash(bond decisions")).length).toBe(3);
 		expect(sync({ check: true })).toEqual([]);
 	});
 
-	test("quitar una regla de bond la trae el sync de vuelta", () => {
+	test("si bond gestionaba solo sus reglas, la clave ask se va con ellas", () => {
 		bondToml({ agents: ["claude"], decisions: '[decisions]\ndir = "docs/decisions"' });
 		sync();
-		const s = json(".claude/settings.json");
-		s.permissions.ask = s.permissions.ask.filter((r: string) => !r.includes("reject"));
-		write(".claude/settings.json", JSON.stringify(s, null, 2) + "\n");
-		expect(sync({ check: true }).some((a) => a.path === ".claude/settings.json")).toBe(true);
+		// Como dejaba la 1.8.0: fichero de bond, registrado en el manifiesto.
+		write(".claude/settings.json", JSON.stringify({ permissions: { ask: OLD } }, null, 2) + "\n");
+		const m = json(".bond/manifest.json");
+		m.json = { ...(m.json ?? {}), ".claude/settings.json": [{ parent: "permissions", keys: ["ask"] }] };
+		write(".bond/manifest.json", JSON.stringify(m, null, 2) + "\n");
 		sync();
-		expect(ask()).toContain("Bash(bond decisions reject:*)");
-	});
-
-	test("sin [decisions] no se crean las reglas", () => {
-		bondToml({ agents: ["claude"] });
-		sync();
-		expect(existsSync(at(".claude/settings.json"))).toBe(false);
+		expect(existsSync(at(".claude/settings.json")) ? ask() : []).toEqual([]);
 		expect(sync({ check: true })).toEqual([]);
-	});
-
-	test("quitar [decisions] quita solo las reglas de bond y deja las del usuario", () => {
-		write(".claude/settings.json", JSON.stringify({ permissions: { ask: ["Bash(git push:*)"] } }, null, 2) + "\n");
-		bondToml({ agents: ["claude"], decisions: '[decisions]\ndir = "docs/decisions"' });
-		sync();
-		expect(ask().length).toBe(4);
-		bondToml({ agents: ["claude"] });
-		sync();
-		expect(ask()).toEqual(["Bash(git push:*)"]);
-		expect(sync({ check: true })).toEqual([]);
-	});
-
-	test("sin claude entre los agentes, nada de .claude/settings.json aunque haya [decisions]", () => {
-		bondToml({ agents: ["pi"], decisions: '[decisions]\ndir = "docs/decisions"' });
-		sync();
-		expect(existsSync(at(".claude/settings.json"))).toBe(false);
 	});
 });
 

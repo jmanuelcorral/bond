@@ -1,5 +1,17 @@
 # Cambios
 
+## Sin publicar
+
+- Aceptar al aprobar: `bond decisions add` (y `record_decision` en pi) admite
+  `--confirmed-by "<lo que dijo el usuario>"` (`confirmed_by` en el JSON) y registra la
+  decisión ya `accepted`, con esa cita y `accepted_via`. Las skills `plan-create`,
+  `decision-record`, `plan-execute` y `convention-document` lo usan: las decisiones que apruebas
+  con un plan quedan aceptadas sin tener que aceptarlas otra vez; solo quedan `proposed` las que
+  un agente toma por su cuenta.
+- Sin cuadro de permiso para aceptar: `bond sync` ya no deja reglas `ask` para `bond decisions
+  accept`, `reject` y `supersede` en `.claude/settings.json`, y quita las que dejó la 1.8.0
+  conservando las tuyas. Si lo has pedido por chat, no hay que validar el comando otra vez.
+
 ## 1.8.0
 
 Aceptar decisiones sin salir de la conversación con tu agente: le dices cuáles aceptas y queda

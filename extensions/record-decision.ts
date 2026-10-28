@@ -2,7 +2,8 @@
  * Tool record_decision: registra una decisión no trivial en la memoria de decisiones del
  * repo ([decisions] en .bond/bond.toml) llamando a `bond decisions add` por shell: bond
  * calcula el id y la autoría (desde el panel de Herdr) y escribe el fichero. La decisión
- * entra como "proposed": solo el usuario la acepta con `bond decisions accept`.
+ * entra como "proposed", salvo que el usuario ya la haya aprobado en la conversación
+ * (`confirmed_by`, con su cita): entonces entra "accepted".
  *
  * Es una tool y no solo una skill porque los modelos locales no siguen formatos a mano:
  * la escritura delicada la hace bond, el modelo solo pasa el contenido (D11).
@@ -25,11 +26,11 @@ const recordDecisionTool = defineTool({
 	name: "record_decision",
 	label: "Record decision",
 	description:
-		"Record a non-trivial decision (yours or the user's) in this repository's decision memory via `bond decisions add`. Requires the repo to enable [decisions] in .bond/bond.toml. bond writes the decision file with its computed id; the decision always enters as proposed and only the user can accept it. Do not use for routine details.",
+		"Record a non-trivial decision (yours or the user's) in this repository's decision memory via `bond decisions add`. Requires the repo to enable [decisions] in .bond/bond.toml. bond writes the decision file with its computed id; the decision enters as proposed unless the user already approved it in this conversation (pass their words in confirmed_by). Do not use for routine details.",
 	promptSnippet: "record_decision: store a non-trivial decision in the repo's decision memory (bond)",
 	promptGuidelines: [
 		"When a non-trivial decision is made in this session (a contract, dependency, scope or design alternative is settled) and the repo has decision memory ([decisions] in .bond/bond.toml), record it with record_decision instead of writing files under docs/decisions by hand.",
-		"Never mark a decision accepted yourself: record_decision creates it as proposed; only the user accepts it.",
+		"Never accept a decision on your own: pass confirmed_by only with the user's explicit approval in this conversation, quoting their words; otherwise it stays proposed for the user to review.",
 	],
 	parameters: Type.Object({
 		title: Type.String({ description: "Short, searchable title of the decision" }),
@@ -37,6 +38,9 @@ const recordDecisionTool = defineTool({
 		decision: Type.String({ description: "The decision itself, stated so it can be applied without rereading the conversation" }),
 		alternatives: Type.Optional(Type.String({ description: "Alternatives considered and why they were rejected (only real ones)" })),
 		consequences: Type.Optional(Type.String({ description: "What the decision implies going forward: migrations, new constraints, follow-up work (optional)" })),
+		confirmed_by: Type.Optional(
+			Type.String({ description: "Only when the user explicitly approved this decision in this conversation (e.g. by approving the plan that contains it): their words, quoted. It records the decision as accepted. Omit it for decisions you take on your own." }),
+		),
 		links: Type.Optional(
 			Type.Array(Type.String({ description: 'Reference in "kind: value" form, e.g. "plan: docs/plans/x.md#p2", "pr: https://..." , "run: runs/..."' })),
 		),
@@ -49,6 +53,7 @@ const recordDecisionTool = defineTool({
 			decision: params.decision,
 			alternatives: params.alternatives ?? "",
 			consequences: params.consequences ?? "",
+			...(params.confirmed_by ? { confirmed_by: params.confirmed_by } : {}),
 			links: params.links ?? [],
 		});
 		const { stdout, stderr, code } = await new Promise<{ stdout: string; stderr: string; code: number }>((resolve, reject) => {
@@ -78,7 +83,7 @@ const recordDecisionTool = defineTool({
 		if (code !== 0) throw new Error((stderr || stdout).trim().slice(0, 500) || "bond decisions add falló");
 		const res = JSON.parse(stdout) as { id: string; path: string; status: string; decided_by: string };
 		return {
-			content: [{ type: "text", text: `Recorded ${res.id} (${res.status}, decided by ${res.decided_by}) at ${res.path}. Only the user can accept it: bond decisions accept ${res.id}` }],
+			content: [{ type: "text", text: `Recorded ${res.id} (${res.status}, decided by ${res.decided_by}) at ${res.path}.${res.status === "proposed" ? ` The user accepts it from the conversation (/accept).` : ""}` }],
 			details: res,
 		};
 	},

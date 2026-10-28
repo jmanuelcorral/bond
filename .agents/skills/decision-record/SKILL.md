@@ -16,8 +16,8 @@ first; without the section, behave as usual and record nothing. The directory an
 
 Record decisions as data, not as conversation. Do not store secrets, private transcripts,
 or the agent's internal reasoning: a record states what was decided, by whom, and why, in
-its final form. Only the user can set a decision's status to `accepted`; an agent never
-marks its own decision accepted, and never rewrites the user's records except to link them.
+its final form. Only the user's approval makes a decision `accepted`; an agent never
+accepts its own decision on its own, and never rewrites the user's records except to link them.
 
 **Never write decision files by hand.** Local models do not follow file formats reliably;
 bond's tooling does the writing (id computation, frontmatter, authorship). You pass
@@ -53,10 +53,14 @@ in doubt, leave it out; noise is worse than a gap, and `bond decisions check` (a
    `<dir>/<id>.md` in the format documented in the
    [decision template](references/decision-template.md). There is no shared index file:
    `bond decisions` lists the records, so parallel branches never conflict over a README.
-   Every tool-made decision enters as `proposed`.
-4. Status is not yours to raise: `record_decision` and `add` always create `proposed`.
-   Only the user moves a decision to `accepted`. From a terminal: `bond decisions accept
-   <id>` (interactive confirmation). From the conversation with their agent (D20): the
+   A decision enters as `proposed` unless the user already approved it.
+4. Accept on approval: when the user has explicitly approved the decision in the
+   conversation — for example by approving the plan that contains it — record it already
+   accepted, quoting their words: `confirmed_by` in `record_decision`, or
+   `bond decisions add ... --confirmed-by "<what the user said>"`. It keeps `accepted_by`
+   with that quote and `accepted_via` with your authorship; do not ask the user to accept
+   it again. Decisions you take on your own while working (not approved by the user) stay
+   `proposed` for review. To accept those later from the conversation, the
    `/accept` command lists the `proposed` records, asks which ones the user wants, and
    runs `bond decisions accept <id>... --confirmed-by "<what the user said>"` — the
    record then keeps `accepted_by` with that reference and `accepted_via` with whoever

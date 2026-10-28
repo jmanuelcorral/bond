@@ -43,7 +43,7 @@ For older plans, keep phase identifiers and existing metadata intact. Add only m
 
 ## Decisions that arise during implementation
 
-When implementation settles a non-trivial choice (a contract, dependency, scope, or a rejected alternative with real cost) and the repo enables decision memory (`[decisions]` in `.bond/bond.toml`), record it with the `decision-record` skill — `record_decision` in pi or `bond decisions add` — and link the returned id in the phase evidence (e.g. `decision: docs/decisions/<id>.md`). Never mark it `accepted`: only the user does that with `bond decisions accept`, and the interactive-terminal barrier exists so an agent cannot accept by accident, not as a security measure. Without decision memory, or if the tool or CLI is unavailable, keep such decisions in the phase report only, as before.
+When implementation settles a non-trivial choice (a contract, dependency, scope, or a rejected alternative with real cost) and the repo enables decision memory (`[decisions]` in `.bond/bond.toml`), record it with the `decision-record` skill — `record_decision` in pi or `bond decisions add` — and link the returned id in the phase evidence (e.g. `decision: docs/decisions/<id>.md`). Record it `proposed` (it is your own choice, not one the user approved); if the user explicitly approves it in the conversation, record or accept it quoting their words with `--confirmed-by`, never on your own. Without decision memory, or if the tool or CLI is unavailable, keep such decisions in the phase report only, as before.
 
 ## Three commit choices
 

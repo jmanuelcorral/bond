@@ -750,11 +750,12 @@ format). Without one or the other they refuse: an agent cannot accept on its own
 can do is run the command quoting the user, with the `/accept` command as its guide. The
 barrier prevents accidental acceptances; it is not a security measure — git provides the
 records' integrity, and a wrong acceptance shows up in the diff and can be reverted with
-`supersede` or `git revert`. In Claude Code, with `[decisions]` active, `bond sync` also
-leaves `ask` rules for `accept`, `reject` and `supersede` in `.claude/settings.json`
-(`Bash(bond decisions accept:*)`…): every run goes through its permission prompt. The `ask`
-key bond manages is the union of whatever the repo already has plus its own: other keys and
-rules are preserved, and deleting a bond rule brings it back on the next sync.
+`supersede` or `git revert`. Accept on approval: when the user already approved a decision in
+the conversation (for example by approving the plan that contains it), it is recorded already
+accepted with `bond decisions add ... --confirmed-by "<what they said>"` (or `confirmed_by` in
+`record_decision`), without asking them to accept it again; only decisions an agent takes on
+its own stay `proposed`. There is no separate permission prompt: `bond sync` removes the
+`ask` rules 1.8.0 left in `.claude/settings.json`, keeping the user's own.
 
 pi has the `record_decision` tool (`extensions/record-decision.ts`), which calls this same
 `bond decisions add --stdin`: the model passes only the content and bond writes the record

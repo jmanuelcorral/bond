@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "ask": [
-      "Bash(bond decisions accept:*)",
-      "Bash(bond decisions reject:*)",
-      "Bash(bond decisions supersede:*)"
-    ]
-  }
-}

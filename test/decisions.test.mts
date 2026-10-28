@@ -77,6 +77,23 @@ describe("add", () => {
 		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
 	});
 
+	test("con confirmed_by entra aceptada con la cita del usuario (aceptar al aprobar)", () => {
+		enableMemory();
+		const { rel, status } = add({ confirmed_by: " chat: «aprueba y guarda» " });
+		expect(status).toBe("accepted");
+		const fm = parseFm(read(rel));
+		expect(fm?.scalars.status).toBe("accepted");
+		expect(fm?.scalars.accepted_by).toBe("chat: «aprueba y guarda»");
+		expect(fm?.scalars.accepted_via).toBe("user");
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+	});
+
+	test("confirmed_by en blanco se rechaza y sin él queda proposed", () => {
+		enableMemory();
+		expect(catchDie(() => add({ confirmed_by: "  " })).error).toContain("--confirmed-by");
+		expect(add().status).toBe("proposed");
+	});
+
 	test("no repite un enlace que ya daba el agente", () => {
 		enableMemory();
 		const { rel } = add({ links: ["plan: docs/plans/x.md", "plan: docs/plans/x.md "] });

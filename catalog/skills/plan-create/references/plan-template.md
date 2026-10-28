@@ -38,7 +38,7 @@ The Approval field is an annotation, not proof of authorization by itself. Do no
 
 ## Decisions, dependencies, and risks
 
-{Approved and pending decisions, prerequisites, security, compatibility, data, and documentation. Do not hide blockers to present a phase as executable. A dependency means accepted behavior, not merely code available on a branch. Annotate each decision with who decided it and when, e.g. `D1 — what was decided (user, 2026-10-28)`. In a repo with decision memory (`[decisions]` in `.bond/bond.toml`), record each decision with the `decision-record` skill (`record_decision` or `bond decisions add`) and reference the returned id here (`docs/decisions/<id>.md`); never mark a decision `accepted` from the plan — only the user accepts. Without decision memory, or if the tool or CLI is unavailable, keep the annotation in the plan only.}
+{Approved and pending decisions, prerequisites, security, compatibility, data, and documentation. Do not hide blockers to present a phase as executable. A dependency means accepted behavior, not merely code available on a branch. Annotate each decision with who decided it and when, e.g. `D1 — what was decided (user, 2026-10-28)`. In a repo with decision memory (`[decisions]` in `.bond/bond.toml`), record each decision with the `decision-record` skill (`record_decision` or `bond decisions add`) and reference the returned id here (`docs/decisions/<id>.md`); decisions approved with the plan are recorded accepted with the user's approval quoted in `confirmed_by`, pending ones stay `proposed`. Without decision memory, or if the tool or CLI is unavailable, keep the annotation in the plan only.}
 
 ## Phases
 
