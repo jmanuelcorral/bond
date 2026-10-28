@@ -3,7 +3,7 @@ name: "2026-10-28-decision-memory"
 description: "Cada repo con bond guarda por escrito las decisiones y los encargos de sus agentes, con trazas en git, y bond decisions permite auditarlos"
 created_at: "2026-10-28T09:34:29Z"
 last_implementation_at: "2026-10-28T13:20:06Z"
-has_completed_all_phases: true
+has_completed_all_phases: false
 ---
 
 # Memoria de decisiones de los agentes
@@ -30,6 +30,9 @@ has_completed_all_phases: true
   informes) a P4; ambas dependen ahora de P2.
 - Revisión 3 (usuario, 2026-10-28, «acepta P3 y P4, añade P5 y lánzala»): la prueba real con un
   agente pi encontró cuatro problemas; se añaden D16–D19 y la fase P5.
+- Revisión 4 (usuario, 2026-10-28, «adelante con P6»): aceptar decisiones tiene que poder hacerse
+  desde la conversación con el agente, sin salir a una terminal; se añaden D20–D21 (D20 sustituye
+  a D13) y la fase P6. El plan se reabre.
 
 ## Goal
 
@@ -147,6 +150,21 @@ Revisión 3 (usuario, 2026-10-28), tras la prueba real con un agente pi:
 - **D19 — Sin índice compartido**: `add`, `accept`, `reject` y `supersede` dejan de reescribir la
   tabla del README, que provocaba conflictos entre ramas paralelas; el README queda con el formato
   y el índice lo da `bond decisions`. `check` deja de exigir el índice al día.
+
+Revisión 4 (usuario, 2026-10-28): «se tienen que poder aceptar desde aquí, no vamos a salir a una
+terminal y picar comandos, esto rompe el flow del desarrollo».
+
+- **D20 — Aceptar desde la conversación** (sustituye a D13): `accept`, `reject` y `supersede`
+  funcionan sin terminal cuando reciben `--confirmed-by "<referencia a lo que dijo el usuario>"`;
+  la decisión guarda `accepted_by` con esa referencia y `accepted_via` con quien lo ejecutó
+  (autoría de D12). Admiten varios ids y `--all-proposed`. Sin `--confirmed-by` y con terminal,
+  siguen preguntando; sin ninguno de los dos, se niegan. El comando `/accept` del catálogo enseña
+  las `proposed`, pregunta cuáles y solo ejecuta con una respuesta explícita del usuario, citándola.
+- **D21 — Control humano del arnés**: en Claude Code, `bond sync` añade a `.claude/settings.json`
+  reglas `ask` para `bond decisions accept`, `reject` y `supersede`, de modo que cada ejecución
+  pasa por el cuadro de permiso de Claude Code, que el modelo no puede saltarse; se fusionan con
+  las reglas que el repo ya tenga, sin pisarlas. En agentes sin ese sistema (pi) quedan la regla
+  de la skill y el rastro en git.
 
 Dependencias y riesgos:
 
@@ -372,6 +390,51 @@ Dependencias y riesgos:
 - Risks and recovery: el formato de las sesiones de pi puede cambiar; por eso el panel queda como
   respaldo.
 
+### P6: Aceptar decisiones desde la conversación
+
+- Outcome: el usuario acepta, rechaza o sustituye decisiones desde la conversación con su agente
+  (por ejemplo, «acepta las 19»), sin abrir otra terminal; en Claude Code cada ejecución pasa por
+  el cuadro de permiso; cada decisión aceptada guarda quién lo pidió y por dónde se ejecutó.
+- Owning repository: `bond`.
+- Dependencies: P5 (aceptada).
+- Affected contracts: `cli/decisions.mts` (`accept`, `reject`, `supersede` con `--confirmed-by`,
+  varios ids y `--all-proposed`; campo `accepted_via` en el frontmatter, opcional para las
+  decisiones ya escritas; `check` lo valida si está); nuevo comando del catálogo
+  `catalog/commands/accept.md` con su entrada en `catalog/catalog.toml`; `cli/repo.mts`
+  (`bond sync` añade las reglas `ask` de D21 a `.claude/settings.json` cuando el repo tiene
+  `[decisions]` y Claude Code entre sus agentes, fusionándolas con las existentes); skill
+  `decision-record` y su plantilla; `README` de `decisionsReadme()`; ayuda de `bond decisions`.
+- Acceptance criteria:
+  - Sin terminal y sin `--confirmed-by`, `accept` se niega como hoy; con `--confirmed-by`, acepta
+    y escribe `accepted_by` (la referencia) y `accepted_via` (`agent:<kind>[/<nombre>]` o `user`).
+  - `accept <id1> <id2>` y `accept --all-proposed --confirmed-by ...` aceptan varias de una vez;
+    un id desconocido o no `proposed` se informa sin abortar las demás, y el código de salida es
+    distinto de 0 si alguna falló.
+  - `--confirmed-by` vacío o en blanco se rechaza.
+  - Con terminal y sin `--confirmed-by`, el flujo interactivo de hoy no cambia.
+  - `bond sync` con `[decisions]` y `claude` en `agents` deja en `.claude/settings.json` las tres
+    reglas `ask` sin borrar las que ya hubiera; sin `[decisions]` o sin `claude`, no las añade;
+    `bond sync --check` al día tras aplicarlas.
+  - `/accept` lista las `proposed`, pide la elección del usuario y solo con respuesta explícita
+    ejecuta `accept` con sus palabras en `--confirmed-by`; nunca por iniciativa propia.
+  - Las decisiones ya escritas sin `accepted_via` siguen pasando `check`.
+- Actions:
+  - [ ] `--confirmed-by`, varios ids y `--all-proposed` en `cli/decisions.mts`, con pruebas.
+  - [ ] Reglas `ask` en `.claude/settings.json` desde `bond sync`, con pruebas de fusión.
+  - [ ] Comando `catalog/commands/accept.md` y entrada en `catalog/catalog.toml`; `bond sync`.
+  - [ ] Skill `decision-record`, plantilla y README de decisiones.
+  - [ ] `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
+  - [ ] Run applicable checks and record actual results.
+  - [ ] Present evidence and stop for review before another phase.
+- Verification: `npm run typecheck && bun test`, `bin/bond catalog check catalog`,
+  `bin/bond sync --check`; a mano, en un repo temporal con `[decisions]` y `claude`: `bond sync` y
+  revisar `.claude/settings.json`; `accept` con y sin `--confirmed-by` desde un shell sin
+  terminal (`</dev/null`); `accept --all-proposed`. Tras integrar, el orquestador acepta desde la
+  conversación las 19 decisiones ya registradas y registra D20 sustituyendo a D13.
+- Risks and recovery: un agente puede ejecutar `accept --confirmed-by` sin que el usuario lo pida;
+  lo mitigan la regla del comando y la skill, el cuadro de permiso en Claude Code y el rastro
+  `accepted_via` en git, que permite revertir con `supersede` o un `git revert`.
+
 ## Progress (local plans only)
 
 | Phase | Implementation | Verification | Review | Evidence |
@@ -381,11 +444,12 @@ Dependencias y riesgos:
 | P3 | implemented | passed | accepted | rama `plan/decision-memory-p3` (kevin, pi), commit `ac7cec7`, integrada en `main` por fast-forward; `bun test` 272/272 en la rama y 279/279 en `main` con P4; aceptada por el usuario en sesión el 2026-10-28 |
 | P4 | implemented | passed | accepted | rama `plan/decision-memory-p4` (stuart, pi), commit `3206cdf` rebasado sobre P3 como `4b823f1` (conflictos en `CHANGELOG.md`, docs y `.bond/manifest.json`, resueltos conservando ambas fases), integrada en `main` por fast-forward; en `main`: typecheck limpio, `bun test` 279/279, `bond sync --check` al día; prueba real con un agente pi (ver Evidence); aceptada por el usuario en sesión el 2026-10-28 |
 | P5 | implemented | passed | accepted | rama `plan/decision-memory-p5` (kevin, pi), commit `3a4134d`, integrada en `main` por fast-forward; en `main`: typecheck limpio, `bun test` 287/287, `bond catalog check catalog` correcto, `bond sync --check` al día; prueba real repetida (ver Evidence); dos fallos de la prueba corregidos en `7102559` (289/289); aceptada por el usuario en sesión el 2026-10-28 |
+| P6 | pending | not_run | pending | none yet |
 
 ## Next step
 
-Plan completo. Fuera de su alcance quedan, si se quieren: activar `[decisions]` en el propio repo
-de bond, empujar `main` y preparar la release con `release-prepare-github`.
+Ejecutar P6 de `docs/plans/2026-10-28-decision-memory.md` con un agente pi. Respuesta corta:
+«revisa P6» cuando termine.
 
 ## Evidence and tracking
 
