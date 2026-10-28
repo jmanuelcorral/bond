@@ -15,3 +15,10 @@ commands = ["commit", "handoff", "review"]      # comandos del catálogo
 
 # Comandos propios: ficheros Markdown en .bond/commands/ ($ARGUMENTS, $1, $2...).
 # Skills propios: carpetas con SKILL.md en .agents/skills/ (bond los enlaza para Claude).
+
+# Memoria de decisiones de los agentes (skill decision-record): las decisiones no triviales
+# quedan en ficheros de esta carpeta (bond decisions add) y los commits pueden llevar los
+# trailers Agent: y Decision:. bond sync crea el README con el formato si falta; a partir de
+# ahí es tuyo. Para no usarla, quita esta sección.
+[decisions]
+dir = "docs/decisions"           # carpeta dentro del repo, ajustable
