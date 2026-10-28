@@ -2,8 +2,8 @@
 name: "2026-10-28-decision-memory"
 description: "Cada repo con bond guarda por escrito las decisiones y los encargos de sus agentes, con trazas en git, y bond decisions permite auditarlos"
 created_at: "2026-10-28T09:34:29Z"
-last_implementation_at: "2026-10-28T13:20:06Z"
-has_completed_all_phases: false
+last_implementation_at: "2026-10-28T14:30:48Z"
+has_completed_all_phases: true
 ---
 
 # Memoria de decisiones de los agentes
@@ -419,13 +419,13 @@ Dependencias y riesgos:
     ejecuta `accept` con sus palabras en `--confirmed-by`; nunca por iniciativa propia.
   - Las decisiones ya escritas sin `accepted_via` siguen pasando `check`.
 - Actions:
-  - [ ] `--confirmed-by`, varios ids y `--all-proposed` en `cli/decisions.mts`, con pruebas.
-  - [ ] Reglas `ask` en `.claude/settings.json` desde `bond sync`, con pruebas de fusión.
-  - [ ] Comando `catalog/commands/accept.md` y entrada en `catalog/catalog.toml`; `bond sync`.
-  - [ ] Skill `decision-record`, plantilla y README de decisiones.
-  - [ ] `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
-  - [ ] Run applicable checks and record actual results.
-  - [ ] Present evidence and stop for review before another phase.
+  - [x] `--confirmed-by`, varios ids y `--all-proposed` en `cli/decisions.mts`, con pruebas.
+  - [x] Reglas `ask` en `.claude/settings.json` desde `bond sync`, con pruebas de fusión.
+  - [x] Comando `catalog/commands/accept.md` y entrada en `catalog/catalog.toml`; `bond sync`.
+  - [x] Skill `decision-record`, plantilla y README de decisiones.
+  - [x] `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
+  - [x] Run applicable checks and record actual results.
+  - [x] Present evidence and stop for review before another phase.
 - Verification: `npm run typecheck && bun test`, `bin/bond catalog check catalog`,
   `bin/bond sync --check`; a mano, en un repo temporal con `[decisions]` y `claude`: `bond sync` y
   revisar `.claude/settings.json`; `accept` con y sin `--confirmed-by` desde un shell sin
@@ -444,12 +444,13 @@ Dependencias y riesgos:
 | P3 | implemented | passed | accepted | rama `plan/decision-memory-p3` (kevin, pi), commit `ac7cec7`, integrada en `main` por fast-forward; `bun test` 272/272 en la rama y 279/279 en `main` con P4; aceptada por el usuario en sesión el 2026-10-28 |
 | P4 | implemented | passed | accepted | rama `plan/decision-memory-p4` (stuart, pi), commit `3206cdf` rebasado sobre P3 como `4b823f1` (conflictos en `CHANGELOG.md`, docs y `.bond/manifest.json`, resueltos conservando ambas fases), integrada en `main` por fast-forward; en `main`: typecheck limpio, `bun test` 279/279, `bond sync --check` al día; prueba real con un agente pi (ver Evidence); aceptada por el usuario en sesión el 2026-10-28 |
 | P5 | implemented | passed | accepted | rama `plan/decision-memory-p5` (kevin, pi), commit `3a4134d`, integrada en `main` por fast-forward; en `main`: typecheck limpio, `bun test` 287/287, `bond catalog check catalog` correcto, `bond sync --check` al día; prueba real repetida (ver Evidence); dos fallos de la prueba corregidos en `7102559` (289/289); aceptada por el usuario en sesión el 2026-10-28 |
-| P6 | pending | not_run | pending | none yet |
+| P6 | implemented | passed | accepted | rama `plan/decision-memory-p6` (kevin, pi), commit `5ee1d77`, integrada en `main` por fast-forward, más tildes en `d50bf02`; en `main`: typecheck limpio, `bun test` 307/307, `bond sync --check` al día; a mano en repo temporal: reglas `ask` en `.claude/settings.json`, `accept` sin terminal negado sin `--confirmed-by` y con referencia vacía, `--all-proposed --confirmed-by` acepta con `accepted_via: agent:claude`; run del encargo en `docs/decisions/runs/`; aceptada por el usuario en sesión el 2026-10-28 |
 
 ## Next step
 
-Ejecutar P6 de `docs/plans/2026-10-28-decision-memory.md` con un agente pi. Respuesta corta:
-«revisa P6» cuando termine.
+Plan completo. Pendiente fuera del plan: aceptar las decisiones registradas en `docs/decisions/`
+desde la conversación (`/accept`), registrar D20 sustituyendo a D13, y publicar P6 en una
+versión nueva.
 
 ## Evidence and tracking
 
@@ -477,3 +478,5 @@ Ejecutar P6 de `docs/plans/2026-10-28-decision-memory.md` con un agente pi. Resp
   README no cambió; `collect` guardó solo su respuesta final desde la sesión; `bond decisions
   runs` y `check` limpios. Dos fallos encontrados (`collect` aceptaba un agente aún trabajando y
   `add` repetía el enlace de la rama), corregidos en `7102559`.
+- P6: `5ee1d77` (`feat: accept decisions from the conversation with --confirmed-by`), en `main`; primer
+  encargo de bond registrado por su propia memoria (`docs/decisions/runs/`).
