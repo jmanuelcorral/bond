@@ -2,7 +2,7 @@
 name: "2026-10-28-decision-memory"
 description: "Cada repo con bond guarda por escrito las decisiones y los encargos de sus agentes, con trazas en git, y bond decisions permite auditarlos"
 created_at: "2026-10-28T09:34:29Z"
-last_implementation_at: "2026-10-28T11:05:00Z"
+last_implementation_at: "2026-10-28T11:32:11Z"
 has_completed_all_phases: false
 ---
 
@@ -224,13 +224,13 @@ Dependencias y riesgos:
   - `check` detecta cada caso roto nombrando fichero y problema; `--json` estable y documentado.
   - Funciona sin red, en un repo sin commits y con rutas `/` en Windows.
 - Actions:
-  - [ ] `cli/decisions.mts`, caso y ayuda en `main.mts`, fila en `doctor.mts`.
-  - [ ] Herramienta `record_decision` en `extensions/` y su registro en las Bond Extensions.
-  - [ ] Skill `decision-record` apuntando a la herramienta; `bond sync`.
-  - [ ] Pruebas en `test/decisions.test.mts` y `test/doctor.test.mts`.
-  - [ ] `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
-  - [ ] Run applicable checks and record actual results.
-  - [ ] Present evidence and stop for review before another phase.
+  - [x] `cli/decisions.mts`, caso y ayuda en `main.mts`, fila en `doctor.mts`.
+  - [x] Herramienta `record_decision` en `extensions/` y su registro en las Bond Extensions.
+  - [x] Skill `decision-record` apuntando a la herramienta; `bond sync`.
+  - [x] Pruebas en `test/decisions.test.mts` y `test/doctor.test.mts`.
+  - [x] `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
+  - [x] Run applicable checks and record actual results.
+  - [x] Present evidence and stop for review before another phase.
 - Verification: `npm run typecheck && bun test`, `bin/bond catalog check catalog`,
   `bin/bond sync --check`; a mano, en un repo temporal con `[decisions]`: `add` (flags y stdin),
   `check`, `accept` con y sin TTY (`</dev/null`), y `record_decision` desde pi en un panel de
@@ -252,13 +252,24 @@ Dependencias y riesgos:
   cuando el repo tiene `[decisions]`; cuerpo con el porqué en cambios no triviales);
   `delivery-review-github` (el PR lista las decisiones y los runs del alcance, sacados de
   `bond decisions --json`); `convention-document` (una convención acordada enlaza su decisión).
+  Añadido tras revisar P2: los apartados que escribe `bond decisions add` (hoy `## Context`,
+  `## Decision`, `## Rejected alternatives`) y los que anuncian el README de P1 y la plantilla
+  (*Contexto*, *Decisión*, *Alternativas descartadas*, *Consecuencias*) tienen que coincidir:
+  en inglés en el fichero, como las skills, con `consequences` opcional en `add` y en
+  `record_decision`; y la documentación dice que la barrera de `accept` (TTY) evita que un agente
+  acepte por descuido, no es una medida de seguridad.
 - Acceptance criteria:
   - Cada skill tocada nombra la herramienta y dice qué hacer si no está (seguir como hoy).
   - Ninguna marca una decisión como `accepted`: eso queda en `bond decisions accept`.
   - `git-conventional-commit` sigue sin firmar por defecto en repos sin `[decisions]`.
   - Las adaptadas de common-skills conservan su `LICENSE` y su nota de origen.
   - `bond sync --check` al día tras el cambio.
+  - `bond decisions add` con `--consequences` (y `record_decision` con `consequences`) escribe los
+    mismos apartados que anuncian el README y la plantilla; `check` sigue dando por válidas las
+    decisiones ya escritas.
 - Actions:
+  - [ ] Apartados de `add`/`record_decision`, README de `decisionsReadme()` y plantilla alineados,
+        con su prueba en `test/decisions.test.mts`.
   - [ ] Editar las cinco skills y sus `references/` en `catalog/skills/`; `bond sync`.
   - [ ] `docs/reference.md`, `docs/en/reference.md` y `## Sin publicar`.
   - [ ] Run applicable checks and record actual results.
@@ -309,15 +320,15 @@ Dependencias y riesgos:
 | Phase | Implementation | Verification | Review | Evidence |
 | --- | --- | --- | --- | --- |
 | P1 | implemented | passed | accepted | rama `plan/decision-memory-p1` (kevin, pi), commits `47c338a` y `6701239`, integrada en `main` por fast-forward; en `main`: `npm run typecheck` limpio, `bun test` 235/235, `bond catalog check catalog` correcto, `bond sync --check` al día; aceptada por el usuario en sesión el 2026-10-28 |
-| P2 | pending | not_run | pending | none yet |
+| P2 | implemented | passed | accepted | rama `plan/decision-memory-p2` (kevin, pi), commit `5354318`, integrada en `main` por fast-forward; en `main`: `npm run typecheck` limpio, `bun test` 267/267, `bond catalog check catalog` correcto, `bond sync --check` al día; a mano: `add` por flags y stdin, sufijo `-2`, `\|` escapado en el índice, autoría `agent:claude` desde un panel de Herdr, `accept` sin TTY negado (exit 1); aceptada por el usuario en sesión el 2026-10-28 |
 | P3 | pending | not_run | pending | none yet |
 | P4 | pending | not_run | pending | none yet |
 
 ## Next step
 
-Ejecutar P2 de `docs/plans/2026-10-28-decision-memory.md`: da la herramienta de la que dependen
-P3 y P4. Tras aceptarla, P3 y P4 pueden ir en paralelo con `plan-team`. Respuesta corta:
-«manda P2 a pi».
+P3 y P4 de `docs/plans/2026-10-28-decision-memory.md` en paralelo con `plan-team`, un agente pi
+por fase: las dos dependen solo de P2, aceptada, y tocan zonas distintas salvo `CHANGELOG.md` y
+la documentación. Después, revisar e integrar cada rama.
 
 ## Evidence and tracking
 
@@ -325,3 +336,6 @@ P3 y P4. Tras aceptarla, P3 y P4 pueden ir en paralelo con `plan-team`. Respuest
   `6701239` (`fix(decisions): tie [decisions] activation to the decision-record skill`), en `main`.
   En la revisión de la primera entrega falló el criterio «desmarcarla deja el repo como hoy»; se
   devolvió al agente y lo corrigió en el segundo commit.
+- P2: `5354318` (`feat(decisions): add bond decisions and the record_decision pi tool`), en
+  `main`. Primero se colgó probando la herramienta (`execFile` con `input`, que no existe); se
+  interrumpió con permiso del usuario y se le dio el arreglo (`spawn` con `stdin.end()`).
