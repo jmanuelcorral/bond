@@ -96,7 +96,7 @@ repos que toca) con un agente por repo. Diferencias con el reparto normal:
   rama (sin `--repo` se niega si la rama está en varios). Los runs van a la memoria de
   decisiones del hub; si el hub no la tiene, a la del submódulo.
 - **Al integrar hay un paso más**: además de mergear cada rama en su base, hay que subir los
-  punteros de los submódulos en la rama del hub y hacer push. Recuerdaselo al usuario al
+  punteros de los submódulos en la rama del hub y hacer push. Recuérdaselo al usuario al
   recoger el informe de cada repo; nunca lo haces tú.
 - **Limpia desde el hub**: `bond team clean <rama>` quita los worktrees de la rama en todos
   los repos de la sesión (las ramas se quedan, también la del hub); `--repo <sub>`, en uno
