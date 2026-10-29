@@ -26,6 +26,19 @@ Run npm run typecheck && bun test. If they pass, I authorize one more commit wit
 
 [memoria de decisiones] Si registras decisiones con bond, commitea los ficheros de docs/decisions/ en esta rama junto con tu trabajo: viajan con la rama y se revisan con el código. No escribas en el plan ni en docs/decisions/runs/.
 
+---
+
+**2026-10-29T19:37:42Z**
+
+P2 is now integrated in plan/hub-session (commits e5d2147 and 20d3e4a, plus a plan/runs commit on top). Rebase this branch onto plan/hub-session (`git rebase plan/hub-session`) and resolve the conflicts:
+- Use P2's exported `sessionRows(root, base?): Row[]` (Row now has optional `repo` and `base`) and remove your own `{repo,row}` sessionRows; adapt prompt/collect/clean/createInHub/cleanInHub to `row.repo`. Keep `teamRows` per repo, exactly as on plan/hub-session.
+- Check closeIdleTable, openWatch, watchLabel and watchCommand as P2 left them (P2 resolves the hub inside closeIdleTable and names the table `tabla · <hub>`); adapt your calls and your tests rather than changing P2's behavior.
+- Merge the texts (TEAM_HELP, CHANGELOG "Sin publicar", docs/reference.md, docs/puesto.md) so both phases are described.
+- Do not edit the plan file. No push, no PR.
+Run npm run typecheck && bun test. Commit the conflict resolution as part of the rebase (keep your two commits; amend only if needed to make each one build). Report: conflicts found and how you resolved them, checks, and the new SHAs.
+
+[memoria de decisiones] Si registras decisiones con bond, commitea los ficheros de docs/decisions/ en esta rama junto con tu trabajo: viajan con la rama y se revisan con el código. No escribas en el plan ni en docs/decisions/runs/.
+
 ## Report
 
 

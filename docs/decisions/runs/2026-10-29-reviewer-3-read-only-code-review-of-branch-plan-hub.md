@@ -5,10 +5,14 @@ branch: "plan/hub-session-p3"
 base: "plan/hub-session@214a0c5"
 orchestrator: "claude"
 started_at: "2026-10-29T19:24:32Z"
-finished_at: "2026-10-29T19:24:32Z"
+finished_at: "2026-10-29T19:48:29Z"
 status: "reported"
 commits:
-  - "ba903ef feat(team): open a vertical branch across a hub's submodules"
+  - "e5d2147 feat(team): show a single session table in hub repos with submodules"
+  - "20d3e4a fix(team): address review findings for hub session table"
+  - "ce16fff docs(plan): record P2 progress and round 2 runs"
+  - "6b17a3f feat(team): open a vertical branch across a hub's submodules"
+  - "6a605d2 fix(team): address P3 review findings for hub teams"
 decisions: []
 ---
 
@@ -24,42 +28,33 @@ Constraints: do not edit, create or commit any file, and do not run commands tha
 
 ## Report
 
-# Revisión P3 (`plan/hub-session-p3`, commit `ba903ef`)
+# Segunda revisión P3 (`6b17a3f` + `6a605d2`, rebase sobre P1+P2)
 
-Estado del branch: `bun test` completo (375 pass) y `test/team-hub.test.mts` (10 pass) verificados en una copia extraída; el checkout no se ha tocado.
+Verificado en copia extraída: `bun test` completo **390 pass / 0 fail**; `team-hub.test.mts` 17 pass. El checkout no se ha tocado.
 
-## Hallazgos
+## Estado de los hallazgos anteriores
 
-**1. `cli/team.mts:934-938` — should-fix — UTF-8 roto en `promptAgent`.**
-El cambio `spawnSync(..., { encoding: "utf8" })` → `spawn` sin `setEncoding` acumula Buffers con `out += d`; un carácter multi-byte partido entre dos lecturas se corrompe a U+FFFD y `JSON.parse` falla. Escenario: `bond team prompt fix/x "tarea"` (ruta no-hub incluida) cuando Herdr responde con acentos/ñ/`·` (mensajes en español, `agent_status`) justo en un corte de chunk → la salida se toma como "no JSON" y un prompt correcto se reporta con el texto crudo o se pierde el estado con `--wait`. Es una regresión respecto al comportamiento previo. Fix: `child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");` tras el spawn.
+| # | Hallazgo | Estado |
+|---|---|---|
+| 1 | UTF-8 en `promptAgent` | **Arreglado** — `child.stdout/stderr.setEncoding("utf8")` (`cli/team.mts:1041-1042`) |
+| 2 | Falsos positivos de D10 en `openVerticals` | **Arreglado** — excluye las bases de la sesión y el mensaje incluye repo y path del worktree detonante (`cli/team.mts:1672-1683`); test «un worktree suelto en una base de la sesión no es una rama vertical abierta» |
+| 3 | `--delete-branch` y la rama del hub | **Arreglado** — `cleanHubBranches` (`cli/team.mts:1861-1890`): borra la rama del hub si está integrada en su base (o `--force`) y no le queda ningún worktree en **ningún** repo; si no, lo dice explícitamente. El «Las ramas se quedan» solo sale sin `--delete-branch`. Tests cubren integrado/no integrado y el caso `--repo` con worktree en el otro repo |
+| 4 | Faltaba test del fallback D5 | **Cubierto** — «sin [decisions] en el hub, los runs van a la memoria del submódulo (D5)», además de `collect --agent` y base inválida del hub |
+| 5 | `hubOf` silenciaba `[hub]` roto | **Arreglado** — avisa `«…: sigo sin el modo hub»` (`cli/team.mts:1644-1648`) con test del bond.toml no-TOML |
+| 6 | Base del hub sin validar en `createInHub` | **Arreglado** — `noBase` incluye `s.repos[0]` (`cli/team.mts:1700-1701`) con test |
+| 7 | `collect --agent` sin agente en la fila | **Arreglado** — fallback a filas sin agente + lookup en `agents(5000)` para el kind (`cli/team.mts:1829-1836`), igual que fuera del hub |
 
-**2. `cli/team.mts:1551-1556` (`openVerticals`) — should-fix — falsos positivos de D10.**
-Cualquier worktree enlazado de un submódulo cuyo nombre de rama exista en el hub cuenta como "vertical abierta". Escenario: queda un worktree en `front` de una rama que también existe en el hub (p. ej. `release/1.0`, o una feature que se fusionó en el hub y se dejó el worktree) → `bond team fix/x` desde el hub muere con «ya tiene abierta la rama vertical release/1.0» sin haber ninguna vertical abierta, y el mensaje no dice qué worktree lo provoca. (El caso `bond team main` dentro del submódulo lo frena git porque `main` está ocupada por el checkout principal, así que el caso real es el worktree residual.) Fix: excluir de la detección las bases de la sesión (`hub.base` y `repo.base` de cada repo) e incluir en el mensaje la ruta del worktree que detona la detección.
+## Integración con P2
 
-**3. `cli/team.mts:1713-1733` (`cleanInHub`) — should-fix — `--delete-branch` no cubre la rama del hub y el mensaje miente.**
-Con `--delete-branch`, `removeWorktrees` borra las ramas integradas de los submódulos pero la rama vertical del hub nunca se toca, y en la línea 1732 se imprime igualmente «Las ramas se quedan, en <hub> y en cada repo» aunque se hayan borrado ramas. Inconsistente con el `--delete-branch` no-hub. Fix: con `--delete-branch`, borrar también la rama del hub si está integrada (o al menos imprimir explícitamente «rama del hub conservada» y ajustar el mensaje condicional).
+Correcta y coherente: P3 usa `sessionRows(root)` de P2 (`Row.repo`/`Row.base`) en lugar de su wrapper propio; `openWatch(s.root, anchor)` resuelve por sí solo el hub (etiqueta `tabla · <hub>`, `--base` descartada en modo hub); `callerTab(s.root, …)` calcula el hueco con `basename(hub)` que coincide con la etiqueta; `closeIdleTable(s.root, …)` en hub recomputa `sessionRows(hub)` (el filtro que le pasa P3 queda redundante pero es inocuo — el recuento refleja el estado real de disco tras la limpieza). `teamRows` sigue por repo y `status`/`--json` no se tocan en esta rama. Repo sin `[hub]`: sin cambios funcionales (el único delta es el aviso extra por bond.toml roto en prompt/collect/clean, stderr únicamente — aceptable y deseable).
 
-**4. `test/team-hub.test.mts` — should-fix (hueco de pruebas) — fallback de D5 sin cubrir.**
-El fixture `HUB_TOML` siempre incluye `[decisions]` en el hub; la rama de `hubRunCtx` (líneas 1640-1657) donde el hub **no** tiene `[decisions]` y los runs deben ir al submódulo no se ejercita nunca, ni tampoco `collect --agent` en hub ni `--delete-branch` en hub. Los criterios de aceptación del plan sí están cubiertos (creación, prompt con nota mutua, D10, clean, runs en el hub, submódulo aislado). Fix: añadir un caso con hub sin `[decisions]` que verifique que el run cae en `docs/decisions/runs/` del submódulo.
+## Hallazgos restantes
 
-**5. `cli/team.mts:1527` (`hubOf`) — nit — error de `[hub]` silenciado.**
-`catchDie(() => hubSession(root)).value` traga el parseo inválido sin aviso: un repo con `[hub]` roto se comporta silenciosamente como no-hub, cuando la mitigación de P1 decía «se ignora con un aviso». Un `warn` una vez por comando bastaría.
+**1. `cli/team.mts:1686,1689` — nit — ambigüedad `repo` nombre/ruta y cast ciego.**
+P2 marca las filas del hub con `repo = session.name` y las de submódulos con `repo = path`. Si un submódulo tiene por ruta el mismo nombre que el basename del hub (p. ej. hub `hub` con submódulo en `hub/`), las filas propias del hub casan en `subRows` (`r.path === row.repo`) y se tratarían como filas de ese submódulo: `clean` intentaría quitar worktrees del hub como si fueran del submódulo y `hubRunCtx` los atribuiría mal. Además `repoOfRow` los fuerza con `as HubRepo`, que ocultaría un undefined si se le escapa una fila del hub. Escenario rebuscado, pero el arreglo es barato: que `sessionRows` de P2 marque la fila del hub con `repo = "."` (o que `subRows` excluya explícitamente `row.repo === s.name`), y un `?? die(...)` en `repoOfRow` en vez del cast.
 
-**6. `cli/team.mts:1597` (`createInHub`) — nit — base del hub sin validar.**
-Se comprueba `noBase` en los submódulos pero no la base del hub antes de `git branch <rama> <base>`; con base inválida sale el error crudo de git en vez del mensaje «cámbiala con bond hub --base» que se da para los demás.
-
-**7. `cli/team.mts:1700-1708` (`collectInHub`) — nit — pérdida del flujo `--agent` sin agente en la fila.**
-El collect no-hub permite `--agent <nombre>` aunque la fila no tenga agente (busca el kind en `agents(5000)`); en hub se muere con «no tiene agente en <repo>». Paridad incompleta del workflow documentado.
-
-## Choques semánticos con P2 (ambos tocan `cli/team.mts`)
-
-- **Doble representación de la agrupación por repo**: P3 introduce el wrapper `{ repo, row }` (`sessionRows`, línea 1559) mientras el plan de P2 pone el campo `repo` **en** `Row` (también en `--json`). Al fusionar quedan dos mecanismos; prompt/collect/clean de P3 deberían pasar a `row.repo`. Hay que elegir uno al integrar.
-- **`closeIdleTable`**: `cleanInHub` (línea 1733) llama `closeIdleTable(s.root, filas-de-todos-los-repos)` con la firma P1 `(root, left)`. P2 va a reimplementar el cierre «por sesión»; si cambia la firma o resuelve la sesión desde el root, esta llamada queda rota o filtra doble. Coordinar firma antes de fusionar ninguna de las dos.
-- **`openWatch`/`watchLabel`**: `createInHub` llama `openWatch(s.root, anchor)` y el test de P3 exige la etiqueta exacta `"tabla · hub"`; P2 añade la rama vertical a la cabecera y reutilización desde submódulos, lo que romperá ese test y posiblemente la firma. Idem `watchCommand`/`watchIdle`.
-- **Textos compartidos** (`TEAM_HELP`, `CHANGELOG` «Sin publicar», `docs/reference.md`, `docs/puesto.md`): conflicto de merge trivial pero en las mismas líneas.
-
-Recomendación: fijar primero las firmas de los helpers de sesión (`Row.repo`, `closeIdleTable`, `openWatch`) y rebasear P3 sobre P2 (o viceversa) adaptando `sessionRows` y las llamadas de `createInHub`/`cleanInHub`; no integrar las dos en paralelo sin esa conversación.
+Nada más accionable: el `gone` de `cleanHubBranches:1868` es invariante del bucle (trivial), y el «rama borrada» en dry-run sigue el mismo patrón cosmético que el `removeWorktrees` no-hub, así que no lo cuento.
 
 ## Veredicto
 
-**Changes requested** — por 1 (regresión de codificación en la ruta no-hub), 2 (bloqueo falso de D10), 3 (`--delete-branch` inconsistente en hub) y 4 (hueco de prueba del fallback D5). Los nits y la coordinación con P2 pueden resolverse en la integración.
+**Approve** — los siete hallazgos anteriores están arreglados con tests que los cubren, la integración con P2 es coherente y no hay regresiones (390/0). El nit 1 se puede pulir al tocar la zona de nuevo.
