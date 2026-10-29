@@ -172,16 +172,20 @@ async function create(args: string[]): Promise<void> {
 	const anchor = insideHerdr() ? process.env.HERDR_PANE_ID : undefined;
 	if (anchor) {
 		// Antes de crear nada: si no caben en la pestaña, se elige dónde van.
+		const hub = hubRoot(root);
+		const repo = hub ? basename(hub) : basename(root);
 		const tab = callerTab(root, anchor);
 		const pending = pendingInTab(root, plan);
 		let layout = o.layout ?? "tabs";
-		if (!o.layout && pending.todo.length > tab.room && !o.yes && process.stdin.isTTY && process.stdout.isTTY) layout = await askLayout(pending.todo.length, tab.room, basename(root));
+		if (!o.layout && pending.todo.length > tab.room && !o.yes && process.stdin.isTTY && process.stdout.isTTY) layout = await askLayout(pending.todo.length, tab.room, repo);
 		if (layout === "workspaces") openWorkspaces(root, plan, o);
 		else openInTab(root, anchor, tab, layout === "same-tab" ? Number.POSITIVE_INFINITY : tab.room, pending, o);
 		openWatch(root, anchor, o.base);
 	} else openWorkspaces(root, plan, o);
 	const { renderSmall } = await import("../lib/bond-logo.mts");
-	console.log(`\n  ${renderSmall(60, `equipo en ${basename(root)}`)}\n`);
+	const hub = hubRoot(root);
+	const repo = hub ? basename(hub) : basename(root);
+	console.log(`\n  ${renderSmall(60, `equipo en ${repo}`)}\n`);
 	printStatus(teamRows(root, o.base));
 	console.log(dim(`\n  Repartir trabajo: bond team prompt <rama> "la tarea"\n  Cómo va: bond team status · Al acabar: bond team clean`));
 }
@@ -219,11 +223,13 @@ interface CallerTab {
 }
 
 /** La pestaña del que llama y cuántos minions le caben; si Herdr no responde, los 4 de una pestaña con solo el tuyo. */
-function callerTab(root: string, anchor: string): CallerTab {
+export function callerTab(root: string, anchor: string): CallerTab {
 	try {
 		const me = herdr<{ pane?: HerdrPane }>(["pane", "get", anchor]).pane;
 		const panes = (herdr<{ panes?: HerdrPane[] }>(["pane", "list", ...(me?.workspace_id ? ["--workspace", me.workspace_id] : [])]).panes ?? []).filter((p) => p.tab_id === me?.tab_id);
-		return { workspace: me?.workspace_id, room: tabRoom(panes.length, !!findWatchPane(panes, me?.tab_id, basename(root))) };
+		const hub = hubRoot(root);
+		const repo = hub ? basename(hub) : basename(root);
+		return { workspace: me?.workspace_id, room: tabRoom(panes.length, !!findWatchPane(panes, me?.tab_id, repo)) };
 	} catch {
 		return { room: tabRoom(1, false) };
 	}
@@ -497,53 +503,65 @@ export function defaultBase(root: string): string {
 	return main?.branch ?? die("el checkout principal no está en una rama: indica la base con --base <ref>");
 }
 
-/** Una fila por worktree enlazado del repo (o de la sesión si es un hub), con lo que sepa Herdr si está en marcha. */
-export function teamRows(root: string, base?: string): Row[] {
+/** Bases de repos de la sesión ya avisadas por no existir (una vez por ejecución). */
+export const warnedMissingBases = new Set<string>();
+
+/** Una fila por worktree enlazado del repo, con lo que sepa Herdr si está en marcha. */
+export function teamRows(root: string, base = defaultBase(root)): Row[] {
+	if (git(root, ["rev-parse", "--verify", "--quiet", `${base}^{commit}`]).status !== 0) die(`la base no existe: ${base}`);
+	const live = serverRunning();
+	const open = new Map<string, string>();
+	let running: HerdrAgent[] = [];
+	if (live) {
+		try {
+			const list = herdr<{ worktrees?: Array<{ path: string; open_workspace_id?: string | null }> }>(["worktree", "list", "--cwd", root]).worktrees ?? [];
+			for (const w of list) if (w.open_workspace_id) open.set(canonical(w.path), w.open_workspace_id);
+		} catch {
+			// Repo que Herdr no conoce: sin workspaces.
+		}
+		running = agents(5000);
+	}
+	const herdrDir = `${sep}.herdr${sep}worktrees${sep}`;
+	return gitWorktrees(root)
+		.filter((w) => !w.main && w.branch)
+		.map((w) => {
+			const branch = w.branch as string;
+			const info = branchInfo(root, base, branch, w.path);
+			const workspace = open.get(w.path);
+			const a = running.find((x) => x.agent && ((workspace && x.workspace_id === workspace) || within(canonical(x.cwd ?? x.foreground_cwd ?? "/"), w.path)));
+			// Herdr da por idle a un agente con una pregunta en pantalla (pi: confiar en la carpeta)
+			// y puede dar por blocked el aviso de arranque de agy, que no es una pregunta.
+			const screen = a?.name && a.agent_status !== "working" ? visibleScreen(a.name) : "";
+			const question = a?.agent_status !== "blocked" ? questionIn(screen) : undefined;
+			const notice = a?.agent_status === "blocked" && startupNoticeIn(screen);
+			const status = notice ? "idle" : a?.agent_status;
+			return {
+				...info,
+				branch,
+				path: w.path,
+				workspace,
+				agent: a ? { name: a.name, kind: a.agent, status, question, pane: a.pane_id, ...(notice ? { notice } : {}) } : undefined,
+				state: classify({ agentStatus: question ? "blocked" : status, ...info }),
+				managed: !!workspace || w.path.includes(herdrDir),
+			};
+		});
+}
+
+/**
+ * Filas de toda la sesión de trabajo. Si root (o un superproyecto que lo contiene) tiene [hub]
+ * en .bond/bond.toml, devuelve las filas de cada repo de la sesión (cada una con `repo` y `base`
+ * fijados a su base en [hub]). Si no es un hub, devuelve teamRows(root, base).
+ */
+export function sessionRows(root: string, base?: string): Row[] {
 	const hub = hubRoot(root);
 	const session = hub ? hubSession(hub) : undefined;
+	if (!session) return teamRows(root, base);
+
 	const live = serverRunning();
 	const open = new Map<string, string>();
 	let running: HerdrAgent[] = [];
 	const herdrDir = `${sep}.herdr${sep}worktrees${sep}`;
 
-	if (!session) {
-		const effectiveBase = base ?? defaultBase(root);
-		if (git(root, ["rev-parse", "--verify", "--quiet", `${effectiveBase}^{commit}`]).status !== 0) die(`la base no existe: ${effectiveBase}`);
-		if (live) {
-			try {
-				const list = herdr<{ worktrees?: Array<{ path: string; open_workspace_id?: string | null }> }>(["worktree", "list", "--cwd", root]).worktrees ?? [];
-				for (const w of list) if (w.open_workspace_id) open.set(canonical(w.path), w.open_workspace_id);
-			} catch {
-				// Repo que Herdr no conoce: sin workspaces.
-			}
-			running = agents(5000);
-		}
-		return gitWorktrees(root)
-			.filter((w) => !w.main && w.branch)
-			.map((w) => {
-				const branch = w.branch as string;
-				const info = branchInfo(root, effectiveBase, branch, w.path);
-				const workspace = open.get(w.path);
-				const a = running.find((x) => x.agent && ((workspace && x.workspace_id === workspace) || within(canonical(x.cwd ?? x.foreground_cwd ?? "/"), w.path)));
-				// Herdr da por idle a un agente con una pregunta en pantalla (pi: confiar en la carpeta)
-				// y puede dar por blocked el aviso de arranque de agy, que no es una pregunta.
-				const screen = a?.name && a.agent_status !== "working" ? visibleScreen(a.name) : "";
-				const question = a?.agent_status !== "blocked" ? questionIn(screen) : undefined;
-				const notice = a?.agent_status === "blocked" && startupNoticeIn(screen);
-				const status = notice ? "idle" : a?.agent_status;
-				return {
-					...info,
-					branch,
-					path: w.path,
-					workspace,
-					agent: a ? { name: a.name, kind: a.agent, status, question, pane: a.pane_id, ...(notice ? { notice } : {}) } : undefined,
-					state: classify({ agentStatus: question ? "blocked" : status, ...info }),
-					managed: !!workspace || w.path.includes(herdrDir),
-				};
-			});
-	}
-
-	// Modo hub: worktrees de todos los repos de la sesión
 	if (live) {
 		for (const hr of session.repos) {
 			if (!hr.present) continue;
@@ -560,12 +578,17 @@ export function teamRows(root: string, base?: string): Row[] {
 	const rows: Row[] = [];
 	for (const hr of session.repos) {
 		if (!hr.present) continue;
-		const repoBase = base ?? hr.base;
-		if (git(hr.dir, ["rev-parse", "--verify", "--quiet", `${repoBase}^{commit}`]).status !== 0) die(`la base no existe en ${hr.path}: ${repoBase}`);
+		if (git(hr.dir, ["rev-parse", "--verify", "--quiet", `${hr.base}^{commit}`]).status !== 0) {
+			if (!warnedMissingBases.has(hr.dir)) {
+				warnedMissingBases.add(hr.dir);
+				warn(`la base no existe en ${hr.path}: ${hr.base}`);
+			}
+			continue;
+		}
 		const wts = gitWorktrees(hr.dir).filter((w) => !w.main && w.branch);
 		for (const w of wts) {
 			const branch = w.branch as string;
-			const info = branchInfo(hr.dir, repoBase, branch, w.path);
+			const info = branchInfo(hr.dir, hr.base, branch, w.path);
 			const workspace = open.get(w.path);
 			const a = running.find((x) => x.agent && ((workspace && x.workspace_id === workspace) || within(canonical(x.cwd ?? x.foreground_cwd ?? "/"), w.path)));
 			const screen = a?.name && a.agent_status !== "working" ? visibleScreen(a.name) : "";
@@ -581,7 +604,7 @@ export function teamRows(root: string, base?: string): Row[] {
 				state: classify({ agentStatus: question ? "blocked" : status, ...info }),
 				managed: !!workspace || w.path.includes(herdrDir),
 				repo: hr.path === "." ? session.name : hr.path,
-				base: repoBase,
+				base: hr.base,
 			});
 		}
 	}
@@ -654,14 +677,15 @@ function status(args: string[]): void | Promise<void> {
 	const root = repoOf(positional[0]);
 	const base = (opts["--base"] ?? opts["-b"]) as string | undefined;
 	const hub = hubRoot(root);
+	if (hub && base) die("en un hub cada repo usa su base de [hub] (.bond/bond.toml); quita --base");
 	if (opts["--watch"] || opts["-w"]) {
 		if (opts["--json"] || opts["-j"]) die("--watch y --json no van juntos");
 		const targetRoot = hub ?? root;
-		const targetBase = base ?? (hub ? undefined : defaultBase(root));
-		return watch(targetRoot, targetBase ?? "", !!opts["--keep-open"]);
+		const targetBase = hub ? "" : (base ?? defaultBase(root));
+		return watch(targetRoot, targetBase, !!opts["--keep-open"]);
 	}
 	if (opts["--keep-open"]) die("--keep-open va con --watch");
-	const rows = teamRows(root, base);
+	const rows = sessionRows(root, base);
 	if (opts["--json"] || opts["-j"]) return console.log(JSON.stringify(rows, null, 2));
 	printStatus(rows);
 }
@@ -789,7 +813,7 @@ async function watch(root: string, base: string, keepOpen = false): Promise<void
 	const targetRoot = hub ?? root;
 	const repo = session ? session.name : basename(root);
 	if (!session) teamRows(root, base); // Que una base que no existe falle aquí, fuera de la pantalla alternativa.
-	else teamRows(targetRoot, base || undefined);
+	else sessionRows(targetRoot);
 	const color = !process.env.NO_COLOR;
 	const self = insideHerdr() ? process.env.HERDR_PANE_ID : undefined;
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -812,7 +836,7 @@ async function watch(root: string, base: string, keepOpen = false): Promise<void
 	const draw = (tick = false) => {
 		let lines: string[];
 		try {
-			const rows = teamRows(targetRoot, base || undefined);
+			const rows = sessionRows(targetRoot);
 			if (tick) {
 				for (const r of rows) if (r.ahead) worked.add(r.branch);
 				let pane: HerdrPane | undefined;
@@ -907,7 +931,7 @@ function watching(pane: string): boolean {
 }
 
 /** Abre (o reutiliza) a la derecha del panel del que llama un panel estrecho con la tabla en vivo. */
-function openWatch(root: string, anchor: string, base?: string): void {
+export function openWatch(root: string, anchor: string, base?: string): void {
 	const hub = hubRoot(root);
 	const targetRoot = hub ?? root;
 	const repo = basename(targetRoot);
@@ -1497,7 +1521,8 @@ function closeIdleTable(root: string, left: Row[]): void {
 	}
 	const hub = hubRoot(root);
 	const repo = hub ? basename(hub) : basename(root);
-	for (const pane of idleTables(left, panes, repo, insideHerdr() ? process.env.HERDR_PANE_ID : undefined)) {
+	const remaining = hub ? sessionRows(hub) : left;
+	for (const pane of idleTables(remaining, panes, repo, insideHerdr() ? process.env.HERDR_PANE_ID : undefined)) {
 		try {
 			act(`herdr pane close ${pane}`, () => herdr(["pane", "close", pane]));
 			console.log(`${ok("-")} tabla en vivo  ${dim(`${pane} · no queda ningún agente del equipo (--keep-table para dejarla)`)}`);

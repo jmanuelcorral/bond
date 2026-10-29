@@ -420,6 +420,15 @@ describe("cerrar al terminar", () => {
 		expect(watchIdle([row("a", "trabajando", { agent: kevin })], table, "fluzo", false)).toBe("busy");
 	});
 
+	test("watchIdle con filas multi-repo: un repo ocupado -> busy; todos integrados -> close", () => {
+		const rowA = { ...row("fix/a", "trabajando", { agent: kevin }), repo: "front", base: "main" };
+		const rowB = { ...row("fix/b", "integrada"), repo: "back", base: "main" };
+		expect(watchIdle([rowA, rowB], { label: "tabla · hub", focused: false }, "hub", false)).toBe("busy");
+
+		const rowADone = { ...row("fix/a", "integrada"), repo: "front", base: "main" };
+		expect(watchIdle([rowADone, rowB], { label: "tabla · hub", focused: false }, "hub", false)).toBe("close");
+	});
+
 	test("si solo queda el grupo ✅, no hay trabajo pendiente y la tabla se cierra", () => {
 		const done = [row("a", "integrada", { ahead: 1 }), row("b", "sin commits", { agent: kevin })];
 		const out = renderWatch(done, { width: 60, color: false, repo: "fluzo", base: "main", time: "10:00:00" });
