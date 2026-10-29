@@ -3,6 +3,7 @@ name: "2026-10-29-hub-session"
 description: "Desde un repo hub con submódulos, una rama vertical abre un agente por repo y todo el equipo se ve en una sola tabla de sesión"
 created_at: "2026-10-29T18:16:29Z"
 has_completed_all_phases: false
+last_implementation_at: "2026-10-29T19:05:00Z"
 ---
 
 # Sesiones de hub: una rama vertical, un agente por repo y una sola tabla
@@ -127,10 +128,10 @@ Riesgos:
     nada.
   - `bond team` y `bond` en un repo sin `[hub]` no cambian.
 - Acciones:
-  - [ ] Comando, sección `[hub]`, detección de submódulos y del hub, ayuda, docs, CHANGELOG y
+  - [x] Comando, sección `[hub]`, detección de submódulos y del hub, ayuda, docs, CHANGELOG y
     pruebas con un hub de fixture (repos locales y `git submodule add` en un directorio
     temporal).
-  - [ ] Ejecutar las comprobaciones y anotar los resultados.
+  - [x] Ejecutar las comprobaciones y anotar los resultados.
   - [ ] Presentar la evidencia y parar para revisión.
 - Verificación: `npm run typecheck && bun test` en la raíz; a mano, `bin/bond hub` en un hub
   real.
@@ -224,16 +225,18 @@ Riesgos:
 
 | Fase | Implementación | Verificación | Revisión | Evidencia |
 | --- | --- | --- | --- | --- |
-| P1 | pending | not_run | pending | todavía nada |
+| P1 | implemented | passed | pending | `47d737a` + `c459850` (arreglos de la revisión) integrados en `plan/hub-session`; en el checkout principal `npm run typecheck` limpio y `bun test` 365/0. Falta la prueba manual en un hub real (no hay ninguno en `~/gitrepos`). Runs: `docs/decisions/runs/2026-10-29-kevin-use-the-plan-execute-skill-to-implement.md`, `2026-10-29-reviewer-1-review-the-commit-47d737a-on-branch-plan.md`, `2026-10-29-reviewer-1-a-reviewer-approved-p1-with-these-fixes.md` |
 | P2 | pending | not_run | pending | todavía nada |
 | P3 | pending | not_run | pending | todavía nada |
 | P4 | pending | not_run | pending | todavía nada |
 
 ## Siguiente paso
 
-Ejecutar P1 (`bond hub` y la sesión del hub): es la única fase sin dependencias y P2 y P3
-la necesitan. Respuesta corta: "ejecuta P1". Alternativa: parar aquí.
+Ronda 2: P2 y P3 en paralelo con `plan-team` desde `plan/hub-session`, ya con P1 integrada (su
+revisión humana sigue pendiente). Después, P4.
 
 ## Evidencia y seguimiento
 
-Sin issues ni PRs todavía.
+- P1: rama `plan/hub-session-p1` (kevin, claude), revisada por reviewer-1 (pi): aprobada con
+  3 should-fix, aplicados en `c459850`. Decisión propuesta por kevin:
+  `docs/decisions/2026-10-29-bond-hub-la-base-de-un-repo-se-indica-con-base-ruta-ref.md`.
