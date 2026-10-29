@@ -2,12 +2,12 @@
 // cada rama (status), mandar trabajo a la de una rama (prompt) y quitar los worktrees que ya no
 // hacen falta (clean). Las ramas no se tocan: nada de merge, push ni borrado sin pedirlo.
 
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { loadDecisions, parseFm, type Parsed, resolveAuthor, slugify } from "./decisions.mts";
-import { hubRoot, hubSession } from "./hub.mts";
+import { type HubRepo, type HubSession, hubRoot, hubSession } from "./hub.mts";
 import { chooseAgent, gitRoot, openWorkspace } from "./launch.mts";
 import { agents, defaultAgentArgs, ensureServer, firstFreeName, herdr, type HerdrAgent, insideHerdr, preparePane, questionIn, requireHerdr, serverRunning, startedBlocked, startupNoticeIn, visibleScreen, workspaces } from "./herdr.mts";
 import { repoDecisions } from "./repo.mts";
@@ -16,9 +16,9 @@ import { act, canonical, caution, catchDie, die, dim, isDryRun, ok, run, warn } 
 
 export const TEAM_HELP = `Uso: bond team [repo] <rama[:agente]>... [opciones] [-- argumentos de los agentes]
        bond team status [repo] [--base <ref>] [--json | --watch [--keep-open]]
-       bond team prompt <rama> <tarea> [--wait] [--timeout <ms>] [--no-record]
-       bond team collect <rama> [--lines <n>] [--agent <nombre>] [--request <encargo>]
-       bond team clean [repo] [rama...] [--base <ref>] [--force] [--delete-branch] [--keep-table] [--dry-run]
+       bond team prompt <rama> <tarea> [--repo <repo>] [--wait] [--timeout <ms>] [--no-record]
+       bond team collect <rama> [--repo <repo>] [--lines <n>] [--agent <nombre>] [--request <encargo>]
+       bond team clean [repo] [rama...] [--repo <repo>] [--base <ref>] [--force] [--delete-branch] [--keep-table] [--dry-run]
 
 Abre un worktree y un agente por rama. Sin [repo], el repo del directorio actual. El agente de
 cada rama: el de rama:agente, si no --agent, si no el agente por defecto del repo
@@ -51,6 +51,18 @@ carpeta al PATH de la shell del panel antes de lanzarlo.
   -y, --yes              Sin preguntar: si no caben, pestañas nuevas
   --no-trust             En paneles: no heredar la confianza del checkout principal
   --trust-repository     Con --workspaces: se pasa a herdr worktree (solo en repos revisados)
+  --repos <a,b>          En un hub: solo esos repos de la sesión (ruta o nombre)
+
+En un hub (un repo con [hub] en .bond/bond.toml, la escribe bond hub), bond team <rama> abre
+una rama vertical: la crea en el hub, sin worktree ni agente, y abre un worktree y un agente
+en cada submódulo de la sesión (o en los de --repos), cada uno desde su base de [hub] y con
+el agente por defecto de su bond.toml (o el de rama:agente o --agent). En paneles, los
+worktrees van en ~/.herdr/worktrees/<hub>/<submódulo>/<rama>. Una sola rama vertical por
+sesión: con una abierta, bond team se niega a abrir otra hasta bond team clean. Desde el hub,
+prompt manda la tarea a todos los agentes de la rama, con una nota que les dice quiénes son
+los otros y en qué repo está cada uno (--repo, solo a uno); collect y clean buscan la rama en
+todos los repos (--repo si hace falta elegir); los runs van a la memoria del hub (si no la
+tiene, a la del submódulo). Dentro de un submódulo, bond team trabaja solo en ese repo.
 
 status   Cada worktree del repo: estado, agente, commits por delante de la base y ficheros.
          Estados: trabajando, bloqueado, sin commitear, lista (commits por revisar),
@@ -100,6 +112,8 @@ export interface TeamArgs {
 	inheritTrust: boolean;
 	specs: Array<{ branch: string; agent?: string }>;
 	agentArgs: string[];
+	/** En un hub: solo estos repos de la sesión (--repos). */
+	repos?: string[];
 }
 
 /**
@@ -124,6 +138,7 @@ export function parseTeam(args: string[], isDir: (p: string) => boolean = exists
 		else if (a === "--same-tab") pick(a, "same-tab");
 		else if (a === "-y" || a === "--yes") o.yes = true;
 		else if (a === "--no-trust") o.inheritTrust = false;
+		else if (a === "--repos") o.repos = val().split(",").map((x) => x.trim()).filter(Boolean);
 		else if (a === "--") {
 			o.agentArgs = args.slice(i + 1);
 			break;
@@ -149,6 +164,9 @@ async function create(args: string[]): Promise<void> {
 	requireHerdr();
 	const o = parseTeam(args);
 	const root = repoOf(o.dir);
+	const session = hubOf(root);
+	if (session) return createInHub(session, o);
+	if (o.repos) die("--repos solo va en un hub (bond hub --help)");
 	// Antes de tocar Herdr: un nombre de rama inválido dejaría un workspace a medias.
 	const invalid = o.specs.filter((s) => run("git", ["-C", root, "check-ref-format", "--branch", s.branch]).status !== 0).map((s) => s.branch);
 	if (invalid.length) die(`nombre de rama no válido para git: ${invalid.map((b) => JSON.stringify(b)).join(", ")}`);
@@ -191,13 +209,14 @@ async function create(args: string[]): Promise<void> {
 }
 
 /** Un workspace por rama con herdr worktree (fuera de Herdr, o con --workspaces). */
-function openWorkspaces(root: string, plan: Array<{ branch: string; agent: string }>, o: TeamArgs): void {
-	for (const { branch, agent } of plan) {
+function openWorkspaces(root: string, plan: PlanItem[], o: TeamArgs): void {
+	for (const item of plan) {
+		const { branch, agent } = item;
 		try {
-			const r = openWorkspace({ dir: root, agent, worktree: branch, base: o.base, shell: false, direction: "right", ratio: "0.6", focus: false, trust: o.trust, agentArgs: defaultAgentArgs(agent, o.agentArgs) });
-			console.log(`${ok("✓")} ${branch}  ${r.reused ? dim(`ya abierto (${r.ws})`) : `${r.agentName} (${agent}) en ${r.agentPane}${r.blocked ? caution(" · espera una respuesta tuya") : ""}`}`);
+			const r = openWorkspace({ dir: item.root ?? root, agent, worktree: branch, base: item.base ?? o.base, shell: false, direction: "right", ratio: "0.6", focus: false, trust: o.trust, agentArgs: defaultAgentArgs(agent, o.agentArgs) });
+			console.log(`${ok("✓")} ${itemLabel(item)}  ${r.reused ? dim(`ya abierto (${r.ws})`) : `${r.agentName} (${agent}) en ${r.agentPane}${r.blocked ? caution(" · espera una respuesta tuya") : ""}`}`);
 		} catch (e) {
-			warn(`${branch}: ${(e as Error).message}`);
+			warn(`${itemLabel(item)}: ${(e as Error).message}`);
 		}
 	}
 }
@@ -279,8 +298,12 @@ export function minionName(live: Set<string>): string {
 	return MINIONS.find((m) => !live.has(m)) ?? firstFreeName("minion", live);
 }
 
-/** Carpeta del worktree de una rama, la misma que usa herdr worktree: ~/.herdr/worktrees/<repo>/<rama>. */
-export const tabWorktreePath = (home: string, repo: string, branch: string) => join(home, ".herdr", "worktrees", repo, branch.replace(/[/\\]+/g, "-"));
+/**
+ * Carpeta del worktree de una rama, la misma que usa herdr worktree: ~/.herdr/worktrees/<repo>/<rama>.
+ * En un hub, `sub` es la ruta del submódulo (con / cambiadas por -): ~/.herdr/worktrees/<hub>/<sub>/<rama> (D9).
+ */
+export const tabWorktreePath = (home: string, repo: string, branch: string, sub?: string) =>
+	join(home, ".herdr", "worktrees", repo, ...(sub ? [sub.replace(/[/\\]+/g, "-")] : []), branch.replace(/[/\\]+/g, "-"));
 
 /**
  * Dónde va cada agente. `tab`: 0 es la pestaña del que llama; 1, 2... las pestañas nuevas.
@@ -313,24 +336,41 @@ export function tabLayout(n: number, room = Number.POSITIVE_INFINITY, perRow = 4
 	});
 }
 
+/**
+ * Una rama a abrir. En un hub, además, el submódulo (`root`, su ruta `sub` en la sesión) y la
+ * base de la que sale su worktree.
+ */
+interface PlanItem {
+	branch: string;
+	agent: string;
+	root?: string;
+	sub?: string;
+	base?: string;
+}
+
+/** Cómo se nombra una rama en la salida: en un hub, con su submódulo. */
+const itemLabel = (i: { branch: string; sub?: string }) => (i.sub ? `${i.branch} · ${i.sub}` : i.branch);
+
 interface Pending {
 	/** Ramas sin agente en marcha, con su worktree si ya existe. */
-	todo: Array<{ branch: string; agent: string; path?: string }>;
+	todo: Array<PlanItem & { path?: string }>;
 	/** Ramas que ya tienen agente, con la carpeta de su worktree. */
-	skipped: Array<{ branch: string; path: string }>;
+	skipped: Array<{ branch: string; sub?: string; path: string }>;
 	/** Nombres de agente en uso en Herdr. */
 	live: Set<string>;
 }
 
 /** Qué ramas necesitan agente (sin crear nada todavía). */
-function pendingInTab(root: string, plan: Array<{ branch: string; agent: string }>): Pending {
-	const existing = gitWorktrees(root);
+function pendingInTab(root: string, plan: PlanItem[]): Pending {
 	const running = agents(5000);
 	const out: Pending = { todo: [], skipped: [], live: new Set(running.map((a) => a.name).filter((n): n is string => !!n)) };
-	for (const { branch, agent } of plan) {
-		const wt = existing.find((w) => w.branch === branch);
-		if (wt && running.some((a) => a.agent && within(canonical(a.cwd ?? a.foreground_cwd ?? "/"), wt.path))) out.skipped.push({ branch, path: wt.path });
-		else out.todo.push({ branch, agent, path: wt?.path });
+	const existing = new Map<string, GitWorktree[]>();
+	for (const item of plan) {
+		const at = item.root ?? root;
+		if (!existing.has(at)) existing.set(at, gitWorktrees(at));
+		const wt = existing.get(at)?.find((w) => w.branch === item.branch);
+		if (wt && running.some((a) => a.agent && within(canonical(a.cwd ?? a.foreground_cwd ?? "/"), wt.path))) out.skipped.push({ branch: item.branch, sub: item.sub, path: wt.path });
+		else out.todo.push({ ...item, path: wt?.path });
 	}
 	return out;
 }
@@ -348,21 +388,23 @@ function trustingOrchestrator(root: string, anchor: string): string | undefined 
 function openInTab(root: string, anchor: string, here: CallerTab, room: number, pending: Pending, o: TeamArgs): void {
 	const { live } = pending;
 	const orchestrator = o.inheritTrust ? trustingOrchestrator(canonical(root), anchor) : undefined;
-	for (const s of pending.skipped) console.log(`${ok("✓")} ${s.branch}  ${dim(`ya tiene agente (${s.path})`)}`);
-	const todo: Array<{ branch: string; agent: string; path: string }> = [];
-	for (const { branch, agent, path: wtPath } of pending.todo) {
-		let path = wtPath;
+	for (const s of pending.skipped) console.log(`${ok("✓")} ${itemLabel(s)}  ${dim(`ya tiene agente (${s.path})`)}`);
+	const todo: Array<PlanItem & { path: string }> = [];
+	for (const item of pending.todo) {
+		const { branch } = item;
+		const at = item.root ?? root;
+		let path = item.path;
 		if (!path) {
-			path = tabWorktreePath(homedir(), basename(root), branch);
-			const isNew = git(root, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).status !== 0;
-			const args = isNew ? ["worktree", "add", "-b", branch, path, o.base ?? "HEAD"] : ["worktree", "add", path, branch];
-			const g = git(root, args);
+			path = tabWorktreePath(homedir(), basename(root), branch, item.sub);
+			const isNew = git(at, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).status !== 0;
+			const args = isNew ? ["worktree", "add", "-b", branch, path, item.base ?? o.base ?? "HEAD"] : ["worktree", "add", path, branch];
+			const g = git(at, args);
 			if (g.status !== 0) {
-				warn(`${branch}: git ${args.join(" ")}: ${g.stderr.trim()}`);
+				warn(`${itemLabel(item)}: git ${args.join(" ")}: ${g.stderr.trim()}`);
 				continue;
 			}
 		}
-		todo.push({ branch, agent, path });
+		todo.push({ ...item, path });
 	}
 	const repo = basename(root);
 	const panes: Array<string | undefined> = [];
@@ -370,6 +412,7 @@ function openInTab(root: string, anchor: string, here: CallerTab, room: number, 
 	const roots: Array<string | undefined> = [];
 	tabLayout(todo.length, room).forEach((split, i) => {
 		const { branch, agent, path } = todo[i];
+		const label = itemLabel(todo[i]);
 		try {
 			let pane: string | undefined;
 			const from = split.from === "tab" ? undefined : split.from === "anchor" ? anchor : panes[split.from];
@@ -382,13 +425,13 @@ function openInTab(root: string, anchor: string, here: CallerTab, room: number, 
 			panes.push(pane);
 			const name = minionName(live);
 			live.add(name);
-			run("herdr", ["pane", "rename", pane, `${name} · ${branch}`]);
+			run("herdr", ["pane", "rename", pane, `${name} · ${label}`]);
 			let trusted = false;
 			if (o.inheritTrust && TRUST_KINDS.includes(agent)) {
 				try {
-					trusted = inheritTrust(agent, canonical(root), canonical(path), undefined, !!orchestrator) === "heredada";
+					trusted = inheritTrust(agent, canonical(todo[i].root ?? root), canonical(path), undefined, !!orchestrator) === "heredada";
 				} catch (e) {
-					warn(`${branch}: no pude heredar la confianza (${(e as Error).message}); ${agent} preguntará`);
+					warn(`${label}: no pude heredar la confianza (${(e as Error).message}); ${agent} preguntará`);
 				}
 			}
 			let blocked = false;
@@ -401,12 +444,12 @@ function openInTab(root: string, anchor: string, here: CallerTab, room: number, 
 				// Suele ser una pregunta del agente (confiar en la carpeta...): no se contesta por ti.
 				blocked = startedBlocked(name, true);
 			}
-			console.log(`${ok("✓")} ${branch}  ${name} (${agent}) en ${pane}${split.tab ? dim(` · ${teamTabLabel(repo, split.tab)}`) : ""}${trusted ? dim(" · confianza heredada") : ""}${blocked ? caution(" · espera una respuesta tuya") : ""}`);
+			console.log(`${ok("✓")} ${label}  ${name} (${agent}) en ${pane}${split.tab ? dim(` · ${teamTabLabel(repo, split.tab)}`) : ""}${trusted ? dim(" · confianza heredada") : ""}${blocked ? caution(" · espera una respuesta tuya") : ""}`);
 		} catch (e) {
 			// El panel de este no se creó: los que cuelgan de él salen del panel del que llama, o
 			// del primero de su pestaña nueva (si tampoco está, se crea la pestaña con el siguiente).
 			panes.push(split.tab ? roots[split.tab] : anchor);
-			warn(`${branch}: ${(e as Error).message}`);
+			warn(`${label}: ${(e as Error).message}`);
 		}
 	});
 }
@@ -954,12 +997,16 @@ export function openWatch(root: string, anchor: string, base?: string): void {
 
 // --- mandar trabajo -------------------------------------------------------------------------
 
-function prompt(args: string[]): void {
+async function prompt(args: string[]): Promise<void> {
 	requireHerdr();
-	const { positional, opts } = parseCommon(args, ["--wait", "--no-record"], ["--timeout"]);
+	const { positional, opts } = parseCommon(args, ["--wait", "--no-record"], ["--timeout", "--repo"]);
 	const [branch, ...words] = positional;
-	if (!branch || !words.length) die('uso: bond team prompt <rama> "la tarea" [--wait] [--timeout <ms>] [--no-record]');
+	if (!branch || !words.length) die('uso: bond team prompt <rama> "la tarea" [--repo <repo>] [--wait] [--timeout <ms>] [--no-record]');
 	const root = repoOf();
+	const extra = [...(opts["--wait"] ? ["--wait"] : []), ...(opts["--timeout"] ? ["--timeout", opts["--timeout"] as string] : [])];
+	const session = hubOf(root);
+	if (session) return promptInHub(session, branch, words.join(" "), opts, extra);
+	if (opts["--repo"]) die("--repo solo va en un hub (bond hub --help)");
 	const rows = teamRows(root);
 	const row = rows.find((r) => r.branch === branch) ?? die(`no hay worktree para ${branch} (bond team status)`);
 	const name = row.agent?.name ?? die(`${branch} no tiene un agente en marcha (bond team ${branch} para abrirlo)`);
@@ -980,17 +1027,36 @@ function prompt(args: string[]): void {
 	}
 	// Herdr rechaza el prompt de un agente blocked: el aviso de arranque de agy se cierra con Esc.
 	if (row.agent?.notice) run("herdr", ["agent", "send-keys", name, "esc"], { timeout: 5000 });
-	const extra = [...(opts["--wait"] ? ["--wait"] : []), ...(opts["--timeout"] ? ["--timeout", opts["--timeout"] as string] : [])];
-	// Sin límite de tiempo propio: con --wait puede tardar lo que tarde el agente.
-	const r = spawnSync("herdr", ["agent", "prompt", name, task, ...extra], { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
-	let parsed: { result?: { agent?: { agent_status?: string } }; error?: { message?: string } } = {};
-	try {
-		parsed = JSON.parse(r.stdout || r.stderr || "{}");
-	} catch {
-		// Salida no JSON.
-	}
-	if (r.status !== 0 || parsed.error) die(`${name}: ${parsed.error?.message ?? (r.stderr || r.stdout).trim()}`);
-	console.log(`${ok("✓")} ${branch} → ${name}${runRel ? `  ${dim(`run: ${runRel}`)}` : ""}${opts["--wait"] ? `  ${dim(parsed.result?.agent?.agent_status ?? "")}` : ""}`);
+	const r = await promptAgent(name, task, extra);
+	if (r.error !== undefined) die(`${name}: ${r.error}`);
+	console.log(`${ok("✓")} ${branch} → ${name}${runRel ? `  ${dim(`run: ${runRel}`)}` : ""}${opts["--wait"] ? `  ${dim(r.status ?? "")}` : ""}`);
+}
+
+/** `herdr agent prompt`: el estado del agente al acabar (con --wait) o el error de Herdr. */
+function promptAgent(name: string, task: string, extra: string[]): Promise<{ status?: string; error?: string }> {
+	return new Promise((done) => {
+		// Sin límite de tiempo propio: con --wait puede tardar lo que tarde el agente.
+		const child = spawn("herdr", ["agent", "prompt", name, task, ...extra], { stdio: ["ignore", "pipe", "pipe"] });
+		let out = "";
+		let err = "";
+		child.stdout.on("data", (d) => {
+			out += d;
+		});
+		child.stderr.on("data", (d) => {
+			err += d;
+		});
+		child.on("error", (e) => done({ error: e.message }));
+		child.on("close", (code) => {
+			let parsed: { result?: { agent?: { agent_status?: string } }; error?: { message?: string } } = {};
+			try {
+				parsed = JSON.parse(out || err || "{}");
+			} catch {
+				// Salida no JSON.
+			}
+			if (code !== 0 || parsed.error) done({ error: parsed.error?.message ?? (err || out).trim() });
+			else done({ status: parsed.result?.agent?.agent_status });
+		});
+	});
 }
 
 // --- runs: encargos e informes en la memoria de decisiones -----------------------------------
@@ -1029,6 +1095,10 @@ export interface RunCtx {
 	worktree: string;
 	/** Carpeta de decisiones relativa ([decisions] dir), con `/`. */
 	dir: string;
+	/** Repo de la rama, si no es mainRoot: en un hub, el submódulo (los runs van al hub, D5). */
+	repo?: string;
+	/** Carpeta de decisiones del repo de la rama, si no es `dir`; "" si ese repo no tiene memoria. */
+	agentDir?: string;
 	branch: string;
 	base: string;
 	agent: string;
@@ -1334,7 +1404,7 @@ export const runBase = (base: string) => {
 function branchCommits(ctx: RunCtx): string[] {
 	const baseRef = runBase(ctx.base);
 	if (!baseRef) return [];
-	const r = git(ctx.mainRoot, ["log", "--format=%h %s", `${baseRef}..${ctx.branch}`]);
+	const r = git(ctx.repo ?? ctx.mainRoot, ["log", "--format=%h %s", `${baseRef}..${ctx.branch}`]);
 	if (r.status !== 0) return [];
 	return r.stdout.split("\n").filter(Boolean).reverse();
 }
@@ -1345,21 +1415,22 @@ function branchCommits(ctx: RunCtx): string[] {
  * la firma de otro agente del mismo tipo sin nombre, como el orquestador.
  */
 export function runDecisions(ctx: RunCtx): string[] {
-	if (!ctx.kind) return [];
+	const dir = ctx.agentDir ?? ctx.dir;
+	if (!ctx.kind || !dir) return [];
 	const who = `agent:${ctx.kind}/${ctx.agent}`;
 	const baseRef = runBase(ctx.base);
 	const inBase = new Set(
-		baseRef ? git(ctx.mainRoot, ["ls-tree", "-r", "--name-only", baseRef, "--", ctx.dir]).stdout.split("\n").filter(Boolean) : [],
+		baseRef ? git(ctx.repo ?? ctx.mainRoot, ["ls-tree", "-r", "--name-only", baseRef, "--", dir]).stdout.split("\n").filter(Boolean) : [],
 	);
-	return loadDecisions(ctx.worktree, ctx.dir)
-		.filter((d) => d.decided_by === who && !inBase.has(`${ctx.dir}/${d.id}.md`))
+	return loadDecisions(ctx.worktree, dir)
+		.filter((d) => d.decided_by === who && !inBase.has(`${dir}/${d.id}.md`))
 		.map((d) => d.id);
 }
 
 /** Enlace de la base actual: `main@abc1234`; cadena vacía si no se puede resolver. */
-function baseLink(root: string): string {
+function baseLink(root: string, base?: string): string {
 	try {
-		const b = defaultBase(root);
+		const b = base ?? defaultBase(root);
 		const short = git(root, ["rev-parse", "--short", b]).stdout.trim();
 		return short ? `${b}@${short}` : b;
 	} catch {
@@ -1394,11 +1465,14 @@ export const collectBlocker = (status?: string) =>
 
 function collect(args: string[]): void {
 	requireHerdr();
-	const { positional, opts } = parseCommon(args, [], ["--lines", "--agent", "--request"]);
-	const usage = "uso: bond team collect <rama> [--lines <n>] [--agent <nombre>] [--request <encargo>]";
+	const { positional, opts } = parseCommon(args, [], ["--lines", "--agent", "--request", "--repo"]);
+	const usage = "uso: bond team collect <rama> [--repo <repo>] [--lines <n>] [--agent <nombre>] [--request <encargo>]";
 	const branch = positional[0] ?? die(usage);
 	if (positional.length > 1) die(usage);
 	const root = repoOf();
+	const session = hubOf(root);
+	if (session) return collectInHub(session, branch, opts);
+	if (opts["--repo"]) die("--repo solo va en un hub (bond hub --help)");
 	const main = gitWorktrees(root).find((w) => w.main)?.path ?? root;
 	const { value: dec, error } = catchDie(() => repoDecisions(main));
 	if (error !== undefined) die(`no pude leer [decisions] de ${main}: ${error}`);
@@ -1407,8 +1481,15 @@ function collect(args: string[]): void {
 	const agent = (opts["--agent"] as string | undefined) || row?.agent?.name || die(`no hay agente en la rama ${branch} y no diste --agent (bond team status)`);
 	const live = row?.agent ? undefined : agents(5000).find((a) => a.name === agent);
 	const kind = row?.agent?.kind ?? live?.agent ?? "";
+	const ctx: RunCtx = { mainRoot: main, worktree: row?.path ?? main, dir: dec.dir, branch, base: baseLink(main), agent, kind, orchestrator: resolveAuthor().replace(/^agent:/, "") };
+	collectInto(ctx, row?.agent?.status ?? live?.agent_status, opts);
+}
+
+/** Lee el informe del agente de `ctx` y lo guarda en su run (collect, en un repo o en un hub). */
+function collectInto(ctx: RunCtx, status: string | undefined, opts: Record<string, string | true>): void {
+	const { agent, branch } = ctx;
 	// Recoger a medias guardaría el panel sin terminar como informe y daría el run por acabado.
-	const busy = collectBlocker(row?.agent?.status ?? live?.agent_status);
+	const busy = collectBlocker(status);
 	if (busy) die(`${agent} ${busy}: espera a que termine (herdr agent wait ${agent}) y repite`);
 	const lines = String(opts["--lines"] ?? "200");
 	// D17: el informe sale del fichero de sesión del agente; el panel recortado es el respaldo.
@@ -1416,8 +1497,7 @@ function collect(args: string[]): void {
 		const rd = run("herdr", ["agent", "read", agent, "--source", "recent-unwrapped", "--lines", lines], { timeout: 20_000 });
 		if (rd.status !== 0) die(`no pude leer el panel de ${agent}: ${(rd.stderr || rd.stdout).trim()}`);
 		return rd.stdout;
-	}, kind);
-	const ctx: RunCtx = { mainRoot: main, worktree: row?.path ?? main, dir: dec.dir, branch, base: baseLink(main), agent, kind, orchestrator: resolveAuthor().replace(/^agent:/, "") };
+	}, ctx.kind);
 	const out = collectRun(ctx, report, { request: opts["--request"] as string | undefined });
 	console.log(`${ok("~")} ${out.rel}  ${dim(`reported · informe desde la ${source} · ${out.commits.length} commit(s) de ${branch} · ${out.decisions.length} decisión(es) de ${agent}`)}`);
 }
@@ -1425,10 +1505,12 @@ function collect(args: string[]): void {
 // --- quitar worktrees -----------------------------------------------------------------------
 
 function clean(args: string[]): void {
-	const { positional, opts } = parseCommon(args, ["--force", "--delete-branch", "--keep-table", "--dry-run"], ["--base", "-b"]);
-	const force = !!opts["--force"];
+	const { positional, opts } = parseCommon(args, ["--force", "--delete-branch", "--keep-table", "--dry-run"], ["--base", "-b", "--repo"]);
 	const dir = positional.length && existsSync(positional[0]) ? positional.shift() : undefined;
 	const root = repoOf(dir);
+	const session = hubOf(root);
+	if (session) return cleanInHub(session, positional, opts);
+	if (opts["--repo"]) die("--repo solo va en un hub (bond hub --help)");
 	const rows = teamRows(root, (opts["--base"] ?? opts["-b"]) as string | undefined);
 	const unknown = positional.filter((b) => !rows.some((r) => r.branch === b));
 	if (unknown.length) die(`sin worktree: ${unknown.join(", ")} (bond team status)`);
@@ -1446,13 +1528,36 @@ function clean(args: string[]): void {
 		return tableLeft();
 	}
 
+	const gone = removeWorktrees(root, targets, opts);
+	for (const r of gone) removed.add(r);
+	if (!isDryRun()) git(root, ["worktree", "prune"]);
+	tableLeft();
+	if (![...gone].some((r) => r.workspace)) return;
+
+	// El workspace del repo que abrió bond team para colgar los worktrees: se avisa, no se cierra.
+	if (serverRunning() && !rows.some((r) => r.workspace && !targets.includes(r))) {
+		const name = basename(root);
+		const ws = workspaces().find((w) => w.label === `bond:${name}` || w.label === `pi:${name}`);
+		if (ws) console.log(dim(`  El workspace del repo (${ws.label}) sigue abierto; si ya no lo usas: herdr workspace close ${ws.workspace_id}`));
+	}
+}
+
+/**
+ * Quita los worktrees de `targets` (del repo `root`): carpeta, workspace o panel y agente; con
+ * --delete-branch, además las ramas integradas. Se salta, avisando, los que tienen el agente
+ * trabajando o cambios sin commitear (salvo --force). Devuelve los que quitó. En un hub, `sub`
+ * nombra el submódulo en la salida.
+ */
+function removeWorktrees(root: string, targets: Row[], opts: Record<string, string | true>, sub?: string): Set<Row> {
+	const force = !!opts["--force"];
+	const removed = new Set<Row>();
 	const cwd = canonical(process.cwd());
-	let removedWorkspace = false;
 	for (const r of targets) {
+		const label = itemLabel({ branch: r.branch, sub });
 		const why =
 			r.state === "trabajando" ? "el agente está trabajando" : r.state === "sin commitear" || r.dirty ? `${r.dirty} cambio(s) sin commitear` : within(cwd, r.path) ? "estás dentro" : r.state === "bloqueado" ? "el agente espera una respuesta" : undefined;
 		if (why && !force) {
-			warn(`${r.branch}: no lo quito, ${why} (--force para quitarlo igualmente)`);
+			warn(`${label}: no lo quito, ${why} (--force para quitarlo igualmente)`);
 			continue;
 		}
 		// En modo pestaña el agente vive en un panel suelto: se cierra con él.
@@ -1471,11 +1576,10 @@ function clean(args: string[]): void {
 				if (r.managed && existsSync(parent) && readdirSync(parent).length === 0) rmdirSync(parent);
 			});
 		} catch (e) {
-			warn(`${r.branch}: ${(e as Error).message}`);
+			warn(`${label}: ${(e as Error).message}`);
 			continue;
 		}
 		removed.add(r);
-		if (r.workspace) removedWorkspace = true;
 		let branchNote = "rama conservada";
 		if (opts["--delete-branch"]) {
 			if (r.integrated || force) {
@@ -1486,18 +1590,9 @@ function clean(args: string[]): void {
 				branchNote = "rama borrada";
 			} else branchNote = "rama conservada: no está integrada (--force para borrarla)";
 		}
-		console.log(`${ok("-")} ${r.branch}  ${dim(`${r.path} · ${branchNote}`)}`);
+		console.log(`${ok("-")} ${label}  ${dim(`${r.path} · ${branchNote}`)}`);
 	}
-	if (!isDryRun()) git(root, ["worktree", "prune"]);
-	tableLeft();
-	if (!removedWorkspace) return;
-
-	// El workspace del repo que abrió bond team para colgar los worktrees: se avisa, no se cierra.
-	if (serverRunning() && !rows.some((r) => r.workspace && !targets.includes(r))) {
-		const name = basename(root);
-		const ws = workspaces().find((w) => w.label === `bond:${name}` || w.label === `pi:${name}`);
-		if (ws) console.log(dim(`  El workspace del repo (${ws.label}) sigue abierto; si ya no lo usas: herdr workspace close ${ws.workspace_id}`));
-	}
+	return removed;
 }
 
 /**
@@ -1530,6 +1625,213 @@ function closeIdleTable(root: string, left: Row[]): void {
 			warn(`tabla en vivo: ${(e as Error).message}`);
 		}
 	}
+}
+
+// --- equipo vertical en un hub -------------------------------------------------------------
+//
+// En un hub ([hub] en su bond.toml, la escribe bond hub), una rama vertical se llama igual en
+// todos los repos que toca (D1). En el hub es solo una rama (D3, D7); en cada submódulo, un
+// worktree y un agente (D2). Una sola rama vertical por sesión (D10). Desde un submódulo,
+// bond team trabaja solo en ese repo, como siempre.
+
+/** La sesión si `root` es un hub; undefined si no (un repo normal o un submódulo). */
+const hubOf = (root: string): HubSession | undefined => catchDie(() => hubSession(root)).value;
+
+/** Los repos de la sesión donde trabajan los agentes: los submódulos que están en disco. */
+const subRepos = (s: HubSession) => s.repos.filter((r) => r.path !== "." && r.present);
+
+/** Los repos nombrados (por ruta o, si no se repite, por nombre de carpeta); sin nombres, todos. */
+export function pickRepos(repos: HubRepo[], names: string[] | undefined, flag: string): HubRepo[] {
+	if (!names) return repos;
+	const out: HubRepo[] = [];
+	for (const n of names) {
+		const key = n.replace(/\\/g, "/").replace(/\/+$/, "");
+		const exact = repos.filter((r) => r.path === key);
+		const hits = exact.length ? exact : repos.filter((r) => basename(r.path) === key);
+		if (!hits.length) die(`${flag} ${n}: no es un repo de la sesión (${repos.map((r) => r.path).join(", ")})`);
+		if (hits.length > 1) die(`${flag} ${n}: hay varios (${hits.map((r) => r.path).join(", ")}); usa la ruta`);
+		if (!out.includes(hits[0])) out.push(hits[0]);
+	}
+	return out;
+}
+
+/**
+ * Ramas verticales abiertas en la sesión: las que tienen worktree en algún submódulo y existen
+ * también en el hub (bond team las crea en los dos; clean quita los worktrees y deja las ramas).
+ */
+export function openVerticals(s: HubSession): string[] {
+	const inHub = (b: string) => git(s.root, ["rev-parse", "--verify", "--quiet", `refs/heads/${b}`]).status === 0;
+	const open = new Set<string>();
+	for (const r of subRepos(s)) for (const w of gitWorktrees(r.dir)) if (!w.main && w.branch && inHub(w.branch)) open.add(w.branch);
+	return [...open].sort();
+}
+
+/** Las filas de la sesión (sessionRows, cada una con su `repo`) que son de esos submódulos. */
+const subRows = (s: HubSession, repos: HubRepo[]) => sessionRows(s.root).filter((row) => repos.some((r) => r.path === row.repo));
+
+/** El submódulo de [hub] de una fila de subRows. */
+const repoOfRow = (s: HubSession, row: Row) => subRepos(s).find((r) => r.path === row.repo) as HubRepo;
+
+async function createInHub(s: HubSession, o: TeamArgs): Promise<void> {
+	if (o.specs.length > 1) die(`en un hub, una sola rama vertical por sesión (D2): bond team <rama>[:agente] [--repos a,b], no ${o.specs.map((x) => x.branch).join(" ")}`);
+	if (o.base) die("en un hub, cada repo sale de su base de [hub] (bond hub la cambia): sin --base");
+	const { branch, agent: asked } = o.specs[0];
+	if (git(s.root, ["check-ref-format", "--branch", branch]).status !== 0) die(`nombre de rama no válido para git: ${JSON.stringify(branch)}`);
+	const subs = subRepos(s);
+	if (!subs.length) die(`${s.name} no tiene submódulos en su sesión: bond hub sync`);
+	const targets = pickRepos(subs, o.repos, "--repos");
+	const open = openVerticals(s).filter((b) => b !== branch);
+	if (open.length) die(`${s.name} ya tiene abierta la rama vertical ${open.join(", ")} y solo cabe una por sesión: ciérrala antes con bond team clean ${open[0]} (las ramas se quedan)`);
+	const noBase = targets.filter((r) => git(r.dir, ["rev-parse", "--verify", "--quiet", `${r.base}^{commit}`]).status !== 0);
+	if (noBase.length) die(`la base no existe en ${noBase.map((r) => `${r.path} (${r.base})`).join(", ")}: cámbiala con bond hub --base <ruta>=<ref>`);
+
+	// El agente de cada repo: el de rama:agente, si no --agent, si no el de su bond.toml.
+	const plan: PlanItem[] = [];
+	const { loadRepoAgents } = await import("./repo.mts");
+	for (const r of targets) {
+		const own = existsSync(join(r.dir, ".bond", "bond.toml")) ? catchDie(() => loadRepoAgents(r.dir)).value : undefined;
+		const agent = await chooseAgent(asked ?? o.agent, own?.default_agent);
+		if (own && !own.agents.includes(agent)) warn(`${r.path}: ${agent} no está entre los agentes del repo: sin su config (MCP, skills...). Añádelo con bond init`);
+		if (git(r.dir, ["status", "--porcelain"]).stdout.trim()) warn(`${r.path}: hay cambios sin commitear: el worktree sale de lo commiteado y no los verá`);
+		plan.push({ branch, agent, root: r.dir, sub: r.path, base: r.base });
+	}
+
+	// En el hub, la rama vertical es solo una rama: sin worktree ni agente (D7).
+	if (git(s.root, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).status === 0) console.log(`${ok("✓")} ${branch} · ${s.name}  ${dim("la rama ya está en el hub")}`);
+	else {
+		const g = git(s.root, ["branch", branch, s.repos[0].base]);
+		if (g.status !== 0) die(`${s.name}: git branch ${branch} ${s.repos[0].base}: ${g.stderr.trim()}`);
+		console.log(`${ok("✓")} ${branch} · ${s.name}  ${dim(`rama del hub desde ${s.repos[0].base}, sin worktree ni agente`)}`);
+	}
+
+	if (!insideHerdr()) await ensureServer();
+	const anchor = insideHerdr() ? process.env.HERDR_PANE_ID : undefined;
+	if (anchor) {
+		const tab = callerTab(s.root, anchor);
+		const pending = pendingInTab(s.root, plan);
+		let layout = o.layout ?? "tabs";
+		if (!o.layout && pending.todo.length > tab.room && !o.yes && process.stdin.isTTY && process.stdout.isTTY) layout = await askLayout(pending.todo.length, tab.room, s.name);
+		if (layout === "workspaces") openWorkspaces(s.root, plan, o);
+		else openInTab(s.root, anchor, tab, layout === "same-tab" ? Number.POSITIVE_INFINITY : tab.room, pending, o);
+		openWatch(s.root, anchor);
+	} else openWorkspaces(s.root, plan, o);
+	const { renderSmall } = await import("../lib/bond-logo.mts");
+	console.log(`\n  ${renderSmall(60, `${branch} en ${s.name}`)}\n`);
+	printStatus(subRows(s, targets).filter((r) => r.branch === branch));
+	console.log(dim(`\n  Repartir trabajo: bond team prompt ${branch} "la tarea" (a todos; --repo <repo> a uno)\n  Recoger: bond team collect ${branch} --repo <repo> · Al acabar: bond team clean ${branch}`));
+}
+
+/**
+ * Nota de coordinación que lleva cada encargo de una rama vertical (D8): en qué repo trabaja
+ * quien lo recibe y quiénes son los demás agentes de la rama, con su repo y su carpeta.
+ */
+export function verticalNote(hub: string, branch: string, me: { name: string; repo: string }, team: Array<{ name: string; repo: string; path: string }>): string {
+	const others = team.filter((t) => t.name !== me.name);
+	const head = `[equipo vertical] Trabajas en ${me.repo}, en la rama ${branch} del hub ${hub}; commitea solo en ese repo.`;
+	if (!others.length) return `${head} Eres el único agente de la rama.`;
+	return `${head} En la misma rama: ${others.map((o) => `${o.name} en ${o.repo} (${o.path})`).join("; ")}. Lo que cruce de un repo a otro (contratos, API, tipos) tiene que encajar con lo suyo: dilo en tu informe.`;
+}
+
+/**
+ * Contexto de runs de una rama de un submódulo (D5): los runs van a la memoria del hub y, si el
+ * hub no la tiene, a la del submódulo; los commits y las decisiones del agente salen del
+ * submódulo. undefined si ni el hub ni el submódulo usan la memoria de decisiones.
+ */
+function hubRunCtx(s: HubSession, repo: HubRepo, row: Row, agent = row.agent?.name ?? row.agent?.kind ?? "", kind = row.agent?.kind ?? ""): RunCtx | undefined {
+	const own = catchDie(() => repoDecisions(repo.dir)).value;
+	const hub = catchDie(() => repoDecisions(s.root)).value;
+	const store = hub ? { root: s.root, dir: hub.dir } : own ? { root: repo.dir, dir: own.dir } : undefined;
+	if (!store) return undefined;
+	return {
+		mainRoot: store.root,
+		dir: store.dir,
+		repo: repo.dir,
+		agentDir: own?.dir ?? "",
+		worktree: row.path,
+		branch: row.branch,
+		base: baseLink(repo.dir, repo.base),
+		agent,
+		kind,
+		orchestrator: resolveAuthor().replace(/^agent:/, ""),
+	};
+}
+
+/** bond team prompt en un hub: la tarea a todos los agentes de la rama (o al de --repo), con la nota de D8. */
+async function promptInHub(s: HubSession, branch: string, words: string, opts: Record<string, string | true>, extra: string[]): Promise<void> {
+	const all = subRows(s, subRepos(s)).filter((r) => r.branch === branch);
+	if (!all.length) die(`no hay worktree para ${branch} en ningún repo de ${s.name} (bond team status)`);
+	const only = opts["--repo"] ? pickRepos(subRepos(s), [opts["--repo"] as string], "--repo")[0] : undefined;
+	const targets = only ? all.filter((r) => r.repo === only.path) : all;
+	if (!targets.length) die(`${branch} no tiene worktree en ${only?.path} (bond team status)`);
+	for (const r of targets) if (!r.agent?.name) warn(`${r.repo}: ${branch} no tiene un agente en marcha (bond team ${branch} para abrirlo)`);
+	const live = targets.filter((r) => r.agent?.name);
+	if (!live.length) die(`${branch} no tiene ningún agente en marcha${only ? ` en ${only.path}` : ""} (bond team ${branch} para abrirlo)`);
+	// Con una pregunta en pantalla, el Enter del prompt la contestaría por ti: no se manda a nadie.
+	const blocked = live.filter((r) => r.state === "bloqueado");
+	if (blocked.length) die(`${blocked.map((r) => `${r.agent?.name} (${r.repo})${r.agent?.question ? `: ${r.agent.question}` : ""}`).join(", ")} espera una respuesta tuya: contéstale en su panel y repite (no he mandado nada)`);
+	const team = all.filter((r) => r.agent?.name).map((r) => ({ name: r.agent?.name as string, repo: r.repo as string, path: r.path }));
+	const sent = await Promise.all(
+		live.map(async (row) => {
+			const name = row.agent?.name as string;
+			const ctx = hubRunCtx(s, repoOfRow(s, row), row);
+			let task = `${words}\n\n${verticalNote(s.name, branch, { name, repo: row.repo as string }, team)}`;
+			if (ctx?.agentDir) task = withMemoryNote(task, ctx.agentDir);
+			let runRel: string | undefined;
+			if (ctx && !opts["--no-record"]) {
+				try {
+					runRel = recordRequest(ctx, task);
+				} catch (e) {
+					warn(`${row.repo}: run: ${(e as Error).message} (mando el prompt igual)`);
+				}
+			}
+			if (row.agent?.notice) run("herdr", ["agent", "send-keys", name, "esc"], { timeout: 5000 });
+			return { row, name, runRel, r: await promptAgent(name, task, extra) };
+		}),
+	);
+	for (const { row, name, runRel, r } of sent) {
+		if (r.error !== undefined) {
+			warn(`${row.repo}: ${name}: ${r.error}`);
+			process.exitCode = 1;
+		} else console.log(`${ok("✓")} ${branch} · ${row.repo} → ${name}${runRel ? `  ${dim(`run: ${runRel}`)}` : ""}${opts["--wait"] ? `  ${dim(r.status ?? "")}` : ""}`);
+	}
+}
+
+/** bond team collect en un hub: el informe del agente de la rama en su repo (--repo si hay varios). */
+function collectInHub(s: HubSession, branch: string, opts: Record<string, string | true>): void {
+	const repos = opts["--repo"] ? pickRepos(subRepos(s), [opts["--repo"] as string], "--repo") : subRepos(s);
+	let found = subRows(s, repos).filter((r) => r.branch === branch);
+	if (opts["--agent"]) found = found.filter((r) => r.agent?.name === opts["--agent"]);
+	if (!found.length) die(`no hay worktree para ${branch}${opts["--agent"] ? ` con ${opts["--agent"]}` : ""} en ${opts["--repo"] ? repos[0].path : `ningún repo de ${s.name}`} (bond team status)`);
+	if (found.length > 1) die(`${branch} está en ${found.length} repos (${found.map((r) => r.repo).join(", ")}): recoge uno a uno con --repo <repo>`);
+	const [row] = found;
+	const repo = repoOfRow(s, row);
+	const agent = row.agent?.name ?? die(`${branch} no tiene agente en ${repo.path} (bond team status)`);
+	const ctx = hubRunCtx(s, repo, row, agent) ?? die(`ni ${s.name} ni ${repo.path} usan la memoria de decisiones: añade la sección [decisions] a .bond/bond.toml del hub (bond init la propone) y ejecuta bond sync`);
+	collectInto(ctx, row.agent?.status, opts);
+}
+
+/** bond team clean en un hub: los worktrees de la rama en todos los repos de la sesión (o en el de --repo). */
+function cleanInHub(s: HubSession, branches: string[], opts: Record<string, string | true>): void {
+	if (opts["--base"] ?? opts["-b"]) die("en un hub, cada repo se compara con su base de [hub]: sin --base");
+	const repos = opts["--repo"] ? pickRepos(subRepos(s), [opts["--repo"] as string], "--repo") : subRepos(s);
+	const rows = subRows(s, repos);
+	const unknown = branches.filter((b) => !rows.some((r) => r.branch === b));
+	if (unknown.length) die(`sin worktree en ${opts["--repo"] ? repos[0].path : s.name}: ${unknown.join(", ")} (bond team status)`);
+	const targets = branches.length ? rows.filter((r) => branches.includes(r.branch)) : rows.filter((r) => r.state === "integrada" && r.managed);
+	if (!branches.length) for (const r of rows.filter((y) => y.state === "integrada" && !y.managed)) console.log(dim(`  ${itemLabel({ branch: r.branch, sub: r.repo })}: integrada, pero no la abrió Herdr (${r.path}); nómbrala para quitarla`));
+	const removed = new Set<Row>();
+	if (!targets.length) console.log(branches.length ? "Nada que quitar." : "Ninguna rama integrada que quitar (bond team status).");
+	for (const repo of repos) {
+		const mine = targets.filter((r) => r.repo === repo.path);
+		if (!mine.length) continue;
+		for (const r of removeWorktrees(repo.dir, mine, opts, repo.path)) removed.add(r);
+		if (!isDryRun()) git(repo.dir, ["worktree", "prune"]);
+	}
+	// La carpeta del hub en ~/.herdr/worktrees, si se queda vacía.
+	const hubDir = join(homedir(), ".herdr", "worktrees", s.name);
+	if (!isDryRun() && removed.size && existsSync(hubDir) && readdirSync(hubDir).length === 0) rmdirSync(hubDir);
+	if (removed.size) console.log(dim(`  Las ramas se quedan, en ${s.name} y en cada repo`));
+	if (!opts["--keep-table"]) closeIdleTable(s.root, rows.filter((r) => !removed.has(r)));
 }
 
 // --- entrada --------------------------------------------------------------------------------

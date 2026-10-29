@@ -17,6 +17,15 @@
   también desde dentro de un submódulo. Los submódulos sin inicializar se avisan y no entran;
   un repo en HEAD separado necesita su base (`--base <ruta>=<rama>` con `--yes`). Sin `[hub]`,
   nada cambia.
+- `bond team` en un hub (con `[hub]`): `bond team fix/x` abre una rama vertical, que se crea en
+  el hub sin worktree ni agente y con un worktree y un agente en cada submódulo (o en los de
+  `--repos`), cada uno desde su base de `[hub]` y con el agente por defecto de su `bond.toml`.
+  Los worktrees van en `~/.herdr/worktrees/<hub>/<submódulo>/<rama>`. Con una rama vertical
+  abierta, `bond team` se niega a abrir otra. Desde el hub, `bond team prompt fix/x` manda la
+  tarea a todos los agentes de la rama con una nota que nombra a los demás y su repo
+  (`--repo`, a uno); `collect` y `clean` buscan la rama en todos los repos (`--repo` para
+  elegir), y los runs van a la memoria de decisiones del hub. Dentro de un submódulo,
+  `bond team` sigue trabajando solo en ese repo.
 
 ## 1.9.1
 
