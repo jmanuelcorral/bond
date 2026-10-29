@@ -3,7 +3,7 @@
 // hacen falta (clean). Las ramas no se tocan: nada de merge, push ni borrado sin pedirlo.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { loadDecisions, parseFm, type Parsed, resolveAuthor, slugify } from "./decisions.mts";
@@ -11,7 +11,7 @@ import { chooseAgent, gitRoot, openWorkspace } from "./launch.mts";
 import { agents, defaultAgentArgs, ensureServer, firstFreeName, herdr, type HerdrAgent, insideHerdr, preparePane, questionIn, requireHerdr, serverRunning, startedBlocked, startupNoticeIn, visibleScreen, workspaces } from "./herdr.mts";
 import { repoDecisions } from "./repo.mts";
 import { inheritTrust, TRUST_KINDS, trusts } from "./trust.mts";
-import { act, caution, catchDie, die, dim, isDryRun, ok, run, warn } from "./util.mts";
+import { act, canonical, caution, catchDie, die, dim, isDryRun, ok, run, warn } from "./util.mts";
 
 export const TEAM_HELP = `Uso: bond team [repo] <rama[:agente]>... [opciones] [-- argumentos de los agentes]
        bond team status [repo] [--base <ref>] [--json | --watch [--keep-open]]
@@ -424,17 +424,6 @@ export function gitWorktrees(root: string): GitWorktree[] {
 }
 
 const git = (cwd: string, args: string[]) => run("git", ["-C", cwd, ...args]);
-/**
- * Ruta comparable: real y absoluta. Git, Herdr y el directorio actual pueden dar la misma
- * carpeta de formas distintas (enlaces; en Windows, nombres cortos como RUNNER~1).
- */
-export const canonical = (p: string) => {
-	try {
-		return realpathSync.native(p);
-	} catch {
-		return resolve(p);
-	}
-};
 /** ¿`p` es `dir` o está dentro? (sin confundir /x/t-a con /x/t-ab) */
 const within = (p: string, dir: string) => p === dir || p.startsWith(dir.endsWith(sep) ? dir : dir + sep);
 const lines = (s: string) => s.split("\n").filter(Boolean);

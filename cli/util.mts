@@ -184,6 +184,18 @@ export function copyPath(src: string, dest: string): void {
 	log(`copiado: ${dest} <- ${src}`);
 }
 
+/**
+ * Ruta comparable: real y absoluta. Git, Herdr y el directorio actual pueden dar la misma
+ * carpeta de formas distintas (enlaces; en Windows, nombres cortos como RUNNER~1).
+ */
+export const canonical = (p: string) => {
+	try {
+		return realpathSync.native(p);
+	} catch {
+		return resolve(p);
+	}
+};
+
 /** Destino de un symlink, o undefined si no lo es. */
 export function linkTarget(p: string): string | undefined {
 	try {

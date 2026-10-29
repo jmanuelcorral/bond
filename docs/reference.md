@@ -18,6 +18,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 | `bond status` | Agentes vivos en Herdr |
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
 | `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
+| `bond hub` | En un repo con submódulos (un hub): su sesión, el hub y sus submódulos con la base de cada uno, en `[hub]` de `.bond/bond.toml`; `sync` la pone al día ([abajo](#bond-hub)) |
 | `bond decisions` | Memoria de decisiones del repo: lista, `add`, `accept`, `show`, `runs`, `check` ([abajo](#bond-decisions)) |
 | `bond catalog create\|check` | Prepara un repo como catálogo propio de skills, comandos y MCP, y lo comprueba ([abajo](#catálogo-propio-bond-catalog)) |
 | `bond catalog add\|list\|update\|remove\|clean` | Usa en el repo el catálogo de tu equipo, por git (con el commit fijado) o por carpeta ([abajo](#catálogos-por-git-bond-catalog-add)) |
@@ -806,6 +807,55 @@ sin equipo, como `bond-delegate`). El agente de la rama nunca escribe su propio 
 
 El formato de los ficheros lo documenta la skill `decision-record`
 (`catalog/skills/decision-record/`).
+
+## `bond hub`
+
+`cli/hub.mts`. Un hub es un repo con submódulos de git (p. ej. un frontend y un backend en
+repos separados). `bond hub` prepara su sesión: el hub y todos sus submódulos inicializados,
+también los anidados, cada uno con su rama base. La guarda en la sección `[hub]` de
+`.bond/bond.toml` del hub (que necesita `bond init` antes). Desde un submódulo, también
+anidado, trabaja sobre el hub de arriba (sube por `git rev-parse
+--show-superproject-working-tree`).
+
+```bash
+bond hub                          # sin [hub]: la prepara, preguntando la base de cada repo
+bond hub --yes --base libs/ui=main # sin preguntas; --base para los repos en HEAD separado
+bond hub                          # con [hub]: enseña la sesión (repo, ruta, base, rama actual)
+bond hub sync                     # añade los submódulos nuevos y quita los que ya no están
+```
+
+| Opción | Qué hace |
+|---|---|
+| `--base <ruta>=<ref>` | Base de un repo de la sesión (`.` es el hub); repetible. Cambia también la de uno que ya estaba |
+| `-y`, `--yes` | Sin preguntas: la base de un repo nuevo es su rama actual. Un repo en HEAD separado (lo normal tras `git submodule update`) no tiene rama: sin `--base`, falla diciendo cómo indicarla, sin escribir nada |
+| `--dry-run` | Enseña la sección que escribiría |
+
+```toml
+# .bond/bond.toml del hub
+[hub]
+# Sesión del hub: la escribe bond hub (y bond hub sync, si cambian los submódulos).
+base = "main"                     # base del propio hub
+exclude = ["vendor/sdk"]          # opcional: rutas que no entran (ni lo que cuelga de ellas)
+
+[hub.repos]
+"frontend" = { base = "main" }
+"frontend/libs/ui" = { base = "develop" }
+```
+
+- Las bases se preguntan solo para los repos nuevos (por defecto, su rama actual); las que ya
+  estaban se conservan. Repetir `bond hub --yes` o `bond hub sync` sin cambios no toca el
+  fichero.
+- Un submódulo sin inicializar se avisa y no entra (`git submodule update --init --recursive`).
+  Con `[hub]`, `bond hub` avisa de los submódulos nuevos o que ya no están, y `bond hub sync`
+  los añade o quita.
+- `bond hub` sustituye solo su sección: el resto del `bond.toml`, comentarios incluidos, queda
+  igual. Lo que escribas a mano dentro de `[hub]`, salvo `exclude` y las bases, se pierde al
+  reescribirla.
+- En un repo sin submódulos explica qué hace falta y no escribe nada.
+- Una `[hub]` inválida (rutas absolutas o con `..`, repos sin base...) la ignoran con un aviso
+  `bond sync` y el resto de comandos; `bond hub` se niega a escribir encima hasta que la arregles
+  o la quites.
+- Sin `[hub]`, nada cambia: `bond` y `bond team` funcionan como siempre.
 
 ## Snippet de Herdr
 
