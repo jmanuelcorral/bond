@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { firstFreeName } from "../cli/herdr.mts";
-import { parseLaunch } from "../cli/launch.mts";
+import { parseLaunch, workspaceLabel } from "../cli/launch.mts";
 
 describe("firstFreeName", () => {
 	test("gru si está libre; si no, gru-2, gru-3...", () => {
@@ -25,5 +25,13 @@ describe("parseLaunch", () => {
 		expect(o.shell).toBe(true);
 		expect(o.direction).toBe("down");
 		expect(o.ratio).toBe("0.7");
+	});
+});
+
+describe("workspaceLabel", () => {
+	test("bond:<repo>, con la rama del worktree o la etiqueta pedida", () => {
+		expect(workspaceLabel("/src/bond")).toBe("bond:bond");
+		expect(workspaceLabel("/src/bond", "feat/x")).toBe("bond:bond/feat/x");
+		expect(workspaceLabel("/src/bond", "feat/x", "mio")).toBe("mio");
 	});
 });

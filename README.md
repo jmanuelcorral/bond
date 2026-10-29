@@ -33,7 +33,8 @@ bond            # cada día, dentro del repo: Herdr con el agente por defecto (g
 - **`bond init`** genera la config de cada agente elegido en el repo (instrucciones, servidores
   MCP, skills, comandos) desde un único `.bond/bond.toml`, sin pisar lo que tengas a mano. Con pi,
   además las **Bond Extensions** (pie de estado, cabecera, `repo_map`, `/delegate`, `/team`).
-- **`bond`** abre el puesto de trabajo en Herdr. Si ya existe, lo enfoca. `bond --agent claude`,
+- **`bond`** abre el puesto de trabajo en Herdr. Si ya existe, lo enfoca; si ya estás en él,
+  abre el agente por defecto en ese panel. `bond --agent claude`,
   `bond --worktree feat/x` y `bond team feat/a feat/b:claude` para más agentes a la vez.
 
 ## Documentación

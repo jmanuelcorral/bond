@@ -12,7 +12,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 |---|---|
 | `bond setup` | Una vez por máquina: Herdr, endpoints de modelos, agentes; aplica modelos, integraciones, skills e instrucciones ([abajo](#bond-setup)) |
 | `bond init` | Una vez por repo: agentes, agente por defecto y herramientas; genera la config de cada agente ([abajo](#configuración-por-repo-bond-init-y-bond-sync)) |
-| `bond` | Dentro de un repo: abre su puesto de trabajo en Herdr ([puesto.md](puesto.md)) |
+| `bond` | Dentro de un repo: abre su puesto de trabajo en Herdr; si ya estás en él, el agente por defecto en tu panel ([puesto.md](puesto.md)) |
 | `bond dev <dir>` | Lo mismo para otro directorio |
 | `bond team` | Un agente por rama, cada uno en su worktree (en Herdr, 4 en tu pestaña y el resto en pestañas nuevas, o lo que elijas); `status` (`--watch`: tabla en vivo agrupada por estado, que se cierra sola sin trabajo pendiente; en un hub, muestra todos los repos de la sesión en un único panel `tabla · <hub>`), `prompt` (con `[decisions]` guarda el encargo en un run; `--no-record` para no guardarlo), `collect` (guarda en el run la última respuesta del agente: de su sesión, o del panel recortado), `clean` (al quitar el último, cierra también la tabla). En un hub, una rama vertical: un agente por repo de la sesión, `--repos`/`--repo` ([puesto.md](puesto.md#bond-team)) |
 | `bond status` | Agentes vivos en Herdr |
