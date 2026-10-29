@@ -2,6 +2,13 @@
 
 ## Sin publicar
 
+- `bond team status` y `--watch` en modo hub (sección `[hub]` en `.bond/bond.toml`): enseñan los
+  worktrees de todos los repos de la sesión en una única tabla, tanto si se lanzan desde el hub
+  como desde cualquiera de sus submódulos. Cada repo se compara contra su base de `[hub]`, con una
+  columna `REPO` en `status` y en la tabla en vivo. En Herdr, la tabla en vivo se abre en un panel
+  único `tabla · <hub>` que se reutiliza desde cualquier submódulo y solo se cierra cuando no queda
+  trabajo pendiente en ningún repo de la sesión. Sin `[hub]`, la salida de `status`, `--json` y
+  `--watch` no cambia.
 - `bond hub`, para repos hub con submódulos de git (p. ej. frontend y backend en repos
   separados): detecta los submódulos inicializados, también los anidados, pregunta la rama
   base de cada repo (por defecto, la actual) y guarda la sesión en la sección `[hub]` de

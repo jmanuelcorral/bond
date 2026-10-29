@@ -142,7 +142,10 @@ Así sabes de un vistazo quién lleva qué. Su worktree vive en `~/.herdr/worktr
 
 A la derecha de tu panel se abre otro estrecho, `tabla · <repo>`, con la tabla en vivo
 (`bond team status --watch`) de todas las ramas del repo, estén donde estén. Si esa tabla ya
-estaba abierta de antes, bond la reutiliza en vez de abrir otra.
+estaba abierta de antes, bond la reutiliza en vez de abrir otra. En un hub con submódulos
+(`[hub]` en `.bond/bond.toml`), el panel se llama `tabla · <hub>` tanto si se lanza desde el hub
+como desde uno de sus submódulos, muestra una sola tabla con las filas de toda la sesión y solo se
+cierra cuando no queda trabajo pendiente en ningún repo.
 
 Si lanzas `bond team` fuera de Herdr, el comportamiento es el de siempre: un workspace por rama
 con `herdr worktree`.
@@ -194,7 +197,9 @@ rama y sin push) y actualiza el plan a medida que integras cada rama.
 
 `status` te da una fila por cada worktree del repo con su estado, su agente, los commits que
 lleva por delante de la base (por defecto, la rama del checkout principal) y los ficheros que
-toca. Los estados son estos:
+toca. En un hub con submódulos (`[hub]` en `.bond/bond.toml`), enseña los worktrees de todos los
+repos de la sesión precedidos de la columna `REPO`, comparando cada uno con su base de `[hub]`.
+Los estados son estos:
 
 | Estado | Qué quiere decir |
 |---|---|
@@ -210,7 +215,8 @@ toca. Los estados son estos:
 Con `--watch` tienes la tabla en vivo, que es lo que ves en el panel `tabla · <repo>`. Ocupa la
 pantalla, se refresca cada 2 s y sale con `q` o Ctrl+C dejando el terminal como estaba. Las ramas
 van agrupadas por estado, empezando por lo que te está esperando a ti, y los grupos vacíos no
-salen. Tiene esta pinta:
+salen. En un hub, la cabecera lleva la rama vertical (`bond team · <hub> · <rama>`) y la columna
+es `REPO` en vez de `RAMA`. Tiene esta pinta:
 
 ```text
 MINION  RAMA    COMMITS  FICHEROS
