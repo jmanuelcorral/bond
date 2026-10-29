@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
 Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
@@ -180,6 +180,21 @@ describe("no regresión: un repo sin [hub] se comporta como siempre", () => {
 		expect(fromSub.status).toBe(0);
 		expect(JSON.parse(fromSub.stdout).map((r: { branch: string }) => r.branch)).toEqual(["feat/front-wt"]);
 	});
+
+	test("filas sin [hub] no tienen campos repo ni base en --json, y la cabecera no tiene columna REPO", () => {
+		g(hub, "worktree", "add", "-q", "-b", "feat/wt-test", join(tmp, "wt-test"));
+		const fromHub = bond(["team", "status", "--json"]);
+		expect(fromHub.status).toBe(0);
+		const parsed = JSON.parse(fromHub.stdout);
+		expect(parsed.length).toBeGreaterThan(0);
+		expect("repo" in parsed[0]).toBe(false);
+		expect("base" in parsed[0]).toBe(false);
+
+		const plain = bond(["team", "status"]);
+		expect(plain.status).toBe(0);
+		expect(plain.stdout).not.toContain("REPO");
+		expect(plain.stdout).toContain("RAMA");
+	});
 });
 
 describe("hubRoot y hubSession", () => {
@@ -246,6 +261,62 @@ describe("P2: una sola tabla para toda la sesión", () => {
 		const { watchCommand } = await import("../cli/team.mts");
 		const cmd = watchCommand(join(hub, "front"), undefined, ["bond"]);
 		expect(cmd).toBe(`bond team status ${canonical(hub)} --watch`);
+	});
+
+	test("en modo hub se rechaza --base para status y --watch", () => {
+		bond(["hub", "--yes", "--base", "front/libs/lib=main"]);
+		const resStatus = bond(["team", "status", "--base", "main"]);
+		expect(resStatus.status).toBe(1);
+		expect(resStatus.stderr).toContain("en un hub cada repo usa su base de [hub]");
+
+		const resWatch = bond(["team", "status", "--watch", "--base", "main"]);
+		expect(resWatch.status).toBe(1);
+		expect(resWatch.stderr).toContain("en un hub cada repo usa su base de [hub]");
+	});
+
+	test("un repo cuya base en [hub] no existe no tira la tabla: avisa una vez y lo salta", async () => {
+		bond(["hub", "--yes", "--base", "front/libs/lib=main"]);
+		const tomlPath = join(hub, ".bond", "bond.toml");
+		const content = readFileSync(tomlPath, "utf8");
+		writeFileSync(tomlPath, content.replace('"front" = { base = "main" }', '"front" = { base = "inexistente" }'));
+
+		const { sessionRows, warnedMissingBases } = await import("../cli/team.mts");
+		warnedMissingBases.clear();
+
+		const warnings: string[] = [];
+		const origWarn = console.error;
+		console.error = (msg: string) => warnings.push(msg);
+		try {
+			const rows1 = sessionRows(hub);
+			expect(warnings.length).toBe(1);
+			expect(warnings[0]).toContain("la base no existe en front: inexistente");
+
+			// Segunda llamada (como el tick de 2 s de watch): no vuelve a avisar
+			const rows2 = sessionRows(hub);
+			expect(warnings.length).toBe(1);
+			expect(rows2).toEqual(rows1);
+		} finally {
+			console.error = origWarn;
+			writeFileSync(tomlPath, content);
+			warnedMissingBases.clear();
+		}
+	});
+
+	test("openWatch y findWatchPane reutilizan tabla · <hub> desde un submódulo", async () => {
+		bond(["hub", "--yes", "--base", "front/libs/lib=main"]);
+		const { findWatchPane, watchLabel } = await import("../cli/team.mts");
+		const hubName = basename(hub);
+		expect(watchLabel(hubName)).toBe(`tabla · ${hubName}`);
+
+		const panes = [
+			{ pane_id: "w1:p1", tab_id: "w1:t1", label: `tabla · ${hubName}` },
+			{ pane_id: "w1:p2", tab_id: "w1:t1", label: "tabla · front" },
+		];
+
+		const hRoot = hubRoot(join(hub, "front"))!;
+		expect(hRoot).toBe(canonical(hub));
+		const repo = basename(hRoot);
+		expect(findWatchPane(panes, "w1:t1", repo)).toBe("w1:p1");
 	});
 });
 
