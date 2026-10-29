@@ -49,8 +49,13 @@ function repoChain(dir: string): string[] {
 	return out;
 }
 
-/** ¿Tiene `root` una sección [hub] válida? Un bond.toml roto aquí no aborta: no es un hub. */
-const hasHub = (root: string) => catchDie(() => repoHub(root)).value !== undefined;
+/**
+ * ¿Tiene `root` una sección [hub] válida? Sin avisos: hubRoot se llama en cada refresco de la
+ * tabla en vivo (P2) y un aviso por llamada spamearía stderr. El aviso por [hub] inválida es de
+ * quien lee la config (loadRepoConfig/repoHub) y de bond hub, que muere con el motivo. Un
+ * bond.toml roto aquí no aborta: no es un hub.
+ */
+const hasHub = (root: string) => catchDie(() => parseHub(repoToml(root)?.hub).hub).value !== undefined;
 
 /**
  * El hub de `dir`: subiendo por los superproyectos, el de más arriba con [hub] en su
@@ -176,7 +181,7 @@ function parseArgs(args: string[]): HubArgs {
 			const v = a === "--base" ? args[++i] : a.slice("--base=".length);
 			const m = v === undefined ? null : /^(.+?)=(.+)$/.exec(v);
 			if (!m) die('--base necesita <ruta>=<ref> (p. ej. --base frontend=main; "." es el hub)');
-			o.bases.set(m[1].replace(/\\/g, "/").replace(/\/+$/, "") || ".", m[2].trim());
+			o.bases.set(m[1].trim().replace(/\\/g, "/").replace(/\/+$/, "") || ".", m[2].trim());
 		} else die(`opción desconocida: ${a} (bond hub --help)`);
 	}
 	return o;
@@ -241,7 +246,7 @@ export async function hub(args: string[]): Promise<void> {
 	}
 	const detached = known.filter((p) => !bases.get(p));
 	if (detached.length) {
-		die(`sin base para ${detached.map((p) => (p === "." ? `${name} (el hub)` : p)).join(", ")}: está en HEAD separado. Indícala con --base, p. ej. bond hub --yes ${detached.map((p) => `--base ${p}=main`).join(" ")}`);
+		die(`sin base para ${detached.map((p) => (p === "." ? `${name} (el hub)` : p)).join(", ")}: ${detached.length > 1 ? "están" : "está"} en HEAD separado. Indícala con --base, p. ej. bond hub --yes ${detached.map((p) => `--base ${p}=main`).join(" ")}`);
 	}
 
 	const next: HubConfig = { base: bases.get(".")!, repos: Object.fromEntries(detected.map((p) => [p, { base: bases.get(p)! }])), exclude };
