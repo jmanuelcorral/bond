@@ -357,6 +357,29 @@ describe("tabla en vivo", () => {
 		expect(renderWatch([], opts)[2]).toBe("Sin worktrees en este repo.");
 	});
 
+	test("modo hub: cabecera con rama vertical, columna REPO en vez de RAMA y anchos 20/35/50/80", () => {
+		const hubRows = [
+			row("fix/x", "trabajando", { repo: "front", base: "main", agent: { name: "kevin", kind: "pi", status: "working", pane: "w1:p2" }, ahead: 2, files: ["a", "b", "c"] }),
+			row("fix/x", "bloqueado", { repo: "back", base: "v2", agent: { name: "stuart", kind: "pi", status: "idle", question: "confiar en la carpeta", pane: "w1:p3" } }),
+			row("fix/x", "lista", { repo: "lib", base: "main", ahead: 1, files: ["x"] }),
+			row("fix/x", "integrada", { repo: "docs", base: "main", ahead: 1 }),
+		];
+		const hubOpts = { width: 80, color: false, repo: "mi-hub", time: "10:00:00" };
+		const out = renderWatch(hubRows, hubOpts);
+		expect(out[0]).toBe(`${"bond team · mi-hub · fix/x".padEnd(72)}10:00:00`);
+		expect(out[2]).toBe("MINION  REPO   COMMITS  FICHEROS");
+		expect(out.filter((l) => /front/.test(l))[0]).toBe("kevin   front  +2       3");
+
+		for (const width of [20, 35, 50, 80]) {
+			const rendered = renderWatch(hubRows, { ...hubOpts, width, color: true }).map(plain);
+			expect(rendered.every((l) => textWidth(l) <= width)).toBe(true);
+			const lines = [rendered[2], ...rendered.filter((l) => /(front|back|lib|docs)/.test(l))];
+			const starts = (l: string) => [...l.matchAll(/(?<=^|\s)\S+/g)].map((m) => textWidth(l.slice(0, m.index)));
+			for (const l of lines.slice(1)) expect(starts(l)).toEqual(starts(rendered[2]));
+		}
+		expect(renderWatch(hubRows, { ...hubOpts, width: 26 })[2]).toBe("MINION  REPO   COM  FICH");
+	});
+
 	test("el panel de la tabla se reutiliza: el de la misma pestaña y el mismo repo", () => {
 		const panes = [
 			{ pane_id: "w1:p1", tab_id: "w1:t1" },

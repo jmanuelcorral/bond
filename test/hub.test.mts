@@ -206,6 +206,49 @@ describe("hubRoot y hubSession", () => {
 	});
 });
 
+describe("P2: una sola tabla para toda la sesión", () => {
+	test("con [hub], status y --json desde el hub o submódulos enseñan todos los worktrees de la sesión", () => {
+		bond(["hub", "--yes", "--base", "front/libs/lib=main"]);
+		g(join(hub, "front"), "worktree", "add", "-q", "-b", "fix/x", join(tmp, "wt-front-v"));
+		g(join(hub, "front", "libs", "lib"), "worktree", "add", "-q", "-b", "fix/x", join(tmp, "wt-lib-v"));
+
+		const fromHub = bond(["team", "status", "--json"]);
+		expect(fromHub.status).toBe(0);
+		const rows = JSON.parse(fromHub.stdout);
+		expect(rows).toHaveLength(2);
+		expect(rows[0].repo).toBe("front");
+		expect(rows[0].branch).toBe("fix/x");
+		expect(rows[0].base).toBe("main");
+		expect(rows[1].repo).toBe("front/libs/lib");
+		expect(rows[1].branch).toBe("fix/x");
+		expect(rows[1].base).toBe("main");
+
+		// Desde un submódulo da exactamente las mismas filas
+		const fromSub = bond(["team", "status", "--json"], join(hub, "front"));
+		expect(fromSub.status).toBe(0);
+		expect(JSON.parse(fromSub.stdout)).toEqual(rows);
+
+		// Desde un submódulo anidado da lo mismo
+		const fromNested = bond(["team", "status", "--json"], join(hub, "front", "libs", "lib"));
+		expect(fromNested.status).toBe(0);
+		expect(JSON.parse(fromNested.stdout)).toEqual(rows);
+
+		// La tabla plana incluye la columna REPO
+		const plainStatus = bond(["team", "status"]);
+		expect(plainStatus.status).toBe(0);
+		expect(plainStatus.stdout).toContain("REPO");
+		expect(plainStatus.stdout).toContain("front");
+		expect(plainStatus.stdout).toContain("front/libs/lib");
+	});
+
+	test("watchCommand desde un submódulo apunta al hub", async () => {
+		bond(["hub", "--yes", "--base", "front/libs/lib=main"]);
+		const { watchCommand } = await import("../cli/team.mts");
+		const cmd = watchCommand(join(hub, "front"), undefined, ["bond"]);
+		expect(cmd).toBe(`bond team status ${canonical(hub)} --watch`);
+	});
+});
+
 describe("[hub] en bond.toml", () => {
 	test("validación", () => {
 		expect(parseHub(undefined)).toEqual({});
