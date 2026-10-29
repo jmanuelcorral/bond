@@ -157,9 +157,9 @@ Riesgos:
   - En un repo sin `[hub]`, la salida de `status`, `--json` y `--watch` es idéntica a la de
     hoy (prueba de no regresión).
 - Acciones:
-  - [ ] Filas de sesión, render, panel único y cierre por sesión, con docs, CHANGELOG y pruebas
+  - [x] Filas de sesión, render, panel único y cierre por sesión, con docs, CHANGELOG y pruebas
     (render en anchos 20/35/50/80 incluido).
-  - [ ] Ejecutar las comprobaciones y anotar los resultados.
+  - [x] Ejecutar las comprobaciones y anotar los resultados.
   - [ ] Presentar la evidencia y parar para revisión.
 - Verificación: `npm run typecheck && bun test`; a mano en Herdr, dos worktrees en dos
   submódulos de un hub real y una sola tabla.
@@ -226,7 +226,7 @@ Riesgos:
 | Fase | Implementación | Verificación | Revisión | Evidencia |
 | --- | --- | --- | --- | --- |
 | P1 | implemented | passed | pending | `47d737a` + `c459850` (arreglos de la revisión) integrados en `plan/hub-session`; en el checkout principal `npm run typecheck` limpio y `bun test` 365/0. Falta la prueba manual en un hub real (no hay ninguno en `~/gitrepos`). Runs: `docs/decisions/runs/2026-10-29-kevin-use-the-plan-execute-skill-to-implement.md`, `2026-10-29-reviewer-1-review-the-commit-47d737a-on-branch-plan.md`, `2026-10-29-reviewer-1-a-reviewer-approved-p1-with-these-fixes.md` |
-| P2 | pending | not_run | pending | todavía nada |
+| P2 | implemented | passed | pending | `e5d2147` + `20d3e4a` (arreglos de la revisión: `teamRows` vuelve a ser por repo y la sesión sale de `sessionRows`, solo para status/--watch) integrados en `plan/hub-session`; en el checkout principal `bun test` 373/0. Falta la prueba manual en un hub real. Runs: `2026-10-29-kevin-use-the-plan-execute-skill-to-implement-2.md`, `2026-10-29-reviewer-2-read-only-code-review-of-branch-plan-hub.md`, `2026-10-29-kevin-a-reviewer-requested-changes-on-your-p2.md` |
 | P3 | pending | not_run | pending | todavía nada |
 | P4 | pending | not_run | pending | todavía nada |
 
@@ -238,5 +238,8 @@ revisión humana sigue pendiente). Después, P4.
 ## Evidencia y seguimiento
 
 - P1: rama `plan/hub-session-p1` (kevin, claude), revisada por reviewer-1 (pi): aprobada con
-  3 should-fix, aplicados en `c459850`. Decisión propuesta por kevin:
+  3 should-fix, aplicados en `c459850`.
+- P2: rama `plan/hub-session-p2` (kevin, agy), revisada por reviewer-2 (pi): cambios pedidos
+  (un bloqueante: `teamRows` devolvía la sesión entera a prompt/collect/clean), aplicados en
+  `20d3e4a`. Decisión propuesta por kevin:
   `docs/decisions/2026-10-29-bond-hub-la-base-de-un-repo-se-indica-con-base-ruta-ref.md`.
