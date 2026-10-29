@@ -4,7 +4,7 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { renderSmall } from "../lib/bond-logo.mts";
-import { agyLocalBin, agyPluginDir } from "./catalog-agents.mts";
+import { agentInstalled, agyPluginDir } from "./catalog-agents.mts";
 import { assetsPath, ensureBondLink, FROM_SOURCE } from "./runtime.mts";
 import {
 	act,
@@ -255,9 +255,6 @@ export function parseIntegrationStatus(text: string): HerdrIntegration[] {
 }
 
 export const herdrIntegrationStatus = () => parseIntegrationStatus(run("herdr", ["integration", "status"]).stdout);
-
-/** Si el agente está instalado: en el PATH o, agy, donde lo deja su instalador. */
-export const agentInstalled = (agent: string) => !!which(agent) || (agent === "agy" && existsSync(agyLocalBin()));
 
 /** Las integraciones de tus agentes instalados (todas las de los instalados si aún no los elegiste). */
 export const integrationsFor = (all: HerdrIntegration[], agents: string[], installed: (agent: string) => boolean = agentInstalled) =>

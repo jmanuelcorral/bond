@@ -1,5 +1,6 @@
 // Agentes que bond conoce: ejecutable, cómo instalarlo y dónde están sus instrucciones globales.
 
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { run, HOME, which } from "./util.mts";
 
@@ -35,12 +36,21 @@ export const AGENTS: AgentInfo[] = [
 
 export const agentInfo = (id: string) => AGENTS.find((a) => a.id === id);
 
+/** Ejecutable del agente: el del PATH o, agy, el que deja su instalador en ~/.local/bin. */
+export function agentPath(agent: string, find: (cmd: string) => string | undefined = which, local = agyLocalBin()): string | undefined {
+	return find(agent) ?? (agent === "agy" && existsSync(local) ? local : undefined);
+}
+
+/** Si el agente está instalado: en el PATH o, agy, donde lo deja su instalador. */
+export const agentInstalled = (agent: string) => !!agentPath(agent);
+
 /** Agentes instalados, con su versión (la primera línea de `--version`). */
 export function installedAgents(): Array<AgentInfo & { version: string }> {
-	return AGENTS.filter((a) => which(a.bin)).map((a) => ({
-		...a,
-		version: /\d+\.\d+(?:\.\d+)?/.exec(run(a.bin, ["--version"], { timeout: 15_000 }).stdout)?.[0] ?? "?",
-	}));
+	return AGENTS.flatMap((a) => {
+		const bin = agentPath(a.bin);
+		if (!bin) return [];
+		return [{ ...a, version: /\d+\.\d+(?:\.\d+)?/.exec(run(bin, ["--version"], { timeout: 15_000 }).stdout)?.[0] ?? "?" }];
+	});
 }
 
 /** Cómo instalar Herdr según el sistema. */

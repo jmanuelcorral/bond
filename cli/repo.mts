@@ -15,10 +15,11 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSy
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parse } from "smol-toml";
 import { parseJsonc } from "./agents.mts";
+import { agentInstalled } from "./catalog-agents.mts";
 import { catalogSlug, count, type McpServer, readCommandNames, readMcps, validateCatalog } from "./catalog.mts";
 import { ensureFetched, gitKey, type Lock, readLock, repoRelative } from "./catalog-git.mts";
 import { assetsPath, ensureBondLink } from "./runtime.mts";
-import { bad, catchingDie, caution, die, dim, isDryRun, log, ok, run, STAMP, warn, which } from "./util.mts";
+import { bad, catchingDie, caution, die, dim, isDryRun, log, ok, run, STAMP, warn } from "./util.mts";
 
 export const SUPPORTED_AGENTS = ["pi", "claude", "copilot", "codex", "opencode", "crush", "gemini", "agy"];
 /** Catálogo: carpeta del repo o extraída del binario. */
@@ -1130,8 +1131,8 @@ export async function init(args: string[]): Promise<void> {
 	const exists = existsSync(tomlPath);
 	if (run("git", ["rev-parse", "--show-toplevel"]).status !== 0) warn(`${root} no es un repo git: los ficheros generados conviene versionarlos`);
 
-	// Agentes instalados, y lo elegido en bond setup como punto de partida.
-	const installed = SUPPORTED_AGENTS.filter((a) => which(a));
+	// Agentes instalados (agy también en ~/.local/bin), y lo elegido en bond setup como punto de partida.
+	const installed = SUPPORTED_AGENTS.filter(agentInstalled);
 	// Con --agents se puede preparar la config de agentes que aquí no están instalados (p. ej.
 	// para el resto del equipo, o en CI); sin él, se parte de los instalados.
 	const askedAgents = list("--agents");

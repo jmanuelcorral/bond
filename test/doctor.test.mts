@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { agentPath } from "../cli/catalog-agents.mts";
 import { agyCheck, agyPluginCheck, catalogCheck, updateCheck } from "../cli/doctor.mts";
 import { addDecision, decisionsDoctor } from "../cli/decisions.mts";
 import { installedRuntime } from "../cli/runtime.mts";
@@ -82,6 +83,22 @@ describe("integraciones de Herdr (bond setup y bond doctor)", () => {
 	test("ya actual: nada que instalar", () => {
 		const all = parseIntegrationStatus("antigravity-cli: current (v3) (/home/u/.gemini/config/hooks/herdr-agent-state.sh)");
 		expect(integrationsFor(all, ["agy"], () => true)).toEqual([{ integration: "antigravity-cli", agent: "agy", state: "current" }]);
+	});
+});
+
+describe("agentes instalados (bond init y bond setup)", () => {
+	test("agy en ~/.local/bin cuenta aunque no esté en el PATH; el resto, solo en el PATH", () => {
+		const dir = mkdtempSync(join(tmpdir(), "bond-agy-bin-"));
+		try {
+			const local = join(dir, "agy");
+			writeFileSync(local, "");
+			expect(agentPath("agy", () => undefined, local)).toBe(local);
+			expect(agentPath("agy", () => "/usr/bin/agy", local)).toBe("/usr/bin/agy");
+			expect(agentPath("agy", () => undefined, join(dir, "otro"))).toBeUndefined();
+			expect(agentPath("pi", () => undefined, local)).toBeUndefined();
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 });
 
