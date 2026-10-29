@@ -1,6 +1,6 @@
-# Generado por scripts/packaging.mts desde la release v1.9.0 de jmanuelcorral/bond.
+# Generado por scripts/packaging.mts desde la release v1.9.1 de jmanuelcorral/bond.
 pkgname=bond-bin
-pkgver=1.9.0
+pkgver=1.9.1
 pkgrel=1
 pkgdesc="CLI para trabajar con varios agentes de código (pi, Claude Code, Codex, Copilot...) en Herdr"
 arch=('x86_64' 'aarch64')
@@ -14,8 +14,8 @@ source_x86_64=("bond-${pkgver}-x86_64::https://github.com/jmanuelcorral/bond/rel
 source_aarch64=("bond-${pkgver}-aarch64::https://github.com/jmanuelcorral/bond/releases/download/v${pkgver}/bond-linux-arm64")
 source=("LICENSE-${pkgver}::https://raw.githubusercontent.com/jmanuelcorral/bond/v${pkgver}/LICENSE")
 sha256sums=('561f047ecd1e4a2b06c8acb98db5b37f826dd9d8739163c76485aa0c5de21d66')
-sha256sums_x86_64=('f47ed307755ab35a92dbb282de6dcc3b049696abf5a25d524aae431558541a33')
-sha256sums_aarch64=('0ba1dd81c6f444806284cbba41ab973fb9a781e87dad35e4b180725813a88f6d')
+sha256sums_x86_64=('d431aac288609fa3c4d70897f5cbb033eca31fb3630c32e1daf154cce8a9d705')
+sha256sums_aarch64=('019a98e12773fc4e2e3e1576890e74bcd1e84711666dfd824f9f94ffe86ad222')
 
 package() {
   install -Dm755 "${srcdir}/bond-${pkgver}-${CARCH}" "${pkgdir}/usr/bin/bond"

@@ -1,29 +1,29 @@
-# Generado por scripts/packaging.mts desde la release v1.9.0 de jmanuelcorral/bond.
+# Generado por scripts/packaging.mts desde la release v1.9.1 de jmanuelcorral/bond.
 class Bond < Formula
   desc "CLI para trabajar con varios agentes de código (pi, Claude Code, Codex, Copilot...) en Herdr"
   homepage "https://github.com/jmanuelcorral/bond"
-  version "1.9.0"
+  version "1.9.1"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/jmanuelcorral/bond/releases/download/v1.9.0/bond-darwin-arm64"
-      sha256 "def0cdd7f7bcbe24c4392c8fa90fb89719503a02a4c89f56f6a6bd17c9295ad3"
+      url "https://github.com/jmanuelcorral/bond/releases/download/v1.9.1/bond-darwin-arm64"
+      sha256 "eb477143a6190ab73b1246f83dce6ae4f0bfd87090d3b64adb4230c7b64c8f45"
     end
     on_intel do
-      url "https://github.com/jmanuelcorral/bond/releases/download/v1.9.0/bond-darwin-x64"
-      sha256 "8e2fcc8c9c312aaa48fe6f2cd653851fb15a0c57b95b382ec926d962b580e838"
+      url "https://github.com/jmanuelcorral/bond/releases/download/v1.9.1/bond-darwin-x64"
+      sha256 "cc38471058d7a4ecd1ba29c28e6251ac013ac2737de1233142223cc575003709"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/jmanuelcorral/bond/releases/download/v1.9.0/bond-linux-arm64"
-      sha256 "0ba1dd81c6f444806284cbba41ab973fb9a781e87dad35e4b180725813a88f6d"
+      url "https://github.com/jmanuelcorral/bond/releases/download/v1.9.1/bond-linux-arm64"
+      sha256 "019a98e12773fc4e2e3e1576890e74bcd1e84711666dfd824f9f94ffe86ad222"
     end
     on_intel do
-      url "https://github.com/jmanuelcorral/bond/releases/download/v1.9.0/bond-linux-x64"
-      sha256 "f47ed307755ab35a92dbb282de6dcc3b049696abf5a25d524aae431558541a33"
+      url "https://github.com/jmanuelcorral/bond/releases/download/v1.9.1/bond-linux-x64"
+      sha256 "d431aac288609fa3c4d70897f5cbb033eca31fb3630c32e1daf154cce8a9d705"
     end
   end
 
