@@ -851,6 +851,9 @@ exclude = ["vendor/sdk"]          # opcional: rutas que no entran (ni lo que cue
 - `bond hub` sustituye solo su sección: el resto del `bond.toml`, comentarios incluidos, queda
   igual. Lo que escribas a mano dentro de `[hub]`, salvo `exclude` y las bases, se pierde al
   reescribirla.
+- Con `[hub]` en varios niveles (un submódulo que también es hub y su superproyecto), manda el
+  **más exterior**: `hubRoot` sube por los superproyectos y se queda con el último que tenga
+  sección; la del repo de en medio queda en sombra mientras el de arriba la tenga.
 - En un repo sin submódulos explica qué hace falta y no escribe nada.
 - Una `[hub]` inválida (rutas absolutas o con `..`, repos sin base...) la ignoran con un aviso
   `bond sync` y el resto de comandos; `bond hub` se niega a escribir encima hasta que la arregles

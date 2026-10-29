@@ -93,6 +93,22 @@ describe("bond hub", () => {
 		expect(toml()).toBe(TOML);
 	});
 
+	test("--base trima la ruta y el ref", () => {
+		const r = bond(["hub", "--yes", "--dry-run", "--base", " front = main ", "--base", "front/libs/lib=main"]);
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain('"front" = { base = "main" }');
+		expect(toml()).toBe(TOML);
+	});
+
+	test("--dry-run enseña el bloque que escribiría y no toca el fichero", () => {
+		const r = bond(["hub", "--yes", "--dry-run", "--base", "front/libs/lib=main"]);
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain("[dry-run]");
+		expect(r.stdout).toContain("[hub]");
+		expect(r.stdout).toContain('"front/libs/lib" = { base = "main" }');
+		expect(toml()).toBe(TOML);
+	});
+
 	test("en un repo sin submódulos explica qué hace falta y no escribe nada", () => {
 		const solo = repo("solo");
 		mkdirSync(join(solo, ".bond"));
@@ -149,6 +165,20 @@ describe("bond hub", () => {
 		expect(r.status).toBe(1);
 		expect(r.stderr).toContain("hub.base");
 		expect(toml()).toBe(bad);
+	});
+});
+
+describe("no regresión: un repo sin [hub] se comporta como siempre", () => {
+	test("bond team status mira solo los worktrees de su propio repo, sin agregar los de los submódulos", () => {
+		// Sin [hub] escrita: ni el hub agrega los submódulos ni el submódulo ve los del hub.
+		g(hub, "worktree", "add", "-q", "-b", "feat/hub-wt", join(tmp, "wt-hub"));
+		g(join(hub, "front"), "worktree", "add", "-q", "-b", "feat/front-wt", join(tmp, "wt-front"));
+		const fromHub = bond(["team", "status", "--json"]);
+		expect(fromHub.status).toBe(0);
+		expect(JSON.parse(fromHub.stdout).map((r: { branch: string }) => r.branch)).toEqual(["feat/hub-wt"]);
+		const fromSub = bond(["team", "status", "--json"], join(hub, "front"));
+		expect(fromSub.status).toBe(0);
+		expect(JSON.parse(fromSub.stdout).map((r: { branch: string }) => r.branch)).toEqual(["feat/front-wt"]);
 	});
 });
 
