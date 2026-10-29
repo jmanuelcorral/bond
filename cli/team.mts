@@ -1039,6 +1039,9 @@ function promptAgent(name: string, task: string, extra: string[]): Promise<{ sta
 		const child = spawn("herdr", ["agent", "prompt", name, task, ...extra], { stdio: ["ignore", "pipe", "pipe"] });
 		let out = "";
 		let err = "";
+		// Texto, no Buffers: un carácter UTF-8 partido entre dos trozos no se rompe.
+		child.stdout.setEncoding("utf8");
+		child.stderr.setEncoding("utf8");
 		child.stdout.on("data", (d) => {
 			out += d;
 		});
@@ -1634,8 +1637,16 @@ function closeIdleTable(root: string, left: Row[]): void {
 // worktree y un agente (D2). Una sola rama vertical por sesión (D10). Desde un submódulo,
 // bond team trabaja solo en ese repo, como siempre.
 
-/** La sesión si `root` es un hub; undefined si no (un repo normal o un submódulo). */
-const hubOf = (root: string): HubSession | undefined => catchDie(() => hubSession(root)).value;
+/**
+ * La sesión si `root` es un hub; undefined si no (un repo normal o un submódulo). Una [hub]
+ * inválida ya la avisa quien la lee; un bond.toml que no es TOML se avisa aquí y bond team
+ * sigue como en un repo normal.
+ */
+function hubOf(root: string): HubSession | undefined {
+	const r = catchDie(() => hubSession(root));
+	if (r.error !== undefined) warn(`${r.error}: sigo sin el modo hub`);
+	return r.value;
+}
 
 /** Los repos de la sesión donde trabajan los agentes: los submódulos que están en disco. */
 const subRepos = (s: HubSession) => s.repos.filter((r) => r.path !== "." && r.present);
@@ -1658,12 +1669,17 @@ export function pickRepos(repos: HubRepo[], names: string[] | undefined, flag: s
 /**
  * Ramas verticales abiertas en la sesión: las que tienen worktree en algún submódulo y existen
  * también en el hub (bond team las crea en los dos; clean quita los worktrees y deja las ramas).
+ * Las bases de la sesión (la del hub y la de cada repo) no cuentan: un worktree suelto en
+ * main o en release/1.0 no es una rama vertical. Cada una, con la carpeta de un worktree suyo.
  */
-export function openVerticals(s: HubSession): string[] {
+export function openVerticals(s: HubSession): Array<{ branch: string; repo: string; path: string }> {
+	const bases = new Set(s.repos.map((r) => r.base));
 	const inHub = (b: string) => git(s.root, ["rev-parse", "--verify", "--quiet", `refs/heads/${b}`]).status === 0;
-	const open = new Set<string>();
-	for (const r of subRepos(s)) for (const w of gitWorktrees(r.dir)) if (!w.main && w.branch && inHub(w.branch)) open.add(w.branch);
-	return [...open].sort();
+	const open = new Map<string, { branch: string; repo: string; path: string }>();
+	for (const r of subRepos(s)) {
+		for (const w of gitWorktrees(r.dir)) if (!w.main && w.branch && !bases.has(w.branch) && !open.has(w.branch) && inHub(w.branch)) open.set(w.branch, { branch: w.branch, repo: r.path, path: w.path });
+	}
+	return [...open.values()].sort((a, b) => a.branch.localeCompare(b.branch));
 }
 
 /** Las filas de la sesión (sessionRows, cada una con su `repo`) que son de esos submódulos. */
@@ -1680,10 +1696,10 @@ async function createInHub(s: HubSession, o: TeamArgs): Promise<void> {
 	const subs = subRepos(s);
 	if (!subs.length) die(`${s.name} no tiene submódulos en su sesión: bond hub sync`);
 	const targets = pickRepos(subs, o.repos, "--repos");
-	const open = openVerticals(s).filter((b) => b !== branch);
-	if (open.length) die(`${s.name} ya tiene abierta la rama vertical ${open.join(", ")} y solo cabe una por sesión: ciérrala antes con bond team clean ${open[0]} (las ramas se quedan)`);
-	const noBase = targets.filter((r) => git(r.dir, ["rev-parse", "--verify", "--quiet", `${r.base}^{commit}`]).status !== 0);
-	if (noBase.length) die(`la base no existe en ${noBase.map((r) => `${r.path} (${r.base})`).join(", ")}: cámbiala con bond hub --base <ruta>=<ref>`);
+	const open = openVerticals(s).filter((v) => v.branch !== branch);
+	if (open.length) die(`${s.name} ya tiene abierta la rama vertical ${open.map((v) => `${v.branch} (worktree en ${v.repo}: ${v.path})`).join(", ")} y solo cabe una por sesión: ciérrala antes con bond team clean ${open[0].branch} (las ramas se quedan)`);
+	const noBase = [s.repos[0], ...targets].filter((r) => git(r.dir, ["rev-parse", "--verify", "--quiet", `${r.base}^{commit}`]).status !== 0);
+	if (noBase.length) die(`la base no existe en ${noBase.map((r) => `${r.path === "." ? s.name : r.path} (${r.base})`).join(", ")}: cámbiala con bond hub --base <ruta>=<ref> ("." es el hub)`);
 
 	// El agente de cada repo: el de rama:agente, si no --agent, si no el de su bond.toml.
 	const plan: PlanItem[] = [];
@@ -1799,15 +1815,18 @@ async function promptInHub(s: HubSession, branch: string, words: string, opts: R
 /** bond team collect en un hub: el informe del agente de la rama en su repo (--repo si hay varios). */
 function collectInHub(s: HubSession, branch: string, opts: Record<string, string | true>): void {
 	const repos = opts["--repo"] ? pickRepos(subRepos(s), [opts["--repo"] as string], "--repo") : subRepos(s);
+	const asked = opts["--agent"] as string | undefined;
 	let found = subRows(s, repos).filter((r) => r.branch === branch);
-	if (opts["--agent"]) found = found.filter((r) => r.agent?.name === opts["--agent"]);
-	if (!found.length) die(`no hay worktree para ${branch}${opts["--agent"] ? ` con ${opts["--agent"]}` : ""} en ${opts["--repo"] ? repos[0].path : `ningún repo de ${s.name}`} (bond team status)`);
+	// --agent: el de ese nombre en la rama o, como fuera de un hub, el worktree sin agente en marcha.
+	if (asked) found = found.some((r) => r.agent?.name === asked) ? found.filter((r) => r.agent?.name === asked) : found.filter((r) => !r.agent);
+	if (!found.length) die(`no hay worktree para ${branch}${asked ? ` con ${asked}` : ""} en ${opts["--repo"] ? repos[0].path : `ningún repo de ${s.name}`} (bond team status)`);
 	if (found.length > 1) die(`${branch} está en ${found.length} repos (${found.map((r) => r.repo).join(", ")}): recoge uno a uno con --repo <repo>`);
 	const [row] = found;
 	const repo = repoOfRow(s, row);
-	const agent = row.agent?.name ?? die(`${branch} no tiene agente en ${repo.path} (bond team status)`);
-	const ctx = hubRunCtx(s, repo, row, agent) ?? die(`ni ${s.name} ni ${repo.path} usan la memoria de decisiones: añade la sección [decisions] a .bond/bond.toml del hub (bond init la propone) y ejecuta bond sync`);
-	collectInto(ctx, row.agent?.status, opts);
+	const agent = asked || row.agent?.name || die(`no hay agente en la rama ${branch} de ${repo.path} y no diste --agent (bond team status)`);
+	const live = row.agent ? undefined : agents(5000).find((a) => a.name === agent);
+	const ctx = hubRunCtx(s, repo, row, agent, row.agent?.kind ?? live?.agent ?? "") ?? die(`ni ${s.name} ni ${repo.path} usan la memoria de decisiones: añade la sección [decisions] a .bond/bond.toml del hub (bond init la propone) y ejecuta bond sync`);
+	collectInto(ctx, row.agent?.status ?? live?.agent_status, opts);
 }
 
 /** bond team clean en un hub: los worktrees de la rama en todos los repos de la sesión (o en el de --repo). */
@@ -1830,8 +1849,41 @@ function cleanInHub(s: HubSession, branches: string[], opts: Record<string, stri
 	// La carpeta del hub en ~/.herdr/worktrees, si se queda vacía.
 	const hubDir = join(homedir(), ".herdr", "worktrees", s.name);
 	if (!isDryRun() && removed.size && existsSync(hubDir) && readdirSync(hubDir).length === 0) rmdirSync(hubDir);
-	if (removed.size) console.log(dim(`  Las ramas se quedan, en ${s.name} y en cada repo`));
+	if (removed.size) cleanHubBranches(s, removed, opts);
 	if (!opts["--keep-table"]) closeIdleTable(s.root, rows.filter((r) => !removed.has(r)));
+}
+
+/**
+ * La rama del hub de las ramas verticales que se han quitado (D7: no tiene worktree). Sin
+ * --delete-branch se queda; con él, se borra si ya está en la base del hub (o con --force) y no
+ * le queda worktree en ningún repo.
+ */
+function cleanHubBranches(s: HubSession, removed: Set<Row>, opts: Record<string, string | true>): void {
+	if (!opts["--delete-branch"]) return console.log(dim(`  Las ramas se quedan, en ${s.name} y en cada repo`));
+	const hubBase = s.repos[0].base;
+	for (const branch of [...new Set([...removed].map((r) => r.branch))]) {
+		if (git(s.root, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).status !== 0) continue;
+		const label = itemLabel({ branch, sub: s.name });
+		// En todos los repos de la sesión, no solo en el de --repo.
+		const gone = new Set([...removed].map((r) => r.path));
+		if (subRepos(s).some((r) => gitWorktrees(r.dir).some((w) => !w.main && w.branch === branch && !gone.has(w.path)))) {
+			console.log(`${ok("-")} ${label}  ${dim("rama conservada: le queda algún worktree en otro repo")}`);
+			continue;
+		}
+		if (!branchInfo(s.root, hubBase, branch).integrated && !opts["--force"]) {
+			console.log(`${ok("-")} ${label}  ${dim(`rama conservada: no está integrada en ${hubBase} (--force para borrarla)`)}`);
+			continue;
+		}
+		try {
+			act(`git -C ${s.root} branch -D ${branch}`, () => {
+				const g = git(s.root, ["branch", "-D", branch]);
+				if (g.status !== 0) throw new Error(g.stderr.trim());
+			});
+			console.log(`${ok("-")} ${label}  ${dim("rama borrada")}`);
+		} catch (e) {
+			warn(`${label}: ${(e as Error).message}`);
+		}
+	}
 }
 
 // --- entrada --------------------------------------------------------------------------------
