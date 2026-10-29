@@ -5,6 +5,9 @@ hero:
   name: bond
   text: Your coding agents, working together
   tagline: pi, Claude Code, Codex, Copilot, opencode, Crush or Gemini. Use whichever you like, configure them once per repo and open them in Herdr. Licence to code.
+  image:
+    src: /hero-terminal.webp
+    alt: Herdr and bond running an agent team in fluzo
   actions:
     - theme: brand
       text: Start here
@@ -13,22 +16,30 @@ hero:
       text: View on GitHub
       link: https://github.com/jmanuelcorral/bond
     - theme: alt
-      text: Download
+      text: Download release
       link: https://github.com/jmanuelcorral/bond/releases/latest
 
 features:
-  - title: bond setup
+  - icon: '<span class="feature-badge">$ bond setup</span>'
+    title: bond setup
     details: You do it once on your machine. It helps you with Herdr, brings in your models (Ollama, LM Studio, OpenAI or your own gateway) and gets the agents you use ready.
     link: /en/getting-started#3-bond-setup-once-per-machine
-  - title: bond init
+    linkText: View guide
+  - icon: '<span class="feature-badge">$ bond init</span>'
+    title: bond init
     details: Once per repo. Pick your agents and tools, and bond writes each one's config from a single .bond/bond.toml. Anything you edited by hand stays untouched.
     link: /en/reference#per-repo-configuration-bond-init-and-bond-sync
-  - title: bond
+    linkText: View reference
+  - icon: '<span class="feature-badge">$ bond</span>'
+    title: bond
     details: The everyday part. Opens your repo in Herdr with your favourite agent. Lots to do? bond team splits branches across several agents, each in its own worktree.
     link: /en/workstation
-  - title: Team catalogs
+    linkText: View workstation
+  - icon: '<span class="feature-badge">$ bond catalog</span>'
+    title: Team catalogs
     details: Your team's skills, commands and MCP servers in their own repo, with the version pinned. Everyone works with the same set, whichever agent they use.
     link: /en/reference#your-own-catalog-bond-catalog
+    linkText: View catalogs
 ---
 
 ## What is this about?
@@ -67,34 +78,82 @@ sentence, for a very simple website: make a plan, split it between two pi agents
 minions each write their page, the live table shows how they are doing, Claude reviews and sends
 two fixes back, merges into `main` and tidies up the team. No cuts: it takes as long as it takes.
 
-<figure class="bond-video">
-<video src="/videos/orquestador.mp4" controls muted playsinline preload="metadata"></video>
-<figcaption>Claude orchestrates two pi agents: plan, split, four panes at once, review with fixes, merge and cleanup.</figcaption>
-</figure>
+<div class="terminal-window">
+  <div class="terminal-header">
+    <div class="terminal-dots">
+      <span class="terminal-dot dot-red"></span>
+      <span class="terminal-dot dot-yellow"></span>
+      <span class="terminal-dot dot-green"></span>
+    </div>
+    <div class="terminal-title">bond team: fluzo</div>
+  </div>
+  <video src="/videos/orquestador.mp4" poster="/videos/poster-orquestador.webp" autoplay muted loop playsinline controls preload="metadata"></video>
+</div>
+<p class="terminal-caption">Claude orchestrates two pi agents: plan, split, four panes at once, review with fixes, merge and cleanup.</p>
 
 And four more, short ones, on [fluzo](https://github.com/fluzo-labs/fluzo), a real Rust project:
 
-<div class="bond-videos">
+<div class="video-grid">
 
-<figure class="bond-video">
-<video src="/videos/init.mp4" controls muted playsinline preload="metadata"></video>
-<figcaption>Setting up a repo with bond init</figcaption>
-</figure>
+<div class="video-card">
+  <h3 class="video-card-title">Setting up a repo with bond init</h3>
+  <div class="terminal-window">
+    <div class="terminal-header">
+      <div class="terminal-dots">
+        <span class="terminal-dot dot-red"></span>
+        <span class="terminal-dot dot-yellow"></span>
+        <span class="terminal-dot dot-green"></span>
+      </div>
+      <div class="terminal-title">bond init</div>
+    </div>
+    <video src="/videos/init.mp4" poster="/videos/poster-init.webp" controls muted loop playsinline preload="none"></video>
+  </div>
+</div>
 
-<figure class="bond-video">
-<video src="/videos/puesto.mp4" controls muted playsinline preload="metadata"></video>
-<figcaption>The workstation in Herdr</figcaption>
-</figure>
+<div class="video-card">
+  <h3 class="video-card-title">The workstation in Herdr</h3>
+  <div class="terminal-window">
+    <div class="terminal-header">
+      <div class="terminal-dots">
+        <span class="terminal-dot dot-red"></span>
+        <span class="terminal-dot dot-yellow"></span>
+        <span class="terminal-dot dot-green"></span>
+      </div>
+      <div class="terminal-title">bond workstation</div>
+    </div>
+    <video src="/videos/puesto.mp4" poster="/videos/poster-puesto.webp" controls muted loop playsinline preload="none"></video>
+  </div>
+</div>
 
-<figure class="bond-video">
-<video src="/videos/equipo.mp4" controls muted playsinline preload="metadata"></video>
-<figcaption>A team of agents with bond team</figcaption>
-</figure>
+<div class="video-card">
+  <h3 class="video-card-title">A team of agents with bond team</h3>
+  <div class="terminal-window">
+    <div class="terminal-header">
+      <div class="terminal-dots">
+        <span class="terminal-dot dot-red"></span>
+        <span class="terminal-dot dot-yellow"></span>
+        <span class="terminal-dot dot-green"></span>
+      </div>
+      <div class="terminal-title">bond team</div>
+    </div>
+    <video src="/videos/equipo.mp4" poster="/videos/poster-equipo.webp" controls muted loop playsinline preload="none"></video>
+  </div>
+</div>
 
-<figure class="bond-video">
-<video src="/videos/catalogos.mp4" controls muted playsinline preload="metadata"></video>
-<figcaption>Team catalogs</figcaption>
-</figure>
+<div class="video-card">
+  <h3 class="video-card-title">Team catalogs</h3>
+  <div class="terminal-window">
+    <div class="terminal-header">
+      <div class="terminal-dots">
+        <span class="terminal-dot dot-red"></span>
+        <span class="terminal-dot dot-yellow"></span>
+        <span class="terminal-dot dot-green"></span>
+      </div>
+      <div class="terminal-title">bond catalog</div>
+    </div>
+    <video src="/videos/catalogos.mp4" poster="/videos/poster-catalogos.webp" controls muted loop playsinline preload="none"></video>
+  </div>
+</div>
 
 </div>
 

@@ -119,7 +119,17 @@ export default defineConfig({
 	srcDir: "src",
 	outDir: "./dist",
 	cleanUrls: true,
-	head: [["link", { rel: "icon", href: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%231f2fa8'/><text x='16' y='23' font-family='monospace' font-size='18' font-weight='700' text-anchor='middle' fill='%23ff3ec9'>B</text></svg>" }]],
+	appearance: "dark",
+	head: [
+		["link", { rel: "icon", type: "image/svg+xml", href: "/bond/favicon.svg" }],
+		["meta", { property: "og:type", content: "website" }],
+		["meta", { property: "og:site_name", content: "bond" }],
+		["meta", { property: "og:image", content: "https://josecorral.dev/bond/og.png" }],
+		["meta", { property: "og:image:width", content: "1200" }],
+		["meta", { property: "og:image:height", content: "630" }],
+		["meta", { name: "twitter:card", content: "summary_large_image" }],
+		["meta", { name: "twitter:image", content: "https://josecorral.dev/bond/og.png" }],
+	],
 	markdown: { anchor: { slugify } },
 	locales: {
 		root: {
@@ -137,6 +147,12 @@ export default defineConfig({
 		},
 	},
 	themeConfig: {
+		logo: {
+			dark: "/logo-dark.png",
+			light: "/logo-light.png",
+			alt: "bond",
+		},
+		siteTitle: false,
 		socialLinks: [{ icon: "github", link: REPO }],
 		search: {
 			provider: "local",
