@@ -31,6 +31,7 @@ Repo
   sync         Regenera la config de cada agente desde .bond/bond.toml
   decisions  Memoria de decisiones del repo: add, accept, show, runs, check
   catalog      Catálogo propio de skills, comandos y MCP para el equipo (create, check)
+  hub          Repo con submódulos: su sesión (repos y bases) en [hub] de bond.toml (sync)
 
 Trabajo diario (Herdr)
   (sin comando)  Dentro de un repo: abre su puesto de trabajo con el agente por defecto
@@ -110,6 +111,10 @@ async function main(argv: string[]): Promise<void> {
 		case "decisions": {
 			const d = await import("./decisions.mts");
 			return wantsHelp ? console.log(d.DECISIONS_HELP) : d.decisions(rest);
+		}
+		case "hub": {
+			const h = await import("./hub.mts");
+			return wantsHelp ? console.log(h.HUB_HELP) : h.hub(rest);
 		}
 		case "catalog": {
 			const c = await import("./catalog.mts");

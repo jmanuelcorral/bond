@@ -1,5 +1,16 @@
 # Cambios
 
+## Sin publicar
+
+- `bond hub`, para repos hub con submódulos de git (p. ej. frontend y backend en repos
+  separados): detecta los submódulos inicializados, también los anidados, pregunta la rama
+  base de cada repo (por defecto, la actual) y guarda la sesión en la sección `[hub]` de
+  `.bond/bond.toml`. Sin cambios pendientes, `bond hub` enseña la sesión (repo, ruta, base y
+  rama actual); `bond hub sync` añade o quita repos cuando cambian los submódulos. Funciona
+  también desde dentro de un submódulo. Los submódulos sin inicializar se avisan y no entran;
+  un repo en HEAD separado necesita su base (`--base <ruta>=<rama>` con `--yes`). Sin `[hub]`,
+  nada cambia.
+
 ## 1.9.1
 
 - `bond init` y el asistente de `bond setup` ya ofrecen Antigravity (`agy`) cuando su instalador
