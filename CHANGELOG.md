@@ -1,6 +1,6 @@
 # Cambios
 
-## Sin publicar
+## 1.9.1
 
 - `bond init` y el asistente de `bond setup` ya ofrecen Antigravity (`agy`) cuando su instalador
   lo deja en `~/.local/bin` y esa carpeta no está en el PATH, como ya hacían `bond doctor` y
