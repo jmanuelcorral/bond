@@ -188,10 +188,10 @@ Riesgos:
   - Los runs de `prompt` y `collect` quedan en `docs/decisions/runs/` del hub.
   - `bond team` dentro de un submódulo sigue abriendo solo ese repo, como hoy.
 - Acciones:
-  - [ ] Creación vertical, rutas de worktree, prompt/collect/clean por sesión y runs en el hub,
+  - [x] Creación vertical, rutas de worktree, prompt/collect/clean por sesión y runs en el hub,
     con docs, CHANGELOG y pruebas (fixture de hub; las órdenes a Herdr, simuladas como en las
     pruebas de equipo existentes).
-  - [ ] Ejecutar las comprobaciones y anotar los resultados.
+  - [x] Ejecutar las comprobaciones y anotar los resultados.
   - [ ] Presentar la evidencia y parar para revisión.
 - Verificación: `npm run typecheck && bun test`; a mano en Herdr, un ciclo completo
   (`bond team fix/x`, `prompt`, `collect`, `clean`) en un hub real.
@@ -227,13 +227,13 @@ Riesgos:
 | --- | --- | --- | --- | --- |
 | P1 | implemented | passed | pending | `47d737a` + `c459850` (arreglos de la revisión) integrados en `plan/hub-session`; en el checkout principal `npm run typecheck` limpio y `bun test` 365/0. Falta la prueba manual en un hub real (no hay ninguno en `~/gitrepos`). Runs: `docs/decisions/runs/2026-10-29-kevin-use-the-plan-execute-skill-to-implement.md`, `2026-10-29-reviewer-1-review-the-commit-47d737a-on-branch-plan.md`, `2026-10-29-reviewer-1-a-reviewer-approved-p1-with-these-fixes.md` |
 | P2 | implemented | passed | pending | `e5d2147` + `20d3e4a` (arreglos de la revisión: `teamRows` vuelve a ser por repo y la sesión sale de `sessionRows`, solo para status/--watch) integrados en `plan/hub-session`; en el checkout principal `bun test` 373/0. Falta la prueba manual en un hub real. Runs: `2026-10-29-kevin-use-the-plan-execute-skill-to-implement-2.md`, `2026-10-29-reviewer-2-read-only-code-review-of-branch-plan-hub.md`, `2026-10-29-kevin-a-reviewer-requested-changes-on-your-p2.md` |
-| P3 | pending | not_run | pending | todavía nada |
+| P3 | implemented | passed | pending | `6b17a3f` + `6a605d2` (rebasados sobre P2, con los arreglos de la revisión y la `sessionRows` de P2) integrados en `plan/hub-session`; en el checkout principal `npm run typecheck` limpio, `bun test` 390/0 y `bond decisions check` sin errores. Falta el ciclo manual en Herdr con un hub real. Runs: `2026-10-29-stuart-use-the-plan-execute-skill-to-implement.md`, `2026-10-29-stuart-a-reviewer-requested-changes-on-your-p3.md`, `2026-10-29-reviewer-3-read-only-code-review-of-branch-plan-hub.md` |
 | P4 | pending | not_run | pending | todavía nada |
 
 ## Siguiente paso
 
-Ronda 2: P2 y P3 en paralelo con `plan-team` desde `plan/hub-session`, ya con P1 integrada (su
-revisión humana sigue pendiente). Después, P4.
+P4 (skills en modo hub), ya con P1–P3 integradas en `plan/hub-session` (sus revisiones humanas
+siguen pendientes).
 
 ## Evidencia y seguimiento
 
@@ -241,5 +241,13 @@ revisión humana sigue pendiente). Después, P4.
   3 should-fix, aplicados en `c459850`.
 - P2: rama `plan/hub-session-p2` (kevin, agy), revisada por reviewer-2 (pi): cambios pedidos
   (un bloqueante: `teamRows` devolvía la sesión entera a prompt/collect/clean), aplicados en
-  `20d3e4a`. Decisión propuesta por kevin:
+  `20d3e4a`.
+- P3: rama `plan/hub-session-p3` (stuart, claude), revisada dos veces por reviewer-3 (pi):
+  cambios pedidos (UTF-8 en `prompt`, falsos positivos de D10, `--delete-branch` con la rama
+  del hub, prueba del fallback de D5), aplicados en `6a605d2`; rebasada sobre P2 y aprobada.
+  Queda un nit: si un submódulo tiene por ruta el nombre del hub, sus filas y las del hub se
+  confunden en `subRows` (`cli/team.mts`); se arregla marcando la fila del hub con
+  `repo = "."`. Decisiones propuestas por stuart:
+  `docs/decisions/2026-10-29-modo-hub-una-rama-vertical-esta-abierta-si-tiene-worktree-en-un-submodulo-y-existe-en-el-hub.md`,
+  `docs/decisions/2026-10-29-modo-hub-prompt-no-manda-nada-si-algun-agente-de-la-rama-espera-una-respuesta.md`. Decisión propuesta por kevin:
   `docs/decisions/2026-10-29-bond-hub-la-base-de-un-repo-se-indica-con-base-ruta-ref.md`.
