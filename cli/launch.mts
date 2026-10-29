@@ -2,8 +2,9 @@
 // un panel y una shell en otro. Fuera de Herdr arranca el servidor y engancha la interfaz; dentro,
 // crea o enfoca el workspace. Con --worktree, el workspace es un worktree de git (herdr worktree).
 
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, delimiter, join, resolve } from "node:path";
 import { agents, attach, ensureServer, focusWorkspace, herdr, insideHerdr, missingAgentDir, preparePane, requireHerdr, slugify, startedBlocked, supportedKinds, uniqueAgentName, workspaceByLabel } from "./herdr.mts";
 import { caution, die, dim, log, ok, run, warn, which } from "./util.mts";
 
@@ -12,7 +13,8 @@ export const LAUNCH_HELP = `Uso: bond [opciones] [-- argumentos del agente]
 
 Dentro de un repo, abre su puesto de trabajo en Herdr: el agente por defecto del repo
 (.bond/bond.toml), llamado gru (gru-2... si ya hay otro), solo en su panel; con --shell, una
-shell al lado. Si el workspace ya existe, lo enfoca.
+shell al lado. Si el workspace ya existe, lo enfoca; si ya estás en él, abre el agente en
+este mismo panel y, al salir de él, vuelves a la shell.
 Fuera de Herdr arranca su servidor y engancha la interfaz. Si el repo no tiene bond, ofrece
 bond init; si su config está desfasada, la regenera antes.
 
@@ -59,13 +61,16 @@ export const gitRoot = (dir: string) => {
 	return r.status === 0 ? r.stdout.trim() : undefined;
 };
 
+/** Etiqueta del workspace de un repo: bond:<repo>[/<rama>], o la pedida con --label. */
+export const workspaceLabel = (project: string, worktree?: string, label?: string) => label ?? `bond:${basename(project)}${worktree ? `/${worktree}` : ""}`;
+
 /** Crea (o reutiliza) el workspace de un repo y lanza el agente en él. */
 export function openWorkspace(o: OpenOptions): Opened {
 	let project = resolve(o.dir);
 	if (o.worktree) project = gitRoot(project) ?? die(`--worktree necesita un repo git: ${project}`);
 	const name = basename(project);
 	const baseLabel = `bond:${name}`;
-	const label = o.label ?? `${baseLabel}${o.worktree ? `/${o.worktree}` : ""}`;
+	const label = workspaceLabel(project, o.worktree, o.label);
 	const trust = o.trust ? ["--trust-repository"] : [];
 	const focus = o.focus ? "--focus" : "--no-focus";
 
@@ -210,6 +215,10 @@ export async function launch(args: string[], opts: { dev: boolean }): Promise<vo
 	const agent = o.noAgent ? undefined : await chooseAgent(o.agent, repoDefault);
 
 	const inside = insideHerdr();
+	// Dentro de su propio workspace no hay nada que enfocar: el agente se abre en este panel.
+	const here = inside ? process.env.HERDR_WORKSPACE_ID : undefined;
+	const label = workspaceLabel(root, o.worktree, o.label);
+	if (agent && o.focus && here && workspaceByLabel(label, label.replace(/^bond:/, "pi:")) === here) return runHere(agent, root, o.agentArgs);
 	if (!inside) await ensureServer();
 	const r = openWorkspace({ dir: root, agent, worktree: o.worktree, base: o.base, label: o.label, shell: o.shell, direction: o.direction, ratio: o.ratio, focus: o.focus, trust: o.trust, agentArgs: o.agentArgs });
 
@@ -225,6 +234,16 @@ export async function launch(args: string[], opts: { dev: boolean }): Promise<vo
 	if (!inside && o.attach) attach();
 	if (inside) console.log(ok(o.focus ? "  listo" : "  listo (en segundo plano)"));
 	else console.log(dim("  herdr para engancharte"));
+}
+
+/** El agente en primer plano en el panel actual; al salir, se vuelve a la shell. */
+function runHere(agent: string, cwd: string, args: string[]): never {
+	const dir = missingAgentDir(agent);
+	const env = dir ? { ...process.env, PATH: `${dir}${delimiter}${process.env.PATH ?? ""}` } : process.env;
+	// En Windows los agentes suelen ser .cmd: hace falta la shell para lanzarlos.
+	const r = spawnSync(agent, args, { stdio: "inherit", cwd, env, shell: process.platform === "win32" });
+	if (r.error) die(`no pude lanzar ${agent}: ${r.error.message}`);
+	process.exit(r.status ?? 0);
 }
 
 /** `bond status`: agentes vivos en Herdr. */

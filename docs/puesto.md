@@ -61,6 +61,11 @@ Ahora busca el workspace, que lleva la etiqueta `bond:<repo>` (o `bond:<repo>/<r
 tantas veces como quieras sin acabar con diez copias del mismo puesto. También reconoce las
 etiquetas antiguas, las de tipo `pi:<repo>`.
 
+Si ya estás en ese workspace (por ejemplo, en una shell del puesto o tras cerrar el agente),
+`bond` no tiene nada que enfocar: abre el agente por defecto (o el de `--agent`) en ese mismo
+panel, en la raíz del repo. Al salir del agente vuelves a la shell. Ese agente no lleva nombre de
+Herdr (no es `gru`); con `--no-focus` o `--no-agent` se comporta como antes.
+
 Si hay que crearlo, monta los paneles. El agente va solo en el panel raíz. Con `--shell`, la shell
 se abre a la derecha y el reparto queda en 60 % para el agente y 40 % para la shell. El agente del
 checkout principal se llama `gru`, porque es el que orquesta; si ya hay otro `gru` en Herdr, este

@@ -116,6 +116,9 @@
   (`--repo`, a uno); `collect` y `clean` buscan la rama en todos los repos (`--repo` para
   elegir), y los runs van a la memoria de decisiones del hub. Dentro de un repo de la sesión,
   `bond team` sigue trabajando solo en ese repo.
+- `bond` dentro de su propio workspace de Herdr abre el agente por defecto (o el de `--agent`) en
+  el panel donde lo escribes, en la raíz del repo; al salir del agente vuelves a la shell. Antes
+  solo decía que el workspace ya estaba abierto.
 
 ## 1.9.1
 
