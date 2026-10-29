@@ -1,5 +1,11 @@
 # Cambios
 
+## Sin publicar
+
+- `bond init` y el asistente de `bond setup` ya ofrecen Antigravity (`agy`) cuando su instalador
+  lo deja en `~/.local/bin` y esa carpeta no está en el PATH, como ya hacían `bond doctor` y
+  `bond team`. Antes no salía en la lista de agentes.
+
 ## 1.9.0
 
 Antigravity (`agy`) entra en bond como un agente más, también en equipos, y aceptar decisiones
