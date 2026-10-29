@@ -214,8 +214,8 @@ Riesgos:
   - Nunca integran, suben punteros, hacen push ni borran ramas por su cuenta.
   - `bond catalog check` (o las pruebas del catálogo) pasan.
 - Acciones:
-  - [ ] Actualizar las dos skills, pasar `bond sync` y las pruebas del catálogo.
-  - [ ] Ejecutar las comprobaciones y anotar los resultados.
+  - [x] Actualizar las dos skills, pasar `bond sync` y las pruebas del catálogo.
+  - [x] Ejecutar las comprobaciones y anotar los resultados.
   - [ ] Presentar la evidencia y parar para revisión.
 - Verificación: `npm run typecheck && bun test`; a mano, `plan-team` con un plan de dos fases
   en un hub real.
@@ -228,12 +228,15 @@ Riesgos:
 | P1 | implemented | passed | pending | `47d737a` + `c459850` (arreglos de la revisión) integrados en `plan/hub-session`; en el checkout principal `npm run typecheck` limpio y `bun test` 365/0. Falta la prueba manual en un hub real (no hay ninguno en `~/gitrepos`). Runs: `docs/decisions/runs/2026-10-29-kevin-use-the-plan-execute-skill-to-implement.md`, `2026-10-29-reviewer-1-review-the-commit-47d737a-on-branch-plan.md`, `2026-10-29-reviewer-1-a-reviewer-approved-p1-with-these-fixes.md` |
 | P2 | implemented | passed | pending | `e5d2147` + `20d3e4a` (arreglos de la revisión: `teamRows` vuelve a ser por repo y la sesión sale de `sessionRows`, solo para status/--watch) integrados en `plan/hub-session`; en el checkout principal `bun test` 373/0. Falta la prueba manual en un hub real. Runs: `2026-10-29-kevin-use-the-plan-execute-skill-to-implement-2.md`, `2026-10-29-reviewer-2-read-only-code-review-of-branch-plan-hub.md`, `2026-10-29-kevin-a-reviewer-requested-changes-on-your-p2.md` |
 | P3 | implemented | passed | pending | `6b17a3f` + `6a605d2` (rebasados sobre P2, con los arreglos de la revisión y la `sessionRows` de P2) integrados en `plan/hub-session`; en el checkout principal `npm run typecheck` limpio, `bun test` 390/0 y `bond decisions check` sin errores. Falta el ciclo manual en Herdr con un hub real. Runs: `2026-10-29-stuart-use-the-plan-execute-skill-to-implement.md`, `2026-10-29-stuart-a-reviewer-requested-changes-on-your-p3.md`, `2026-10-29-reviewer-3-read-only-code-review-of-branch-plan-hub.md` |
-| P4 | pending | not_run | pending | todavía nada |
+| P4 | implemented | passed | pending | `33180bf` integrado en `plan/hub-session` (más una errata corregida en el commit de progreso); `bond sync --check` al día, `npm run typecheck` limpio, `bun test` 390/0. `bond-team` está en `global/skills/`, no en `catalog/`. Falta probar `plan-team` con un plan de dos fases en un hub real. Run: `2026-10-29-kevin-use-the-plan-execute-skill-to-implement-3.md` |
 
 ## Siguiente paso
 
-P4 (skills en modo hub), ya con P1–P3 integradas en `plan/hub-session` (sus revisiones humanas
-siguen pendientes).
+Las cuatro fases están implementadas e integradas en `plan/hub-session`. Falta: la revisión
+humana de cada fase, la prueba manual en un hub real (no hay ninguno en `~/gitrepos`; montar
+uno con dos submódulos y recorrer `bond hub`, `bond team fix/x`, `prompt`, `collect` y
+`clean`), aceptar o rechazar las tres decisiones propuestas y el PR de `plan/hub-session`
+contra `main`.
 
 ## Evidencia y seguimiento
 
@@ -249,5 +252,11 @@ siguen pendientes).
   confunden en `subRows` (`cli/team.mts`); se arregla marcando la fila del hub con
   `repo = "."`. Decisiones propuestas por stuart:
   `docs/decisions/2026-10-29-modo-hub-una-rama-vertical-esta-abierta-si-tiene-worktree-en-un-submodulo-y-existe-en-el-hub.md`,
-  `docs/decisions/2026-10-29-modo-hub-prompt-no-manda-nada-si-algun-agente-de-la-rama-espera-una-respuesta.md`. Decisión propuesta por kevin:
+  `docs/decisions/2026-10-29-modo-hub-prompt-no-manda-nada-si-algun-agente-de-la-rama-espera-una-respuesta.md`.
+- P4: rama `plan/hub-session-p4` (kevin, pi), revisada por el orquestador (solo documentación de
+  skills; una errata corregida).
+- Fallo observado al orquestar: si se abre otro agente (p. ej. un revisor) dentro del worktree
+  de una rama, `bond team prompt <rama>` puede mandar la tarea a ese agente en vez de al de la
+  rama (`teamRows` toma el primer agente cuyo cwd cae en el worktree). Pendiente de su propio
+  arreglo. Decisión propuesta por kevin:
   `docs/decisions/2026-10-29-bond-hub-la-base-de-un-repo-se-indica-con-base-ruta-ref.md`.
