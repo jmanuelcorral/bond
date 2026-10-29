@@ -342,11 +342,13 @@ bond team clean fix/login
   de un repo a otro encaje. Con `--repo` va solo a uno. Si alguno espera una respuesta tuya, no
   manda nada a nadie.
 - **Recoger**: `collect` necesita `--repo` cuando la rama está en varios repos: se recoge repo a
-  repo. Los runs (encargos e informes) van a la memoria de decisiones del hub, junto al plan; si
+  repo (o con `--agent <nombre>`, que vale también si ese agente ya no está en marcha). Los runs (encargos e informes) van a la memoria de decisiones del hub, junto al plan; si
   el hub no tiene `[decisions]`, a la del submódulo. Los commits y las decisiones de cada run
   salen de su submódulo.
 - **Limpiar**: `clean fix/login` quita los worktrees de todos los repos (`--repo`, de uno) y deja
-  las ramas, también la del hub. Sin ramas, los integrados de todos los repos.
+  las ramas, también la del hub. Sin ramas, los integrados de todos los repos. Con
+  `--delete-branch` borra además las integradas, y la del hub si está integrada en su base y ya
+  no le queda worktree en ningún repo.
 
 Dentro de un submódulo, `bond team` trabaja solo en ese repo, como siempre. Integrar las ramas,
 subir los punteros de los submódulos en la rama del hub y hacer push sigue siendo cosa tuya.

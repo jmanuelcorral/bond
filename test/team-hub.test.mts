@@ -158,7 +158,7 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 		const before = JSON.stringify(herdrState().agents);
 		const r = bond(["team", "fix/y"]);
 		expect(r.status).toBe(1);
-		expect(r.stderr).toContain("ya tiene abierta la rama vertical fix/x");
+		expect(r.stderr).toContain(`ya tiene abierta la rama vertical fix/x (worktree en back: ${tabWorktreePath(home, "hub", "fix/x", "back")})`);
 		expect(r.stderr).toContain("bond team clean fix/x");
 		expect(branches(hub)).toEqual(["fix/x", "main"]);
 		expect(branches(join(hub, "front"))).toEqual(["main"]);
@@ -231,6 +231,100 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 		expect(r.status).toBe(0);
 		expect(branches(hub)).toEqual(["main"]);
 		expect(herdrState().agents.map((a) => a.cwd)).toEqual([tabWorktreePath(home, "front", "feat/a")]);
+	});
+
+	test("sin [decisions] en el hub, los runs van a la memoria del submódulo (D5)", () => {
+		writeFileSync(join(hub, ".bond", "bond.toml"), HUB_TOML.replace('[decisions]\ndir = "docs/decisions"\n\n', ""));
+		mkdirSync(join(hub, "back", ".bond"));
+		writeFileSync(join(hub, "back", ".bond", "bond.toml"), 'agents = ["pi"]\n\n[decisions]\ndir = "docs/decisions"\n');
+		expect(bond(["team", "fix/x"]).status).toBe(0);
+		const r = bond(["team", "prompt", "fix/x", "tarea"]);
+		expect(r.status).toBe(0);
+		expect(existsSync(join(hub, "docs", "decisions", "runs"))).toBe(false);
+		expect(readdirSync(join(hub, "back", "docs", "decisions", "runs")).length).toBe(1);
+		// front no tiene memoria: ni run ni nota de memoria; back, las dos.
+		expect(existsSync(join(hub, "front", "docs"))).toBe(false);
+		const st = herdrState();
+		const to = (sub: string) => st.prompts.find((p) => p.name === st.agents.find((a) => a.cwd === tabWorktreePath(home, "hub", "fix/x", sub))!.name)!.task;
+		expect(to("back")).toContain("[memoria de decisiones]");
+		expect(to("front")).not.toContain("[memoria de decisiones]");
+		// collect de front: ni el hub ni front tienen memoria.
+		expect(bond(["team", "collect", "fix/x", "--repo", "front"]).stderr).toContain("usan la memoria de decisiones");
+		expect(bond(["team", "collect", "fix/x", "--repo", "back"]).status).toBe(0);
+	});
+
+	test("collect --agent elige la rama sin --repo, y vale aunque su agente ya no esté en marcha", () => {
+		bond(["team", "fix/x"]);
+		bond(["team", "prompt", "fix/x", "tarea"]);
+		const back = herdrState().agents.find((a) => a.cwd === tabWorktreePath(home, "hub", "fix/x", "back"))!.name;
+		const r = bond(["team", "collect", "fix/x", "--agent", back]);
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain(`de ${back}`);
+		// El agente de back se cierra: su worktree queda sin agente y --agent lo recoge igual.
+		const st = JSON.parse(readFileSync(state, "utf8"));
+		st.agents = st.agents.filter((a: { name: string }) => a.name !== back);
+		writeFileSync(state, JSON.stringify(st));
+		const again = bond(["team", "collect", "fix/x", "--agent", back]);
+		expect(again.status).toBe(0);
+		const dir = join(hub, "docs", "decisions", "runs");
+		expect(readFileSync(join(dir, readdirSync(dir).find((f) => f.includes(back))!), "utf8")).toContain(`informe de ${back}`);
+	});
+
+	test("clean --delete-branch borra también la rama del hub si está integrada; si no, la conserva y lo dice", () => {
+		bond(["team", "fix/x"]);
+		const r = bond(["team", "clean", "fix/x", "--delete-branch"]);
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain("fix/x · hub  rama borrada");
+		expect(r.stdout).not.toContain("Las ramas se quedan");
+		for (const dir of [hub, join(hub, "front"), join(hub, "back")]) expect(branches(dir)).toEqual(["main"]);
+		// Con un commit en la rama del hub que no está en main, se queda.
+		bond(["team", "fix/y"]);
+		const wt = join(tmp, "hub-wt");
+		g(hub, "worktree", "add", "-q", wt, "fix/y");
+		writeFileSync(join(wt, "h.txt"), "h\n");
+		g(wt, "add", "h.txt");
+		g(wt, "commit", "-qm", "h");
+		g(hub, "worktree", "remove", wt);
+		const keep = bond(["team", "clean", "fix/y", "--delete-branch"]);
+		expect(keep.status).toBe(0);
+		expect(keep.stdout).toContain("fix/y · hub  rama conservada: no está integrada en main");
+		expect(branches(hub)).toEqual(["fix/y", "main"]);
+		expect(branches(join(hub, "front"))).toEqual(["main"]);
+	});
+
+	test("clean --delete-branch --repo: la rama del hub se queda mientras otro repo tenga worktree", () => {
+		bond(["team", "fix/x"]);
+		const r = bond(["team", "clean", "fix/x", "--repo", "back", "--delete-branch"]);
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain("le queda algún worktree en otro repo");
+		expect(branches(hub)).toEqual(["fix/x", "main"]);
+		expect(branches(join(hub, "back"))).toEqual(["main"]);
+	});
+
+	test("un worktree suelto en una base de la sesión no es una rama vertical abierta", () => {
+		// front sale de dev, que también existe en el hub, y tiene un worktree de dev olvidado.
+		writeFileSync(join(hub, ".bond", "bond.toml"), HUB_TOML.replace('"front" = { base = "main" }', '"front" = { base = "dev" }'));
+		g(join(hub, "front"), "branch", "dev");
+		g(hub, "branch", "dev");
+		g(join(hub, "front"), "worktree", "add", "-q", join(tmp, "front-dev"), "dev");
+		const r = bond(["team", "fix/x"]);
+		expect(r.stderr).not.toContain("ya tiene abierta");
+		expect(r.status).toBe(0);
+	});
+
+	test("una base del hub que no existe falla con un mensaje claro, sin crear nada", () => {
+		writeFileSync(join(hub, ".bond", "bond.toml"), HUB_TOML.replace('base = "main"\n\n[hub.repos]', 'base = "nope"\n\n[hub.repos]'));
+		const r = bond(["team", "fix/x"]);
+		expect(r.status).toBe(1);
+		expect(r.stderr).toContain("la base no existe en hub (nope)");
+		expect(branches(hub)).toEqual(["main"]);
+		expect(existsSync(state)).toBe(false);
+	});
+
+	test("un bond.toml del hub que no es TOML se avisa y bond team sigue como en un repo normal", () => {
+		writeFileSync(join(hub, ".bond", "bond.toml"), "agents = [\n");
+		const r = bond(["team", "clean"]);
+		expect(r.stderr).toContain("sigo sin el modo hub");
 	});
 
 	test("--repos y --repo fuera de un hub, no", () => {

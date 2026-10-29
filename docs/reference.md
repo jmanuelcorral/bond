@@ -869,13 +869,14 @@ vertical ([puesto.md](puesto.md#una-rama-vertical-en-un-hub)):
 |---|---|
 | `bond team <rama>[:agente] [--repos a,b]` | Crea la rama en el hub (sin worktree ni agente) y abre un worktree y un agente en cada submódulo (o en los de `--repos`), desde su base de `[hub]`, con el agente de `:agente`, `--agent` o el del `bond.toml` del submódulo. Una sola rama; sin `--base` |
 | `bond team prompt <rama> "…" [--repo <r>]` | A todos los agentes de la rama, con una nota que nombra a los demás y su repo; `--repo`, a uno. Si alguno está bloqueado, no manda nada |
-| `bond team collect <rama> [--repo <r>]` | El informe del agente de la rama; `--repo` si está en varios repos |
-| `bond team clean [rama...] [--repo <r>]` | Quita los worktrees de todos los repos (o del de `--repo`); las ramas se quedan, también la del hub |
+| `bond team collect <rama> [--repo <r>] [--agent <a>]` | El informe del agente de la rama; `--repo` o `--agent` si está en varios repos |
+| `bond team clean [rama...] [--repo <r>] [--delete-branch]` | Quita los worktrees de todos los repos (o del de `--repo`); las ramas se quedan, también la del hub. Con `--delete-branch`, borra las integradas y la del hub si está integrada en su base y no le queda worktree en ningún repo |
 
 - Worktrees en paneles: `~/.herdr/worktrees/<hub>/<submódulo>/<rama>` (las `/` de una ruta
   anidada pasan a `-`). Con `--workspaces` o fuera de Herdr, donde los pone `herdr worktree`.
-- Con una rama vertical abierta (tiene worktree en algún submódulo y existe en el hub),
-  `bond team <otra>` falla sin crear nada y dice cómo cerrarla.
+- Con una rama vertical abierta (tiene worktree en algún submódulo y existe en el hub; las bases
+  de la sesión no cuentan), `bond team <otra>` falla sin crear nada, dice dónde está su worktree
+  y cómo cerrarla.
 - Runs: en `<dir>/runs/` del hub si tiene `[decisions]`; si no, en el del submódulo. La nota de
   la memoria de decisiones solo va a los agentes cuyo submódulo tiene `[decisions]`.
 
