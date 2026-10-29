@@ -14,7 +14,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 | `bond init` | Una vez por repo: agentes, agente por defecto y herramientas; genera la config de cada agente ([abajo](#configuración-por-repo-bond-init-y-bond-sync)) |
 | `bond` | Dentro de un repo: abre su puesto de trabajo en Herdr ([puesto.md](puesto.md)) |
 | `bond dev <dir>` | Lo mismo para otro directorio |
-| `bond team` | Un agente por rama, cada uno en su worktree (en Herdr, 4 en tu pestaña y el resto en pestañas nuevas, o lo que elijas); `status` (`--watch`: tabla en vivo agrupada por estado, que se cierra sola sin trabajo pendiente; en un hub, muestra todos los repos de la sesión en un único panel `tabla · <hub>`), `prompt` (con `[decisions]` guarda el encargo en un run; `--no-record` para no guardarlo), `collect` (guarda en el run la última respuesta del agente: de su sesión, o del panel recortado), `clean` (al quitar el último, cierra también la tabla) ([puesto.md](puesto.md#bond-team)) |
+| `bond team` | Un agente por rama, cada uno en su worktree (en Herdr, 4 en tu pestaña y el resto en pestañas nuevas, o lo que elijas); `status` (`--watch`: tabla en vivo agrupada por estado, que se cierra sola sin trabajo pendiente; en un hub, muestra todos los repos de la sesión en un único panel `tabla · <hub>`), `prompt` (con `[decisions]` guarda el encargo en un run; `--no-record` para no guardarlo), `collect` (guarda en el run la última respuesta del agente: de su sesión, o del panel recortado), `clean` (al quitar el último, cierra también la tabla). En un hub, una rama vertical: un agente por submódulo, `--repos`/`--repo` ([puesto.md](puesto.md#bond-team)) |
 | `bond status` | Agentes vivos en Herdr |
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
 | `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
@@ -859,6 +859,25 @@ exclude = ["vendor/sdk"]          # opcional: rutas que no entran (ni lo que cue
   `bond sync` y el resto de comandos; `bond hub` se niega a escribir encima hasta que la arregles
   o la quites.
 - Sin `[hub]`, nada cambia: `bond` y `bond team` funcionan como siempre.
+
+### `bond team` en un hub
+
+Desde el hub (no desde un submódulo, que sigue como un repo normal), `bond team` abre una rama
+vertical ([puesto.md](puesto.md#una-rama-vertical-en-un-hub)):
+
+| Orden | En un hub |
+|---|---|
+| `bond team <rama>[:agente] [--repos a,b]` | Crea la rama en el hub (sin worktree ni agente) y abre un worktree y un agente en cada submódulo (o en los de `--repos`), desde su base de `[hub]`, con el agente de `:agente`, `--agent` o el del `bond.toml` del submódulo. Una sola rama; sin `--base` |
+| `bond team prompt <rama> "…" [--repo <r>]` | A todos los agentes de la rama, con una nota que nombra a los demás y su repo; `--repo`, a uno. Si alguno está bloqueado, no manda nada |
+| `bond team collect <rama> [--repo <r>]` | El informe del agente de la rama; `--repo` si está en varios repos |
+| `bond team clean [rama...] [--repo <r>]` | Quita los worktrees de todos los repos (o del de `--repo`); las ramas se quedan, también la del hub |
+
+- Worktrees en paneles: `~/.herdr/worktrees/<hub>/<submódulo>/<rama>` (las `/` de una ruta
+  anidada pasan a `-`). Con `--workspaces` o fuera de Herdr, donde los pone `herdr worktree`.
+- Con una rama vertical abierta (tiene worktree en algún submódulo y existe en el hub),
+  `bond team <otra>` falla sin crear nada y dice cómo cerrarla.
+- Runs: en `<dir>/runs/` del hub si tiene `[decisions]`; si no, en el del submódulo. La nota de
+  la memoria de decisiones solo va a los agentes cuyo submódulo tiene `[decisions]`.
 
 ## Snippet de Herdr
 

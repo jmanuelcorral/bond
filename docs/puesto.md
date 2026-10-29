@@ -107,9 +107,12 @@ rama que le pidas, y tienes a la vista cómo va cada una. Estos son sus cuatro m
 ```bash
 bond team [repo] <rama[:agente]>... [--agent <a>] [--base <ref>] [--tabs | --same-tab | --workspaces] [--yes] [--no-trust] [-- args de los agentes]
 bond team status [repo] [--base <ref>] [--json | --watch [--keep-open]]
-bond team prompt <rama> "la tarea" [--wait] [--timeout <ms>]
-bond team clean [repo] [rama...] [--force] [--delete-branch] [--keep-table] [--dry-run]
+bond team prompt <rama> "la tarea" [--repo <repo>] [--wait] [--timeout <ms>]
+bond team clean [repo] [rama...] [--repo <repo>] [--force] [--delete-branch] [--keep-table] [--dry-run]
 ```
+
+En un repo hub con submódulos, `bond team` trabaja en vertical: lo ves en
+[Una rama vertical en un hub](#una-rama-vertical-en-un-hub).
 
 ### Un ejemplo de principio a fin
 
@@ -310,6 +313,43 @@ Si al terminar no queda ningún agente del equipo, cierra también el panel de l
 tu pestaña vuelve a quedar como estaba. Con `--keep-table` la tabla se queda abierta (aunque, si
 no tiene nada pendiente, luego se cierra ella sola, salvo que la lanzaras con `--keep-open`). El
 workspace del repo no lo cierra; te dice cómo hacerlo si quieres.
+
+### Una rama vertical en un hub
+
+Si trabajas desde un repo hub con submódulos (p. ej. `frontend` y `backend` en repos aparte) y
+ya lo preparaste con `bond hub` ([referencia](reference.md#bond-hub)), `bond team` cambia de
+forma: una rama ya no es un agente, es un cambio que cruza los repos. Desde el hub:
+
+```bash
+bond team fix/login                 # la rama en el hub y un agente por submódulo
+bond team fix/login --repos backend # solo en esos repos (ruta o nombre, separados por comas)
+bond team prompt fix/login "el login falla con emails en mayúsculas"
+bond team collect fix/login --repo backend
+bond team clean fix/login
+```
+
+- **Crear**: `fix/login` se crea en el hub como rama, sin worktree ni agente, desde su base de
+  `[hub]`. En cada submódulo de la sesión (o en los de `--repos`) se abre un worktree desde su
+  base y un agente: el de `fix/login:agente` o `--agent` si los das y, si no, el agente por
+  defecto del `bond.toml` de ese submódulo. Los worktrees van en
+  `~/.herdr/worktrees/<hub>/<submódulo>/<rama>`, así que dos hubs con un `frontend` no chocan.
+  `--base` no vale aquí: las bases son las de `[hub]`.
+- **Una sola rama vertical a la vez**: con `fix/login` abierta, `bond team fix/pagos` se niega
+  sin crear nada y te dice que la cierres antes con `bond team clean fix/login`. Repetir
+  `bond team fix/login` abre solo lo que falte.
+- **Repartir**: `prompt` manda la tarea a todos los agentes de la rama, y a cada uno le añade
+  una nota con su repo y quiénes son los demás (nombre, repo y carpeta), para que lo que cruza
+  de un repo a otro encaje. Con `--repo` va solo a uno. Si alguno espera una respuesta tuya, no
+  manda nada a nadie.
+- **Recoger**: `collect` necesita `--repo` cuando la rama está en varios repos: se recoge repo a
+  repo. Los runs (encargos e informes) van a la memoria de decisiones del hub, junto al plan; si
+  el hub no tiene `[decisions]`, a la del submódulo. Los commits y las decisiones de cada run
+  salen de su submódulo.
+- **Limpiar**: `clean fix/login` quita los worktrees de todos los repos (`--repo`, de uno) y deja
+  las ramas, también la del hub. Sin ramas, los integrados de todos los repos.
+
+Dentro de un submódulo, `bond team` trabaja solo en ese repo, como siempre. Integrar las ramas,
+subir los punteros de los submódulos en la rama del hub y hacer push sigue siendo cosa tuya.
 
 ## Conducir los agentes a mano
 
