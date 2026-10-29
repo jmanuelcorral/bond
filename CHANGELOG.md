@@ -2,6 +2,12 @@
 
 ## Sin publicar
 
+- Las skills `plan-team` (catálogo) y `bond-team` (global) trabajan en modo hub: en un repo con
+  `[hub]`, una fase o subtarea es una rama vertical (un agente por repo de la sesión, una sola
+  rama abierta a la vez, `--repos` para elegirlos), la tarea se manda con un único
+  `bond team prompt` que llega a todos los agentes con una nota de coordinación, y se recoge
+  repo a repo con `bond team collect --repo`. Al integrar recuerdan que falta subir los
+  punteros de los submódulos en la rama del hub y hacer push: nunca lo hacen ellas.
 - `bond team status` y `--watch` en modo hub (sección `[hub]` en `.bond/bond.toml`): enseñan los
   worktrees de todos los repos de la sesión en una única tabla, tanto si se lanzan desde el hub
   como desde cualquiera de sus submódulos. Cada repo se compara contra su base de `[hub]`, con una
