@@ -1,13 +1,13 @@
 ---
 id: "2026-10-29-bond-hub-configura-la-sesion-en-hub-de-bond-bond-toml"
 title: "bond hub configura la sesión en [hub] de .bond/bond.toml"
-status: "accepted"
+status: "superseded"
 date: "2026-10-29"
 decided_by: "agent:claude"
-accepted_by: "El usuario: \"Es algo que tal vez preguntemos al configurar un hub, tal vez tiene sentido que exista el comando hub\""
+accepted_by: "El usuario: \"si, quita [hub] y guárdalo\" (2026-10-30)"
 accepted_via: "agent:claude"
 supersedes: ""
-superseded_by: ""
+superseded_by: "2026-10-30-hub-hub-toml-versionado-y-bond-hub-local-toml-personal-se-quita-hub"
 links:
   - "plan: docs/plans/2026-10-29-hub-session.md"
   - "branch: main"
