@@ -90,6 +90,8 @@ link = "symlink"
 	);
 	writeFileSync(join(hub, ".gitignore"), ".bond/hub.local.toml\n/repos/sub\n");
 	writeFileSync(join(hub, ".bond", "hub.local.toml"), `[repos.sub]\nsource = ${JSON.stringify(subReal)}\n`);
+	// Con hub.toml ya escrito, bond sync genera el bloque del hub en AGENTS.md (D18).
+	expect(bond(["sync"], hub).status).toBe(0);
 	g(hub, "add", "-A");
 	g(hub, "commit", "-qm", "hub setup");
 
