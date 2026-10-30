@@ -839,14 +839,14 @@ base = "main"
 
 [repos.frontend]
 url  = "git@github.com:fluzo/frontend.git"
-path = "frontend"
+path = "repos/frontend"
 base = "main"
 link = "submodule"
 agent = "claude"
 
 [repos.backend]
 url  = "git@github.com:fluzo/backend.git"
-path = "backend"
+path = "repos/backend"
 base = "main"
 link = "symlink"
 
@@ -858,6 +858,10 @@ source = "~/gitrepos/fluzo-backend"
 - `hub.toml` is the session's only source of truth: it declares the hub's name, its base branch
   and the list of repos with their relative path, base branch and link mode (`submodule` or
   `symlink`).
+- The default path of a new repo is `repos/<name>` (D16): the `bond hub init` assistant proposes
+  it as an editable initial value, `bond hub add` uses it without asking and `--path` overrides
+  it. Submodules that already existed in the repo keep their path; hubs with repos at the root keep
+  working as before (`bond hub check` only warns).
 - `bond hub init [dir]`: an assistant that creates the hub (`git init`, `.bond/`, `AGENTS.md`,
   `hub.toml`, `.gitignore` and `hub.local.toml`) or prepares it in an existing repo. It imports
   existing submodules with their base and adds repos by URL (submodule) or local path (symlink).
@@ -896,6 +900,12 @@ is not ready to work with agents; each problem names the repo, the check and the
 | `worktrees` | it supports worktrees (it is not a bare repo) |
 | `cambios` | no uncommitted changes |
 | `rama vertical` | there are no worktrees of branches that don't exist in the hub, and only one vertical branch is open (D10) |
+| `ruta` | **warning** (D16/D17): the repo sits outside `repos/`, the default path of new hubs |
+
+Some checks are warnings (D17): they are shown with a "!" but they do not count as problems nor
+change the exit code. In `--json` each warning carries `warn: true` and the report counts
+`warnings` apart from `problems`; `bond doctor` reflects the warnings in its hub row as a
+warning without turning it into a failure.
 
 With `--fix` it repairs only the safe, announced things: creating or repairing the link to the
 local clone with `bond hub init`'s `linkRepo` (symlink, junction on Windows), registering the

@@ -21,7 +21,7 @@ Object.assign(process.env, {
 
 const { BOND_HOME } = await import("../cli/runtime.mts");
 const { hubRoot, hubSession, hubsPath, parseHubToml, parseHubLocalToml } = await import("../cli/hub.mts");
-const { isLink, isBrokenLink, linkRepo, localCloneError, renderHubToml, renderHubLocalToml } = await import("../cli/hub-init.mts");
+const { isLink, isBrokenLink, linkRepo, localCloneError, renderHubToml, renderHubLocalToml, defaultRepoPath } = await import("../cli/hub-init.mts");
 const { canonical } = await import("../cli/util.mts");
 
 const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
@@ -86,10 +86,13 @@ describe("bond hub init", () => {
 		expect(frontEntry).toBeDefined();
 		expect(frontEntry?.url).toBe(frontUrl);
 		expect(frontEntry?.base).toBe("main");
+		// D16: los repos nuevos entran en repos/<nombre> por defecto.
+		expect(frontEntry?.path).toBe(`repos/${basename(frontReal)}`);
 
 		const backEntry = Object.values(hubToml.repos).find((r) => r.link === "symlink");
 		expect(backEntry).toBeDefined();
 		expect(backEntry?.base).toBe("main");
+		expect(backEntry?.path).toBe(`repos/${basename(backReal)}`);
 
 		const localPath = join(hubDir, ".bond", "hub.local.toml");
 		expect(existsSync(localPath)).toBe(true);
@@ -145,12 +148,12 @@ describe("bond hub init", () => {
 		writeFileSync(join(backReal, "dirty.txt"), "x\n");
 		const res = bond(["hub", "init", hubDir, "--yes", `file://${frontReal}`, backReal], tmp);
 		expect(res.status).toBe(0);
-		const front = join(hubDir, basename(frontReal));
+		const front = join(hubDir, "repos", basename(frontReal));
 		expect(existsSync(join(front, ".bond", "bond.toml"))).toBe(true);
 		expect(g(front, "log", "-1", "--format=%s")).toBe("chore: add bond config");
 		expect(g(front, "status", "--porcelain")).toBe("");
 		// El hub apunta al commit con la config del submódulo.
-		expect(g(hubDir, "ls-tree", "HEAD", basename(frontReal))).toContain(g(front, "rev-parse", "HEAD"));
+		expect(g(hubDir, "ls-tree", "HEAD", `repos/${basename(frontReal)}`)).toContain(g(front, "rev-parse", "HEAD"));
 		expect(existsSync(join(backReal, ".bond", "bond.toml"))).toBe(true);
 		expect(g(backReal, "log", "-1", "--format=%s")).toBe("init");
 		expect(res.stderr).toContain("sin commitear");
@@ -221,6 +224,13 @@ describe("selector del clon local", () => {
 });
 
 describe("bond hub add", () => {
+	test("defaultRepoPath: la ruta que propone el asistente y usan init/add por defecto (D16)", () => {
+		// El asistente la pasa como initialValue editable de «Ruta dentro del hub» y
+		// init/add la aplican sin preguntar; --path y los submódulos existentes la cambian.
+		expect(defaultRepoPath("front")).toBe("repos/front");
+		expect(defaultRepoPath("mi-api")).toBe("repos/mi-api");
+	});
+
 	test("bond hub add añade un submódulo si es URL y un symlink si es ruta local", () => {
 		const hubDir = repo("hub-add-test");
 		const initRes = bond(["hub", "init", "--yes"], hubDir);
@@ -236,12 +246,24 @@ describe("bond hub add", () => {
 
 		const s = hubSession(hubDir);
 		expect(s).toBeDefined();
-		expect(s?.repos.some((r) => r.path === "front" && r.link === "submodule")).toBe(true);
-		expect(s?.repos.some((r) => r.path === "back" && r.link === "symlink")).toBe(true);
+		// D16: ruta por defecto repos/<nombre> para submódulo y symlink.
+		expect(s?.repos.some((r) => r.path === "repos/front" && r.link === "submodule")).toBe(true);
+		expect(s?.repos.some((r) => r.path === "repos/back" && r.link === "symlink")).toBe(true);
 
-		// .gitignore contiene back
+		// .gitignore contiene la ruta del symlink bajo repos/
 		const gitignore = readFileSync(join(hubDir, ".gitignore"), "utf8");
-		expect(gitignore).toContain("/back");
+		expect(gitignore).toContain("/repos/back");
+	});
+
+	test("bond hub add --path manda sobre la ruta por defecto (D16)", () => {
+		const hubDir = repo("hub-add-path");
+		expect(bond(["hub", "init", "--yes"], hubDir).status).toBe(0);
+
+		const addCustom = bond(["hub", "add", `file://${frontReal}`, "--name", "front", "--path", "apps/front"], hubDir);
+		expect(addCustom.status).toBe(0);
+		const s = hubSession(hubDir);
+		expect(s?.repos.some((r) => r.path === "apps/front" && r.link === "submodule")).toBe(true);
+		expect(s?.repos.some((r) => r.path === "repos/front")).toBe(false);
 	});
 
 	test("bond hub add falla si repos.<name> ya existe con otra configuración o la ruta está duplicada (S2)", () => {
@@ -255,8 +277,8 @@ describe("bond hub add", () => {
 		expect(resDup.status).not.toBe(0);
 		expect(resDup.stderr).toContain("ya existe en hub.toml con otra configuración");
 
-		// Distinto nombre pero misma ruta -> error
-		const resPathDup = bond(["hub", "add", `file://${backReal}`, "--name", "other", "--path", "front"], hubDir);
+		// Distinto nombre pero misma ruta -> error (la ruta por defecto de front es repos/front, D16)
+		const resPathDup = bond(["hub", "add", `file://${backReal}`, "--name", "other", "--path", "repos/front"], hubDir);
 		expect(resPathDup.status).not.toBe(0);
 		expect(resPathDup.stderr).toContain("ya está usada por repos.front");
 	});
@@ -275,7 +297,7 @@ describe("bond hub sync", () => {
 		spawnSync("git", ["-C", hubDir, "commit", "-qm", "commit hub config"], { encoding: "utf8" });
 		// hub init commiteó la config de bond en el submódulo (solo local): se publica en su origen,
 		// como haría el usuario con git push antes de subir el hub, para que el clon la encuentre.
-		g(frontReal, "fetch", "-q", join(hubDir, basename(frontReal)), "main:bond-config");
+		g(frontReal, "fetch", "-q", join(hubDir, "repos", basename(frontReal)), "main:bond-config");
 
 		// Clonar el hub en otra carpeta (no lleva .bond/hub.local.toml porque está en .gitignore)
 		const clonedHub = join(tmp, "cloned-hub");
@@ -288,22 +310,19 @@ describe("bond hub sync", () => {
 		expect(syncFail.stderr).toContain("hub.local.toml");
 
 		// Pero el submódulo sí se montó
-		const frontKey = Object.keys(parseHubToml(readFileSync(join(clonedHub, "hub.toml"), "utf8")).repos).find(
-			(k) => parseHubToml(readFileSync(join(clonedHub, "hub.toml"), "utf8")).repos[k].link === "submodule",
-		)!;
-		expect(existsSync(join(clonedHub, frontKey, ".git"))).toBe(true);
+		const clonedToml = parseHubToml(readFileSync(join(clonedHub, "hub.toml"), "utf8"));
+		const frontKey = Object.keys(clonedToml.repos).find((k) => clonedToml.repos[k].link === "submodule")!;
+		expect(existsSync(join(clonedHub, clonedToml.repos[frontKey].path, ".git"))).toBe(true);
 
 		// Al indicarle la ruta local en .bond/hub.local.toml, sync tiene éxito y monta el symlink
-		const backKey = Object.keys(parseHubToml(readFileSync(join(clonedHub, "hub.toml"), "utf8")).repos).find(
-			(k) => parseHubToml(readFileSync(join(clonedHub, "hub.toml"), "utf8")).repos[k].link === "symlink",
-		)!;
+		const backKey = Object.keys(clonedToml.repos).find((k) => clonedToml.repos[k].link === "symlink")!;
 		mkdirSync(join(clonedHub, ".bond"), { recursive: true });
 		writeFileSync(join(clonedHub, ".bond", "hub.local.toml"), `[repos.${backKey}]\nsource = ${JSON.stringify(backReal)}\n`);
 
 		const syncSuccess = bond(["hub", "sync", "--yes"], clonedHub);
 		expect(syncSuccess.status).toBe(0);
-		expect(existsSync(join(clonedHub, backKey))).toBe(true);
-		expect(lstatSync(join(clonedHub, backKey)).isSymbolicLink()).toBe(true);
+		expect(existsSync(join(clonedHub, clonedToml.repos[backKey].path))).toBe(true);
+		expect(lstatSync(join(clonedHub, clonedToml.repos[backKey].path)).isSymbolicLink()).toBe(true);
 	});
 
 	test("sync --dry-run dice qué haría y no toca nada; nunca borra un repo ni un clon existente", () => {

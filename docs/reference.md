@@ -837,14 +837,14 @@ base = "main"
 
 [repos.frontend]
 url  = "git@github.com:fluzo/frontend.git"
-path = "frontend"
+path = "repos/frontend"
 base = "main"
 link = "submodule"
 agent = "claude"
 
 [repos.backend]
 url  = "git@github.com:fluzo/backend.git"
-path = "backend"
+path = "repos/backend"
 base = "main"
 link = "symlink"
 
@@ -854,6 +854,7 @@ source = "~/gitrepos/fluzo-backend"
 ```
 
 - `hub.toml` es la única fuente de la sesión: declara el nombre del hub, su rama base y la lista de repos con su ruta relativa, rama base y modo de enlace (`submodule` o `symlink`).
+- La ruta por defecto de un repo nuevo es `repos/<nombre>` (D16): el asistente de `bond hub init` la propone como valor inicial (editable), `bond hub add` la usa sin preguntar y `--path` manda sobre ella. Al importar submódulos que ya existían en el repo se conserva su ruta; los hubs con los repos en la raíz siguen funcionando igual (`bond hub check` solo avisa).
 - `bond hub init [dir]`: asistente que crea el hub (`git init`, `.bond/`, `AGENTS.md`, `hub.toml`, `.gitignore` y `hub.local.toml`) o lo prepara en un repo existente. Importa submódulos existentes con su base y añade repos por URL (submódulo) o ruta local (symlink). Antes de nada hace `bond init` en el propio hub si no lo tiene (con terminal, con sus preguntas; con `--yes`, lo elegido en `bond setup`), con las skills por defecto más `plan-team`. Los repos de la sesión que no tienen bond reciben un `bond init` con la config del hub (sus agentes, con el `agent` del repo como el de por defecto, y las skills por defecto del catálogo); los que ya lo tienen conservan la suya. Esa config se commitea en la rama actual del repo si estaba limpio (si no, se deja sin commitear y se avisa); en un submódulo ese commit es local: haz `git push` en él antes de subir el hub. La ruta al clon local se elige navegando por disco desde la carpeta que contiene el hub (flechas para elegir, Tab completa, `/` entra en la carpeta) y solo acepta un repo git. Con `--yes` usa valores detectados sin preguntar.
 - `bond hub add <url|ruta>`: añade un repositorio a `hub.toml` (como submódulo si es URL o symlink si es clon local) y sincroniza el disco.
 - `bond hub sync`: deja el disco como dice `hub.toml`: monta submódulos, crea symlinks (o junctions en Windows si el symlink falla) y actualiza el registro global; al hub y a los repos sin bond les hace `bond init`, como `bond hub init`. Si falta la ruta de un symlink en `.bond/hub.local.toml`, con `--yes` falla indicando cómo configurarla y de forma interactiva la pregunta. Con `--dry-run` muestra qué haría sin tocar el disco.
@@ -878,6 +879,12 @@ para trabajar con agentes; cada problema nombra el repo, la comprobación y el a
 | `worktrees` | admite worktrees (no es un repo bare) |
 | `cambios` | sin cambios sin commitear |
 | `rama vertical` | no hay worktrees de ramas que no existen en el hub, y solo hay una rama vertical abierta (D10) |
+| `ruta` | **aviso** (D16/D17): el repo está fuera de `repos/`, la ruta por defecto de los hubs nuevos |
+
+Algunas comprobaciones son avisos (D17): se muestran con «!» pero no cuentan como problemas
+ni cambian el código de salida. En `--json` cada aviso lleva `warn: true` y el informe suma
+`warnings` aparte de `problems`; `bond doctor` refleja los avisos en su fila del hub como
+aviso, sin pasarla a fallo.
 
 Con `--fix` arregla solo lo seguro y anunciado: crear o reparar el enlace al clon local con el
 `linkRepo` de `bond hub init` (symlink, junction en Windows) registrando el clon y el enlace en

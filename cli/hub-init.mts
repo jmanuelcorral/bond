@@ -39,6 +39,9 @@ Crea un hub o lo prepara en un repo git existente e importa repositorios:
 por URL (submódulo) o desde un clon local (symlink). En un repo con submódulos,
 los importa a hub.toml con su rama base.
 
+Los repos nuevos entran en repos/<nombre> (D16); al importar submódulos
+que ya existían se conserva su ruta.
+
 Opciones:
   --yes, -y       No pregunta: usa valores detectados y añade los repos indicados
   --dry-run       Muestra qué haría sin escribir en disco ni ejecutar comandos
@@ -67,7 +70,7 @@ si es una ruta a un clon local.
 
 Opciones:
   --name <nombre>  Identificador del repo en hub.toml (por defecto, derivado del origen)
-  --path <ruta>    Ruta dentro del hub (por defecto, igual al nombre)
+  --path <ruta>    Ruta dentro del hub (por defecto, repos/<nombre>; D16)
   --base <rama>    Rama base del repo (por defecto, la rama actual o main)
   --link <modo>    Modo de enlace: "submodule" o "symlink"
   --agent <agente> Agente por defecto para este repo en el hub
@@ -126,6 +129,13 @@ export function detectSubmoduleUrl(root: string, subPath: string): string | unde
 	if (u2.status === 0 && u2.stdout.trim()) return u2.stdout.trim();
 	return undefined;
 }
+
+/**
+ * Ruta por defecto de un repo nuevo en el hub: repos/<nombre> (D16). El asistente la
+ * propone como valor inicial (editable) y `hub init`/`hub add` la usan sin preguntar;
+ * `--path` y la ruta de los submódulos ya existentes mandan sobre ella.
+ */
+export const defaultRepoPath = (key: string) => `repos/${key}`;
 
 /** Serializa HubToml a texto TOML. */
 export function renderHubToml(hub: HubToml): string {
@@ -713,7 +723,7 @@ export async function hubInit(args: string[]): Promise<void> {
 				const url = await ask(p.text({ message: "URL del repositorio (git@... o https://...):" }));
 				const defaultName = basename(url.replace(/\.git$/, ""));
 				const key = await ask(p.text({ message: "Nombre en hub.toml:", initialValue: defaultName }));
-				const path = await ask(p.text({ message: "Ruta dentro del hub:", initialValue: key }));
+				const path = await ask(p.text({ message: "Ruta dentro del hub:", initialValue: defaultRepoPath(key) }));
 				const defaultBase = detectRemoteBranch(url) ?? "main";
 				const repoBase = await ask(p.text({ message: "Rama base:", initialValue: defaultBase }));
 				const agent = await ask(p.text({ message: "Agente por defecto (opcional):", placeholder: "pi, claude, codex..." }));
@@ -729,7 +739,7 @@ export async function hubInit(args: string[]): Promise<void> {
 				const resolved = expandSource(localPath, root);
 				const defaultName = basename(localPath);
 				const key = await ask(p.text({ message: "Nombre en hub.toml:", initialValue: defaultName }));
-				const path = await ask(p.text({ message: "Ruta dentro del hub:", initialValue: key }));
+				const path = await ask(p.text({ message: "Ruta dentro del hub:", initialValue: defaultRepoPath(key) }));
 				const defaultBase = currentBranch(resolved) ?? "main";
 				const repoBase = await ask(p.text({ message: "Rama base:", initialValue: defaultBase }));
 				const agent = await ask(p.text({ message: "Agente por defecto (opcional):", placeholder: "pi, claude, codex..." }));
@@ -765,7 +775,7 @@ export async function hubInit(args: string[]): Promise<void> {
 				const key = basename(target.replace(/\.git$/, ""));
 				if (!hubToml.repos[key]) {
 					hubToml.repos[key] = {
-						path: key,
+						path: defaultRepoPath(key),
 						base: detectRemoteBranch(target) ?? "main",
 						link: "submodule",
 						url: target,
@@ -777,7 +787,7 @@ export async function hubInit(args: string[]): Promise<void> {
 				if (!hubToml.repos[key]) {
 					const originUrl = git(resolved, ["remote", "get-url", "origin"]).stdout.trim() || undefined;
 					hubToml.repos[key] = {
-						path: key,
+						path: defaultRepoPath(key),
 						base: currentBranch(resolved) ?? "main",
 						link: "symlink",
 						...(originUrl ? { url: originUrl } : {}),
@@ -904,7 +914,8 @@ export async function hubAdd(args: string[]): Promise<void> {
 
 	const detectedLink: "submodule" | "symlink" = link ?? (isRepoUrl(target) ? "submodule" : "symlink");
 	const repoName = name ?? (detectedLink === "submodule" ? basename(target.replace(/\.git$/, "")) : basename(target));
-	const repoPath = path ?? repoName;
+	// D16: por defecto los repos van en repos/<nombre>; --path manda sobre el defecto.
+	const repoPath = path ?? defaultRepoPath(repoName);
 
 	if (!insidePath(repoPath)) {
 		die(`la ruta "${repoPath}" tiene que ser relativa dentro del hub, con / y sin ..`);
