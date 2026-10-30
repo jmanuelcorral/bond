@@ -3,7 +3,7 @@ name: "2026-10-30-whats-new-hub"
 description: "Página de novedades en la web que presenta el modo hub, con un vídeo en castellano y otro en inglés en el que un orquestador pi monta un hola mundo React + Express en un hub"
 created_at: "2026-10-30T16:00:00Z"
 has_completed_all_phases: false
-last_implementation_at: ""
+last_implementation_at: "2026-10-30T16:50:00Z"
 ---
 
 # Novedades en la web: el modo hub, con su vídeo
@@ -123,13 +123,13 @@ Riesgos:
 
 | Fase | Implementación | Verificación | Revisión | Evidencia |
 | --- | --- | --- | --- | --- |
-| F1 | pending | not_run | pending | todavía nada |
+| F1 | implemented | passed | pending | `f5190ab` (kevin, agy) integrado en `feat/whats-new`: `docs/novedades.md` (publicada como `whats-new.md`) y `docs/en/whats-new.md`, «Novedades»/«What's new» en la barra y en la guía, aviso en las dos portadas; build del site correcto y anclas a la referencia y al puesto comprobadas. Revisado por el orquestador. Run: `2026-10-30-kevin-use-the-plan-execute-skill-to-implement-6.md` |
 | F2 | pending | not_run | pending | todavía nada |
 | F3 | pending | not_run | pending | todavía nada |
 
 ## Siguiente paso
 
-F1 (la página de novedades).
+F2 (los vídeos del hub): guiones listos; falta la confianza de pi en el hub de demo (usuario) y grabar.
 
 ## Evidencia y seguimiento
 
