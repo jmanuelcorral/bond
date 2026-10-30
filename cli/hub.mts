@@ -88,6 +88,9 @@ export interface HubSession {
 	repos: HubRepo[];
 }
 
+/** Etiqueta visible de un repo de la sesión: su clave en hub.toml (o el nombre del hub para "."). */
+export const hubRepoLabel = (s: HubSession, r: HubRepo) => (r.path === "." ? s.name : (r.name ?? r.path));
+
 export interface HubTomlRepo {
 	path: string;
 	base: string;

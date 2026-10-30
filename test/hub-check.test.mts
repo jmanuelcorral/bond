@@ -224,7 +224,9 @@ link = "symlink"
 
 		const rep = checkHubSession(hubSession(hub)!);
 		expect(rep.ok).toBe(true);
-		expect(rep.warnings).toBeGreaterThan(0);
+		expect(rep.warnings).toBe(3);
+		const baseWarnings = rep.repos.flatMap((x) => x.checks).filter((c) => c.check === "base atrasada");
+		expect(baseWarnings).toHaveLength(1);
 		const backRep = rep.repos.find((x) => x.path === "back")!;
 		expect(backRep.checks.some((c) => c.check === "base atrasada" && c.warn && c.ok)).toBe(true);
 

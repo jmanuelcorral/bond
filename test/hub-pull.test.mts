@@ -48,12 +48,22 @@ const bond = (args: string[], cwd = hub) =>
 		stdio: ["ignore", "pipe", "pipe"],
 	});
 
+const bondInit = (dir: string) => {
+	mkdirSync(join(dir, ".bond"), { recursive: true });
+	writeFileSync(join(dir, ".bond", "bond.toml"), "agents = []\n");
+	const s = bond(["sync"], dir);
+	expect(s.status).toBe(0);
+	g(dir, "add", "-A");
+	g(dir, "commit", "-qm", "bond init");
+};
+
 beforeEach(() => {
 	rmSync(hubsPath(), { force: true });
 	tmp = realpathSync(mkdtempSync(join(tmpdir(), "bond-hubpull-")));
 
 	// Repo de origen para el submódulo/enlace
 	subReal = repo("sub-real");
+	bondInit(subReal);
 
 	// Remoto bare para subReal
 	subRemote = join(tmp, "sub-remote.git");
@@ -63,6 +73,7 @@ beforeEach(() => {
 
 	// Hub
 	hub = repo("hub");
+	bondInit(hub);
 	mkdirSync(join(hub, "repos"), { recursive: true });
 	symlinkSync(subReal, join(hub, "repos", "sub"), process.platform === "win32" ? "junction" : "dir");
 
@@ -78,7 +89,6 @@ link = "symlink"
 `,
 	);
 	writeFileSync(join(hub, ".gitignore"), ".bond/hub.local.toml\n/repos/sub\n");
-	mkdirSync(join(hub, ".bond"), { recursive: true });
 	writeFileSync(join(hub, ".bond", "hub.local.toml"), `[repos.sub]\nsource = ${JSON.stringify(subReal)}\n`);
 	g(hub, "add", "-A");
 	g(hub, "commit", "-qm", "hub setup");
@@ -164,17 +174,31 @@ describe("bond hub pull", () => {
 		g(worker, "push", "origin", "main");
 
 		const subShaAntes = g(subReal, "rev-parse", "HEAD");
+		const subBaseAntes = g(subReal, "rev-parse", "refs/heads/main");
 
-		// Hacemos fetch manual para que el tracking ref esté al tanto (ya que dry-run no hace fetch)
+		// Hacemos fetch manual en subReal para que su tracking ref sepa del commit (dry-run no hace fetch)
 		g(subReal, "fetch", "origin");
+		const subTrackingTrasFetch = g(subReal, "rev-parse", "refs/remotes/origin/main");
+
+		// Avanzamos además el remoto del hub sin hacer fetch en el hub
+		const workerHub = join(tmp, "worker-hub-dry");
+		g(tmp, "clone", hubRemote, workerHub);
+		writeFileSync(join(workerHub, "hubfile2.txt"), "hub\n");
+		g(workerHub, "add", "hubfile2.txt");
+		g(workerHub, "commit", "-qm", "nuevo en hubRemote");
+		g(workerHub, "push", "origin", "main");
+		const hubTrackingAntes = g(hub, "rev-parse", "refs/remotes/origin/main");
 
 		const r = bond(["hub", "pull", "--dry-run"]);
 		expect(r.status).toBe(0);
 		expect(r.stdout).toContain("sub (repos/sub)  avanzaría 1 commit(s)");
 		expect(r.stdout).toContain("[dry-run]");
 
-		// Verificamos que el repo no avanzó
+		// Verificamos que HEAD, la rama local y las tracking refs (origin/main) permanecen idénticas (no hubo fetch en dry-run)
 		expect(g(subReal, "rev-parse", "HEAD")).toBe(subShaAntes);
+		expect(g(subReal, "rev-parse", "refs/heads/main")).toBe(subBaseAntes);
+		expect(g(subReal, "rev-parse", "refs/remotes/origin/main")).toBe(subTrackingTrasFetch);
+		expect(g(hub, "rev-parse", "refs/remotes/origin/main")).toBe(hubTrackingAntes);
 	});
 
 	test("--json devuelve el resultado estructurado por repo", () => {
@@ -192,7 +216,46 @@ describe("bond hub pull", () => {
 		expect(data.repos[1].status).toBe("up_to_date");
 	});
 
-	test("salta repos con cambios sin commitear y explica el motivo sin fallar", () => {
+	test("submódulo con HEAD separado por detrás de su remoto: pull actualiza la base, HEAD no se mueve y check deja de avisar (1)", () => {
+		// Desconectamos HEAD en subReal (estado normal de un submódulo)
+		const headBefore = g(subReal, "rev-parse", "HEAD");
+		g(subReal, "checkout", headBefore);
+		expect(spawnSync("git", ["-C", subReal, "symbolic-ref", "-q", "HEAD"]).status).not.toBe(0);
+
+		// Avanzamos el remoto de subReal con un nuevo commit
+		const worker = join(tmp, "worker-sub-detached");
+		g(tmp, "clone", subRemote, worker);
+		writeFileSync(join(worker, "file-sub.txt"), "nuevo en remoto\n");
+		g(worker, "add", "file-sub.txt");
+		g(worker, "commit", "-qm", "nuevo en subRemote");
+		g(worker, "push", "origin", "main");
+		const remoteSha = g(worker, "rev-parse", "HEAD");
+
+		// Hacemos fetch en subReal para que check detecte base atrasada
+		g(subReal, "fetch", "origin");
+
+		// check avisa de base atrasada
+		const chk1 = bond(["hub", "check"]);
+		expect(chk1.status).toBe(0);
+		expect(chk1.stdout).toContain("base atrasada");
+
+		// bond hub pull actualiza la base ref sin tocar HEAD
+		const p = bond(["hub", "pull"]);
+		expect(p.status).toBe(0);
+		expect(p.stdout).toContain("sub (repos/sub)  avanzado 1 commit(s)");
+
+		// La rama base main se actualizó al commit remoto
+		expect(g(subReal, "rev-parse", "refs/heads/main")).toBe(remoteSha);
+		// HEAD sigue separado en el commit anterior
+		expect(g(subReal, "rev-parse", "HEAD")).toBe(headBefore);
+
+		// check ya no avisa de base atrasada
+		const chk2 = bond(["hub", "check"]);
+		expect(chk2.status).toBe(0);
+		expect(chk2.stdout).not.toContain("base atrasada");
+	});
+
+	test("salta repos con cambios sin commitear en su base y explica el motivo sin fallar", () => {
 		writeFileSync(join(subReal, "cambio-sucio.txt"), "sucio\n");
 
 		const r = bond(["hub", "pull"]);
@@ -201,22 +264,24 @@ describe("bond hub pull", () => {
 		expect(r.stdout).toContain("1 saltado(s)");
 	});
 
-	test("salta repos en otra rama y explica el motivo sin fallar", () => {
-		g(subReal, "checkout", "-b", "feature/otra");
+	test("salta si la base tiene checkout en otro worktree y explica el motivo sin fallar", () => {
+		// Creamos un segundo worktree de subReal en otra carpeta con la rama main
+		const wtDir = join(tmp, "wt-main");
+		// Pasamos subReal a otra rama para que wtDir pueda hacer checkout de main
+		g(subReal, "checkout", "-b", "rama-secundaria");
+		g(subReal, "worktree", "add", wtDir, "main");
+
+		// Avanzamos el remoto de subReal
+		const worker = join(tmp, "worker-sub-wt");
+		g(tmp, "clone", subRemote, worker);
+		writeFileSync(join(worker, "file-wt.txt"), "nuevo\n");
+		g(worker, "add", "file-wt.txt");
+		g(worker, "commit", "-qm", "nuevo en subRemote");
+		g(worker, "push", "origin", "main");
 
 		const r = bond(["hub", "pull"]);
 		expect(r.status).toBe(0);
-		expect(r.stdout).toContain('sub (repos/sub)  saltado: en la rama "feature/otra" (no en su base "main")');
-		expect(r.stdout).toContain("1 saltado(s)");
-	});
-
-	test("salta repos con HEAD separado y explica el motivo sin fallar", () => {
-		const headCommit = g(subReal, "rev-parse", "HEAD");
-		g(subReal, "checkout", headCommit);
-
-		const r = bond(["hub", "pull"]);
-		expect(r.status).toBe(0);
-		expect(r.stdout).toContain('sub (repos/sub)  saltado: HEAD separado (no en su base "main")');
+		expect(r.stdout).toContain("sub (repos/sub)  saltado: la base \"main\" tiene checkout en otro worktree");
 		expect(r.stdout).toContain("1 saltado(s)");
 	});
 
