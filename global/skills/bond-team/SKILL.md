@@ -82,6 +82,11 @@ repos que toca) con un agente por repo. Diferencias con el reparto normal:
   se niega a abrir la segunda y dice cómo cerrar la primera (`bond team clean <rama>`).
   Divide la tarea por repos, no por subtareas sueltas. Si la división no encaja por repos,
   propón una sola sesión o rondas sucesivas: una rama vertical detrás de otra.
+- **Antes, las bases al día**: los worktrees salen de la base de cada repo, así que antes de
+  montar el equipo pasa `bond hub pull` (fetch y solo fast-forward; salta, con el motivo, lo
+  que no puede avanzar sin riesgo) y `bond hub check`. El `AGENTS.md` del hub trae un bloque
+  generado (`bond:hub`) con los repos de la sesión, qué es cada uno y las reglas del hub:
+  léelo para repartir la tarea por repos.
 - **Monta el equipo con una sola rama**: `bond team team/<nombre> --repos front,back` (ruta
   o nombre de carpeta único; sin `--repos`, todos los repos de la sesión). `--base` no
   vale: cada repo sale de su base de `hub.toml`. La rama se crea en el hub sin worktree ni
