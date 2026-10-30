@@ -1,11 +1,14 @@
 // bond hub check (cli/hub-check.mts): revisión guiada de la sesión del hub y su --fix.
 // Nunca toca el ~/.bond real: BOND_HOME temporal, como en test/hub.test.mts.
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+// Montar el hub (git init, submódulo, symlink) y lanzar bond tarda varios segundos en Windows.
+setDefaultTimeout(30_000);
 
 if (!process.env.BOND_HOME) {
 	process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
@@ -227,10 +230,10 @@ describe("--fix", () => {
 
 	test("bond hub check acepta --yes y -y para arreglar sin preguntar (H2)", () => {
 		// Antes fallaba con "opción desconocida: --yes"; ahora se acepta (y -y) y aplica los seguros.
-		expect(bond(["hub", "check", "--fix", "--yes"]).stdout).not.toContain("opción desconocida");
-		expect(bond(["hub", "check", "--fix", "--yes"]).stderr).not.toContain("opción desconocida");
-		expect(bond(["hub", "check", "-y"]).stdout).not.toContain("opción desconocida");
-		expect(bond(["hub", "check", "-y"]).stderr).not.toContain("opción desconocida");
+		for (const args of [["--fix", "--yes"], ["-y"]]) {
+			const r = bond(["hub", "check", ...args]);
+			expect(r.stdout + r.stderr).not.toContain("opción desconocida");
+		}
 	});
 
 	test("--fix con --json: la stdout es solo el informe y los mensajes del arreglo van a stderr", () => {
