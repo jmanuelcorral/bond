@@ -930,13 +930,15 @@ reports an invalid `hub.toml` as a failure with its parse error; outside one, no
 ### `bond hub pull`
 
 `cli/hub-pull.mts`. Updates the base branch of the hub and each session repo with `git fetch` and
-fast-forward advance (D19). It only acts if the repo is on its base branch and has no uncommitted
-changes. If a repo has changes, is on another branch, its base has diverged or lacks a
-remote/upstream, it skips it and explains why. It never performs a merge, rebase or push.
+fast-forward advance (D19). It only acts if the repo is on its base branch without uncommitted changes,
+or advancing the ref directly if the base is not checked out in any worktree (e.g. in a submodule
+with detached HEAD). If the base has changes in its checkout, is in use in another worktree, has
+diverged or lacks a remote/upstream, it skips it and explains why. It never performs a merge, rebase
+or push.
 
 - `--dry-run`: describes the advances without fetching or moving branches.
-- `--json`: JSON output with the structured per-repo result (`updated`, `up_to_date`, `skipped`),
-  upstream and advanced commits.
+- `--json`: JSON output with the structured per-repo result (`updated`, `up_to_date`, `skipped`,
+  `failed`), upstream and advanced commits. If any repo ends in `failed`, the command exits with 1.
 
 ### `bond team` in a hub
 

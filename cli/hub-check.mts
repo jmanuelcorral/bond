@@ -7,7 +7,7 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { hubRoot, hubSession, registerHubRepo, submodules, type HubRepo, type HubSession } from "./hub.mts";
+import { hubRepoLabel, hubRoot, hubSession, registerHubRepo, submodules, type HubRepo, type HubSession } from "./hub.mts";
 import { linkRepo } from "./hub-init.mts";
 import { agentInstalled } from "./catalog-agents.mts";
 import { gitWorktrees } from "./team.mts";
@@ -72,8 +72,6 @@ export interface CheckOpts {
 	hasAgent?: (agent: string) => boolean;
 }
 
-const label = (s: HubSession, r: HubRepo) => (r.path === "." ? s.name : (r.name ?? r.path));
-
 /** Aviso (D17/D19): la base va por detrás de su remoto según el último fetch. */
 function baseBehindCheck(r: HubRepo): HubCheck[] {
 	const up = git(r.dir, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", `${r.base}@{upstream}`]);
@@ -113,7 +111,7 @@ function fixLink(r: HubRepo, s: HubSession): void {
 
 /** Las comprobaciones de un repo de la sesión. Si no está en disco, solo se reporta eso. */
 function checkRepo(r: HubRepo, s: HubSession, hasAgent: (agent: string) => boolean): HubCheck[] {
-	const name = label(s, r);
+	const name = hubRepoLabel(s, r);
 	// El aviso de ruta depende solo de la declaración, no de que el repo esté en disco.
 	const checks: HubCheck[] = [...routeChecks(r)];
 
@@ -250,7 +248,7 @@ export function checkHubSession(s: HubSession, opts: CheckOpts = {}): HubCheckRe
 	const repos: RepoReport[] = s.repos.map((r) => {
 		const checks = checkRepo(r, s, hasAgent);
 		if (r.path === ".") checks.push(...verticalChecks(s));
-		return { repo: label(s, r), path: r.path, checks };
+		return { repo: hubRepoLabel(s, r), path: r.path, checks };
 	});
 	const problems = repos.reduce((n, rp) => n + rp.checks.filter((c) => !c.ok).length, 0);
 	const warnings = repos.reduce((n, rp) => n + rp.checks.filter((c) => c.warn && c.ok).length, 0);

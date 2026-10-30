@@ -903,13 +903,14 @@ cambia nada.
 ### `bond hub pull`
 
 `cli/hub-pull.mts`. Pone al día la rama base del hub y de cada repo de la sesión con `git fetch` y
-avance en fast-forward (D19). Solo actúa si el repo está en su rama base y sin cambios sin commitear.
-Si un repo tiene cambios, está en otra rama, su base ha divergido o no tiene remoto/upstream, lo salta
-y explica el motivo. Nunca hace merge, rebase ni push.
+avance en fast-forward (D19). Solo actúa si el repo está en su rama base y sin cambios sin commitear,
+o avanzando directamente la ref si la base no tiene checkout en ningún worktree (p. ej. en un submódulo
+con HEAD separado). Si la base tiene cambios en su checkout, está en uso en otro worktree, ha divergido o
+no tiene remoto/upstream, lo salta y explica el motivo. Nunca hace merge, rebase ni push.
 
 - `--dry-run`: describe los avances sin hacer fetch ni mover las ramas.
-- `--json`: salida estructurada en JSON con el resultado por repo (`updated`, `up_to_date`, `skipped`),
-  upstream y commits avanzados.
+- `--json`: salida estructurada en JSON con el resultado por repo (`updated`, `up_to_date`, `skipped`,
+  `failed`), upstream y commits avanzados. Si algún repo termina en `failed`, el comando sale con 1.
 
 ### `bond team` en un hub
 

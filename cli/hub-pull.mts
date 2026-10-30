@@ -1,18 +1,23 @@
 // bond hub pull: pone al día la rama base del hub y de cada repo de la sesión con git fetch y
 // avance en fast-forward (D19). Solo actúa si el repo está en su rama base y sin cambios sin
-// commitear. Si un repo tiene cambios, está en otra rama, su base ha divergido o no tiene
-// remoto/upstream, lo salta y explica el motivo. Nunca hace merge, rebase ni push.
+// commitear, o actualizando la ref directamente si la base no tiene checkout en ningún worktree
+// (p. ej. en un submódulo con HEAD separado). Si un repo tiene cambios en su checkout de la base,
+// la base tiene checkout en otro worktree, ha divergido o no tiene remoto/upstream, lo salta y
+// explica el motivo. Nunca hace merge, rebase ni push.
 // Con --dry-run y --json.
 
-import { currentBranch, hubRoot, hubSession, type HubRepo, type HubSession } from "./hub.mts";
-import { bad, caution, die, dim, isDryRun, log, ok, run, setDryRun } from "./util.mts";
+import { currentBranch, hubRepoLabel, hubRoot, hubSession, type HubRepo, type HubSession } from "./hub.mts";
+import { gitWorktrees } from "./team.mts";
+import { bad, canonical, caution, die, dim, isDryRun, log, ok, run, setDryRun } from "./util.mts";
 
 export const HUB_PULL_HELP = `Uso: bond hub pull [opciones]
 
 Pone al día la rama base del hub y de cada repo de la sesión con git fetch y
 avance en fast-forward (D19). Solo actúa si el repo está en su rama base y sin
-cambios sin commitear. Si un repo tiene cambios, está en otra rama, su base ha
-divergido o no tiene remoto/upstream, lo salta y explica el motivo.
+cambios sin commitear, o avanzando directamente la ref si la base no tiene
+checkout en ningún worktree (p. ej. en un submódulo con HEAD separado). Si la
+base tiene cambios en su checkout, está en uso en otro worktree, ha divergido o
+no tiene remoto/upstream, lo salta y explica el motivo.
 Nunca hace merge, rebase ni push.
 
 Opciones:
@@ -48,10 +53,8 @@ export interface PullOpts {
 	dryRun?: boolean;
 }
 
-const label = (s: HubSession, r: HubRepo) => (r.path === "." ? s.name : (r.name ?? r.path));
-
 export function pullRepo(r: HubRepo, s: HubSession, opts: PullOpts = {}): RepoPullResult {
-	const name = label(s, r);
+	const name = hubRepoLabel(s, r);
 	const res: RepoPullResult = { repo: name, path: r.path, base: r.base, status: "skipped" };
 	const dryRun = opts.dryRun ?? isDryRun();
 
@@ -65,57 +68,59 @@ export function pullRepo(r: HubRepo, s: HubSession, opts: PullOpts = {}): RepoPu
 		return { ...res, reason: `la base "${r.base}" no existe`, detail: `la base "${r.base}" no existe` };
 	}
 
-	// 3. Está en su rama base
-	const branch = currentBranch(r.dir);
-	if (branch !== r.base) {
-		const reason = branch ? `en la rama "${branch}" (no en su base "${r.base}")` : `HEAD separado (no en su base "${r.base}")`;
-		return { ...res, reason, detail: reason };
-	}
-
-	// 4. Sin cambios sin commitear
-	const dirty = git(r.dir, ["status", "--porcelain"]).stdout.split("\n").filter(Boolean).length;
-	if (dirty > 0) {
-		const reason = `${dirty} cambio(s) sin commitear`;
-		return { ...res, reason, detail: reason };
-	}
-
-	// 5. Tiene remoto configurado
+	// 3. Tiene remoto configurado
 	const remotes = git(r.dir, ["remote"]).stdout.split("\n").filter(Boolean);
 	if (!remotes.length) {
 		return { ...res, reason: "sin remoto configurado", detail: "sin remoto configurado" };
 	}
 
-	// 6. Upstream de la base
+	// 4. Upstream de la base
 	const remoteConfig = git(r.dir, ["config", `branch.${r.base}.remote`]).stdout.trim();
 	const upInitial = git(r.dir, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", `${r.base}@{upstream}`]);
 	if (!remoteConfig && upInitial.status !== 0) {
 		return { ...res, reason: `la base "${r.base}" no tiene upstream configurado`, detail: `la base "${r.base}" no tiene upstream configurado` };
 	}
+	const remote = remoteConfig || (upInitial.status === 0 ? upInitial.stdout.trim().split("/")[0] : undefined) || remotes[0];
 
-	// 7. git fetch (si no es --dry-run)
+	// 5. Comprobar dónde tiene checkout la base
+	const worktrees = gitWorktrees(r.dir);
+	const checkedOutElsewhere = worktrees.find((w) => w.branch === r.base && w.path !== canonical(r.dir));
+	if (checkedOutElsewhere) {
+		const reason = `la base "${r.base}" tiene checkout en otro worktree (${checkedOutElsewhere.path})`;
+		return { ...res, reason, detail: reason };
+	}
+	const isCheckedOutHere = currentBranch(r.dir) === r.base;
+	if (isCheckedOutHere) {
+		const dirty = git(r.dir, ["status", "--porcelain"]).stdout.split("\n").filter(Boolean).length;
+		if (dirty > 0) {
+			const reason = `${dirty} cambio(s) sin commitear`;
+			return { ...res, reason, detail: reason };
+		}
+	}
+
+	// 6. git fetch (si no es --dry-run)
 	if (!dryRun) {
-		const fetchArgs = remoteConfig ? ["fetch", "--quiet", remoteConfig] : ["fetch", "--quiet"];
-		const f = git(r.dir, fetchArgs);
+		const f = git(r.dir, ["fetch", "--quiet", remote]);
 		if (f.status !== 0) {
 			return { ...res, reason: `git fetch falló: ${firstLine(f.stderr)}`, detail: `git fetch falló: ${firstLine(f.stderr)}` };
 		}
 	}
 
-	// 8. Resolver upstream tras fetch o en --dry-run
+	// 7. Resolver upstream tras fetch o en --dry-run
 	const upResolved = git(r.dir, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", `${r.base}@{upstream}`]);
 	if (upResolved.status !== 0 || !upResolved.stdout.trim()) {
 		return { ...res, reason: `la base "${r.base}" no tiene upstream configurado`, detail: `la base "${r.base}" no tiene upstream configurado` };
 	}
 	const upstream = upResolved.stdout.trim();
 
-	// 9. Comprobar ahead / behind
+	// 8. Comprobar ahead / behind
 	const countRes = git(r.dir, ["rev-list", "--left-right", "--count", `${r.base}...${upstream}`]);
 	if (countRes.status !== 0) {
 		return { ...res, upstream, reason: `no se pudo comparar ${r.base} con ${upstream}`, detail: `no se pudo comparar ${r.base} con ${upstream}` };
 	}
 	const [ahead = 0, behind = 0] = countRes.stdout.trim().split(/\s+/).map(Number);
 
-	// 10. Evaluar estado
+	// 9. Evaluar estado
 	if (behind === 0) {
 		return { ...res, status: "up_to_date", upstream, commits: 0, detail: "al día" };
 	}
@@ -125,7 +130,7 @@ export function pullRepo(r: HubRepo, s: HubSession, opts: PullOpts = {}): RepoPu
 		return { ...res, status: "skipped", upstream, reason, detail: reason };
 	}
 
-	// ahead === 0 && behind > 0: fast-forward
+	// ahead === 0 && behind > 0: avance en fast-forward
 	if (dryRun) {
 		return {
 			...res,
@@ -136,17 +141,38 @@ export function pullRepo(r: HubRepo, s: HubSession, opts: PullOpts = {}): RepoPu
 		};
 	}
 
-	const ff = git(r.dir, ["merge", "--ff-only", upstream]);
-	if (ff.status !== 0) {
+	if (isCheckedOutHere) {
+		const ff = git(r.dir, ["merge", "--ff-only", upstream]);
+		if (ff.status !== 0) {
+			return {
+				...res,
+				status: "failed",
+				upstream,
+				reason: `fast-forward falló: ${firstLine(ff.stderr)}`,
+				detail: `fast-forward falló: ${firstLine(ff.stderr)}`,
+			};
+		}
+		return {
+			...res,
+			status: "updated",
+			upstream,
+			commits: behind,
+			detail: `avanzado ${behind} commit(s) a ${upstream} (fast-forward)`,
+		};
+	}
+
+	// La base no tiene checkout en ningún worktree (p. ej. submódulo con HEAD separado):
+	// avance directo de la ref con fetch fast-forward (sin '+' para rechazar si no es ff)
+	const ffFetch = git(r.dir, ["fetch", remote, `${r.base}:${r.base}`]);
+	if (ffFetch.status !== 0) {
 		return {
 			...res,
 			status: "failed",
 			upstream,
-			reason: `fast-forward falló: ${firstLine(ff.stderr)}`,
-			detail: `fast-forward falló: ${firstLine(ff.stderr)}`,
+			reason: `fast-forward falló: ${firstLine(ffFetch.stderr)}`,
+			detail: `fast-forward falló: ${firstLine(ffFetch.stderr)}`,
 		};
 	}
-
 	return {
 		...res,
 		status: "updated",
@@ -196,7 +222,8 @@ export function printPull(r: HubPullReport): void {
 	if (skipped) parts.push(`${skipped} saltado(s)`);
 	if (failed) parts.push(`${failed} con fallo`);
 	const prefix = r.dryRun ? `${dim("[dry-run]")} ` : "";
-	console.log(`\n${prefix}${ok("bases revisadas")}${parts.length ? dim(` · ${parts.join(" · ")}`) : ""}`);
+	const title = failed > 0 ? bad("bases revisadas") : ok("bases revisadas");
+	console.log(`\n${prefix}${title}${parts.length ? dim(` · ${parts.join(" · ")}`) : ""}`);
 }
 
 export async function hubPull(args: string[]): Promise<void> {
