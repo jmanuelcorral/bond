@@ -2,6 +2,13 @@
 
 ## Sin publicar
 
+- `bond hub init`, `bond hub add` y `bond hub sync` hacen `bond init` con la config del hub
+  (sus agentes y las skills por defecto del catálogo) en los repos de la sesión que no tienen
+  bond, y respetan la de los que ya lo tienen. Con terminal preguntan antes. La config se
+  commitea en la rama actual del repo si estaba limpio (los worktrees de `bond team` salen de lo
+  commiteado); si no, se deja sin commitear y se avisa. En un submódulo ese commit es local, y
+  se avisa de hacer `git push` en él antes de subir el hub. `bond hub check` propone
+  `bond hub sync` para un repo sin bond.
 - `bond hub init` (y `bond hub sync` cuando falta la ruta de un symlink) pide la ruta al clon
   local navegando por disco: empieza en la carpeta que contiene el hub, autocompleta carpetas
   (flechas para elegir, Tab completa, `/` entra en la carpeta) y solo acepta un repo git.
