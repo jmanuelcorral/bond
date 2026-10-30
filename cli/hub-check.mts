@@ -137,7 +137,7 @@ function checkRepo(r: HubRepo, s: HubSession, hasAgent: (agent: string) => boole
 
 	// 4. bond init hecho y config de agentes al día (bond sync --check).
 	if (!existsSync(join(r.dir, ".bond", "bond.toml"))) {
-		checks.push({ check: "bond init", ok: false, detail: "el repo no tiene .bond/bond.toml", fix: "bond hub sync (hace bond init con la config del hub)" });
+		checks.push({ check: "bond init", ok: false, detail: "el repo no tiene .bond/bond.toml", fix: "bond hub sync (hace el bond init que falta)" });
 	} else {
 		const prev = process.cwd();
 		let cfgActions: ReturnType<typeof syncRepo> | undefined;

@@ -1118,8 +1118,12 @@ async function askSelection(current: Selection, installed: string[], catalogs: C
 	return { agents, default_agent: def, mcp: pick("mcp"), skills: pick("skills"), commands: pick("commands") };
 }
 
-/** `bond init`; con `quiet` (desde bond hub) no enseña los pasos siguientes: el hub los da. */
-export async function init(args: string[], opts: { quiet?: boolean } = {}): Promise<void> {
+/**
+ * `bond init`. Desde bond hub: con `quiet` no enseña los pasos siguientes (el hub los da), con
+ * `extraSkills` las añade a las de por defecto y con `fallbackAgents` los usa si no hay ningún
+ * agente instalado (en vez de fallar).
+ */
+export async function init(args: string[], opts: { quiet?: boolean; extraSkills?: string[]; fallbackAgents?: string[] } = {}): Promise<void> {
 	if (args.includes("--list")) return printCatalog();
 	const opt = (name: string) => {
 		const i = args.indexOf(name);
@@ -1147,7 +1151,7 @@ export async function init(args: string[], opts: { quiet?: boolean } = {}): Prom
 	const installed = SUPPORTED_AGENTS.filter(agentInstalled);
 	// Con --agents se puede preparar la config de agentes que aquí no están instalados (p. ej.
 	// para el resto del equipo, o en CI); sin él, se parte de los instalados.
-	const askedAgents = list("--agents");
+	const askedAgents = list("--agents") ?? (!installed.length ? opts.fallbackAgents : undefined);
 	if (!installed.length && !askedAgents) die("no hay ningún agente instalado (bond setup te dice cómo instalar uno; o usa --agents)");
 	for (const a of askedAgents ?? []) if (!installed.includes(a)) warn(`${a} no está instalado aquí: se genera su config igualmente`);
 	let global: { agents: string[]; default_agent?: string } = { agents: [] };
@@ -1164,7 +1168,7 @@ export async function init(args: string[], opts: { quiet?: boolean } = {}): Prom
 		agents: global.agents.filter((a) => installed.includes(a)).length ? global.agents.filter((a) => installed.includes(a)) : installed,
 		default_agent: global.default_agent,
 		mcp: Object.keys(contents(bondCatalog()).mcp),
-		skills: defaultSkills(),
+		skills: [...new Set([...defaultSkills(), ...(opts.extraSkills ?? [])])],
 		commands: contents(bondCatalog()).commands,
 	};
 

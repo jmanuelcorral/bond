@@ -2,6 +2,11 @@
 
 ## Sin publicar
 
+- `bond hub init` hace primero `bond init` en el propio hub si no lo tiene (con terminal, con
+  sus preguntas; con `--yes`, lo elegido en `bond setup`), con las skills por defecto más
+  `plan-team`, en lugar del `bond.toml` mínimo de antes; así el orquestador tiene las skills del
+  catálogo en el hub. `bond hub sync` también se lo hace a un hub que no lo tenga, y
+  `bond hub check` lo marca en la fila del hub.
 - `bond hub init`, `bond hub add` y `bond hub sync` hacen `bond init` con la config del hub
   (sus agentes y las skills por defecto del catálogo) en los repos de la sesión que no tienen
   bond, y respetan la de los que ya lo tienen. Con terminal preguntan antes. La config se
@@ -18,9 +23,9 @@
     `.gitmodules`, `.gitignore`, `AGENTS.md`, `.bond/` y la config de agente), para que
     `bond hub check` encuentre la base. En un hub preexistente con commits no commitea: los
     cambios se dejan para el usuario. Con `--dry-run` solo lo describe.
-  - `bond hub init` propone memoria de decisiones para el hub (activada por defecto con `--yes`):
-    escribe `decision-record` y la sección `[decisions]` en su `.bond/bond.toml`, de modo que los
-    runs de `bond team` quedan en el hub y no caen en cada repo de la sesión (D5).
+  - El hub nace con memoria de decisiones (`decision-record` y `[decisions]`, del `bond init` del
+    hub), de modo que los runs de `bond team` quedan en el hub y no caen en cada repo de la
+    sesión (D5).
   - `bond hub check` acepta `--yes`/`-y` para aplicar los arreglos seguros sin preguntar; con
     terminal y sin `--yes`, `--fix` pregunta antes de cada arreglo.
   - `bond team prompt` reintenta una vez un prompt que Herdr devuelve estancado

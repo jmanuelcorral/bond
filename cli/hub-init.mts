@@ -31,7 +31,7 @@ import {
 	registerHubRepo,
 	submodules,
 } from "./hub.mts";
-import { agentsMd, DECISIONS_SECTION, init, loadRepoAgents, syncRepo } from "./repo.mts";
+import { agentsMd, init, loadRepoAgents, syncRepo } from "./repo.mts";
 
 export const HUB_INIT_HELP = `Uso: bond hub init [dir] [repos...] [opciones]
 
@@ -46,6 +46,9 @@ Opciones:
   --name <nombre> Nombre del hub (por defecto, el nombre de la carpeta)
   --base <rama>   Rama base del hub (por defecto, la rama actual o main)
   --repo <origen> Repositorio a importar (URL o ruta local; puede repetirse)
+
+Antes de nada hace bond init en el propio hub si no lo tiene (con terminal, con sus
+preguntas; con --yes, lo de bond setup), con las skills por defecto y plan-team.
 
 Un hub recién creado (sin ningún commit) queda con su config de agente generada y un
 commit inicial de los ficheros del hub, para que 'bond hub check' encuentre la base.
@@ -76,8 +79,8 @@ export const HUB_SYNC_HELP = `Uso: bond hub sync [opciones]
 
 Deja el disco como dice hub.toml: monta submódulos, crea enlaces (symlinks o
 junctions en Windows), pregunta la ruta local que falte u ofrece clonar, y
-actualiza el registro global ~/.bond/hubs.toml. A los repos de la sesión sin
-bond les hace bond init con la config del hub (como bond hub init).
+actualiza el registro global ~/.bond/hubs.toml. Al hub y a los repos de la
+sesión que no tienen bond les hace bond init (como bond hub init).
 
 Opciones:
   --yes, -y   Falla si falta alguna ruta local en vez de preguntar
@@ -503,6 +506,27 @@ export async function initSessionRepos(root: string, hubToml: HubToml, opts: { i
 	}
 }
 
+/**
+ * bond init en el propio hub si no lo tiene. Con terminal, el de siempre, con sus preguntas;
+ * sin ella, lo elegido en bond setup. En los dos, las skills por defecto más plan-team (la que
+ * usa el orquestador en un hub), y pi si no hay ningún agente instalado.
+ */
+export async function initHub(root: string, opts: { interactive: boolean }): Promise<void> {
+	if (existsSync(join(root, ".bond", "bond.toml"))) return;
+	if (isDryRun()) {
+		console.log(`    ${dim("[dry-run]")} bond init en el hub (skills por defecto y plan-team)`);
+		return;
+	}
+	const prev = process.cwd();
+	try {
+		process.chdir(root);
+		log("bond init en el hub");
+		await init(opts.interactive ? [] : ["--yes"], { quiet: true, extraSkills: ["plan-team"], fallbackAgents: ["pi"] });
+	} finally {
+		process.chdir(prev);
+	}
+}
+
 /** Comando bond hub init */
 export async function hubInit(args: string[]): Promise<void> {
 	if (args.includes("-h") || args.includes("--help")) {
@@ -591,10 +615,11 @@ export async function hubInit(args: string[]): Promise<void> {
 		mkdirSync(join(root, ".bond"), { recursive: true });
 	});
 
-	// Memoria de decisiones del hub (D5): los runs de bond team van aquí, no a cada repo de
-	// la sesión. Con --yes va activada por defecto; en modo interactivo se propone.
 	const interactive = !yes && process.stdin.isTTY === true;
-	let withDecisions = true;
+
+	// bond init en el propio hub antes que nada: sin él, el orquestador no tiene las skills del
+	// catálogo (plan-team, decision-record con la memoria de decisiones del hub, D5...).
+	await initHub(root, { interactive });
 
 	// AGENTS.md si no existe
 	const agentsPath = join(root, "AGENTS.md");
@@ -630,13 +655,6 @@ export async function hubInit(args: string[]): Promise<void> {
 		const p = await import("@clack/prompts");
 		p.intro(dim(`hub init · ${basename(root)}`));
 
-		// Memoria de decisiones: se propone activada (los runs del equipo quedan en el hub).
-		withDecisions = await ask(
-			p.confirm({
-				message: "¿Memoria de decisiones para el hub? (los runs de bond team se guardan aquí)",
-				initialValue: true,
-			}),
-		);
 
 		hubToml.name = await ask(
 			p.text({
@@ -773,16 +791,6 @@ export async function hubInit(args: string[]): Promise<void> {
 	act("guardar hub.toml", () => {
 		writeFileSync(hubTomlPath, renderHubToml(hubToml));
 	});
-
-	// .bond/bond.toml del hub si no existe: los agentes y, con memoria de decisiones, la
-	// skill decision-record y la sección [decisions] (para que los runs caigan en el hub, D5).
-	const bondTomlPath = join(root, ".bond", "bond.toml");
-	if (!existsSync(bondTomlPath)) {
-		act("crear .bond/bond.toml", () => {
-			const skills = withDecisions ? `skills = ["decision-record"]\n` : "";
-			writeFileSync(bondTomlPath, `agents = ["pi"]\n${skills}${withDecisions ? `\n${DECISIONS_SECTION}` : ""}`);
-		});
-	}
 
 	if (Object.keys(hubLocalToml.repos).length > 0) {
 		act("guardar .bond/hub.local.toml", () => {
@@ -989,5 +997,6 @@ export async function hubSync(args: string[]): Promise<void> {
 	}
 
 	await syncHub(root, { yes });
+	await initHub(root, { interactive: !yes && process.stdin.isTTY === true });
 	await initSessionRepos(root, parseHubToml(readFileSync(join(root, "hub.toml"), "utf8"), "hub.toml"), { interactive: !yes && process.stdin.isTTY === true });
 }
