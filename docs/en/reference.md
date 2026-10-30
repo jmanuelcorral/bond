@@ -862,11 +862,12 @@ source = "~/gitrepos/fluzo-backend"
   `hub.toml`, `.gitignore` and `hub.local.toml`) or prepares it in an existing repo. It imports
   existing submodules with their base and adds repos by URL (submodule) or local path (symlink).
   The local clone is picked by browsing the disk from the folder that holds the hub (arrows to
-  choose, Tab completes, `/` enters the folder) and only a git repo is accepted. With `--yes` it uses detected values without asking.
+  choose, Tab completes, `/` enters the folder) and only a git repo is accepted. Session repos without bond get a `bond init` with the hub's config (its agents, with the repo's `agent` as the default one, and the catalog's default skills); those that already have it keep their own. That config is committed on the repo's current branch if it was clean (otherwise it is left uncommitted with a warning); in a submodule that commit is local: run `git push` in it before pushing the hub. With `--yes` it uses detected values without asking.
 - `bond hub add <url|path>`: adds a repository to `hub.toml` (as a submodule if it is a URL, as
   a symlink if it is a local clone) and syncs the disk.
 - `bond hub sync`: leaves the disk as `hub.toml` says: it mounts submodules, creates symlinks (or
-  junctions on Windows when the symlink fails) and updates the global registry. If a symlink's
+  junctions on Windows when the symlink fails) and updates the global registry; repos without bond get a `bond init` with the hub's config,
+  as in `bond hub init`. If a symlink's
   local path is missing from `.bond/hub.local.toml`, with `--yes` it fails saying how to set it
   and, interactively, it asks. With `--dry-run` it shows what it would do without touching the disk.
 - `.bond/hub.local.toml` stores the paths to this machine's local clones (`source`), accepting `~`

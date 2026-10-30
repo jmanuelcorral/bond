@@ -7,6 +7,7 @@ import {
 	act,
 	brokenLink,
 	canonical,
+	catchDie,
 	die,
 	dim,
 	isDryRun,
@@ -30,7 +31,7 @@ import {
 	registerHubRepo,
 	submodules,
 } from "./hub.mts";
-import { agentsMd, DECISIONS_SECTION, syncRepo } from "./repo.mts";
+import { agentsMd, DECISIONS_SECTION, init, loadRepoAgents, syncRepo } from "./repo.mts";
 
 export const HUB_INIT_HELP = `Uso: bond hub init [dir] [repos...] [opciones]
 
@@ -49,6 +50,11 @@ Opciones:
 Un hub recién creado (sin ningún commit) queda con su config de agente generada y un
 commit inicial de los ficheros del hub, para que 'bond hub check' encuentre la base.
 En un hub preexistente con commits no se commitea: los cambios se dejan para ti.
+
+Los repos de la sesión sin bond reciben un bond init con la config del hub (sus
+agentes y las skills por defecto del catálogo); los que ya lo tienen conservan la
+suya. Su config se commitea en la rama actual del repo si estaba limpio; en un
+submódulo ese commit es local: haz git push en él antes de subir el hub.
 `;
 
 export const HUB_ADD_HELP = `Uso: bond hub add <url|ruta> [opciones]
@@ -70,7 +76,8 @@ export const HUB_SYNC_HELP = `Uso: bond hub sync [opciones]
 
 Deja el disco como dice hub.toml: monta submódulos, crea enlaces (symlinks o
 junctions en Windows), pregunta la ruta local que falte u ofrece clonar, y
-actualiza el registro global ~/.bond/hubs.toml.
+actualiza el registro global ~/.bond/hubs.toml. A los repos de la sesión sin
+bond les hace bond init con la config del hub (como bond hub init).
 
 Opciones:
   --yes, -y   Falla si falta alguna ruta local en vez de preguntar
@@ -431,6 +438,71 @@ export async function syncHub(
 	updateGitignore(root, [".bond/hub.local.toml", ...symlinkPaths]);
 }
 
+/**
+ * bond init en los repos de la sesión que no lo tienen, con los agentes del hub (y el `agent` del
+ * repo en hub.toml como el de por defecto) y las skills por defecto del catálogo: sin eso, el
+ * agente de ese repo no tiene sus skills ni sus instrucciones. Los repos que ya tienen bond
+ * conservan su config. Como los worktrees de bond team salen de lo commiteado, la config se
+ * commitea en la rama actual del repo, solo si el repo estaba limpio (el commit lleva solo lo
+ * de bond); si no, se deja sin commitear y se avisa. Con terminal y sin --yes, pregunta antes.
+ */
+export async function initSessionRepos(root: string, hubToml: HubToml, opts: { interactive: boolean }): Promise<void> {
+	const pending = Object.entries(hubToml.repos)
+		.map(([key, r]) => ({ key, r, dir: join(root, r.path) }))
+		.filter(({ dir }) => existsSync(dir) && !existsSync(join(dir, ".bond", "bond.toml")) && git(dir, ["rev-parse", "--show-toplevel"]).status === 0);
+	if (!pending.length) return;
+
+	const hub = existsSync(join(root, ".bond", "bond.toml")) ? catchDie(() => loadRepoAgents(root)).value : undefined;
+	const p = opts.interactive ? await import("@clack/prompts") : undefined;
+
+	for (const { key, r, dir } of pending) {
+		const agents = [...new Set([...(hub?.agents.length ? hub.agents : []), ...(r.agent ? [r.agent] : [])])];
+		const def = r.agent ?? hub?.default_agent;
+		const desc = agents.length ? `agentes ${agents.join(", ")}` : "los agentes de bond setup";
+		if (p) {
+			const go = await ask(p.confirm({ message: `${key} no tiene bond: ¿bond init con la config del hub (${desc})?`, initialValue: true }));
+			if (!go) {
+				warn(`${key}: sin bond init, su agente no tendrá las skills ni las instrucciones de bond (bond hub check lo marca)`);
+				continue;
+			}
+		}
+		if (isDryRun()) {
+			console.log(`    ${dim("[dry-run]")} bond init en ${r.path} (${desc}) y commit de su config si el repo está limpio`);
+			continue;
+		}
+		const clean = git(dir, ["status", "--porcelain"]).stdout.trim() === "";
+		const args = agents.length ? ["--agents", agents.join(","), ...(def ? ["--default", def] : [])] : ["--yes"];
+		const prev = process.cwd();
+		try {
+			process.chdir(dir);
+			log(`bond init en ${r.path}`);
+			await init(args, { quiet: true });
+		} finally {
+			process.chdir(prev);
+		}
+		const branch = currentBranch(dir) ?? "HEAD";
+		if (!clean) {
+			warn(`${key}: tenía cambios sin commitear, así que su config de bond queda sin commitear; commitéala tú (los worktrees de bond team salen de lo commiteado)`);
+			continue;
+		}
+		if (p) {
+			const go = await ask(p.confirm({ message: `¿Commitear la config de bond en ${key} (${branch})?`, initialValue: true }));
+			if (!go) {
+				warn(`${key}: config de bond sin commitear; los worktrees de bond team no la verán hasta que la commitees`);
+				continue;
+			}
+		}
+		git(dir, ["add", "-A"]);
+		const c = git(dir, ["commit", "-qm", "chore: add bond config"]);
+		if (c.status !== 0) warn(`${key}: commit de la config de bond: ${c.stderr.trim() || c.stdout.trim()}`);
+		else {
+			console.log(`${ok("✓")} ${key}: config de bond commiteada en ${branch}`);
+			// En un submódulo, el hub apunta a ese commit: sin push, un clon del hub no lo encuentra.
+			if (r.link === "submodule") warn(`${key}: el commit es local; haz git push en ${r.path} antes de subir el hub, o sus clones no encontrarán ese commit`);
+		}
+	}
+}
+
 /** Comando bond hub init */
 export async function hubInit(args: string[]): Promise<void> {
 	if (args.includes("-h") || args.includes("--help")) {
@@ -724,6 +796,7 @@ export async function hubInit(args: string[]): Promise<void> {
 	updateGitignore(root, [".bond/hub.local.toml", ...symlinkPaths]);
 
 	await syncHub(root, { yes: !interactive, hubToml, hubLocalToml });
+	await initSessionRepos(root, hubToml, { interactive });
 
 	// H1: un hub recién creado (sin ningún commit) queda sin la base que luego exige
 	// `bond hub check` y con la config de agente sin generar. Generamos la config del hub
@@ -889,6 +962,7 @@ export async function hubAdd(args: string[]): Promise<void> {
 	updateGitignore(root, [".bond/hub.local.toml", ...symlinkPaths]);
 
 	await syncHub(root, { yes: true, hubToml, hubLocalToml });
+	await initSessionRepos(root, hubToml, { interactive: !yes && process.stdin.isTTY === true });
 	log(`añadido ${repoName} a ${root}`);
 }
 
@@ -915,4 +989,5 @@ export async function hubSync(args: string[]): Promise<void> {
 	}
 
 	await syncHub(root, { yes });
+	await initSessionRepos(root, parseHubToml(readFileSync(join(root, "hub.toml"), "utf8"), "hub.toml"), { interactive: !yes && process.stdin.isTTY === true });
 }

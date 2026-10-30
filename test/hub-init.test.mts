@@ -133,6 +133,36 @@ describe("bond hub init", () => {
 		expect(baseFail).toEqual([]);
 	});
 
+	test("bond hub init hace bond init en los repos sin bond y commitea su config si estaban limpios", () => {
+		const hubDir = join(tmp, "init-hub");
+		// back-real con un cambio sin commitear: su config se queda sin commitear y se avisa.
+		writeFileSync(join(backReal, "dirty.txt"), "x\n");
+		const res = bond(["hub", "init", hubDir, "--yes", `file://${frontReal}`, backReal], tmp);
+		expect(res.status).toBe(0);
+		const front = join(hubDir, basename(frontReal));
+		expect(existsSync(join(front, ".bond", "bond.toml"))).toBe(true);
+		expect(g(front, "log", "-1", "--format=%s")).toBe("chore: add bond config");
+		expect(g(front, "status", "--porcelain")).toBe("");
+		// El hub apunta al commit con la config del submódulo.
+		expect(g(hubDir, "ls-tree", "HEAD", basename(frontReal))).toContain(g(front, "rev-parse", "HEAD"));
+		expect(existsSync(join(backReal, ".bond", "bond.toml"))).toBe(true);
+		expect(g(backReal, "log", "-1", "--format=%s")).toBe("init");
+		expect(res.stderr).toContain("sin commitear");
+		// Sin el bloque de pasos siguientes de bond init: el hub ya lo hace.
+		expect(res.stdout).not.toContain("Siguiente:");
+	});
+
+	test("bond hub init respeta la config de un repo que ya tiene bond", () => {
+		const hubDir = join(tmp, "own-hub");
+		mkdirSync(join(backReal, ".bond"));
+		writeFileSync(join(backReal, ".bond", "bond.toml"), 'agents = ["claude"]\n');
+		g(backReal, "add", "-A");
+		g(backReal, "commit", "-qm", "own bond");
+		bond(["hub", "init", hubDir, "--yes", backReal], tmp);
+		expect(readFileSync(join(backReal, ".bond", "bond.toml"), "utf8")).toBe('agents = ["claude"]\n');
+		expect(g(backReal, "log", "-1", "--format=%s")).toBe("own bond");
+	});
+
 	test("bond hub init --dry-run muestra qué haría, llega al resumen y no crea nada (B1)", () => {
 		const hubDir = join(tmp, "dry-hub");
 		const res = bond(["hub", "init", hubDir, "--dry-run", `file://${frontReal}`, backReal], tmp);
@@ -228,6 +258,9 @@ describe("bond hub sync", () => {
 		// antes ya no hace falta y daría 'nada que commitear'. Se tolera por si acaso.
 		g(hubDir, "add", "-A");
 		spawnSync("git", ["-C", hubDir, "commit", "-qm", "commit hub config"], { encoding: "utf8" });
+		// hub init commiteó la config de bond en el submódulo (solo local): se publica en su origen,
+		// como haría el usuario con git push antes de subir el hub, para que el clon la encuentre.
+		g(frontReal, "fetch", "-q", join(hubDir, basename(frontReal)), "main:bond-config");
 
 		// Clonar el hub en otra carpeta (no lleva .bond/hub.local.toml porque está en .gitignore)
 		const clonedHub = join(tmp, "cloned-hub");

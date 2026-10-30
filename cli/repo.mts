@@ -1118,7 +1118,8 @@ async function askSelection(current: Selection, installed: string[], catalogs: C
 	return { agents, default_agent: def, mcp: pick("mcp"), skills: pick("skills"), commands: pick("commands") };
 }
 
-export async function init(args: string[]): Promise<void> {
+/** `bond init`; con `quiet` (desde bond hub) no enseña los pasos siguientes: el hub los da. */
+export async function init(args: string[], opts: { quiet?: boolean } = {}): Promise<void> {
 	if (args.includes("--list")) return printCatalog();
 	const opt = (name: string) => {
 		const i = args.indexOf(name);
@@ -1203,6 +1204,7 @@ export async function init(args: string[]): Promise<void> {
 	}
 	if (sel.agents.includes("pi")) await ensureBondLink();
 	syncRepo();
+	if (opts.quiet) return;
 	const generated = [...new Set(plan(root, loadRepoConfig(root), loadManifest(root)).map((o) => o.path.split("/")[0]))].sort();
 	const trust: Record<string, string> = {
 		pi: "pi pregunta si confías en el proyecto (sin eso no carga .pi/ ni las Bond Extensions)",
