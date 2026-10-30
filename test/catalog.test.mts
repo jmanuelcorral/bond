@@ -3,7 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -195,6 +195,14 @@ describe("el catálogo de bond", () => {
 		expect(r.warnings).toEqual([]);
 		expect(r.name).toBe("bond");
 		expect(r.mcps).toEqual(["context7", "duckduckgo"]);
+	});
+
+	test("las skills globales de bond (las que enlaza bond setup) tienen frontmatter que pi carga", () => {
+		// pi no carga una skill con frontmatter inválido: p. ej. un ": " sin comillas en la description.
+		const dir = join(ROOT, "global", "skills");
+		for (const name of readdirSync(dir)) {
+			expect({ name, errors: strictFrontmatter(readFileSync(join(dir, name, "SKILL.md"), "utf8")) }).toEqual({ name, errors: [] });
+		}
 	});
 });
 
