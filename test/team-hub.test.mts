@@ -16,7 +16,8 @@ const { pickRepos, tabWorktreePath, verticalNote } = await import("../cli/team.m
 const { catchDie } = await import("../cli/util.mts");
 
 const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
-const HUB_TOML = 'agents = ["pi"]\n\n[decisions]\ndir = "docs/decisions"\n\n[hub]\nbase = "main"\n\n[hub.repos]\n"back" = { base = "main" }\n"front" = { base = "main" }\n';
+const HUB_TOML = 'name = "hub"\nbase = "main"\n\n[repos.back]\npath = "back"\nbase = "main"\nlink = "submodule"\n\n[repos.front]\npath = "front"\nbase = "main"\nlink = "submodule"\n';
+const BOND_TOML = 'agents = ["pi"]\n\n[decisions]\ndir = "docs/decisions"\n';
 
 /** herdr simulado: lo justo de cada orden que usa bond team, con su estado en $FAKE_HERDR_STATE. */
 const FAKE_HERDR = `#!${process.execPath}
@@ -119,7 +120,7 @@ beforeEach(() => {
 	// front tiene su propio bond.toml, con claude por defecto; back no tiene.
 	repo("front", { ".bond/bond.toml": 'agents = ["claude"]\n' });
 	repo("back");
-	hub = repo("hub", { ".bond/bond.toml": HUB_TOML });
+	hub = repo("hub", { "hub.toml": HUB_TOML, ".bond/bond.toml": BOND_TOML });
 	g(hub, "submodule", "add", "-q", "../front", "front");
 	g(hub, "submodule", "add", "-q", "../back", "back");
 	g(hub, "commit", "-qm", "subs");
@@ -234,7 +235,7 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 	});
 
 	test("sin [decisions] en el hub, los runs van a la memoria del submódulo (D5)", () => {
-		writeFileSync(join(hub, ".bond", "bond.toml"), HUB_TOML.replace('[decisions]\ndir = "docs/decisions"\n\n', ""));
+		writeFileSync(join(hub, ".bond", "bond.toml"), 'agents = ["pi"]\n');
 		mkdirSync(join(hub, "back", ".bond"));
 		writeFileSync(join(hub, "back", ".bond", "bond.toml"), 'agents = ["pi"]\n\n[decisions]\ndir = "docs/decisions"\n');
 		expect(bond(["team", "fix/x"]).status).toBe(0);
@@ -303,7 +304,7 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 
 	test("un worktree suelto en una base de la sesión no es una rama vertical abierta", () => {
 		// front sale de dev, que también existe en el hub, y tiene un worktree de dev olvidado.
-		writeFileSync(join(hub, ".bond", "bond.toml"), HUB_TOML.replace('"front" = { base = "main" }', '"front" = { base = "dev" }'));
+		writeFileSync(join(hub, "hub.toml"), HUB_TOML.replace('[repos.front]\npath = "front"\nbase = "main"', '[repos.front]\npath = "front"\nbase = "dev"'));
 		g(join(hub, "front"), "branch", "dev");
 		g(hub, "branch", "dev");
 		g(join(hub, "front"), "worktree", "add", "-q", join(tmp, "front-dev"), "dev");
@@ -313,7 +314,7 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 	});
 
 	test("una base del hub que no existe falla con un mensaje claro, sin crear nada", () => {
-		writeFileSync(join(hub, ".bond", "bond.toml"), HUB_TOML.replace('base = "main"\n\n[hub.repos]', 'base = "nope"\n\n[hub.repos]'));
+		writeFileSync(join(hub, "hub.toml"), HUB_TOML.replace('name = "hub"\nbase = "main"', 'name = "hub"\nbase = "nope"'));
 		const r = bond(["team", "fix/x"]);
 		expect(r.status).toBe(1);
 		expect(r.stderr).toContain("la base no existe en hub (nope)");
@@ -321,8 +322,8 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 		expect(existsSync(state)).toBe(false);
 	});
 
-	test("un bond.toml del hub que no es TOML se avisa y bond team sigue como en un repo normal", () => {
-		writeFileSync(join(hub, ".bond", "bond.toml"), "agents = [\n");
+	test("un hub.toml del hub que no es TOML se avisa y bond team sigue como en un repo normal", () => {
+		writeFileSync(join(hub, "hub.toml"), "name = [\n");
 		const r = bond(["team", "clean"]);
 		expect(r.stderr).toContain("sigo sin el modo hub");
 	});

@@ -307,8 +307,6 @@ export interface RepoConfig {
 	tools: Record<Kind, Tool[]>;
 	/** Memoria de decisiones del repo ([decisions] en bond.toml); undefined si no la usa. */
 	decisions?: { dir: string };
-	/** Sesión del hub ([hub] en bond.toml, la escribe bond hub); undefined si no es un hub. */
-	hub?: HubConfig;
 }
 
 export function repoRoot(): string {
@@ -364,7 +362,6 @@ export function loadRepoConfig(root: string, over: { toml?: string; lock?: Lock 
 		if (!s.command && !s.url) die(`bond.toml: mcp_servers.${name} necesita command o url`);
 	}
 	cfg.decisions = parseDecisions(root, raw.decisions);
-	cfg.hub = hubOrWarn(raw.hub);
 	return cfg;
 }
 
@@ -403,56 +400,6 @@ function parseDecisions(root: string, v: unknown): { dir: string } | undefined {
 		die(`bond.toml: decisions.dir ${JSON.stringify(dir)} tiene que ser una carpeta dentro del repo: relativa, sin .. y sin ruta absoluta`);
 	}
 	return { dir: dir.split(sep).join("/") };
-}
-
-/** Sección [hub] del bond.toml: la sesión de un repo hub con submódulos (la escribe bond hub). */
-export interface HubConfig {
-	/** Base de la rama vertical en el propio hub. */
-	base: string;
-	/** Submódulos de la sesión (ruta relativa al hub, con /) y la base de cada uno. */
-	repos: Record<string, { base: string }>;
-	/** Rutas que no entran en la sesión (ni lo que cuelga de ellas). */
-	exclude: string[];
-}
-
-/** ¿Ruta relativa dentro del repo, con / y sin ..? Así se guardan en [hub]. */
-const insidePath = (p: string) => p !== "" && p !== "." && !isAbsolute(p) && !/^[A-Za-z]:/.test(p) && !p.includes("\\") && !p.split("/").some((x) => x === ".." || x === "");
-
-/**
- * Valida la sección [hub]: undefined sin la sección, y el motivo si no cuadra. Quien solo la
- * lee (bond sync, bond team) la ignora con un aviso; bond hub se niega a escribir encima.
- */
-export function parseHub(v: unknown): { hub?: HubConfig; error?: string } {
-	if (v === undefined) return {};
-	const table = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x) && !(x instanceof Date);
-	const ref = (x: unknown) => typeof x === "string" && x.trim() !== "";
-	if (!table(v)) return { error: "hub tiene que ser una tabla: [hub] (la escribe bond hub)" };
-	if (!ref(v.base)) return { error: 'hub.base tiene que ser la rama base del hub (base = "main")' };
-	const repos: Record<string, { base: string }> = {};
-	if (v.repos !== undefined && !table(v.repos)) return { error: "hub.repos tiene que ser una tabla de rutas: [hub.repos]" };
-	for (const [path, r] of Object.entries((v.repos ?? {}) as Record<string, unknown>)) {
-		if (!insidePath(path)) return { error: `hub.repos: ${JSON.stringify(path)} tiene que ser una ruta relativa dentro del hub, con / y sin ..` };
-		if (!table(r) || !ref(r.base)) return { error: `hub.repos.${JSON.stringify(path)} necesita su base: { base = "main" }` };
-		repos[path] = { base: (r.base as string).trim() };
-	}
-	const exclude = v.exclude ?? [];
-	if (!Array.isArray(exclude) || !exclude.every((e) => typeof e === "string" && insidePath(e))) return { error: "hub.exclude tiene que ser una lista de rutas relativas dentro del hub, con / y sin .." };
-	return { hub: { base: (v.base as string).trim(), repos, exclude: exclude as string[] } };
-}
-
-function hubOrWarn(v: unknown): HubConfig | undefined {
-	const { hub, error } = parseHub(v);
-	if (error) warn(`bond.toml: ${error}; se ignora la sección [hub] (bond hub --help)`);
-	return hub;
-}
-
-/**
- * La sección [hub] del repo sin exigir el resto de la config: undefined si no hay bond.toml,
- * ni sección, o si no es válida (con un aviso). Con bond.toml inválido, muere como loadRepoConfig.
- */
-export function repoHub(root: string): HubConfig | undefined {
-	const raw = repoToml(root);
-	return raw && hubOrWarn(raw.hub);
 }
 
 /** bond.toml del repo leído (sin validar el resto), o undefined si no hay. Muere si no es TOML. */

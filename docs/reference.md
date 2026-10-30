@@ -18,7 +18,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 | `bond status` | Agentes vivos en Herdr |
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
 | `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
-| `bond hub` | En un repo con submódulos (un hub): su sesión, el hub y sus submódulos con la base de cada uno, en `[hub]` de `.bond/bond.toml`; `sync` la pone al día ([abajo](#bond-hub)) |
+| `bond hub` | En un hub: enseña la sesión de trabajo declarada en `hub.toml` (repos, ruta, base, modo de enlace y rama) ([abajo](#bond-hub)) |
 | `bond decisions` | Memoria de decisiones del repo: lista, `add`, `accept`, `show`, `runs`, `check` ([abajo](#bond-decisions)) |
 | `bond catalog create\|check` | Prepara un repo como catálogo propio de skills, comandos y MCP, y lo comprueba ([abajo](#catálogo-propio-bond-catalog)) |
 | `bond catalog add\|list\|update\|remove\|clean` | Usa en el repo el catálogo de tu equipo, por git (con el commit fijado) o por carpeta ([abajo](#catálogos-por-git-bond-catalog-add)) |
@@ -810,75 +810,69 @@ El formato de los ficheros lo documenta la skill `decision-record`
 
 ## `bond hub`
 
-`cli/hub.mts`. Un hub es un repo con submódulos de git (p. ej. un frontend y un backend en
-repos separados). `bond hub` prepara su sesión: el hub y todos sus submódulos inicializados,
-también los anidados, cada uno con su rama base. La guarda en la sección `[hub]` de
-`.bond/bond.toml` del hub (que necesita `bond init` antes). Desde un submódulo, también
-anidado, trabaja sobre el hub de arriba (sube por `git rev-parse
---show-superproject-working-tree`).
+`cli/hub.mts`. Un hub es un repo git compartido que agrupa varios repos (p. ej. frontend y backend en
+repos separados) declarados en `hub.toml`, cada uno como submódulo (`link = "submodule"`) o como enlace
+(`link = "symlink"`) a un clon local. La sesión la forman el propio hub y sus repos, cada uno con su
+rama base y su modo de enlace. Lo propio de cada máquina (la ruta al clon local de cada symlink) se guarda
+en `.bond/hub.local.toml` (ignorado en git).
+
+Desde un submódulo, `hubRoot` encuentra el hub subiendo por git (`git rev-parse --show-superproject-working-tree`).
+Desde un repo enlazado por symlink (que vive fuera del hub), `hubRoot` lo encuentra gracias al registro global
+`~/.bond/hubs.toml`.
 
 ```bash
-bond hub                          # sin [hub]: la prepara, preguntando la base de cada repo
-bond hub --yes --base libs/ui=main # sin preguntas; --base para los repos en HEAD separado
-bond hub                          # con [hub]: enseña la sesión (repo, ruta, base, rama actual)
-bond hub sync                     # añade los submódulos nuevos y quita los que ya no están
+bond hub        # enseña la sesión del hub: repos, ruta, base, enlace y rama actual
 ```
-
-| Opción | Qué hace |
-|---|---|
-| `--base <ruta>=<ref>` | Base de un repo de la sesión (`.` es el hub); repetible. Cambia también la de uno que ya estaba |
-| `-y`, `--yes` | Sin preguntas: la base de un repo nuevo es su rama actual. Un repo en HEAD separado (lo normal tras `git submodule update`) no tiene rama: sin `--base`, falla diciendo cómo indicarla, sin escribir nada |
-| `--dry-run` | Enseña la sección que escribiría |
 
 ```toml
-# .bond/bond.toml del hub
-[hub]
-# Sesión del hub: la escribe bond hub (y bond hub sync, si cambian los submódulos).
-base = "main"                     # base del propio hub
-exclude = ["vendor/sdk"]          # opcional: rutas que no entran (ni lo que cuelga de ellas)
+# hub.toml en la raíz del hub (versionado)
+name = "fluzo"
+base = "main"
 
-[hub.repos]
-"frontend" = { base = "main" }
-"frontend/libs/ui" = { base = "develop" }
+[repos.frontend]
+url  = "git@github.com:fluzo/frontend.git"
+path = "frontend"
+base = "main"
+link = "submodule"
+agent = "claude"
+
+[repos.backend]
+url  = "git@github.com:fluzo/backend.git"
+path = "backend"
+base = "main"
+link = "symlink"
+
+# .bond/hub.local.toml (en .gitignore)
+[repos.backend]
+source = "~/gitrepos/fluzo-backend"
 ```
 
-- Las bases se preguntan solo para los repos nuevos (por defecto, su rama actual); las que ya
-  estaban se conservan. Repetir `bond hub --yes` o `bond hub sync` sin cambios no toca el
-  fichero.
-- Un submódulo sin inicializar se avisa y no entra (`git submodule update --init --recursive`).
-  Con `[hub]`, `bond hub` avisa de los submódulos nuevos o que ya no están, y `bond hub sync`
-  los añade o quita.
-- `bond hub` sustituye solo su sección: el resto del `bond.toml`, comentarios incluidos, queda
-  igual. Lo que escribas a mano dentro de `[hub]`, salvo `exclude` y las bases, se pierde al
-  reescribirla.
-- Con `[hub]` en varios niveles (un submódulo que también es hub y su superproyecto), manda el
-  **más exterior**: `hubRoot` sube por los superproyectos y se queda con el último que tenga
-  sección; la del repo de en medio queda en sombra mientras el de arriba la tenga.
-- En un repo sin submódulos explica qué hace falta y no escribe nada.
-- Una `[hub]` inválida (rutas absolutas o con `..`, repos sin base...) la ignoran con un aviso
-  `bond sync` y el resto de comandos; `bond hub` se niega a escribir encima hasta que la arregles
-  o la quites.
-- Sin `[hub]`, nada cambia: `bond` y `bond team` funcionan como siempre.
+- `hub.toml` es la única fuente de la sesión: declara el nombre del hub, su rama base y la lista de repos con su ruta relativa, rama base y modo de enlace (`submodule` o `symlink`).
+- `.bond/hub.local.toml` guarda las rutas a los clones locales de la máquina (`source`), admitiendo `~` para expandir la carpeta de usuario.
+- `~/.bond/hubs.toml` es el registro global donde `bond` anota los repos asociados a cada hub. Permite que `hubRoot` encuentre el hub desde dentro de un repo enlazado por symlink.
+- Un `hub.toml` inválido se explica con un mensaje que dice qué corregir; `bond team` avisa y continúa como en un repo normal.
+- Un `.bond/bond.toml` con `[hub]` no hace nada especial y se ignora sin error.
+- Sin `hub.toml`, los comandos funcionan como siempre en un repo normal.
 
 ### `bond team` en un hub
 
-Desde el hub (no desde un submódulo, que sigue como un repo normal), `bond team` abre una rama
+Desde el hub (no desde un repo enlazado, que sigue como un repo normal), `bond team` abre una rama
 vertical ([puesto.md](puesto.md#una-rama-vertical-en-un-hub)):
 
 | Orden | En un hub |
 |---|---|
-| `bond team <rama>[:agente] [--repos a,b]` | Crea la rama en el hub (sin worktree ni agente) y abre un worktree y un agente en cada submódulo (o en los de `--repos`), desde su base de `[hub]`, con el agente de `:agente`, `--agent` o el del `bond.toml` del submódulo. Una sola rama; sin `--base` |
+| `bond team <rama>[:agente] [--repos a,b]` | Crea la rama en el hub (sin worktree ni agente) y abre un worktree y un agente en cada repo de la sesión (o en los de `--repos`), desde su base de `hub.toml`, con el agente de `:agente`, `--agent` o el del `bond.toml` del repo. Una sola rama; sin `--base` |
 | `bond team prompt <rama> "…" [--repo <r>]` | A todos los agentes de la rama, con una nota que nombra a los demás y su repo; `--repo`, a uno. Si alguno está bloqueado, no manda nada |
 | `bond team collect <rama> [--repo <r>] [--agent <a>]` | El informe del agente de la rama; `--repo` o `--agent` si está en varios repos |
 | `bond team clean [rama...] [--repo <r>] [--delete-branch]` | Quita los worktrees de todos los repos (o del de `--repo`); las ramas se quedan, también la del hub. Con `--delete-branch`, borra las integradas y la del hub si está integrada en su base y no le queda worktree en ningún repo |
 
-- Worktrees en paneles: `~/.herdr/worktrees/<hub>/<submódulo>/<rama>` (las `/` de una ruta
+- Worktrees en paneles: `~/.herdr/worktrees/<hub>/<repo>/<rama>` (las `/` de una ruta
   anidada pasan a `-`). Con `--workspaces` o fuera de Herdr, donde los pone `herdr worktree`.
-- Con una rama vertical abierta (tiene worktree en algún submódulo y existe en el hub; las bases
+- Con una rama vertical abierta (tiene worktree en algún repo y existe en el hub; las bases
   de la sesión no cuentan), `bond team <otra>` falla sin crear nada, dice dónde está su worktree
   y cómo cerrarla.
-- Runs: en `<dir>/runs/` del hub si tiene `[decisions]`; si no, en el del submódulo. La nota de
-  la memoria de decisiones solo va a los agentes cuyo submódulo tiene `[decisions]`.
+- Runs: en `<dir>/runs/` del hub si tiene `[decisions]`; si no, en el del repo. La nota de
+  la memoria de decisiones solo va a los agentes cuyo repo tiene `[decisions]`.
 
 ## Snippet de Herdr
 

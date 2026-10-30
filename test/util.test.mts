@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { catchDie, catchingDie, COPY_MARK, copyPath, die, isCopyOf, which } from "../cli/util.mts";
+import { canonical, catchDie, catchingDie, COPY_MARK, copyPath, die, isCopyOf, which } from "../cli/util.mts";
 
 let dir: string;
 beforeEach(() => {
@@ -89,5 +89,16 @@ describe("catchDie", () => {
 		});
 		expect(outer).toEqual({ error: "fuera" });
 		expect(catchingDie()).toBe(false);
+	});
+});
+
+describe.skipIf(process.platform === "win32")("canonical", () => {
+	test("resuelve symlinks en las dos direcciones", () => {
+		const target = join(dir, "target");
+		const link = join(dir, "link");
+		mkdirSync(target);
+		symlinkSync(target, link);
+		expect(canonical(link)).toBe(canonical(target));
+		expect(canonical(target)).toBe(canonical(link));
 	});
 });

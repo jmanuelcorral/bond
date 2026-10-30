@@ -1,32 +1,23 @@
-// bond hub: prepara un repo hub (un repo con submódulos de git, p. ej. frontend y backend) para
-// trabajar en sesión. La sesión la forman el hub y sus submódulos inicializados, también los
-// anidados, cada uno con su rama base; se guarda en la sección [hub] de .bond/bond.toml.
+// bond hub: prepara y gestiona un repo hub (un repo compartido que agrupa varios repos,
+// p. ej. frontend y backend) para trabajar en sesión. La sesión la forman el hub y sus repos,
+// declarados en hub.toml, cada uno con su rama base y su modo de enlace (submodule o symlink).
+// Lo propio de cada máquina va en .bond/hub.local.toml.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { parse } from "smol-toml";
-import { type HubConfig, parseHub, repoHub, repoToml } from "./repo.mts";
-import { canonical, catchDie, die, dim, isDryRun, log, ok, run, warn } from "./util.mts";
+import { canonical, catchDie, die, dim, HOME, log, run, warn } from "./util.mts";
 
-export const HUB_HELP = `Uso: bond hub [sync] [opciones]
+export const HUB_HELP = `Uso: bond hub [opciones]
 
-Un hub es un repo con submódulos de git (p. ej. frontend y backend). bond hub prepara su
-sesión: el hub y sus submódulos inicializados (también los anidados), cada uno con su rama
-base, en la sección [hub] de .bond/bond.toml. Desde un submódulo trabaja sobre el hub de
-arriba. El hub necesita .bond/bond.toml (bond init).
+Un hub es un repo git compartido que agrupa varios repos (p. ej. frontend y backend)
+declarados en hub.toml, cada uno como submódulo o como enlace (symlink) a un clon local.
+La sesión la forman el hub y sus repos, cada uno con su rama base y su modo de enlace.
+Lo propio de cada máquina va en .bond/hub.local.toml.
 
-  bond hub        Sin [hub], la prepara: pregunta la base de cada repo (por defecto, su rama
-                  actual). Con [hub], enseña la sesión: repos, ruta, base y rama actual
-  bond hub sync   Añade los submódulos nuevos y quita los que ya no están
-
-  --base <ruta>=<ref>  Base de un repo de la sesión ("." es el hub); repetible. Sin preguntas,
-                       hace falta para los repos en HEAD separado
-  -y, --yes            Sin preguntas: la base de un repo nuevo es su rama actual
-  --dry-run            Enseña lo que escribiría, sin escribir
-
-Los submódulos sin inicializar se avisan y no entran (git submodule update --init
---recursive). Para dejar uno fuera, añade su ruta a exclude en [hub]. Sin la sección, bond
-team funciona como siempre.`;
+  bond hub        Enseña la sesión del hub: repos, ruta, base, enlace y rama actual
+`;
 
 const git = (cwd: string, args: string[]) => run("git", ["-C", cwd, ...args]);
 
@@ -49,22 +40,6 @@ function repoChain(dir: string): string[] {
 	return out;
 }
 
-/**
- * ¿Tiene `root` una sección [hub] válida? Sin avisos: hubRoot se llama en cada refresco de la
- * tabla en vivo (P2) y un aviso por llamada spamearía stderr. El aviso por [hub] inválida es de
- * quien lee la config (loadRepoConfig/repoHub) y de bond hub, que muere con el motivo. Un
- * bond.toml roto aquí no aborta: no es un hub.
- */
-const hasHub = (root: string) => catchDie(() => parseHub(repoToml(root)?.hub).hub).value !== undefined;
-
-/**
- * El hub de `dir`: subiendo por los superproyectos, el de más arriba con [hub] en su
- * bond.toml (también el propio repo). undefined si ninguno lo es.
- */
-export function hubRoot(dir = process.cwd()): string | undefined {
-	return repoChain(dir).reverse().find(hasHub);
-}
-
 /** Rama actual de un repo, o undefined en HEAD separado (lo normal en un submódulo). */
 export const currentBranch = (dir: string) => {
 	const r = git(dir, ["symbolic-ref", "--short", "-q", "HEAD"]);
@@ -79,31 +54,281 @@ export interface HubRepo {
 	base: string;
 	/** Rama actual; undefined en HEAD separado. */
 	branch?: string;
-	/** ¿Está el repo en disco? (un submódulo que se desinicializó no lo está) */
+	/** ¿Está el repo en disco? (un submódulo que se desinicializó o symlink roto no lo está) */
 	present: boolean;
+	/** Modo de enlace: "submodule" o "symlink" (undefined para "."). */
+	link?: "submodule" | "symlink";
+	/** URL del repo remoto (si se declaró en hub.toml). */
+	url?: string;
+	/** Ruta al clon local (para link = "symlink", de .bond/hub.local.toml). */
+	source?: string;
+	/** Agente por defecto para este repo en el hub (si se declaró en hub.toml). */
+	agent?: string;
 }
 
 export interface HubSession {
 	root: string;
 	name: string;
-	/** El hub primero (".") y después sus submódulos por ruta. */
+	/** El hub primero (".") y después sus repos por ruta. */
 	repos: HubRepo[];
 }
 
-/** ¿`path` es una de `prefixes` o cuelga de ella? */
-const under = (path: string, prefixes: string[]) => prefixes.some((e) => path === e || path.startsWith(`${e}/`));
+export interface HubTomlRepo {
+	path: string;
+	base: string;
+	link: "submodule" | "symlink";
+	url?: string;
+	agent?: string;
+}
 
-/** La sesión de un hub según su [hub]: sus repos con su base y su rama actual; undefined sin [hub]. */
-export function hubSession(root: string): HubSession | undefined {
-	const hub = repoHub(root);
-	if (!hub) return undefined;
-	const repo = (path: string, base: string): HubRepo => {
-		const dir = path === "." ? root : join(root, ...path.split("/"));
-		const present = existsSync(join(dir, ".git"));
-		return { path, dir, base, branch: present ? currentBranch(dir) : undefined, present };
+export interface HubToml {
+	name: string;
+	base: string;
+	repos: Record<string, HubTomlRepo>;
+}
+
+export interface HubLocalToml {
+	repos: Record<string, { source?: string }>;
+}
+
+/** ¿Ruta relativa dentro del repo, con / y sin ..? Así se guardan en hub.toml. */
+export const insidePath = (p: string) => p !== "" && p !== "." && !isAbsolute(p) && !/^[A-Za-z]:/.test(p) && !p.includes("\\") && !p.split("/").some((x) => x === ".." || x === "");
+
+/** Valida y devuelve el contenido de un hub.toml. Muere con un mensaje claro si no es válido. */
+export function parseHubToml(text: string, pathForError = "hub.toml"): HubToml {
+	let raw: Record<string, unknown>;
+	try {
+		raw = parse(text) as Record<string, unknown>;
+	} catch (e) {
+		die(`${pathForError} no es TOML válido: ${(e as Error).message}`);
+	}
+	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+		die(`${pathForError} tiene que ser una tabla: define name, base y [repos]`);
+	}
+	if (typeof raw.name !== "string" || !raw.name.trim()) {
+		die(`${pathForError}: falta name (el nombre del hub, p. ej. name = "mi-hub")`);
+	}
+	if (typeof raw.base !== "string" || !raw.base.trim()) {
+		die(`${pathForError}: falta base (la rama base del hub, p. ej. base = "main")`);
+	}
+	const reposRaw = raw.repos;
+	if (reposRaw !== undefined && (typeof reposRaw !== "object" || reposRaw === null || Array.isArray(reposRaw))) {
+		die(`${pathForError}: repos tiene que ser una tabla de repositorios: [repos.<nombre>]`);
+	}
+	const repos: Record<string, HubTomlRepo> = {};
+	const seenPaths = new Set<string>();
+	for (const [key, val] of Object.entries((reposRaw ?? {}) as Record<string, unknown>)) {
+		if (typeof val !== "object" || val === null || Array.isArray(val)) {
+			die(`${pathForError}: repos.${key} tiene que ser una tabla: [repos.${key}]`);
+		}
+		const r = val as Record<string, unknown>;
+		if (typeof r.path !== "string" || !r.path.trim()) {
+			die(`${pathForError}: repos.${key} necesita path (la ruta dentro del hub, con /)`);
+		}
+		const path = r.path.trim().replace(/\\/g, "/");
+		if (!insidePath(path)) {
+			die(`${pathForError}: repos.${key}.path tiene que ser una ruta relativa dentro del hub, con / y sin ..`);
+		}
+		if (seenPaths.has(path)) {
+			die(`${pathForError}: la ruta "${path}" está repetida en repos`);
+		}
+		seenPaths.add(path);
+		if (typeof r.base !== "string" || !r.base.trim()) {
+			die(`${pathForError}: repos.${key} necesita base (la rama base del repo)`);
+		}
+		const link = r.link;
+		if (link !== "submodule" && link !== "symlink") {
+			die(`${pathForError}: repos.${key}.link tiene que ser "submodule" o "symlink"`);
+		}
+		if (r.url !== undefined && (typeof r.url !== "string" || !r.url.trim())) {
+			die(`${pathForError}: repos.${key}.url tiene que ser una cadena`);
+		}
+		if (r.agent !== undefined && (typeof r.agent !== "string" || !r.agent.trim())) {
+			die(`${pathForError}: repos.${key}.agent tiene que ser una cadena`);
+		}
+		repos[key] = {
+			path,
+			base: (r.base as string).trim(),
+			link,
+			url: typeof r.url === "string" ? r.url.trim() : undefined,
+			agent: typeof r.agent === "string" ? r.agent.trim() : undefined,
+		};
+	}
+	return {
+		name: (raw.name as string).trim(),
+		base: (raw.base as string).trim(),
+		repos,
 	};
-	const subs = Object.keys(hub.repos).filter((p) => !under(p, hub.exclude)).sort();
-	return { root, name: basename(root), repos: [repo(".", hub.base), ...subs.map((p) => repo(p, hub.repos[p].base))] };
+}
+
+/** Valida y devuelve el contenido de un .bond/hub.local.toml. */
+export function parseHubLocalToml(text: string, pathForError = ".bond/hub.local.toml"): HubLocalToml {
+	let raw: Record<string, unknown>;
+	try {
+		raw = parse(text) as Record<string, unknown>;
+	} catch (e) {
+		die(`${pathForError} no es TOML válido: ${(e as Error).message}`);
+	}
+	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+		die(`${pathForError} tiene que ser una tabla: [repos.<nombre>]`);
+	}
+	const reposRaw = raw.repos;
+	if (reposRaw !== undefined && (typeof reposRaw !== "object" || reposRaw === null || Array.isArray(reposRaw))) {
+		die(`${pathForError}: repos tiene que ser una tabla: [repos.<nombre>]`);
+	}
+	const repos: Record<string, { source?: string }> = {};
+	for (const [key, val] of Object.entries((reposRaw ?? {}) as Record<string, unknown>)) {
+		if (typeof val !== "object" || val === null || Array.isArray(val)) {
+			die(`${pathForError}: repos.${key} tiene que ser una tabla`);
+		}
+		const r = val as Record<string, unknown>;
+		if (r.source !== undefined && (typeof r.source !== "string" || !r.source.trim())) {
+			die(`${pathForError}: repos.${key}.source tiene que ser una ruta`);
+		}
+		repos[key] = { source: typeof r.source === "string" ? r.source.trim() : undefined };
+	}
+	return { repos };
+}
+
+/** Expande ~ a HOME y resuelve rutas relativas al hub. */
+function expandSource(source: string, hubRoot: string): string {
+	if (source.startsWith("~/") || source === "~") {
+		return join(HOME, source.slice(source === "~" ? 1 : 2));
+	}
+	if (isAbsolute(source)) return source;
+	return resolve(hubRoot, source);
+}
+
+/** La sesión de un hub según su hub.toml (y .bond/hub.local.toml si existe). undefined sin hub.toml. */
+export function hubSession(root: string): HubSession | undefined {
+	const tomlPath = join(root, "hub.toml");
+	if (!existsSync(tomlPath)) return undefined;
+	const text = readFileSync(tomlPath, "utf8");
+	const hubToml = parseHubToml(text, relative(process.cwd(), tomlPath) || "hub.toml");
+
+	const localPath = join(root, ".bond", "hub.local.toml");
+	let localToml: HubLocalToml | undefined;
+	if (existsSync(localPath)) {
+		const localText = readFileSync(localPath, "utf8");
+		localToml = parseHubLocalToml(localText, relative(process.cwd(), localPath) || ".bond/hub.local.toml");
+	}
+
+	const hubSelf: HubRepo = {
+		path: ".",
+		dir: root,
+		base: hubToml.base,
+		branch: currentBranch(root),
+		present: true,
+	};
+
+	const subs: HubRepo[] = [];
+	for (const [key, entry] of Object.entries(hubToml.repos).sort((a, b) => a[1].path.localeCompare(b[1].path))) {
+		const dir = join(root, ...entry.path.split("/"));
+		const present = existsSync(join(dir, ".git"));
+		const rawSource = localToml?.repos[key]?.source ?? localToml?.repos[entry.path]?.source;
+		const source = rawSource ? expandSource(rawSource, root) : undefined;
+		subs.push({
+			path: entry.path,
+			dir,
+			base: entry.base,
+			link: entry.link,
+			branch: present ? currentBranch(dir) : undefined,
+			present,
+			url: entry.url,
+			source,
+			agent: entry.agent,
+		});
+	}
+
+	return {
+		root,
+		name: hubToml.name,
+		repos: [hubSelf, ...subs],
+	};
+}
+
+/** Ubicación del registro global ~/.bond/hubs.toml */
+export const hubsPath = () => join(process.env.BOND_HOME || join(HOME, ".bond"), "hubs.toml");
+
+/** Lee el registro global ~/.bond/hubs.toml: repo -> hub (rutas canónicas). */
+export function readHubsRegistry(): Record<string, string> {
+	const p = hubsPath();
+	if (!existsSync(p)) return {};
+	try {
+		const parsed = parse(readFileSync(p, "utf8")) as Record<string, unknown>;
+		const repos = parsed.repos;
+		if (!repos || typeof repos !== "object" || Array.isArray(repos)) return {};
+		const out: Record<string, string> = {};
+		for (const [k, v] of Object.entries(repos as Record<string, unknown>)) {
+			let h: string | undefined;
+			if (typeof v === "string") h = v;
+			else if (typeof v === "object" && v !== null && typeof (v as Record<string, unknown>).hub === "string") {
+				h = (v as Record<string, unknown>).hub as string;
+			}
+			if (h) out[canonical(k)] = canonical(h);
+		}
+		return out;
+	} catch {
+		return {};
+	}
+}
+
+/** Guarda el registro global ~/.bond/hubs.toml. */
+export function writeHubsRegistry(registry: Record<string, string>): void {
+	const p = hubsPath();
+	mkdirSync(dirname(p), { recursive: true });
+	const lines = [
+		"# ~/.bond/hubs.toml",
+		"# Registro global de repos enlazados a hubs (generado por bond)",
+		"",
+		"[repos]",
+	];
+	for (const [r, h] of Object.entries(registry).sort(([a], [b]) => a.localeCompare(b))) {
+		lines.push(`${JSON.stringify(r)} = ${JSON.stringify(h)}`);
+	}
+	writeFileSync(p, `${lines.join("\n")}\n`);
+}
+
+/** Anota un repo y su hub en el registro global ~/.bond/hubs.toml. */
+export function registerHubRepo(repoDir: string, hubRoot: string): void {
+	const reg = readHubsRegistry();
+	reg[canonical(repoDir)] = canonical(hubRoot);
+	writeHubsRegistry(reg);
+}
+
+/** ¿Tiene `root` un hub.toml válido? Sin avisos en stderr. */
+export const hasHub = (root: string): boolean => {
+	const p = join(root, "hub.toml");
+	if (!existsSync(p)) return false;
+	return catchDie(() => hubSession(root)).value !== undefined;
+};
+
+/**
+ * El hub de `dir`: subiendo por los superproyectos, el de más arriba con hub.toml válido.
+ * Si git no encuentra ninguno (p. ej. un repo enlazado por symlink), consulta ~/.bond/hubs.toml.
+ */
+export function hubRoot(dir = process.cwd()): string | undefined {
+	const chain = repoChain(dir);
+	const fromGit = chain.slice().reverse().find(hasHub);
+	if (fromGit) return fromGit;
+
+	// Si git no encuentra superproyecto (p. ej. un repo enlazado por symlink),
+	// busca la raíz del repo actual en ~/.bond/hubs.toml (D14).
+	const top = chain[0] ?? toplevel(dir);
+	if (!top) return undefined;
+	const reg = readHubsRegistry();
+	const mapped = reg[canonical(top)];
+	if (mapped && hasHub(mapped)) return mapped;
+
+	// Si es un worktree de un repo enlazado, prueba con el repo principal del worktree
+	const common = git(top, ["rev-parse", "--git-common-dir"]);
+	if (common.status === 0 && common.stdout.trim()) {
+		const mainTop = canonical(join(resolve(top, common.stdout.trim()), ".."));
+		const mappedMain = reg[mainTop];
+		if (mappedMain && hasHub(mappedMain)) return mappedMain;
+	}
+
+	return undefined;
 }
 
 export interface Submodule {
@@ -122,41 +347,16 @@ export function submodules(root: string): Submodule[] {
 		.map((m) => ({ path: m[2].replace(/\\/g, "/"), initialized: m[1] !== "-" }));
 }
 
-/** El texto de la sección [hub], con las rutas ordenadas: el mismo hub da siempre el mismo texto. */
-export function hubBlock(hub: HubConfig): string {
-	const lines = ["[hub]", "# Sesión del hub: la escribe bond hub (y bond hub sync, si cambian los submódulos).", `base = ${JSON.stringify(hub.base)}`];
-	if (hub.exclude.length) lines.push(`exclude = [${hub.exclude.map((e) => JSON.stringify(e)).join(", ")}]`);
-	lines.push("", "[hub.repos]");
-	for (const p of Object.keys(hub.repos).sort()) lines.push(`${JSON.stringify(p)} = { base = ${JSON.stringify(hub.repos[p].base)} }`);
-	return lines.join("\n");
-}
-
-/**
- * El bond.toml con la sección [hub] (y sus subtablas) sustituida por `block` donde estaba, o
- * al final si no la había. El resto del fichero, comentarios incluidos, queda igual.
- */
-export function withHub(text: string, block: string): string {
-	const lines = text.split("\n");
-	const table = (l: string) => /^\s*\[\[?\s*([^\]]+?)\s*\]\]?\s*(#.*)?$/.exec(l)?.[1];
-	const isHub = (name: string | undefined) => name !== undefined && (name === "hub" || /^hub\s*\./.test(name));
-	const start = lines.findIndex((l) => isHub(table(l)));
-	if (start < 0) return `${text.trimEnd()}\n\n${block}\n`;
-	let end = start + 1;
-	while (end < lines.length && (table(lines[end]) === undefined || isHub(table(lines[end])))) end++;
-	// Los comentarios y líneas en blanco del final son de lo que sigue (la tabla siguiente o el final).
-	while (end > start + 1 && /^\s*(#.*)?$/.test(lines[end - 1])) end--;
-	return [...lines.slice(0, start), ...block.split("\n"), ...lines.slice(end)].join("\n");
-}
-
-const sameHub = (a: HubConfig, b: HubConfig) => hubBlock(a) === hubBlock(b);
-
-/** ¿`ref` es un commit en el repo `dir`? */
-const validRef = (dir: string, ref: string) => git(dir, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]).status === 0;
-
-/** Tabla de la sesión: repo, ruta, base y rama actual. */
-function printSession(s: HubSession): void {
-	const rows = s.repos.map((r) => [r.path === "." ? s.name : basename(r.path), r.path, r.base, !r.present ? "(no está)" : (r.branch ?? "(HEAD separado)")]);
-	const all = [["REPO", "RUTA", "BASE", "RAMA"], ...rows];
+/** Tabla de la sesión: repo, ruta, base, modo de enlace y rama actual. */
+export function printSession(s: HubSession): void {
+	const rows = s.repos.map((r) => [
+		r.path === "." ? s.name : basename(r.path),
+		r.path,
+		r.base,
+		r.path === "." ? "-" : (r.link ?? "submodule"),
+		!r.present ? "(no está)" : (r.branch ?? "(HEAD separado)"),
+	]);
+	const all = [["REPO", "RUTA", "BASE", "ENLACE", "RAMA"], ...rows];
 	const widths = all[0].map((_, i) => Math.max(...all.map((r) => r[i].length)));
 	const fmt = (r: string[]) => `  ${r.map((c, i) => (i === r.length - 1 ? c : c.padEnd(widths[i]))).join("  ")}`;
 	log(`hub ${s.name} ${dim(`(${s.root})`)}`);
@@ -164,122 +364,24 @@ function printSession(s: HubSession): void {
 	for (const r of rows) console.log(fmt(r));
 }
 
-interface HubArgs {
-	sync: boolean;
-	yes: boolean;
-	bases: Map<string, string>;
-}
-
-function parseArgs(args: string[]): HubArgs {
-	const o: HubArgs = { sync: false, yes: false, bases: new Map() };
-	for (let i = 0; i < args.length; i++) {
-		const a = args[i];
-		if (a === "sync" && i === 0) o.sync = true;
-		else if (a === "-y" || a === "--yes") o.yes = true;
-		else if (a === "--dry-run") continue;
-		else if (a === "--base" || a.startsWith("--base=")) {
-			const v = a === "--base" ? args[++i] : a.slice("--base=".length);
-			const m = v === undefined ? null : /^(.+?)=(.+)$/.exec(v);
-			if (!m) die('--base necesita <ruta>=<ref> (p. ej. --base frontend=main; "." es el hub)');
-			o.bases.set(m[1].trim().replace(/\\/g, "/").replace(/\/+$/, "") || ".", m[2].trim());
-		} else die(`opción desconocida: ${a} (bond hub --help)`);
-	}
-	return o;
-}
-
 export async function hub(args: string[]): Promise<void> {
-	const o = parseArgs(args);
-	const chain = repoChain(process.cwd());
-	if (!chain.length) die("bond hub va dentro de un repo git: el hub es un repo con submódulos");
-	// El hub ya configurado más arriba, o si no hay ninguno, el superproyecto de más arriba.
-	const root = chain.slice().reverse().find(hasHub) ?? chain[chain.length - 1];
-	const name = basename(root);
-	const tomlPath = join(root, ".bond", "bond.toml");
-	if (!existsSync(tomlPath)) die(`${name} no tiene .bond/bond.toml: ejecuta bond init en ${root} y después bond hub`);
-	const parsed = parseHub(repoToml(root)?.hub);
-	if (parsed.error) die(`bond.toml: ${parsed.error}. Arréglala o quita la sección [hub] y vuelve a ejecutar bond hub`);
-	const current = parsed.hub;
-
-	const subs = submodules(root);
-	if (!subs.length) die(`${name} no tiene submódulos: un hub es un repo con submódulos de git (git submodule add <url> <ruta>). Añádelos y vuelve a ejecutar bond hub`);
-	const exclude = current?.exclude ?? [];
-	const included = subs.filter((s) => !under(s.path, exclude));
-	for (const s of included.filter((x) => !x.initialized)) warn(`${s.path}: submódulo sin inicializar, no entra en la sesión (git submodule update --init --recursive ${s.path})`);
-	const detected = included.filter((s) => s.initialized).map((s) => s.path);
-	if (!detected.length) die(`${name} no tiene submódulos inicializados${exclude.length ? " fuera de exclude" : ""}: git submodule update --init --recursive, y después bond hub`);
-	const added = detected.filter((p) => !current?.repos[p]);
-	const removed = Object.keys(current?.repos ?? {}).filter((p) => !detected.includes(p));
-
-	// Con [hub] y sin nada que cambiar pedido: enseña la sesión y lo pendiente.
-	if (current && !o.sync && !o.bases.size) {
-		printSession(hubSession(root)!);
-		for (const p of added) warn(`${p}: submódulo nuevo, fuera de la sesión: bond hub sync lo añade`);
-		for (const p of removed) warn(`${p}: ya no es un submódulo inicializado: bond hub sync lo quita de la sesión`);
+	if (args.includes("-h") || args.includes("--help")) {
+		console.log(HUB_HELP.trimEnd());
 		return;
 	}
-
-	const dirOf = (p: string) => (p === "." ? root : join(root, ...p.split("/")));
-	const known = [".", ...detected];
-	for (const [p, ref] of o.bases) {
-		if (!known.includes(p)) die(`--base ${p}: no es un repo de la sesión (${known.join(", ")})`);
-		if (!validRef(dirOf(p), ref)) die(`--base ${p}=${ref}: ${ref} no existe en ${p === "." ? name : p}`);
+	if (args.length > 0) {
+		die(`opción desconocida: ${args[0]} (bond hub --help)`);
 	}
-	// Base de cada repo: la de --base, la que ya tenía o, para uno nuevo, su rama actual.
-	const bases = new Map<string, string | undefined>();
-	for (const p of known) bases.set(p, o.bases.get(p) ?? (p === "." ? current?.base : current?.repos[p]?.base) ?? currentBranch(dirOf(p)));
-	const interactive = !o.yes && process.stdin.isTTY === true;
-	const toAsk = known.filter((p) => !o.bases.has(p) && (p === "." ? !current : !current?.repos[p]));
-	if (interactive && toAsk.length) {
-		const pr = await import("@clack/prompts");
-		pr.intro(`bond hub · ${name}`);
-		for (const p of toAsk) {
-			const label = p === "." ? `${name} (el hub)` : p;
-			const v = await pr.text({
-				message: `Rama base de ${label}`,
-				initialValue: bases.get(p) ?? "",
-				placeholder: "main",
-				validate: (x) => (!x?.trim() ? "hace falta una base" : validRef(dirOf(p), x.trim()) ? undefined : `${x.trim()} no existe en ${label}`),
-			});
-			if (pr.isCancel(v)) die("cancelado: no se ha escrito nada");
-			bases.set(p, String(v).trim());
+	const cwd = process.cwd();
+	const root = hubRoot(cwd);
+	if (!root) {
+		if (existsSync(join(cwd, "hub.toml"))) {
+			// Si hub.toml existe pero tiene error, hubSession morirá con el motivo exacto
+			hubSession(cwd);
 		}
+		die("no es un hub: falta hub.toml (bond hub --help)");
 	}
-	const detached = known.filter((p) => !bases.get(p));
-	if (detached.length) {
-		die(`sin base para ${detached.map((p) => (p === "." ? `${name} (el hub)` : p)).join(", ")}: ${detached.length > 1 ? "están" : "está"} en HEAD separado. Indícala con --base, p. ej. bond hub --yes ${detached.map((p) => `--base ${p}=main`).join(" ")}`);
-	}
-
-	const next: HubConfig = { base: bases.get(".")!, repos: Object.fromEntries(detected.map((p) => [p, { base: bases.get(p)! }])), exclude };
-	if (current && sameHub(current, next)) {
-		printSession(hubSession(root)!);
-		console.log(dim("  sin cambios en [hub]"));
-		return;
-	}
-	const text = readFileSync(tomlPath, "utf8");
-	const updated = withHub(text, hubBlock(next));
-	// Lo escrito tiene que leerse igual (p. ej. un hub = {...} en línea no se sustituye): si no, nada.
-	let check: HubConfig | undefined;
-	try {
-		check = parseHub((parse(updated) as Record<string, unknown>).hub).hub;
-	} catch {
-		check = undefined;
-	}
-	if (!check || !sameHub(check, next)) die(`no sé reescribir la sección [hub] de ${relative(process.cwd(), tomlPath) || tomlPath}: déjala como tabla [hub] (o quítala) y vuelve a ejecutar bond hub`);
-
-	log(`${current ? "actualizo" : "preparo"} el hub ${name} ${dim(`(${root})`)}`);
-	for (const p of known) {
-		const before = p === "." ? current?.base : current?.repos[p]?.base;
-		const after = bases.get(p)!;
-		const label = p === "." ? `${name} (el hub)` : p;
-		if (before === undefined) console.log(`${ok("+")} ${label}  ${dim(`base ${after}`)}`);
-		else if (before !== after) console.log(`${ok("~")} ${label}  ${dim(`base ${before} -> ${after}`)}`);
-	}
-	for (const p of removed) console.log(`${ok("-")} ${p}`);
-	if (isDryRun()) {
-		console.log(dim(`  [dry-run] escribiría en .bond/bond.toml:\n${hubBlock(next).replace(/^/gm, "    ")}`));
-		return;
-	}
-	writeFileSync(tomlPath, updated);
-	console.log(`${ok("~")} .bond/bond.toml  ${dim("sección [hub]")}`);
-	printSession(hubSession(root)!);
+	const s = hubSession(root);
+	if (!s) die(`${basename(root)} no es un hub: falta hub.toml`);
+	printSession(s);
 }

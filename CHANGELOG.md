@@ -2,35 +2,39 @@
 
 ## Sin publicar
 
+- `hub.toml` como única fuente de la sesión de un hub: declara el nombre del hub, su rama base
+  y los repositorios asociados, cada uno como submódulo (`link = "submodule"`) o como enlace
+  (`link = "symlink"`). La sección `[hub]` desaparece de `.bond/bond.toml` y deja de usarse.
+  Las rutas locales a los clones de la máquina se declaran en `.bond/hub.local.toml` (en `.gitignore`),
+  admitiendo `~` para la carpeta de usuario.
+- Registro global `~/.bond/hubs.toml` para localizar el hub: `hubRoot` encuentra el hub subiendo
+  por superproyectos de git o, en repos enlazados por symlink que viven fuera del hub, consultando
+  el registro global.
+- `canonical` resuelve enlaces simbólicos en ambas direcciones, casando rutas relativas al symlink
+  dentro del hub con el clon real.
+- `bond hub` enseña la sesión de trabajo declarada en `hub.toml`: ruta, base, modo de enlace
+  (`submodule` o `symlink`) y rama actual de cada repositorio.
 - Las skills `plan-team` (catálogo) y `bond-team` (global) trabajan en modo hub: en un repo con
-  `[hub]`, una fase o subtarea es una rama vertical (un agente por repo de la sesión, una sola
+  `hub.toml`, una fase o subtarea es una rama vertical (un agente por repo de la sesión, una sola
   rama abierta a la vez, `--repos` para elegirlos), la tarea se manda con un único
   `bond team prompt` que llega a todos los agentes con una nota de coordinación, y se recoge
   repo a repo con `bond team collect --repo`. Al integrar recuerdan que falta subir los
   punteros de los submódulos en la rama del hub y hacer push: nunca lo hacen ellas.
-- `bond team status` y `--watch` en modo hub (sección `[hub]` en `.bond/bond.toml`): enseñan los
+- `bond team status` y `--watch` en modo hub (con `hub.toml`): enseñan los
   worktrees de todos los repos de la sesión en una única tabla, tanto si se lanzan desde el hub
-  como desde cualquiera de sus submódulos. Cada repo se compara contra su base de `[hub]`, con una
+  como desde cualquiera de sus repos. Cada repo se compara contra su base de `hub.toml`, con una
   columna `REPO` en `status` y en la tabla en vivo. En Herdr, la tabla en vivo se abre en un panel
-  único `tabla · <hub>` que se reutiliza desde cualquier submódulo y solo se cierra cuando no queda
-  trabajo pendiente en ningún repo de la sesión. Sin `[hub]`, la salida de `status`, `--json` y
+  único `tabla · <hub>` que se reutiliza desde cualquier repo y solo se cierra cuando no queda
+  trabajo pendiente en ningún repo de la sesión. Sin `hub.toml`, la salida de `status`, `--json` y
   `--watch` no cambia.
-- `bond hub`, para repos hub con submódulos de git (p. ej. frontend y backend en repos
-  separados): detecta los submódulos inicializados, también los anidados, pregunta la rama
-  base de cada repo (por defecto, la actual) y guarda la sesión en la sección `[hub]` de
-  `.bond/bond.toml`. Sin cambios pendientes, `bond hub` enseña la sesión (repo, ruta, base y
-  rama actual); `bond hub sync` añade o quita repos cuando cambian los submódulos. Funciona
-  también desde dentro de un submódulo. Los submódulos sin inicializar se avisan y no entran;
-  un repo en HEAD separado necesita su base (`--base <ruta>=<rama>` con `--yes`). Sin `[hub]`,
-  nada cambia.
-- `bond team` en un hub (con `[hub]`): `bond team fix/x` abre una rama vertical, que se crea en
-  el hub sin worktree ni agente y con un worktree y un agente en cada submódulo (o en los de
-  `--repos`), cada uno desde su base de `[hub]` y con el agente por defecto de su `bond.toml`.
-  Los worktrees van en `~/.herdr/worktrees/<hub>/<submódulo>/<rama>`. Con una rama vertical
+- `bond team` en un hub (con `hub.toml`): `bond team fix/x` abre una rama vertical, que se crea en
+  el hub sin worktree ni agente y con un worktree y un agente en cada repo de la sesión (o en los de
+  `--repos`), cada uno desde su base de `hub.toml` y con el agente por defecto de su `bond.toml`.
+  Los worktrees van en `~/.herdr/worktrees/<hub>/<repo>/<rama>`. Con una rama vertical
   abierta, `bond team` se niega a abrir otra. Desde el hub, `bond team prompt fix/x` manda la
   tarea a todos los agentes de la rama con una nota que nombra a los demás y su repo
   (`--repo`, a uno); `collect` y `clean` buscan la rama en todos los repos (`--repo` para
-  elegir), y los runs van a la memoria de decisiones del hub. Dentro de un submódulo,
+  elegir), y los runs van a la memoria de decisiones del hub. Dentro de un repo de la sesión,
   `bond team` sigue trabajando solo en ese repo.
 
 ## 1.9.1

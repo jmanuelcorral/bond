@@ -53,16 +53,16 @@ carpeta al PATH de la shell del panel antes de lanzarlo.
   --trust-repository     Con --workspaces: se pasa a herdr worktree (solo en repos revisados)
   --repos <a,b>          En un hub: solo esos repos de la sesión (ruta o nombre)
 
-En un hub (un repo con [hub] en .bond/bond.toml, la escribe bond hub), bond team <rama> abre
+En un hub (un repo con hub.toml), bond team <rama> abre
 una rama vertical: la crea en el hub, sin worktree ni agente, y abre un worktree y un agente
-en cada submódulo de la sesión (o en los de --repos), cada uno desde su base de [hub] y con
+en cada repo de la sesión (o en los de --repos), cada uno desde su base de hub.toml y con
 el agente por defecto de su bond.toml (o el de rama:agente o --agent). En paneles, los
 worktrees van en ~/.herdr/worktrees/<hub>/<submódulo>/<rama>. Una sola rama vertical por
 sesión: con una abierta, bond team se niega a abrir otra hasta bond team clean. Desde el hub,
 prompt manda la tarea a todos los agentes de la rama, con una nota que les dice quiénes son
 los otros y en qué repo está cada uno (--repo, solo a uno); collect y clean buscan la rama en
 todos los repos (--repo si hace falta elegir); los runs van a la memoria del hub (si no la
-tiene, a la del submódulo). Dentro de un submódulo, bond team trabaja solo en ese repo.
+tiene, a la del repo). Dentro de un repo de la sesión, bond team trabaja solo en ese repo.
 
 status   Cada worktree del repo: estado, agente, commits por delante de la base y ficheros.
          Estados: trabajando, bloqueado, sin commitear, lista (commits por revisar),
@@ -74,7 +74,7 @@ status   Cada worktree del repo: estado, agente, commits por delante de la base 
          el título del grupo; cada fila: minion, rama, commits y ficheros. Sale con q o Ctrl+C. En el
          panel de la tabla, si ninguna rama tiene trabajo pendiente (trabajando, bloqueado,
          sin commitear, lista, o un agente abierto sin commits aún), avisa y se cierra sola;
-         no si es el panel enfocado ni con --keep-open. En un hub ([hub] en .bond/bond.toml),
+         no si es el panel enfocado ni con --keep-open. En un hub (declarado en hub.toml),
          status y --watch enseñan los worktrees de toda la sesión en un panel tabla · <hub> con
          columna REPO.
 prompt   Manda una tarea al agente de esa rama (herdr agent prompt); --wait espera a que acabe.
@@ -591,9 +591,9 @@ export function teamRows(root: string, base = defaultBase(root)): Row[] {
 }
 
 /**
- * Filas de toda la sesión de trabajo. Si root (o un superproyecto que lo contiene) tiene [hub]
- * en .bond/bond.toml, devuelve las filas de cada repo de la sesión (cada una con `repo` y `base`
- * fijados a su base en [hub]). Si no es un hub, devuelve teamRows(root, base).
+ * Filas de toda la sesión de trabajo. Si root (o un superproyecto que lo contiene) tiene un
+ * hub.toml válido, devuelve las filas de cada repo de la sesión (cada una con `repo` y `base`
+ * fijados a su base en hub.toml). Si no es un hub, devuelve teamRows(root, base).
  */
 export function sessionRows(root: string, base?: string): Row[] {
 	const hub = hubRoot(root);
@@ -719,8 +719,15 @@ function status(args: string[]): void | Promise<void> {
 	if (positional.length > 1) die("uso: bond team status [repo] [--base <ref>] [--json | --watch [--keep-open]]");
 	const root = repoOf(positional[0]);
 	const base = (opts["--base"] ?? opts["-b"]) as string | undefined;
+	if (existsSync(join(root, "hub.toml"))) {
+		const r = catchDie(() => hubSession(root));
+		if (r.error !== undefined && !warnedInvalidHub.has(root)) {
+			warnedInvalidHub.add(root);
+			warn(`${r.error}: sigo sin el modo hub`);
+		}
+	}
 	const hub = hubRoot(root);
-	if (hub && base) die("en un hub cada repo usa su base de [hub] (.bond/bond.toml); quita --base");
+	if (hub && base) die("en un hub cada repo usa su base de hub.toml; quita --base");
 	if (opts["--watch"] || opts["-w"]) {
 		if (opts["--json"] || opts["-j"]) die("--watch y --json no van juntos");
 		const targetRoot = hub ?? root;
@@ -1632,23 +1639,27 @@ function closeIdleTable(root: string, left: Row[]): void {
 
 // --- equipo vertical en un hub -------------------------------------------------------------
 //
-// En un hub ([hub] en su bond.toml, la escribe bond hub), una rama vertical se llama igual en
-// todos los repos que toca (D1). En el hub es solo una rama (D3, D7); en cada submódulo, un
-// worktree y un agente (D2). Una sola rama vertical por sesión (D10). Desde un submódulo,
+// En un hub (declarado en hub.toml), una rama vertical se llama igual en
+// todos los repos que toca (D1). En el hub es solo una rama (D3, D7); en cada repo, un
+// worktree y un agente (D2). Una sola rama vertical por sesión (D10). Desde un repo de la sesión,
 // bond team trabaja solo en ese repo, como siempre.
 
+export const warnedInvalidHub = new Set<string>();
+
 /**
- * La sesión si `root` es un hub; undefined si no (un repo normal o un submódulo). Una [hub]
- * inválida ya la avisa quien la lee; un bond.toml que no es TOML se avisa aquí y bond team
- * sigue como en un repo normal.
+ * La sesión si `root` es un hub; undefined si no (un repo normal o un submódulo). Un hub.toml
+ * inválido se avisa aquí y bond team sigue como en un repo normal.
  */
 function hubOf(root: string): HubSession | undefined {
 	const r = catchDie(() => hubSession(root));
-	if (r.error !== undefined) warn(`${r.error}: sigo sin el modo hub`);
+	if (r.error !== undefined && !warnedInvalidHub.has(root)) {
+		warnedInvalidHub.add(root);
+		warn(`${r.error}: sigo sin el modo hub`);
+	}
 	return r.value;
 }
 
-/** Los repos de la sesión donde trabajan los agentes: los submódulos que están en disco. */
+/** Los repos de la sesión donde trabajan los agentes: los que están en disco. */
 const subRepos = (s: HubSession) => s.repos.filter((r) => r.path !== "." && r.present);
 
 /** Los repos nombrados (por ruta o, si no se repite, por nombre de carpeta); sin nombres, todos. */
@@ -1667,7 +1678,7 @@ export function pickRepos(repos: HubRepo[], names: string[] | undefined, flag: s
 }
 
 /**
- * Ramas verticales abiertas en la sesión: las que tienen worktree en algún submódulo y existen
+ * Ramas verticales abiertas en la sesión: las que tienen worktree en algún repo y existen
  * también en el hub (bond team las crea en los dos; clean quita los worktrees y deja las ramas).
  * Las bases de la sesión (la del hub y la de cada repo) no cuentan: un worktree suelto en
  * main o en release/1.0 no es una rama vertical. Cada una, con la carpeta de un worktree suyo.
@@ -1682,19 +1693,19 @@ export function openVerticals(s: HubSession): Array<{ branch: string; repo: stri
 	return [...open.values()].sort((a, b) => a.branch.localeCompare(b.branch));
 }
 
-/** Las filas de la sesión (sessionRows, cada una con su `repo`) que son de esos submódulos. */
+/** Las filas de la sesión (sessionRows, cada una con su `repo`) que son de esos repos. */
 const subRows = (s: HubSession, repos: HubRepo[]) => sessionRows(s.root).filter((row) => repos.some((r) => r.path === row.repo));
 
-/** El submódulo de [hub] de una fila de subRows. */
+/** El repo de hub.toml de una fila de subRows. */
 const repoOfRow = (s: HubSession, row: Row) => subRepos(s).find((r) => r.path === row.repo) as HubRepo;
 
 async function createInHub(s: HubSession, o: TeamArgs): Promise<void> {
 	if (o.specs.length > 1) die(`en un hub, una sola rama vertical por sesión (D2): bond team <rama>[:agente] [--repos a,b], no ${o.specs.map((x) => x.branch).join(" ")}`);
-	if (o.base) die("en un hub, cada repo sale de su base de [hub] (bond hub la cambia): sin --base");
+	if (o.base) die("en un hub, cada repo sale de su base de hub.toml: sin --base");
 	const { branch, agent: asked } = o.specs[0];
 	if (git(s.root, ["check-ref-format", "--branch", branch]).status !== 0) die(`nombre de rama no válido para git: ${JSON.stringify(branch)}`);
 	const subs = subRepos(s);
-	if (!subs.length) die(`${s.name} no tiene submódulos en su sesión: bond hub sync`);
+	if (!subs.length) die(`${s.name} no tiene repos en su sesión: añade repos a hub.toml`);
 	const targets = pickRepos(subs, o.repos, "--repos");
 	const open = openVerticals(s).filter((v) => v.branch !== branch);
 	if (open.length) die(`${s.name} ya tiene abierta la rama vertical ${open.map((v) => `${v.branch} (worktree en ${v.repo}: ${v.path})`).join(", ")} y solo cabe una por sesión: ciérrala antes con bond team clean ${open[0].branch} (las ramas se quedan)`);
@@ -1831,7 +1842,7 @@ function collectInHub(s: HubSession, branch: string, opts: Record<string, string
 
 /** bond team clean en un hub: los worktrees de la rama en todos los repos de la sesión (o en el de --repo). */
 function cleanInHub(s: HubSession, branches: string[], opts: Record<string, string | true>): void {
-	if (opts["--base"] ?? opts["-b"]) die("en un hub, cada repo se compara con su base de [hub]: sin --base");
+	if (opts["--base"] ?? opts["-b"]) die("en un hub, cada repo se compara con su base de hub.toml: sin --base");
 	const repos = opts["--repo"] ? pickRepos(subRepos(s), [opts["--repo"] as string], "--repo") : subRepos(s);
 	const rows = subRows(s, repos);
 	const unknown = branches.filter((b) => !rows.some((r) => r.branch === b));
