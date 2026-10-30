@@ -1,10 +1,13 @@
 // Pruebas de bond hub init, bond hub add y bond hub sync (P6 de 2026-10-30-hub-guided)
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+
+// hub init monta submódulos, enlaces y hace bond init en cada repo: en Windows tarda varios segundos.
+setDefaultTimeout(30_000);
 
 // BOND_HOME incondicional a carpeta temporal para no tocar nunca el real del entorno
 process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
