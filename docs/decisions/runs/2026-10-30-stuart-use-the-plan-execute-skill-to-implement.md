@@ -5,10 +5,14 @@ branch: "plan/hub-guided-p7"
 base: "plan/hub-session@03d9d20"
 orchestrator: "claude"
 started_at: "2026-10-30T07:40:31Z"
-finished_at: "2026-10-30T08:05:14Z"
+finished_at: "2026-10-30T08:37:19Z"
 status: "reported"
 commits:
-  - "aa096d6 feat(hub): add bond hub check with --fix and --json"
+  - "ad692c2 feat(hub): create hub and import repositories via init, add, and sync"
+  - "0821fa7 fix(hub): address reviewer findings for P6 hub creation and import"
+  - "93d2231 docs(plan): record P6 progress and its runs"
+  - "9f4ff33 feat(hub): add bond hub check with --fix and --json"
+  - "8f5936c fix(hub): address reviewer findings for P7 hub check"
 decisions:
   - "2026-10-30-en-bond-hub-check-rama-vertical-a-medias-son-worktrees-de-ramas-que-no-existen-en-el-hub-o-mas-de-una-vertical-abierta"
 ---
@@ -23,27 +27,39 @@ Use the plan-execute skill to implement only P7 of docs/plans/2026-10-30-hub-gui
 
 ## Report
 
-## Informe P7 — `bond hub check` (plan `2026-10-30-hub-guided`, base `03d9d20`)
+## Informe — rebase + fixes del revisor (P7)
 
-**Qué cambió** (commit `aa096d6` en `plan/hub-guided-p7`, 8 ficheros, +590/−3):
+**SHAs** en `plan/hub-guided-p7` (sobre `93d2231` de `plan/hub-session`):
+- `9f4ff33` — P7 rebaseado (contenido original de `aa096d6` + resoluciones de conflicto)
+- `8f5936c` — fixes del revisor (3 ficheros, +131/−50)
 
-- `cli/hub-check.mts` (nuevo, módulo propio para no chocar con P6): `checkHubSession` con 9 comprobaciones por repo (`existe`, `enlace`, `base`, `bond init`, `config` vía `bond sync --check`, `agentes`, `worktrees`, `cambios`, `rama vertical`), `--fix` (solo enlaces y `submodule update --init`, con fallback a junction en Windows D15), `--json` (informe sin `fixFn`), `--dry-run` respetado. El re-check tras `--fix` usa una sesión fresca.
-- `cli/hub.mts`: despacho `bond hub check` + ayuda (7 líneas). `cli/main.mts`: 1 línea de ayuda global. `cli/doctor.mts`: `checkHubRow()` (una fila resumen dentro de un hub) + ayuda.
-- `docs/reference.md`: sección `bond hub check`. `CHANGELOG.md`: dos entradas en `## Sin publicar`.
-- `test/hub-check.test.mts`: 14 pruebas con `BOND_HOME` temporal (nunca tocan el `~/.bond` real).
-- Decisión registrada (proposed): semántica de "rama vertical a medias" — worktrees de ramas que no existen en el hub, o más de una abierta; los subconjuntos `--repos` son legítimos. Commiteada en `docs/decisions/` con la rama, como pediste.
+**Conflictos del rebase y cómo los resolví**
 
-**Comprobaciones ejecutadas**
+| Fichero | Conflicto | Resolución |
+|---|---|---|
+| `cli/hub.mts` (HUB_HELP) | mi bloque de 2 líneas vs el "Comandos:" de P6 | Lista de P6 + línea `check` nueva; el detalle vive en `HUB_CHECK_HELP`, alcanzable con `bond hub check --help` |
+| `cli/hub.mts` (dispatcher) | mi `if (args[0] === "check")` quedó auto-fusionado **después** del chequeo de ayuda genérica (con `bond hub check --help` habría caído a la ayuda del hub) | Movido a la cadena `[sub, ...rest]` de P6, justo detrás de `sync` y **antes** del `-h/--help` genérico, para que `--help` llegue a `hubCheck` |
+| `docs/reference.md` (bloque bash) | mis 2 líneas vs las 4 de P6 | Bloque de P6 + línea `bond hub check` |
 
-| Comprobación | Resultado |
-|---|---|
-| `npm run typecheck` | pasa |
-| `bun test` (suite completa) | 400 pass / 0 fail (386 previas + 14 nuevas) |
-| Manual `bin/bond hub check` en hub de prueba (`file://` + symlink) | sano→0; symlink roto→1 nombra repo y arreglo; `--fix` recrea el enlace→0; `--json` estructura correcta; ayuda OK |
-| Prueba manual del plan "en el hub de P6" | **no ejecutable**: P6 no está en mi base (rama paralela); sustituido por el hub de prueba anterior |
+CHANGELOG y `main.mts` fusionaron solos. Para mantener el commit del rebase puro, los fixes del revisor se restauraron y commitearon aparte.
 
-**Criterios de aceptación**: verde+exit 0 y problema por repo con arreglo+exit 1 ✔; fixture roto por cada comprobación (symlink roto, base inexistente, sin `bond init`, agente no instalado vía `hasAgent` inyectable, cambios sin commitear, vertical a medias) ✔; `--fix` arregla symlink y submódulo sin iniciar y nunca descarta cambios ni cambia de rama (probado explícitamente) ✔; `bond doctor` fuera de un hub no cambia ✔.
+**Fixes aplicados** (todos con test)
 
-**Riesgos**: el fixture de Windows (junction fallback) no se ha podido probar en esta máquina — lo cubrirá el CI al pasar la suite; `config` por repo usa un `chdir` temporal (single-thread, restaurado en `finally`); la decisión sobre "vertical a medias" queda *proposed* hasta que la aceptes (`/accept`).
+1. `doctor`: la fila del hub sano ya no ofrece `bond hub check` como fix; solo cuando hay problemas.
+2. Eliminado `makeDirLink`; se usa `linkRepo` de `cli/hub-init.mts` (junction nativa, sin `cmd /c mklink`).
+3. Fixture de tests: `symlinkSync(..., process.platform === "win32" ? "junction" : "dir")`; eliminados los 3 `skipIf(win32)`.
+4. `--fix --json`: stdout solo JSON; logs del arreglo y `[dry-run]` a stderr (redirect de `console.log` durante la fase de arreglo).
+5. `--fix` sobre symlink registra clon y enlace con `registerHubRepo` (D14, mismo patrón que `syncHub` de P6).
+6. `doctor` con `hub.toml` inválido: fila `fail` con el error de parseo. Ojo: `hubRoot` descarta hubs inválidos (`hasHub`), así que el fallback busca el `hub.toml` por `repoChain(cwd)`.
+7. Submódulo con `enlace` ok: `{ check: "enlace", ok: true, detail: "submódulo" }`.
+8. `hubCheck` hace `setDryRun(true)` propio.
+9. Test nuevo "varias ramas verticales abiertas" (dos ramas con worktree y ambas en el hub → `varias ramas verticales abiertas (fix/x, fix/y)`).
+10. `agentInstalled` de `cli/catalog-agents.mts` como default (cubre el bin local de agy).
 
-**Siguiente paso**: revisión de esta evidencia y de la decisión registrada; P6 sigue en su rama en paralelo — nada que integrar desde aquí sin tu revisión.
+**Verificación**
+- `npm run typecheck`: limpio. `bun test`: **413 pass / 0 fail** (18 de hub-check, 4 nuevas desde el último informe).
+- Manual con `BOND_HOME=$(mktemp -d)` (nada toca el `~/.bond` real): `check --help` propia; `--fix --json` → stdout puro JSON, `enlazado` en stderr, `hubs.toml` del temporal registra `back-real → hub`; `doctor` con `hub.toml` roto → `✗ hub — hub.toml inválido: ...`; `bond hub --help` lista `check`.
+
+**Riesgos**: el camino junction de Windows lo ejercita CI, no esta máquina; el redirect `console.log→console.error` es global durante la fase de arreglo (acotado con `finally`).
+
+**Siguiente paso**: re-review de `8f5936c` sobre `9f4ff33`; si pasa, integración de la rama. Réplica posible: "revisado, integra la rama" o "para".

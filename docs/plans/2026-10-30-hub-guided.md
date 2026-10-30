@@ -214,8 +214,8 @@ Riesgos:
     cambia de rama un repo.
   - `bond doctor` fuera de un hub no cambia.
 - Acciones:
-  - [ ] Comprobaciones, `--fix`, `--json`, entrada en `bond doctor`, docs, CHANGELOG y pruebas.
-  - [ ] Ejecutar las comprobaciones y anotar los resultados.
+  - [x] Comprobaciones, `--fix`, `--json`, entrada en `bond doctor`, docs, CHANGELOG y pruebas.
+  - [x] Ejecutar las comprobaciones y anotar los resultados.
   - [ ] Presentar la evidencia y parar para revisión.
 - Verificación: `npm run typecheck && bun test`; a mano, `bin/bond hub check` en el hub de P6.
 - Riesgos y recuperación: `--fix` pregunta antes de cada cambio salvo con `--yes`.
@@ -252,13 +252,13 @@ Riesgos:
 | --- | --- | --- | --- | --- |
 | P5 | implemented | passed | pending | `f8e930e` + `b87a26b` (arreglos de la revisión) integrados en `plan/hub-session`; en el checkout principal `bun test` 386/0, y las pruebas no tocan el `~/.bond/hubs.toml` real (`BOND_HOME` temporal). Sin probar en Windows (canonical/realpath y junctions, a cubrir en P6). Runs: `2026-10-30-kevin-use-the-plan-execute-skill-to-implement.md`, `2026-10-30-reviewer-5-read-only-code-review-of-branch-plan-hub.md`, `2026-10-30-kevin-a-reviewer-requested-changes-on-your-p5.md` |
 | P6 | implemented | passed | pending | `ad692c2` + `0821fa7` (arreglos de la revisión) integrados en `plan/hub-session`; en el checkout principal `bun test` 395/0. Sin probar en Windows real (junctions: lo dirá el CI) ni a mano con un repo real por URL. Runs: `2026-10-30-kevin-use-the-plan-execute-skill-to-implement-2.md`, `2026-10-30-reviewer-6-read-only-code-review-of-branch-plan-hub.md`, `2026-10-30-kevin-a-reviewer-requested-changes-on-your-p6.md` |
-| P7 | pending | not_run | pending | todavía nada |
+| P7 | implemented | passed | pending | `9f4ff33` + `8f5936c` (rebasados sobre P6, con los arreglos de la revisión y el `linkRepo` de P6) integrados en `plan/hub-session`; en el checkout principal `npm run typecheck` limpio, `bun test` 413/0, `bond decisions check` sin errores. Sin probar en Windows real. Runs: `2026-10-30-stuart-use-the-plan-execute-skill-to-implement.md`, `2026-10-30-reviewer-7-read-only-code-review-of-branch-plan-hub.md`, `2026-10-30-stuart-a-reviewer-requested-changes-on-your-p7.md` |
 | P8 | pending | not_run | pending | todavía nada |
 
 ## Siguiente paso
 
-P6 (crear e importar) y P7 (revisión guiada) en paralelo desde `plan/hub-session`, ya con P5
-integrada (su revisión humana sigue pendiente).
+P8 (flujo completo de punta a punta), ya con P5–P7 integradas en `plan/hub-session` (sus
+revisiones humanas siguen pendientes).
 
 ## Evidencia y seguimiento
 
@@ -275,6 +275,12 @@ integrada (su revisión humana sigue pendiente).
 - Incidente: una prueba manual de un agente con `bin/bond hub` sin `BOND_HOME` temporal escribió
   el `~/.bond/hubs.toml` real (solo rutas de `/tmp`); el orquestador lo borró. Las pruebas
   automáticas fijan `BOND_HOME` temporal; las pruebas manuales de P8 tienen que hacerlo también.
+- P7: rama `plan/hub-guided-p7` (stuart, pi), revisada por reviewer-7 (agy): cambios pedidos
+  (sugerencia de arreglo en `bond doctor` con el hub sano, enlaces con `cmd /c mklink` que fallan
+  en Windows, pruebas que se saltaban Windows, `--fix --json` con texto en stdout, registro sin
+  actualizar en `--fix`, `hub.toml` inválido invisible en doctor), aplicados en `8f5936c` tras
+  rebasar sobre P6 y reutilizar su `linkRepo`. Decisión propuesta por stuart sobre qué es una
+  "rama vertical a medias" en `check`, pendiente de aceptar.
 
 Sin issues ni PRs todavía. Continúa `2026-10-29-hub-session` en la misma rama
 (`plan/hub-session`), que irá en un solo PR.
