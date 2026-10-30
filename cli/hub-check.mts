@@ -25,7 +25,9 @@ sin commitear y sin ramas verticales a medias.
   --fix     Arregla solo lo seguro: crea o repara el enlace al clon local (symlink,
             junction en Windows) y registra el repo en ~/.bond/hubs.toml (D14), e
             inicializa los submódulos sin iniciar. Nunca descarta cambios ni cambia
-            de rama un repo.
+            de rama un repo. Con terminal y sin --yes pregunta antes de cada arreglo.
+  --yes, -y Aplica los arreglos seguros sin preguntar (necesario sin terminal si se
+            quiere arreglar; con --fix y terminal, evita la confirmación).
   --json    Salida en JSON (los mensajes del arreglo van a stderr).
   --dry-run Describe los arreglos sin aplicarlos.
 `;
@@ -244,7 +246,7 @@ function printCheck(r: HubCheckReport): void {
 
 const fixableHint = (r: HubCheckReport) => (r.repos.some((rp) => rp.checks.some((c) => !c.ok && c.fixFn)) ? " → bond hub check --fix arregla lo seguro" : "");
 
-export function hubCheck(args: string[]): void {
+export async function hubCheck(args: string[]): Promise<void> {
 	if (args.includes("-h") || args.includes("--help")) {
 		console.log(HUB_CHECK_HELP.trimEnd());
 		return;
@@ -252,7 +254,8 @@ export function hubCheck(args: string[]): void {
 	if (args.includes("--dry-run")) setDryRun(true);
 	const fix = args.includes("--fix");
 	const json = args.includes("--json");
-	for (const a of args) if (!["--fix", "--json", "--dry-run"].includes(a)) die(`opción desconocida: ${a} (bond hub check --help)`);
+	const yes = args.includes("--yes") || args.includes("-y");
+	for (const a of args) if (!["--fix", "--json", "--dry-run", "--yes", "-y"].includes(a)) die(`opción desconocida: ${a} (bond hub check --help)`);
 	const root = hubRoot(process.cwd());
 	if (!root) die("no es un hub: falta hub.toml (bond hub --help)");
 	const s = hubSession(root);
@@ -260,11 +263,23 @@ export function hubCheck(args: string[]): void {
 	let report = checkHubSession(s);
 	if (fix) {
 		const autos = report.repos.flatMap((rp) => rp.checks.filter((c) => !c.ok && c.fixFn).map((c) => ({ rp, c })));
+		// Sin --yes y con terminal, se pregunta antes de cada arreglo; sin terminal o con
+		// --yes, se aplican todos los seguros de una vez (como siempre).
+		const ask = !yes && !json && process.stdin.isTTY === true;
+		const p = ask ? await import("@clack/prompts") : undefined;
 		// Con --json la stdout es solo el informe: los mensajes del arreglo van a stderr.
 		const origLog = console.log;
 		if (json) console.log = (...a: unknown[]) => console.error(...a); // eslint-disable-line no-console
 		try {
 			for (const { rp, c } of autos) {
+				if (p) {
+					const go = await p.confirm({ message: `¿Arreglar ${c.check} en ${rp.repo}: ${c.detail ?? ""}?` });
+					if (typeof go === "symbol") {
+						p.cancel("Cancelado");
+						process.exit(130);
+					}
+					if (!go) continue;
+				}
 				act(`arreglar ${c.check} en ${rp.repo}: ${c.detail ?? ""}`, () => {
 					try {
 						c.fixFn!();

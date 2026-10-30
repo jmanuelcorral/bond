@@ -883,9 +883,11 @@ Con `--fix` arregla solo lo seguro y anunciado: crear o reparar el enlace al clo
 `linkRepo` de `bond hub init` (symlink, junction en Windows) registrando el clon y el enlace en
 `~/.bond/hubs.toml` (D14), y `git submodule update --init` de los submódulos sin iniciar. Nunca
 descarta cambios ni cambia de rama un repo; lo demás (`bond init`, `bond sync`) se ofrece con el
-comando. Con `--dry-run` solo lo describe. `--json` emite el informe completo por repos y manda a
-stderr los mensajes del arreglo. `bond doctor` incluye un resumen (`hub <nombre>`) cuando estás en
-un hub y reporta como fallo un `hub.toml` inválido con su error de parseo; fuera, no cambia nada.
+comando. Con terminal y sin `--yes` pregunta antes de cada arreglo; con `--yes`/`-y` (o `--json`)
+los aplica todos de una vez. Con `--dry-run` solo lo describe. `--json` emite el informe completo
+por repos y manda a stderr los mensajes del arreglo. `bond doctor` incluye un resumen (`hub <nombre>`)
+cuando estás en un hub y reporta como fallo un `hub.toml` inválido con su error de parseo; fuera, no
+cambia nada.
 
 ### `bond team` en un hub
 

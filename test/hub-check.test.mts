@@ -225,6 +225,14 @@ describe("--fix", () => {
 		expect(r.stdout).toContain("[dry-run]");
 	});
 
+	test("bond hub check acepta --yes y -y para arreglar sin preguntar (H2)", () => {
+		// Antes fallaba con "opción desconocida: --yes"; ahora se acepta (y -y) y aplica los seguros.
+		expect(bond(["hub", "check", "--fix", "--yes"]).stdout).not.toContain("opción desconocida");
+		expect(bond(["hub", "check", "--fix", "--yes"]).stderr).not.toContain("opción desconocida");
+		expect(bond(["hub", "check", "-y"]).stdout).not.toContain("opción desconocida");
+		expect(bond(["hub", "check", "-y"]).stderr).not.toContain("opción desconocida");
+	});
+
 	test("--fix con --json: la stdout es solo el informe y los mensajes del arreglo van a stderr", () => {
 		rmSync(join(hub, "back"));
 		const r = bond(["hub", "check", "--fix", "--json"]);
