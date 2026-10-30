@@ -2,6 +2,9 @@
 
 ## Sin publicar
 
+- `bond hub init` (y `bond hub sync` cuando falta la ruta de un symlink) pide la ruta al clon
+  local navegando por disco: empieza en la carpeta que contiene el hub, autocompleta carpetas
+  (flechas para elegir, Tab completa, `/` entra en la carpeta) y solo acepta un repo git.
 - Arreglos del flujo guiado del hub probado de punta a punta:
   - `bond hub init` deja ahora el hub recién creado (sin ningún commit) con su config de agente
     generada (equivalente a `bond sync`) y un commit inicial de sus ficheros (`hub.toml`,

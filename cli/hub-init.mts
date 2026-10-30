@@ -2,7 +2,7 @@
 // Gestiona hub.toml (versionado), .bond/hub.local.toml (personal) y el registro global.
 
 import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
 	act,
 	brokenLink,
@@ -264,6 +264,36 @@ const ask = async <T,>(v: Promise<T | symbol>): Promise<T> => {
 	return r as T;
 };
 
+/** Por qué una ruta no vale como clon local (no existe o no es un repo git), o undefined si vale. */
+export function localCloneError(value: string | undefined, hubDir: string): string | undefined {
+	const v = value?.trim();
+	if (!v) return "indica la carpeta del clon local";
+	const dir = expandSource(v, hubDir);
+	if (!existsSync(dir)) return `no existe: ${dir}`;
+	if (git(dir, ["rev-parse", "--show-toplevel"]).status !== 0) return `no es un repo git: ${dir}`;
+	return undefined;
+}
+
+/**
+ * Pide la ruta a un clon local navegando por disco: autocompleta carpetas mientras se escribe
+ * (flechas para elegir, Tab completa el nombre, / entra en la carpeta y Enter la acepta).
+ * Empieza en la carpeta que contiene el hub, donde suelen vivir los clones hermanos, acepta `~`
+ * y solo da por buena una carpeta que sea un repo git.
+ */
+async function askLocalClone(p: typeof import("@clack/prompts"), message: string, hubDir: string): Promise<string> {
+	const start = dirname(resolve(hubDir));
+	const chosen = await ask(
+		p.path({
+			message: `${message} ${dim("(↑/↓ elige, Tab completa, / entra en la carpeta)")}`,
+			root: start,
+			initialValue: start + sep,
+			directory: true,
+			validate: (v) => localCloneError(v, hubDir),
+		}),
+	);
+	return chosen.trim().replace(/[\\/]+$/, "");
+}
+
 /** Sincroniza el disco con hub.toml y .bond/hub.local.toml. */
 export async function syncHub(
 	root: string,
@@ -367,10 +397,10 @@ export async function syncHub(
 						});
 						chosen = cloneDir;
 					} else {
-						chosen = await ask(p.text({ message: `Ruta al clon local de ${key}:` }));
+						chosen = await askLocalClone(p, `Ruta al clon local de ${key}:`, root);
 					}
 				} else {
-					chosen = await ask(p.text({ message: `Ruta al clon local de ${key}:` }));
+					chosen = await askLocalClone(p, `Ruta al clon local de ${key}:`, root);
 				}
 
 				rawSource = chosen;
@@ -605,8 +635,8 @@ export async function hubInit(args: string[]): Promise<void> {
 					...(agent.trim() ? { agent: agent.trim() } : {}),
 				};
 			} else if (choice === "symlink") {
-				const localPath = await ask(p.text({ message: "Ruta al clon local:" }));
-				const resolved = resolve(localPath);
+				const localPath = await askLocalClone(p, "Ruta al clon local:", root);
+				const resolved = expandSource(localPath, root);
 				const defaultName = basename(localPath);
 				const key = await ask(p.text({ message: "Nombre en hub.toml:", initialValue: defaultName }));
 				const path = await ask(p.text({ message: "Ruta dentro del hub:", initialValue: key }));

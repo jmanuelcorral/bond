@@ -861,7 +861,8 @@ source = "~/gitrepos/fluzo-backend"
 - `bond hub init [dir]`: an assistant that creates the hub (`git init`, `.bond/`, `AGENTS.md`,
   `hub.toml`, `.gitignore` and `hub.local.toml`) or prepares it in an existing repo. It imports
   existing submodules with their base and adds repos by URL (submodule) or local path (symlink).
-  With `--yes` it uses detected values without asking.
+  The local clone is picked by browsing the disk from the folder that holds the hub (arrows to
+  choose, Tab completes, `/` enters the folder) and only a git repo is accepted. With `--yes` it uses detected values without asking.
 - `bond hub add <url|path>`: adds a repository to `hub.toml` (as a submodule if it is a URL, as
   a symlink if it is a local clone) and syncs the disk.
 - `bond hub sync`: leaves the disk as `hub.toml` says: it mounts submodules, creates symlinks (or
