@@ -18,7 +18,7 @@ Object.assign(process.env, {
 
 const { BOND_HOME } = await import("../cli/runtime.mts");
 const { hubRoot, hubSession, hubsPath, parseHubToml, parseHubLocalToml } = await import("../cli/hub.mts");
-const { isLink, isBrokenLink, linkRepo, renderHubToml, renderHubLocalToml } = await import("../cli/hub-init.mts");
+const { isLink, isBrokenLink, linkRepo, localCloneError, renderHubToml, renderHubLocalToml } = await import("../cli/hub-init.mts");
 const { canonical } = await import("../cli/util.mts");
 
 const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
@@ -157,6 +157,21 @@ describe("bond hub init", () => {
 		expect(hubToml.repos["sub-front"].path).toBe("sub-front");
 		expect(hubToml.repos["sub-front"].link).toBe("submodule");
 		expect(hubToml.repos["sub-front"].base).toBe("main");
+	});
+});
+
+describe("selector del clon local", () => {
+	test("solo acepta una carpeta que existe y es un repo git", () => {
+		const hubDir = join(tmp, "sel-hub");
+		mkdirSync(hubDir);
+		const plain = join(tmp, "no-git");
+		mkdirSync(plain);
+		expect(localCloneError("", hubDir)).toContain("indica");
+		expect(localCloneError(join(tmp, "no-existe"), hubDir)).toContain("no existe");
+		expect(localCloneError(plain, hubDir)).toContain("no es un repo git");
+		expect(localCloneError(backReal, hubDir)).toBeUndefined();
+		// Relativa al hub, como la escribiría el usuario.
+		expect(localCloneError(join("..", basename(backReal)), hubDir)).toBeUndefined();
 	});
 });
 
