@@ -130,6 +130,9 @@ describe("bond hub init", () => {
 		const bondToml = readFileSync(join(hubDir, ".bond", "bond.toml"), "utf8");
 		expect(bondToml).toContain("decision-record");
 		expect(bondToml).toContain("[decisions]");
+		// El hub tiene su propio bond init: las skills por defecto y plan-team, ya generadas.
+		expect(bondToml).toContain("plan-team");
+		expect(existsSync(join(hubDir, ".agents", "skills", "plan-team", "SKILL.md"))).toBe(true);
 		// H1: `bond hub check` ya no reporta que falte la base en ninguno de los repos.
 		const chk = JSON.parse(bond(["hub", "check", "--json"], hubDir).stdout) as { repos: Array<{ checks: Array<{ check: string; ok: boolean }> }> };
 		const baseFail = chk.repos.flatMap((r) => r.checks).filter((c) => c.check === "base" && !c.ok);
@@ -153,6 +156,15 @@ describe("bond hub init", () => {
 		expect(res.stderr).toContain("sin commitear");
 		// Sin el bloque de pasos siguientes de bond init: el hub ya lo hace.
 		expect(res.stdout).not.toContain("Siguiente:");
+	});
+
+	test("bond hub sync hace el bond init del hub si le falta", () => {
+		const hubDir = join(tmp, "noinit-hub");
+		bond(["hub", "init", hubDir, "--yes", backReal], tmp);
+		rmSync(join(hubDir, ".bond", "bond.toml"));
+		expect(bond(["hub", "check"], hubDir).stdout).toContain("bond hub sync");
+		bond(["hub", "sync", "--yes"], hubDir);
+		expect(readFileSync(join(hubDir, ".bond", "bond.toml"), "utf8")).toContain("plan-team");
 	});
 
 	test("bond hub init respeta la config de un repo que ya tiene bond", () => {
