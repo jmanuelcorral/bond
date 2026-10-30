@@ -1,21 +1,33 @@
-# BOND
+<p align="center">
+  <a href="https://josecorral.dev/bond/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/public/logo-dark.png">
+      <img alt="bond" src="docs/public/logo-light.png" width="420">
+    </picture>
+  </a>
+</p>
 
-![BOND](assets/bond-logo.png)
+<p align="center"><b>Tus agentes de código, trabajando juntos.</b> · <i>007 · licence to code</i></p>
 
-<details><summary>El logo en texto</summary>
+<p align="center">
+  <a href="https://github.com/jmanuelcorral/bond/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/jmanuelcorral/bond/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/jmanuelcorral/bond/releases/latest"><img alt="Última release" src="https://img.shields.io/github/v/release/jmanuelcorral/bond?label=release&color=0ea5e9"></a>
+  <a href="https://github.com/jmanuelcorral/bond/releases"><img alt="Descargas" src="https://img.shields.io/github/downloads/jmanuelcorral/bond/total?color=6366f1"></a>
+  <a href="https://github.com/jmanuelcorral/homebrew-tap"><img alt="Homebrew" src="https://img.shields.io/badge/brew-jmanuelcorral%2Ftap%2Fbond-fbb040?logo=homebrew&logoColor=white"></a>
+  <img alt="Linux, macOS y Windows" src="https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-555?logo=linux&logoColor=white">
+  <a href="LICENSE"><img alt="Licencia MIT" src="https://img.shields.io/github/license/jmanuelcorral/bond?color=22c55e"></a>
+  <a href="https://josecorral.dev/bond/"><img alt="Documentación" src="https://img.shields.io/badge/docs-josecorral.dev%2Fbond-2dd4bf"></a>
+</p>
 
-```
-╱╱╱╱╱╱ 007                        ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
-╱╱╱╱╱╱ █▀▀▄ ▄▀▀▀▄ █▄  █ █▀▀▀▀▀▀▀▄ ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
-╱╱╱╱╱╱ █▀▀▄ █   █ █ ▀▄█ █       █ ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
-╱╱╱╱╱╱ █▄▄▀ ▀▄▄▄▀ █   █ █▄▄▄▄▄▄▄▀ ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
-```
-
-</details>
-
-**BOND** (*007 · licence to code*) es una CLI para trabajar con varios agentes de código a la
-vez: pi, Claude Code, Codex, Copilot CLI, opencode, Crush y Gemini CLI, coordinados con
+**bond** es una CLI para trabajar con varios agentes de código a la vez: pi, Claude Code, Codex,
+Copilot CLI, opencode, Crush, Gemini CLI y Antigravity, coordinados con
 **[Herdr](https://herdr.dev)**. Ninguno es obligatorio: basta con tener uno.
+
+<p align="center">
+  <a href="https://josecorral.dev/bond/whats-new"><img alt="El modo hub en acción: un orquestador pi reparte un hola mundo entre un frontend React y un backend Express, un agente por repo" src="assets/hub-demo.webp" width="900"></a>
+  <br>
+  <sub><b>Nuevo en 1.10.0, el modo hub:</b> un orquestador pi reparte una historia entre un frontend y un backend, un agente por repo. <a href="https://josecorral.dev/bond/whats-new">Vídeo completo y novedades →</a></sub>
+</p>
 
 ## En tres comandos
 
@@ -45,6 +57,7 @@ buscador). En el repo:
 
 | Doc | Para qué |
 |---|---|
+| [docs/novedades.md](docs/novedades.md) | Lo nuevo de cada versión; en 1.10.0, el modo hub (con vídeo) |
 | [docs/getting-started.md](docs/getting-started.md) | De cero a trabajar: instalación, setup, primer repo, bucle diario, glosario |
 | [docs/puesto.md](docs/puesto.md) | `bond`, `bond team`, `bond status`: workspaces, agentes, worktrees, equipos |
 | [docs/reference.md](docs/reference.md) | Referencia: cada comando, qué genera para cada agente y por qué |
@@ -89,6 +102,25 @@ Desde el código (Node 22.18 o más): `git clone https://github.com/jmanuelcorra
 otro. Todo respeta las reglas del skill `herdr`: Herdr solo se usa cuando lo pides, nombres
 únicos, nada de merge, push ni limpieza automática, y nadie responde por ti a las preguntas de
 un agente.
+
+## Modo hub
+
+Un **hub** es un repo de operaciones que agrupa otros repos (como submódulos o como symlinks a
+tus clones) y trabaja con ellos en vertical: una rama con el mismo nombre en todos y un agente
+por repo, coordinados desde el hub.
+
+```bash
+bond hub init                    # crea el hub, importa los repos en repos/ y les hace bond init
+bond hub check                   # qué falta en cada repo y cómo arreglarlo (--fix)
+bond hub pull                    # pone al día la base de cada repo (solo fast-forward)
+bond team fix/login              # una rama vertical: un worktree y un agente por repo
+bond team prompt fix/login "el login falla con emails en mayúsculas"
+bond team collect fix/login --repo backend && bond team clean fix/login
+```
+
+La sesión vive en `hub.toml`, y el `AGENTS.md` del hub lleva un bloque generado con los repos y
+las reglas del hub para el orquestador. Detalle en [Novedades](docs/novedades.md) y en la
+[referencia](docs/reference.md#bond-hub).
 
 ## Flujo de trabajo con skills
 
@@ -139,14 +171,18 @@ bond/
 │   ├── catalog.mts               # bond catalog (create, check, add, list, update, remove, clean)
 │   ├── catalog-git.mts           # catálogos por git: refs, caché y .bond/lock.json
 │   ├── launch.mts, herdr.mts     # bond, bond dev, bond status
-│   ├── team.mts                  # bond team (status, prompt, clean)
+│   ├── team.mts                  # bond team (status, prompt, collect, clean)
+│   ├── hub.mts, hub-init.mts     # bond hub: la sesión (hub.toml), init, add, sync
+│   ├── hub-check.mts, hub-pull.mts   # bond hub check y bond hub pull
 │   ├── sessions.mts              # bond sessions
+│   ├── decisions.mts             # bond decisions: la memoria de decisiones y sus runs
+│   ├── trust.mts                 # confianza de los agentes en los worktrees de bond team
 │   ├── update.mts                # bond update
 │   ├── config.mts, keys.mts      # ~/.bond: config.toml, claves
 │   ├── endpoints.mts, models.mts, agents.mts, run.mts   # endpoints y modelos por agente
 │   ├── instructions.mts          # instrucciones globales de cada agente
 │   ├── catalog-agents.mts        # agentes conocidos y cómo instalarlos
-│   ├── doctor.mts, runtime.mts, util.mts
+│   ├── doctor.mts, suggestions.mts, migrate.mts, runtime.mts, util.mts
 ├── catalog/                      # lo que bond init instala en un repo
 │   ├── catalog.toml              # nombre, resumen de cada skill y si sale marcada
 │   ├── skills/                   # code-context, plan-create, plan-execute...
@@ -154,6 +190,7 @@ bond/
 │   └── mcps/                     # servidores MCP, uno por fichero: context7, duckduckgo
 ├── templates/catalog/            # lo que bond catalog create escribe en un catálogo nuevo
 ├── global/skills/                # bond-delegate, bond-team (globales, para cualquier agente)
+├── assets/                       # la vista previa animada del README
 ├── extensions/, prompts/, lib/   # Bond Extensions de pi (paquete: package.json → "pi")
 ├── scripts/build.mts             # binarios y paquete de npm
 ├── docs/                         # la documentación (también en GitHub Pages)
