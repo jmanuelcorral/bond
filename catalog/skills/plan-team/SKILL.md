@@ -63,6 +63,11 @@ applies with these differences:
   refuses a second one and says how to close the first (`bond team clean <branch>`). Never
   open two. With several eligible phases, run them in sequence, one vertical branch each:
   the parallelism is across the repos of the phase, not across phases.
+- **Bring the bases up to date first**: worktrees start from each repo's base, so before
+  opening the phase run `bond hub pull` (fetch and fast-forward only; it skips, with the reason,
+  what it cannot advance safely) and `bond hub check`. The hub's `AGENTS.md` has a generated
+  block (`bond:hub`) with the session's repos, what each one is and the hub's rules: read it
+  to map the plan's work to repos.
 - **Open the phase** with a single branch spec: `bond team plan/<slug>-p2` (add
   `--repos front,back` when the plan says which repos the phase touches; paths or unique
   folder names). `--base` does not apply: each repo starts from its own base in `hub.toml`. The

@@ -329,12 +329,16 @@ without failing (D17). Each repo may carry a description (`description` in `hub.
 generates in the hub's `AGENTS.md` a block with the session table, the hub's rules (don't edit
 `repos/` from the hub; work in a repo goes through `bond team`) and where `docs/plans/` and
 `docs/decisions/` live, so you can tell what each repo is without leaving the hub (D18).
+Before opening a team, `bond hub pull` brings the base of the hub and of every repo up to date
+(`git fetch` and fast-forward only, never merge, rebase or push): worktrees start from that base,
+and `bond hub check` warns when one is behind its remote (D19).
 The flow, end to end (see
 [reference](reference.md#bond-hub)):
 
 ```bash
 bond hub init                    # creates the hub and imports the repos (submodule or symlink)
 bond hub check                   # reviews the session: what's missing and how to fix it (--fix)
+bond hub pull                    # brings each repo's base up to date (fast-forward only)
 bond team fix/login              # the branch in the hub and one agent per repo of the session
 bond team fix/login --repos backend  # or only in those repos (path or name, comma-separated)
 bond team prompt fix/login "the login fails with uppercase emails"

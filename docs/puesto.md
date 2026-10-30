@@ -323,12 +323,14 @@ guiada con `bond hub init`, que hace primero `bond init` en el propio hub (con `
 agentes, y `--fix` arregla lo seguro. Los repos nuevos entran por defecto en `repos/<nombre>` (D16); un hub
 que ya los tenga en la raíz sigue funcionando igual — `bond hub check` solo avisa de ello, sin fallar (D17).
 Cada repo puede llevar descripción (`description` en `hub.toml`; el asistente de `bond hub init` la pregunta y en `bond hub add` es `--description`): `bond sync` genera en el `AGENTS.md` del hub un bloque con la tabla de la sesión, las reglas del hub (no editar `repos/` desde el hub; el trabajo en un repo va por `bond team`) y dónde viven `docs/plans/` y `docs/decisions/`, para que desde el hub se sepa qué es cada repo sin salir de él (D18).
+Antes de abrir un equipo, `bond hub pull` pone al día la base del hub y de cada repo (`git fetch` y avance solo en fast-forward, sin merge, rebase ni push): los worktrees salen de esa base, y `bond hub check` avisa si alguna va por detrás de su remoto (D19).
 El flujo, de punta a punta (ver
 [referencia](reference.md#bond-hub)):
 
 ```bash
 bond hub init                    # crea el hub e importa los repos (submódulo o symlink)
 bond hub check                   # revisa la sesión: qué falta y cómo arreglarlo (--fix)
+bond hub pull                    # pone al día la base de cada repo (solo fast-forward)
 bond team fix/login              # la rama en el hub y un agente por repo de la sesión
 bond team fix/login --repos backend  # o solo en esos repos (ruta o nombre, separados por comas)
 bond team prompt fix/login "el login falla con emails en mayúsculas"

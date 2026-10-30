@@ -81,6 +81,7 @@ Desde el código (Node 22.18 o más): `git clone https://github.com/jmanuelcorra
 | Cómo va cada rama, mandarle trabajo, recoger | `bond team status`, `bond team prompt feat/a "…"`, `bond team clean` |
 | Ver qué hace cada uno | `bond status`; `bond sessions` para retomar sesiones de pi |
 | Delegar en otro agente desde un agente | Skill `bond-delegate`: en pi `/delegate reviewer:claude revisa el diff`; en Claude o Copilot `/bond-delegate …` |
+| Un hub: un repo de operaciones con otros repos (submódulo o symlink) | `bond hub init` lo crea e importa los repos en `repos/`; `bond hub check`, `bond hub pull` y `bond team fix/x` (una rama vertical, un agente por repo) |
 | Repartir una tarea entre worktrees desde un agente | Skill `bond-team`: en pi `/team <tarea>`; propone el reparto, espera tu OK y resume por rama |
 
 `bond-delegate` y `bond-team` son skills globales: cualquier agente puede delegar en cualquier
