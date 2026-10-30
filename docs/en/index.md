@@ -42,7 +42,7 @@ features:
     linkText: View catalogs
 ---
 
-::: tip What's new: hub mode
+::: tip New in bond 1.10.0: hub mode
 Working across multiple repositories at once? With the new **hub mode**, bond coordinates cross-repo changes in a single vertical session with an agent per repository. [See what's new](whats-new.md).
 :::
 
@@ -94,6 +94,21 @@ two fixes back, merges into `main` and tidies up the team. No cuts: it takes as 
   <video src="/videos/orquestador.mp4" poster="/videos/poster-orquestador.webp" autoplay muted loop playsinline controls preload="metadata"></video>
 </div>
 <p class="terminal-caption">Claude orchestrates two pi agents: plan, split, four panes at once, review with fixes, merge and cleanup.</p>
+
+And the new **hub mode**: a pi orchestrator and one agent per repo, across a frontend and a backend at once ([what's new](whats-new.md)):
+
+<div class="terminal-window">
+  <div class="terminal-header">
+    <div class="terminal-dots">
+      <span class="terminal-dot dot-red"></span>
+      <span class="terminal-dot dot-yellow"></span>
+      <span class="terminal-dot dot-green"></span>
+    </div>
+    <div class="terminal-title">bond hub: demo-hub</div>
+  </div>
+  <video src="/videos/hub-en.mp4" poster="/videos/poster-hub-en.webp" controls muted loop playsinline preload="metadata"></video>
+</div>
+<p class="terminal-caption">A hub with a React frontend (submodule) and an Express backend (symlink): <code>bond hub init</code>, <code>bond hub check</code> and a pi orchestrator that splits the story into a vertical branch with <code>bond team</code>, one pi agent per repo, and checks it all at the end.</p>
 
 And four more, short ones, on [fluzo](https://github.com/fluzo-labs/fluzo), a real Rust project:
 
