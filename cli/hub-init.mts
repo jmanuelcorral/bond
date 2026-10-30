@@ -30,7 +30,7 @@ import {
 	registerHubRepo,
 	submodules,
 } from "./hub.mts";
-import { agentsMd } from "./repo.mts";
+import { agentsMd, DECISIONS_SECTION, syncRepo } from "./repo.mts";
 
 export const HUB_INIT_HELP = `Uso: bond hub init [dir] [repos...] [opciones]
 
@@ -45,6 +45,10 @@ Opciones:
   --name <nombre> Nombre del hub (por defecto, el nombre de la carpeta)
   --base <rama>   Rama base del hub (por defecto, la rama actual o main)
   --repo <origen> Repositorio a importar (URL o ruta local; puede repetirse)
+
+Un hub recién creado (sin ningún commit) queda con su config de agente generada y un
+commit inicial de los ficheros del hub, para que 'bond hub check' encuentre la base.
+En un hub preexistente con commits no se commitea: los cambios se dejan para ti.
 `;
 
 export const HUB_ADD_HELP = `Uso: bond hub add <url|ruta> [opciones]
@@ -476,18 +480,19 @@ export async function hubInit(args: string[]): Promise<void> {
 		});
 	}
 
+	// ¿Tenía ya commits el repo del hub al empezar? Solo los hubs recién creados (sin ningún
+	// commit) se commitean al final; en un hub preexistente con commits no se commitea (H1).
+	const hadCommits = git(root, ["rev-parse", "--verify", "--quiet", "HEAD"]).status === 0;
+
 	// Directorio .bond
 	act("crear .bond", () => {
 		mkdirSync(join(root, ".bond"), { recursive: true });
 	});
 
-	// .bond/bond.toml mínimo si no existe
-	const bondTomlPath = join(root, ".bond", "bond.toml");
-	if (!existsSync(bondTomlPath)) {
-		act("crear .bond/bond.toml", () => {
-			writeFileSync(bondTomlPath, 'agents = ["pi"]\n');
-		});
-	}
+	// Memoria de decisiones del hub (D5): los runs de bond team van aquí, no a cada repo de
+	// la sesión. Con --yes va activada por defecto; en modo interactivo se propone.
+	const interactive = !yes && process.stdin.isTTY === true;
+	let withDecisions = true;
 
 	// AGENTS.md si no existe
 	const agentsPath = join(root, "AGENTS.md");
@@ -519,11 +524,17 @@ export async function hubInit(args: string[]): Promise<void> {
 		hubLocalToml = parseHubLocalToml(readFileSync(localTomlPath, "utf8"), ".bond/hub.local.toml");
 	}
 
-	const interactive = !yes && process.stdin.isTTY === true;
-
 	if (interactive) {
 		const p = await import("@clack/prompts");
 		p.intro(dim(`hub init · ${basename(root)}`));
+
+		// Memoria de decisiones: se propone activada (los runs del equipo quedan en el hub).
+		withDecisions = await ask(
+			p.confirm({
+				message: "¿Memoria de decisiones para el hub? (los runs de bond team se guardan aquí)",
+				initialValue: true,
+			}),
+		);
 
 		hubToml.name = await ask(
 			p.text({
@@ -661,6 +672,16 @@ export async function hubInit(args: string[]): Promise<void> {
 		writeFileSync(hubTomlPath, renderHubToml(hubToml));
 	});
 
+	// .bond/bond.toml del hub si no existe: los agentes y, con memoria de decisiones, la
+	// skill decision-record y la sección [decisions] (para que los runs caigan en el hub, D5).
+	const bondTomlPath = join(root, ".bond", "bond.toml");
+	if (!existsSync(bondTomlPath)) {
+		act("crear .bond/bond.toml", () => {
+			const skills = withDecisions ? `skills = ["decision-record"]\n` : "";
+			writeFileSync(bondTomlPath, `agents = ["pi"]\n${skills}${withDecisions ? `\n${DECISIONS_SECTION}` : ""}`);
+		});
+	}
+
 	if (Object.keys(hubLocalToml.repos).length > 0) {
 		act("guardar .bond/hub.local.toml", () => {
 			writeFileSync(localTomlPath, renderHubLocalToml(hubLocalToml));
@@ -673,6 +694,35 @@ export async function hubInit(args: string[]): Promise<void> {
 	updateGitignore(root, [".bond/hub.local.toml", ...symlinkPaths]);
 
 	await syncHub(root, { yes: !interactive, hubToml, hubLocalToml });
+
+	// H1: un hub recién creado (sin ningún commit) queda sin la base que luego exige
+	// `bond hub check` y con la config de agente sin generar. Generamos la config del hub
+	// (equivalente a bond sync) y, si el repo no tenía commits, hacemos el commit inicial de
+	// sus ficheros. En un hub preexistente con commits no commiteamos: los cambios se dejan
+	// para que los revise el usuario. En dry-run solo se describe (el directorio puede no existir).
+	if (!hadCommits) {
+		act("bond sync en el hub y commit inicial de sus ficheros (hub.toml, .gitmodules, .gitignore, AGENTS.md, .bond/ y la config de agente)", () => {
+			const prevCwd = process.cwd();
+			try {
+				process.chdir(root);
+				syncRepo();
+			} finally {
+				process.chdir(prevCwd);
+			}
+			git(root, ["add", "-A"]);
+			const c = git(root, ["commit", "-qm", "bond hub init"]);
+			if (c.status !== 0) warn(`commit inicial del hub: ${c.stderr.trim() || c.stdout.trim()}`);
+		});
+	} else if (existsSync(root)) {
+		// Hub preexistente: sincronizamos la config generada pero no commiteamos.
+		const prevCwd = process.cwd();
+		try {
+			process.chdir(root);
+			syncRepo({ quiet: true });
+		} finally {
+			process.chdir(prevCwd);
+		}
+	}
 	log(`hub ${hubToml.name} listo en ${root}`);
 }
 

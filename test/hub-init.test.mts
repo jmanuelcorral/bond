@@ -118,6 +118,21 @@ describe("bond hub init", () => {
 		expect(readFileSync(hubTomlPath, "utf8")).toBe(renderHubToml(hubToml));
 	});
 
+	test("bond hub init deja un commit inicial y memoria de decisiones; hub check pasa (H1, H5)", () => {
+		const hubDir = join(tmp, "h1-hub");
+		bond(["hub", "init", hubDir, `file://${frontReal}`, backReal], tmp);
+		// H1: el hub queda con al menos un commit, así que la base existe para `bond hub check`.
+		expect(spawnSync("git", ["-C", hubDir, "rev-parse", "--verify", "--quiet", "HEAD"], { encoding: "utf8" }).status).toBe(0);
+		// H5: el bond.toml del hub trae la skill decision-record y la sección [decisions].
+		const bondToml = readFileSync(join(hubDir, ".bond", "bond.toml"), "utf8");
+		expect(bondToml).toContain("decision-record");
+		expect(bondToml).toContain("[decisions]");
+		// H1: `bond hub check` ya no reporta que falte la base en ninguno de los repos.
+		const chk = JSON.parse(bond(["hub", "check", "--json"], hubDir).stdout) as { repos: Array<{ checks: Array<{ check: string; ok: boolean }> }> };
+		const baseFail = chk.repos.flatMap((r) => r.checks).filter((c) => c.check === "base" && !c.ok);
+		expect(baseFail).toEqual([]);
+	});
+
 	test("bond hub init --dry-run muestra qué haría, llega al resumen y no crea nada (B1)", () => {
 		const hubDir = join(tmp, "dry-hub");
 		const res = bond(["hub", "init", hubDir, "--dry-run", `file://${frontReal}`, backReal], tmp);
@@ -194,8 +209,10 @@ describe("bond hub sync", () => {
 
 		const frontUrl = `file://${frontReal}`;
 		bond(["hub", "init", "--yes", frontUrl, backReal], hubDir);
+		// bond hub init ya deja el hub con su commit inicial (H1); el add+commit extra de
+		// antes ya no hace falta y daría 'nada que commitear'. Se tolera por si acaso.
 		g(hubDir, "add", "-A");
-		g(hubDir, "commit", "-qm", "commit hub config");
+		spawnSync("git", ["-C", hubDir, "commit", "-qm", "commit hub config"], { encoding: "utf8" });
 
 		// Clonar el hub en otra carpeta (no lleva .bond/hub.local.toml porque está en .gitignore)
 		const clonedHub = join(tmp, "cloned-hub");

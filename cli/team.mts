@@ -1038,8 +1038,33 @@ async function prompt(args: string[]): Promise<void> {
 	console.log(`${ok("✓")} ${branch} → ${name}${runRel ? `  ${dim(`run: ${runRel}`)}` : ""}${opts["--wait"] ? `  ${dim(r.status ?? "")}` : ""}`);
 }
 
-/** `herdr agent prompt`: el estado del agente al acabar (con --wait) o el error de Herdr. */
-function promptAgent(name: string, task: string, extra: string[]): Promise<{ status?: string; error?: string }> {
+/** Espera `ms` milisegundos. */
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** ¿El resultado de Herdr es un prompt estancado (no se observó actividad en la ventana)? */
+function isStalled(r: { error?: string; code?: string }): boolean {
+	return r.code === "agent_prompt_stalled" || (r.error ?? "").includes("agent_prompt_stalled");
+}
+
+/**
+ * ¿El panel del agente muestra señales de haber recibido la tarea? Un stall no prueba que el
+ * prompt no llegara, así que antes de reenviar se comprueba el panel: si ya se ve la tarea,
+ * se da por entregado y no se reintenta.
+ */
+function paneShowsPrompt(name: string, task: string): boolean {
+	try {
+		const rd = run("herdr", ["agent", "read", name, "--source", "recent-unwrapped", "--lines", "120"], { timeout: 10_000 });
+		if (rd.status !== 0) return false;
+		const hay = rd.stdout.replace(/\s+/g, " ");
+		const needle = task.split("\n")[0].trim().replace(/\s+/g, " ").slice(0, 60);
+		return needle.length > 0 && hay.includes(needle);
+	} catch {
+		return false;
+	}
+}
+
+/** Un envío de `herdr agent prompt`, sin la lógica de reintento. */
+function rawPrompt(name: string, task: string, extra: string[]): Promise<{ status?: string; error?: string; code?: string }> {
 	return new Promise((done) => {
 		// Sin límite de tiempo propio: con --wait puede tardar lo que tarde el agente.
 		const child = spawn("herdr", ["agent", "prompt", name, task, ...extra], { stdio: ["ignore", "pipe", "pipe"] });
@@ -1056,16 +1081,42 @@ function promptAgent(name: string, task: string, extra: string[]): Promise<{ sta
 		});
 		child.on("error", (e) => done({ error: e.message }));
 		child.on("close", (code) => {
-			let parsed: { result?: { agent?: { agent_status?: string } }; error?: { message?: string } } = {};
+			let parsed: { result?: { agent?: { agent_status?: string } }; error?: { code?: string; message?: string } } = {};
 			try {
 				parsed = JSON.parse(out || err || "{}");
 			} catch {
 				// Salida no JSON.
 			}
-			if (code !== 0 || parsed.error) done({ error: parsed.error?.message ?? (err || out).trim() });
+			if (code !== 0 || parsed.error) done({ error: parsed.error?.message ?? (err || out).trim(), code: parsed.error?.code });
 			else done({ status: parsed.result?.agent?.agent_status });
 		});
 	});
+}
+
+/**
+ * Enviar una tarea a un agente y esperar su primer estado asentado.
+ *
+ * Con `--wait` puede tardar lo que tarde el agente; si el agente queda blocked se devuelve tal
+ * cual para que el orquestador decida (no se reintenta: un blocked es una decisión del agente).
+ *
+ * Si Herdr responde `agent_prompt_stalled` y el panel no muestra la tarea (p. ej. un agente
+ * recién arrancado que aún no registró actividad), se espera un momento y se reintenta UNA
+ * vez. Si vuelve a estancarse sin señales en el panel, se devuelve un error claro (stalled)
+ * en lugar de un aviso: el prompt se perdió y hay que revisarlo. Si el panel ya muestra la
+ * tarea, se da por entregada pese al stall y no se reenvía.
+ */
+async function promptAgent(name: string, task: string, extra: string[]): Promise<{ status?: string; error?: string; stalled?: boolean }> {
+	const first = await rawPrompt(name, task, extra);
+	if (!isStalled(first)) return first;
+	if (paneShowsPrompt(name, task)) return { status: first.status ?? "idle" };
+	await sleep(1500);
+	const second = await rawPrompt(name, task, extra);
+	if (!isStalled(second)) return second;
+	if (paneShowsPrompt(name, task)) return { status: second.status ?? "idle" };
+	return {
+		stalled: true,
+		error: `el prompt no llegó a ${name}: Herdr no observó actividad y el panel no muestra la tarea tras reintentar una vez. Revisa el panel antes de volver a mandarlo.`,
+	};
 }
 
 // --- runs: encargos e informes en la memoria de decisiones -----------------------------------
@@ -1815,11 +1866,14 @@ async function promptInHub(s: HubSession, branch: string, words: string, opts: R
 		}),
 	);
 	for (const { row, name, runRel, r } of sent) {
+		if (r.stalled) continue; // se reportan todos juntos al final, con un error claro
 		if (r.error !== undefined) {
 			warn(`${row.repo}: ${name}: ${r.error}`);
 			process.exitCode = 1;
 		} else console.log(`${ok("✓")} ${branch} · ${row.repo} → ${name}${runRel ? `  ${dim(`run: ${runRel}`)}` : ""}${opts["--wait"] ? `  ${dim(r.status ?? "")}` : ""}`);
 	}
+	const stalls = sent.filter((x) => x.r.stalled);
+	if (stalls.length) die(`el prompt no llegó a ${stalls.map((x) => `${x.name} (${x.row.repo})`).join(", ")}: revisa sus paneles antes de volver a mandar`);
 }
 
 /** bond team collect en un hub: el informe del agente de la rama en su repo (--repo si hay varios). */

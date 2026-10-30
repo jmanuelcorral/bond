@@ -1000,7 +1000,7 @@ const tomlArr = (a: string[]) => `[${a.map((x) => JSON.stringify(x)).join(", ")}
 const hasDecisionSkill = (skills: string[]) => skills.some((s) => s.slice(s.lastIndexOf(":") + 1) === "decision-record");
 
 /** La sección [decisions] que bond escribe cuando decision-record está elegida. */
-const DECISIONS_SECTION = `# Memoria de decisiones de los agentes (skill decision-record): las decisiones no triviales
+export const DECISIONS_SECTION = `# Memoria de decisiones de los agentes (skill decision-record): las decisiones no triviales
 # quedan en ficheros de esta carpeta (bond decisions add) y los commits pueden llevar los
 # trailers Agent: y Decision:. bond sync crea el README con el formato si falta; a partir de
 # ahí es tuyo. Para no usarla, quita esta sección.

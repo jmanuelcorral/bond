@@ -2,6 +2,21 @@
 
 ## Sin publicar
 
+- Arreglos del flujo guiado del hub probado de punta a punta:
+  - `bond hub init` deja ahora el hub recién creado (sin ningún commit) con su config de agente
+    generada (equivalente a `bond sync`) y un commit inicial de sus ficheros (`hub.toml`,
+    `.gitmodules`, `.gitignore`, `AGENTS.md`, `.bond/` y la config de agente), para que
+    `bond hub check` encuentre la base. En un hub preexistente con commits no commitea: los
+    cambios se dejan para el usuario. Con `--dry-run` solo lo describe.
+  - `bond hub init` propone memoria de decisiones para el hub (activada por defecto con `--yes`):
+    escribe `decision-record` y la sección `[decisions]` en su `.bond/bond.toml`, de modo que los
+    runs de `bond team` quedan en el hub y no caen en cada repo de la sesión (D5).
+  - `bond hub check` acepta `--yes`/`-y` para aplicar los arreglos seguros sin preguntar; con
+    terminal y sin `--yes`, `--fix` pregunta antes de cada arreglo.
+  - `bond team prompt` reintenta una vez un prompt que Herdr devuelve estancado
+    (`agent_prompt_stalled`) cuando el panel no muestra señales de haberlo recibido (p. ej. un
+    agente recién arrancado); si vuelve a estancarse sin señales, falla con un mensaje claro en
+    lugar de solo avisar. Si el panel ya muestra la tarea, se da por entregada y no se reenvía.
 - `bond hub check` revisa cada repo de la sesión del hub y dice qué falta y cómo arreglarlo: que
   existe y es un repo git, que su enlace es el que dice `hub.toml` (symlink al clon de
   `.bond/hub.local.toml` o submódulo registrado), que tiene la base, que tiene `bond init` hecho y
