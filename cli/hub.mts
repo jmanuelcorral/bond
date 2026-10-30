@@ -20,6 +20,7 @@ Comandos:
   init [dir]      Crea un hub o lo prepara en un repo que ya existe, e importa repos
   add <url|ruta>  Añade un repo al hub (como submódulo o como enlace local)
   sync            Deja el disco como dice hub.toml y actualiza el registro global
+  check           Revisa cada repo de la sesión: qué falta y cómo arreglarlo (--fix, --json)
 
 Sin subcomando: enseña la sesión del hub (repos, ruta, base, enlace y rama actual).
 `;
@@ -418,6 +419,10 @@ export async function hub(args: string[]): Promise<void> {
 	if (sub === "sync") {
 		const { hubSync } = await import("./hub-init.mts");
 		return hubSync(rest);
+	}
+	if (sub === "check") {
+		const c = await import("./hub-check.mts");
+		return c.hubCheck(rest);
 	}
 	if (args.includes("-h") || args.includes("--help")) {
 		console.log(HUB_HELP.trimEnd());

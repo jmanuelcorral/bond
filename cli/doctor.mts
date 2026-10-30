@@ -20,8 +20,9 @@ export const DOCTOR_HELP = `Uso: bond doctor [--quick]
 Comprueba la instalación global: Node, Herdr, pi, Antigravity (agy, si lo usas), enlaces de
 configuración, paquete de pi, skill de Herdr, integración, filtro de git, herramientas de
 contexto, servidores MCP, la pasarela de modelos, las sugerencias de prompt de pi, los
-catálogos del repo, la memoria de decisiones (si el repo tiene [decisions]) y el aviso de
-versión nueva. Sale con 1 si algo falla.
+catálogos del repo, la sesión del hub si estás en uno (resumen de bond hub check), la
+memoria de decisiones (si el repo tiene [decisions]) y el aviso de versión nueva. Sale con 1
+si algo falla.
 
   --quick      Se salta lo lento (conectar los servidores MCP, consultar las refs de los
                catálogos por git)
@@ -238,6 +239,23 @@ async function checkRepo(): Promise<void> {
 	const conflicts = actions.filter((a) => a.sign === "!").length;
 	if (!actions.length) add("ok", "repo", `${root}: config de agentes al día`);
 	else add(conflicts ? "fail" : "warn", "repo", `${root}: ${actions.length} cambio(s) pendiente(s)${conflicts ? `, ${conflicts} conflicto(s)` : ""}`, "bond sync");
+}
+
+/**
+ * Resumen de `bond hub check` cuando el directorio actual está en un hub: una sola fila.
+ * Fuera de un hub no añade nada. El detalle lo da `bond hub check`.
+ */
+async function checkHubRow(): Promise<void> {
+	const { hubRoot, hubSession } = await import("./hub.mts");
+	const root = hubRoot(process.cwd());
+	if (!root) return;
+	const s = catchDie(() => hubSession(root));
+	if (s.error !== undefined || !s.value) return; // hub.toml inválido: ya lo avisó bond hub / bond team
+	const { checkHubSession } = await import("./hub-check.mts");
+	const r = catchDie(() => checkHubSession(s.value!));
+	if (r.error !== undefined) return add("fail", `hub ${s.value.name}`, r.error, "bond hub check");
+	const failed = r.value.repos.flatMap((rp) => rp.checks.filter((c) => !c.ok).map((c) => `${rp.repo} · ${c.check}`));
+	add(failed.length ? "fail" : "ok", `hub ${r.value.hub}`, failed.length ? `${failed.length} problema(s): ${failed.join("; ")}` : `${r.value.repos.length - 1} repo(s) de la sesión al día`, "bond hub check");
 }
 
 /**
@@ -513,6 +531,7 @@ export async function doctor(args: string[]): Promise<void> {
 	if (!quick) checkMcp();
 	await checkModels();
 	await checkRepo();
+	await checkHubRow();
 	await checkDecisionsRow();
 	await checkCatalogs(quick);
 	checkBond();
