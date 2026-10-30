@@ -1,0 +1,231 @@
+// bond hub check (cli/hub-check.mts): revisión guiada de la sesión del hub y su --fix.
+// Nunca toca el ~/.bond real: BOND_HOME temporal, como en test/hub.test.mts.
+
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+if (!process.env.BOND_HOME) {
+	process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
+}
+Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
+const { BOND_HOME } = await import("../cli/runtime.mts");
+const { hubSession, hubsPath, registerHubRepo } = await import("../cli/hub.mts");
+const { checkHubSession } = await import("../cli/hub-check.mts");
+
+const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
+let tmp: string;
+let hub: string;
+let backReal: string;
+
+const g = (cwd: string, ...args: string[]) => {
+	const r = spawnSync("git", ["-c", "protocol.file.allow=always", "-C", cwd, ...args], { encoding: "utf8" });
+	if (r.status !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
+	return r.stdout.trim();
+};
+const repo = (name: string) => {
+	const dir = join(tmp, name);
+	mkdirSync(dir, { recursive: true });
+	g(dir, "init", "-q", "-b", "main");
+	writeFileSync(join(dir, "README"), `${name}\n`);
+	g(dir, "add", "README");
+	g(dir, "commit", "-qm", "init");
+	return dir;
+};
+const bond = (args: string[], cwd = hub) =>
+	spawnSync(process.execPath, [MAIN, ...args], { cwd, env: { ...process.env, BOND_HOME, NO_COLOR: "1", GIT_ALLOW_PROTOCOL: "file" }, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+
+// Repo preparado como si pasara por bond init: .bond/bond.toml, config sincronizada y commiteado.
+const bondInit = (dir: string) => {
+	mkdirSync(join(dir, ".bond"), { recursive: true });
+	writeFileSync(join(dir, ".bond", "bond.toml"), "agents = []\n");
+	const s = bond(["sync"], dir);
+	expect(s.status).toBe(0);
+	g(dir, "add", "-A");
+	g(dir, "commit", "-qm", "bond init");
+};
+
+beforeEach(() => {
+	rmSync(hubsPath(), { force: true });
+	tmp = realpathSync(mkdtempSync(join(tmpdir(), "bond-hubcheck-")));
+	const front = repo("front");
+	backReal = repo("back-real");
+	bondInit(front);
+	bondInit(backReal);
+
+	hub = repo("hub");
+	g(hub, "submodule", "add", "-q", "../front", "front");
+	if (process.platform !== "win32") symlinkSync(backReal, join(hub, "back"));
+	mkdirSync(join(hub, ".bond"), { recursive: true });
+	writeFileSync(join(hub, ".bond", "bond.toml"), "agents = []\n");
+	writeFileSync(
+		join(hub, "hub.toml"),
+		`name = "hub"
+base = "main"
+
+[repos.front]
+path = "front"
+base = "main"
+link = "submodule"
+
+[repos.back]
+path = "back"
+base = "main"
+link = "symlink"
+`,
+	);
+	// Los symlinks y el fichero local del hub van ignorados en git (D13).
+	writeFileSync(join(hub, ".gitignore"), ".bond/hub.local.toml\nback\n");
+	writeFileSync(join(hub, ".bond", "hub.local.toml"), `[repos.back]\nsource = "${backReal}"\n`);
+	const s = bond(["sync"], hub);
+	expect(s.status).toBe(0);
+	g(hub, "add", "-A");
+	g(hub, "commit", "-qm", "hub setup");
+});
+
+afterEach(() => {
+	rmSync(hubsPath(), { force: true });
+	rmSync(tmp, { recursive: true, force: true });
+});
+
+describe.skipIf(process.platform === "win32")("hub sano", () => {
+	test("check da todo en verde y sale con 0", () => {
+		const r = bond(["hub", "check"]);
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain("hub hub");
+		expect(r.stdout).toContain("listo para trabajar");
+
+		const rep = checkHubSession(hubSession(hub)!);
+		expect(rep.ok).toBe(true);
+		expect(rep.problems).toBe(0);
+		expect(rep.repos.map((x) => x.path)).toEqual([".", "back", "front"]);
+	});
+
+	test("--json enseña el informe completo, sin las funciones de arreglo", () => {
+		const r = bond(["hub", "check", "--json"]);
+		expect(r.status).toBe(0);
+		const rep = JSON.parse(r.stdout);
+		expect(rep.hub).toBe("hub");
+		expect(rep.ok).toBe(true);
+		expect(rep.problems).toBe(0);
+		expect(rep.repos).toHaveLength(3);
+		expect(rep.repos[0].checks.some((c: { check: string; ok: boolean }) => c.check === "base" && c.ok)).toBe(true);
+		expect(r.stdout).not.toContain("fixFn");
+	});
+});
+
+describe.skipIf(process.platform === "win32")("comprobaciones con la sesión rota", () => {
+	test("symlink roto: nombra el repo, dice que falta el enlace y sale con 1", () => {
+		rmSync(join(hub, "back"));
+		const r = bond(["hub", "check"]);
+		expect(r.status).toBe(1);
+		expect(r.stdout).toContain("back");
+		expect(r.stdout).toContain("falta el enlace");
+		expect(r.stdout).toContain("1 problema");
+	});
+
+	test("base que no existe en un repo de la sesión", () => {
+		writeFileSync(join(hub, "hub.toml"), readFileSync(join(hub, "hub.toml"), "utf8").replace('path = "back"\nbase = "main"', 'path = "back"\nbase = "no-existe"'));
+		const r = bond(["hub", "check"]);
+		expect(r.status).toBe(1);
+		expect(r.stdout).toContain("no-existe");
+		expect(r.stdout).toContain("base");
+	});
+
+	test("repo sin bond init: lo dice desde un repo enlazado registrado en ~/.bond/hubs.toml", () => {
+		rmSync(join(backReal, ".bond", "bond.toml"));
+		registerHubRepo(backReal, hub);
+		const r = bond(["hub", "check"], backReal);
+		expect(r.status).toBe(1);
+		expect(r.stdout).toContain("bond init");
+		expect(r.stdout).toContain("back");
+	});
+
+	test("agente no instalado: checkHubSession con hasAgent falso lo nombra", () => {
+		writeFileSync(join(backReal, ".bond", "bond.toml"), 'agents = ["pi"]\ndefault_agent = "pi"\n');
+		g(backReal, "add", "-A");
+		g(backReal, "commit", "-qm", "agent pi");
+		const rep = checkHubSession(hubSession(hub)!, { hasAgent: () => false });
+		const back = rep.repos.find((x) => x.path === "back")!;
+		const agentes = back.checks.find((c) => c.check === "agentes")!;
+		expect(agentes.ok).toBe(false);
+		expect(agentes.detail).toContain("pi");
+		expect(rep.ok).toBe(false);
+	});
+
+	test("cambios sin commitear en un repo de la sesión", () => {
+		writeFileSync(join(backReal, "sucia.txt"), "x\n");
+		const r = bond(["hub", "check"]);
+		expect(r.status).toBe(1);
+		expect(r.stdout).toContain("back");
+		expect(r.stdout).toContain("sin commitear");
+	});
+
+	test("rama vertical a medias: worktree en un repo sin rama en el hub", () => {
+		g(join(hub, "front"), "worktree", "add", "-q", "-b", "fix/x", join(tmp, "wt-front-x"));
+		const r = bond(["hub", "check"]);
+		expect(r.status).toBe(1);
+		expect(r.stdout).toContain("fix/x");
+		expect(r.stdout).toContain("no existe en el hub");
+
+		// Creada la rama en el hub, la sesión vuelve a estar sana.
+		g(hub, "branch", "fix/x", "main");
+		const ok2 = bond(["hub", "check"]);
+		expect(ok2.status).toBe(0);
+	});
+});
+
+describe.skipIf(process.platform === "win32")("--fix", () => {
+	test("arregla el symlink que falta y sale con 0", () => {
+		rmSync(join(hub, "back"));
+		const r = bond(["hub", "check", "--fix"]);
+		expect(r.status).toBe(0);
+		expect(readlinkSync(join(hub, "back"))).toBe(backReal);
+		expect(r.stdout).toContain("enlazado");
+	});
+
+	test("arregla el submódulo sin inicializar", () => {
+		g(hub, "submodule", "deinit", "-f", "front");
+		const r = bond(["hub", "check", "--fix"]);
+		expect(r.status).toBe(0);
+		expect(existsSync(join(hub, "front", "README"))).toBe(true);
+		expect(r.stdout).toContain("submódulo inicializado");
+	});
+
+	test("--dry-run no toca nada", () => {
+		rmSync(join(hub, "back"));
+		const r = bond(["hub", "check", "--fix", "--dry-run"]);
+		expect(r.status).toBe(1);
+		expect(existsSync(join(hub, "back"))).toBe(false);
+		expect(r.stdout).toContain("[dry-run]");
+	});
+
+	test("nunca descarta cambios ni cambia de rama: arregla el enlace y deja el repo sucio como estaba", () => {
+		writeFileSync(join(backReal, "sucia.txt"), "x\n");
+		rmSync(join(hub, "back"));
+		const branchBefore = g(backReal, "rev-parse", "--abbrev-ref", "HEAD");
+		const r = bond(["hub", "check", "--fix"]);
+		// El enlace se crea; lo demás (cambios sin commitear) sigue siendo problema.
+		expect(readlinkSync(join(hub, "back"))).toBe(backReal);
+		expect(existsSync(join(backReal, "sucia.txt"))).toBe(true);
+		expect(g(backReal, "rev-parse", "--abbrev-ref", "HEAD")).toBe(branchBefore);
+		expect(r.status).toBe(1);
+		expect(r.stdout).toContain("sin commitear");
+	});
+});
+
+describe("bond doctor y el hub", () => {
+	test("bond doctor fuera de un hub no añade la fila del hub", () => {
+		const solo = repo("solo");
+		const r = bond(["doctor", "--quick"], solo);
+		expect(r.stdout).not.toContain("bond hub check");
+	});
+
+	test("bond doctor dentro de un hub incluye el resumen de check", () => {
+		const r = bond(["doctor", "--quick"], hub);
+		expect(r.stdout).toContain("hub hub");
+		expect(r.stdout).toContain("bond hub check");
+	});
+});

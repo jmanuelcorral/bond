@@ -31,7 +31,7 @@ Repo
   sync         Regenera la config de cada agente desde .bond/bond.toml
   decisions  Memoria de decisiones del repo: add, accept, show, runs, check
   catalog      Catálogo propio de skills, comandos y MCP para el equipo (create, check)
-  hub          Sesión del repo hub (repos, bases y enlaces) declarada en hub.toml
+  hub          Sesión del repo hub (repos, bases y enlaces) declarada en hub.toml; check lo revisa
 
 Trabajo diario (Herdr)
   (sin comando)  Dentro de un repo: abre su puesto de trabajo con el agente por defecto

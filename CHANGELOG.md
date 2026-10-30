@@ -2,6 +2,18 @@
 
 ## Sin publicar
 
+- `bond hub check` revisa cada repo de la sesión del hub y dice qué falta y cómo arreglarlo: que
+  existe y es un repo git, que su enlace es el que dice `hub.toml` (symlink al clon de
+  `.bond/hub.local.toml` o submódulo registrado), que tiene la base, que tiene `bond init` hecho y
+  su config al día (`bond sync --check`), que sus agentes están instalados, que admite worktrees y
+  que no tiene cambios sin commitear ni una rama vertical a medias (worktrees de ramas que no
+  existen en el hub, o más de una abierta). Sale con 0 si todo está en verde y con 1 si algo falla,
+  nombrando cada problema por repo con su arreglo. Con `--fix` arregla solo lo seguro (crear o
+  reparar el enlace al clon local, registrándolo en `~/.bond/hubs.toml` (D14), e inicializar
+  submódulos sin iniciar) y nunca descarta cambios ni cambia de rama un repo; con `--json` emite
+  el informe completo (los mensajes del arreglo van a stderr).
+- `bond doctor` incluye un resumen de `bond hub check` (`hub <nombre>`) cuando estás en un hub y
+  reporta como fallo un `hub.toml` inválido con su error de parseo; fuera de uno no cambia nada.
 - `hub.toml` como única fuente de la sesión de un hub: declara el nombre del hub, su rama base
   y los repositorios asociados, cada uno como submódulo (`link = "submodule"`) o como enlace
   (`link = "symlink"`). La sección `[hub]` desaparece de `.bond/bond.toml` y deja de usarse.

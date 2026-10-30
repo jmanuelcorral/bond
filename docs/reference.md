@@ -825,6 +825,7 @@ bond hub                 # enseña la sesión del hub: repos, ruta, base, enlace
 bond hub init [dir]      # crea un hub o lo prepara en un repo existente e importa repos
 bond hub add <url|ruta>  # añade un repo al hub (como submódulo o enlace local)
 bond hub sync            # monta submódulos, crea enlaces y actualiza el registro global
+bond hub check           # revisa cada repo de la sesión y dice qué falta y cómo arreglarlo (--fix, --json)
 ```
 
 ```toml
@@ -859,6 +860,31 @@ source = "~/gitrepos/fluzo-backend"
 - Un `hub.toml` inválido se explica con un mensaje que dice qué corregir; `bond team` avisa y continúa como en un repo normal.
 - Un `.bond/bond.toml` con `[hub]` no hace nada especial y se ignora sin error.
 - Sin `hub.toml`, los comandos funcionan como siempre en un repo normal.
+
+### `bond hub check`
+
+`cli/hub-check.mts`. Revisa cada repo de la sesión (el hub primero) y sale con 1 si algo no está listo
+para trabajar con agentes; cada problema nombra el repo, la comprobación y el arreglo:
+
+| Comprobación | Qué mira |
+|---|---|
+| `existe` | el repo está en disco y es un repo git (submódulo inicializado, enlace no roto) |
+| `enlace` | el modo de enlace es el que dice `hub.toml`: symlink al clon de `hub.local.toml`, submódulo registrado |
+| `base` | la rama base declarada existe en el repo |
+| `bond init` | tiene `.bond/bond.toml` |
+| `config` | su config de agentes está al día (`bond sync --check`) |
+| `agentes` | sus agentes (los de su `bond.toml` y el `agent` de `hub.toml`) están instalados |
+| `worktrees` | admite worktrees (no es un repo bare) |
+| `cambios` | sin cambios sin commitear |
+| `rama vertical` | no hay worktrees de ramas que no existen en el hub, y solo hay una rama vertical abierta (D10) |
+
+Con `--fix` arregla solo lo seguro y anunciado: crear o reparar el enlace al clon local con el
+`linkRepo` de `bond hub init` (symlink, junction en Windows) registrando el clon y el enlace en
+`~/.bond/hubs.toml` (D14), y `git submodule update --init` de los submódulos sin iniciar. Nunca
+descarta cambios ni cambia de rama un repo; lo demás (`bond init`, `bond sync`) se ofrece con el
+comando. Con `--dry-run` solo lo describe. `--json` emite el informe completo por repos y manda a
+stderr los mensajes del arreglo. `bond doctor` incluye un resumen (`hub <nombre>`) cuando estás en
+un hub y reporta como fallo un `hub.toml` inválido con su error de parseo; fuera, no cambia nada.
 
 ### `bond team` en un hub
 
