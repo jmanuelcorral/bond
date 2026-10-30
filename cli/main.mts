@@ -114,7 +114,7 @@ async function main(argv: string[]): Promise<void> {
 		}
 		case "hub": {
 			const h = await import("./hub.mts");
-			return wantsHelp ? console.log(h.HUB_HELP) : h.hub(rest);
+			return h.hub(rest);
 		}
 		case "catalog": {
 			const c = await import("./catalog.mts");

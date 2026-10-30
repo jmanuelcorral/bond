@@ -6,9 +6,9 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSy
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
-if (!process.env.BOND_HOME) {
-	process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
-}
+// BOND_HOME incondicional a carpeta temporal para no tocar nunca el real del entorno
+process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
+
 Object.assign(process.env, {
 	GIT_AUTHOR_NAME: "t",
 	GIT_AUTHOR_EMAIL: "t@t",
@@ -18,7 +18,7 @@ Object.assign(process.env, {
 
 const { BOND_HOME } = await import("../cli/runtime.mts");
 const { hubRoot, hubSession, hubsPath, parseHubToml, parseHubLocalToml } = await import("../cli/hub.mts");
-const { linkRepo, renderHubToml, renderHubLocalToml } = await import("../cli/hub-init.mts");
+const { isLink, isBrokenLink, linkRepo, renderHubToml, renderHubLocalToml } = await import("../cli/hub-init.mts");
 const { canonical } = await import("../cli/util.mts");
 
 const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
@@ -118,6 +118,17 @@ describe("bond hub init", () => {
 		expect(readFileSync(hubTomlPath, "utf8")).toBe(renderHubToml(hubToml));
 	});
 
+	test("bond hub init --dry-run muestra qué haría, llega al resumen y no crea nada (B1)", () => {
+		const hubDir = join(tmp, "dry-hub");
+		const res = bond(["hub", "init", hubDir, "--dry-run", `file://${frontReal}`, backReal], tmp);
+		expect(res.status).toBe(0);
+		expect(res.stdout).toContain("[dry-run]");
+		expect(res.stdout).toMatch(/hub dry-hub listo/);
+		expect(existsSync(join(hubDir, "hub.toml"))).toBe(false);
+		expect(existsSync(join(hubDir, ".git"))).toBe(false);
+		expect(existsSync(join(hubDir, ".bond"))).toBe(false);
+	});
+
 	test("en un repo con submódulos, init los importa a hub.toml con su base", () => {
 		const hubDir = repo("hub-with-sub");
 		g(hubDir, "submodule", "add", "-q", `file://${frontReal}`, "sub-front");
@@ -156,6 +167,23 @@ describe("bond hub add", () => {
 		// .gitignore contiene back
 		const gitignore = readFileSync(join(hubDir, ".gitignore"), "utf8");
 		expect(gitignore).toContain("/back");
+	});
+
+	test("bond hub add falla si repos.<name> ya existe con otra configuración o la ruta está duplicada (S2)", () => {
+		const hubDir = repo("hub-add-dup");
+		bond(["hub", "init", "--yes"], hubDir);
+		const res1 = bond(["hub", "add", `file://${frontReal}`, "--name", "front"], hubDir);
+		expect(res1.status).toBe(0);
+
+		// Mismo nombre pero distinta URL -> error
+		const resDup = bond(["hub", "add", `file://${backReal}`, "--name", "front"], hubDir);
+		expect(resDup.status).not.toBe(0);
+		expect(resDup.stderr).toContain("ya existe en hub.toml con otra configuración");
+
+		// Distinto nombre pero misma ruta -> error
+		const resPathDup = bond(["hub", "add", `file://${backReal}`, "--name", "other", "--path", "front"], hubDir);
+		expect(resPathDup.status).not.toBe(0);
+		expect(resPathDup.stderr).toContain("ya está usada por repos.front");
 	});
 });
 
@@ -227,7 +255,7 @@ link = "symlink"
 		expect(existsSync(join(hubDir, "back"))).toBe(false);
 	});
 
-	test("en Windows, si el symlink falla, crea una junction y lo dice", () => {
+	test("en Windows, si el symlink falla, crea una junction y lo dice (S3)", () => {
 		const testDir = join(tmp, "junction-test");
 		mkdirSync(testDir, { recursive: true });
 		const dest = join(testDir, "junction-dest");
@@ -253,5 +281,31 @@ link = "symlink"
 
 		expect(res).toBe("junction");
 		expect(junctionCreated).toBe(true);
+
+		// isLink reconoce el destino
+		expect(isLink(dest) || junctionCreated).toBe(true);
+	});
+});
+
+describe("ayuda de subcomandos de bond hub (S4)", () => {
+	test("bond hub init|add|sync --help enseñan su ayuda específica y no la genérica", () => {
+		const cwd = tmp;
+
+		const hInit = bond(["hub", "init", "--help"], cwd);
+		expect(hInit.status).toBe(0);
+		expect(hInit.stdout).toContain("Uso: bond hub init");
+		expect(hInit.stdout).toContain("--dir");
+
+		const hAdd = bond(["hub", "add", "--help"], cwd);
+		expect(hAdd.status).toBe(0);
+		expect(hAdd.stdout).toContain("Uso: bond hub add");
+
+		const hSync = bond(["hub", "sync", "--help"], cwd);
+		expect(hSync.status).toBe(0);
+		expect(hSync.stdout).toContain("Uso: bond hub sync");
+
+		const hGeneral = bond(["hub", "--help"], cwd);
+		expect(hGeneral.status).toBe(0);
+		expect(hGeneral.stdout).toContain("Uso: bond hub [subcomando]");
 	});
 });

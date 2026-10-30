@@ -1,7 +1,7 @@
 // bond hub init, add, sync: creación e importación guiada de repositorios en un hub.
 // Gestiona hub.toml (versionado), .bond/hub.local.toml (personal) y el registro global.
 
-import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import {
 	act,
@@ -41,6 +41,7 @@ los importa a hub.toml con su rama base.
 Opciones:
   --yes, -y       No pregunta: usa valores detectados y añade los repos indicados
   --dry-run       Muestra qué haría sin escribir en disco ni ejecutar comandos
+  --dir <ruta>    Directorio del hub (por defecto, el directorio actual)
   --name <nombre> Nombre del hub (por defecto, el nombre de la carpeta)
   --base <rama>   Rama base del hub (por defecto, la rama actual o main)
   --repo <origen> Repositorio a importar (URL o ruta local; puede repetirse)
@@ -167,6 +168,28 @@ export function updateGitignore(hubRoot: string, pathsToIgnore: string[]): void 
 	}
 }
 
+/** ¿Es un symlink o junction (reparse point en Windows)? */
+export function isLink(p: string): boolean {
+	try {
+		const stat = lstatSync(p);
+		if (stat.isSymbolicLink()) return true;
+		readlinkSync(p);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/** ¿Es un enlace roto (symlink o junction cuyo destino no existe)? */
+export function isBrokenLink(p: string): boolean {
+	try {
+		if (!isLink(p)) return false;
+		return !existsSync(p);
+	} catch {
+		return false;
+	}
+}
+
 /** Enlaza src en dest (symlink o fallback a junction en Windows). */
 export function linkRepo(
 	src: string,
@@ -184,11 +207,11 @@ export function linkRepo(
 		return "symlink";
 	}
 
-	if (brokenLink(dest)) {
-		rmSync(dest);
+	if (isBrokenLink(dest)) {
+		rmSync(dest, { recursive: true, force: true });
 	} else if (existsSync(dest)) {
 		try {
-			if (!lstatSync(dest).isSymbolicLink()) {
+			if (!isLink(dest)) {
 				if (existsSync(join(dest, ".git"))) {
 					warn(`${dest} ya existe como repositorio real; no se sustituye`);
 					return "symlink";
@@ -196,10 +219,10 @@ export function linkRepo(
 				warn(`${dest} ya existe; lo guardo como ${basename(dest)}.bak.${STAMP}`);
 				renameSync(dest, `${dest}.bak.${STAMP}`);
 			} else {
-				rmSync(dest);
+				rmSync(dest, { recursive: true, force: true });
 			}
 		} catch {
-			rmSync(dest);
+			rmSync(dest, { recursive: true, force: true });
 		}
 	}
 
@@ -245,22 +268,28 @@ export async function syncHub(
 		dryRun?: boolean;
 		platform?: NodeJS.Platform;
 		symlinkFn?: (target: string, path: string, type?: string) => void;
+		hubToml?: HubToml;
+		hubLocalToml?: HubLocalToml;
 	} = {},
 ): Promise<void> {
-	const tomlPath = join(root, "hub.toml");
-	if (!existsSync(tomlPath)) {
-		die("no es un hub: falta hub.toml (bond hub --help)");
+	let hubToml = opts.hubToml;
+	if (!hubToml) {
+		const tomlPath = join(root, "hub.toml");
+		if (!existsSync(tomlPath)) {
+			die("no es un hub: falta hub.toml (bond hub --help)");
+		}
+		hubToml = parseHubToml(readFileSync(tomlPath, "utf8"), relative(process.cwd(), tomlPath) || "hub.toml");
 	}
-	const hubToml = parseHubToml(readFileSync(tomlPath, "utf8"), relative(process.cwd(), tomlPath) || "hub.toml");
 
 	const localPath = join(root, ".bond", "hub.local.toml");
-	let hubLocalToml: HubLocalToml = { repos: {} };
-	if (existsSync(localPath)) {
+	let hubLocalToml: HubLocalToml = opts.hubLocalToml ?? { repos: {} };
+	if (!opts.hubLocalToml && existsSync(localPath)) {
 		hubLocalToml = parseHubLocalToml(readFileSync(localPath, "utf8"), relative(process.cwd(), localPath) || ".bond/hub.local.toml");
 	}
 
 	const symlinkPaths: string[] = [];
 	let localChanged = false;
+	const isGitRepo = git(root, ["rev-parse", "--show-toplevel"]).status === 0;
 
 	// Procesar submódulos primero y luego symlinks
 	const entries = Object.entries(hubToml.repos).sort(([_keyA, a], [_keyB, b]) => {
@@ -274,7 +303,7 @@ export async function syncHub(
 		const dest = join(root, ...entry.path.split("/"));
 
 		if (entry.link === "submodule") {
-			const subs = submodules(root);
+			const subs = isGitRepo ? submodules(root) : [];
 			const found = subs.find((s) => s.path === entry.path);
 			if (found && found.initialized && existsSync(join(dest, ".git"))) {
 				log(`submódulo al día: ${entry.path}`);
@@ -310,12 +339,13 @@ export async function syncHub(
 				let chosen: string;
 
 				if (entry.url) {
+					const url = entry.url;
 					const action = await ask(
 						p.select({
 							message: `¿Cómo quieres configurar ${key}?`,
 							options: [
 								{ value: "path", label: "Indicar la ruta a un clon local existente" },
-								{ value: "clone", label: `Clonar desde ${entry.url}` },
+								{ value: "clone", label: `Clonar desde ${url}` },
 							],
 						}),
 					);
@@ -327,8 +357,10 @@ export async function syncHub(
 								initialValue: defaultDir,
 							}),
 						);
-						const r = git(root, ["clone", entry.url, cloneDir]);
-						if (r.status !== 0) die(`git clone falló: ${r.stderr.trim()}`);
+						act(`git clone ${url} ${cloneDir}`, () => {
+							const r = git(root, ["clone", url, cloneDir]);
+							if (r.status !== 0) die(`git clone falló: ${r.stderr.trim()}`);
+						});
 						chosen = cloneDir;
 					} else {
 						chosen = await ask(p.text({ message: `Ruta al clon local de ${key}:` }));
@@ -507,7 +539,7 @@ export async function hubInit(args: string[]): Promise<void> {
 		);
 
 		// Submódulos existentes
-		const existingSubs = submodules(root).filter((s) => !hubToml.repos[basename(s.path)]);
+		const existingSubs = isGitRepo ? submodules(root).filter((s) => !hubToml.repos[basename(s.path)]) : [];
 		if (existingSubs.length > 0) {
 			const chosenSubs = await ask(
 				p.multiselect({
@@ -583,7 +615,7 @@ export async function hubInit(args: string[]): Promise<void> {
 		}
 	} else {
 		// Importar submódulos existentes automáticamente (D4)
-		const existingSubs = submodules(root);
+		const existingSubs = isGitRepo ? submodules(root) : [];
 		for (const sub of existingSubs) {
 			const key = basename(sub.path);
 			if (!hubToml.repos[key] && !Object.values(hubToml.repos).some((r) => r.path === sub.path)) {
@@ -640,7 +672,7 @@ export async function hubInit(args: string[]): Promise<void> {
 		.map((r) => r.path);
 	updateGitignore(root, [".bond/hub.local.toml", ...symlinkPaths]);
 
-	await syncHub(root, { yes: true });
+	await syncHub(root, { yes: !interactive, hubToml, hubLocalToml });
 	log(`hub ${hubToml.name} listo en ${root}`);
 }
 
@@ -717,6 +749,26 @@ export async function hubAdd(args: string[]): Promise<void> {
 		die(`la ruta "${repoPath}" tiene que ser relativa dentro del hub, con / y sin ..`);
 	}
 
+	const existing = hubToml.repos[repoName];
+	if (existing) {
+		const newSource = detectedLink === "symlink" ? (target.startsWith("~") ? target : resolve(target)) : undefined;
+		if (
+			existing.path !== repoPath ||
+			existing.link !== detectedLink ||
+			(detectedLink === "submodule" && existing.url !== target) ||
+			(detectedLink === "symlink" && hubLocalToml.repos[repoName]?.source !== newSource)
+		) {
+			die(`repos.${repoName} ya existe en hub.toml con otra configuración (usa otro --name o edita hub.toml)`);
+		} else {
+			log(`repos.${repoName} ya existe en hub.toml`);
+			return;
+		}
+	}
+	const existingByPath = Object.entries(hubToml.repos).find(([k, r]) => k !== repoName && r.path === repoPath);
+	if (existingByPath) {
+		die(`la ruta "${repoPath}" ya está usada por repos.${existingByPath[0]}`);
+	}
+
 	if (detectedLink === "submodule") {
 		const repoBase = base ?? (detectRemoteBranch(target) ?? "main");
 		hubToml.repos[repoName] = {
@@ -756,7 +808,7 @@ export async function hubAdd(args: string[]): Promise<void> {
 		.map((r) => r.path);
 	updateGitignore(root, [".bond/hub.local.toml", ...symlinkPaths]);
 
-	await syncHub(root, { yes: true });
+	await syncHub(root, { yes: true, hubToml, hubLocalToml });
 	log(`añadido ${repoName} a ${root}`);
 }
 
