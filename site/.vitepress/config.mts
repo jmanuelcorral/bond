@@ -19,6 +19,7 @@ const slugify = (s: string) =>
 const es: DefaultTheme.Config = {
 	nav: [
 		{ text: "Empezar", link: "/getting-started" },
+		{ text: "Novedades", link: "/whats-new" },
 		{ text: "Referencia", link: "/reference" },
 		{
 			text: "GitHub",
@@ -36,6 +37,7 @@ const es: DefaultTheme.Config = {
 			items: [
 				{ text: "Primeros pasos", link: "/getting-started" },
 				{ text: "El puesto de trabajo", link: "/workstation" },
+				{ text: "Novedades", link: "/whats-new" },
 				{ text: "Problemas habituales", link: "/troubleshooting" },
 			],
 		},
@@ -50,10 +52,12 @@ const es: DefaultTheme.Config = {
 			],
 		},
 	],
-	// workstation.md se publica desde docs/puesto.md (prepare.mjs). VitePress pasa esta función
-	// al navegador tal cual: no puede usar variables de fuera (REPO), de ahí la URL escrita.
+	// workstation.md se publica desde docs/puesto.md y whats-new.md desde docs/novedades.md
+	// (prepare.mjs). VitePress pasa esta función al navegador tal cual: no puede usar variables
+	// de fuera (REPO), de ahí la URL escrita.
 	editLink: {
-		pattern: ({ filePath }) => `https://github.com/jmanuelcorral/bond/edit/main/docs/${filePath === "workstation.md" ? "puesto.md" : filePath}`,
+		pattern: ({ filePath }) =>
+			`https://github.com/jmanuelcorral/bond/edit/main/docs/${filePath === "workstation.md" ? "puesto.md" : filePath === "whats-new.md" ? "novedades.md" : filePath}`,
 		text: "Editar esta página en GitHub",
 	},
 	outline: { level: [2, 3], label: "En esta página" },
@@ -74,6 +78,7 @@ const es: DefaultTheme.Config = {
 const en: DefaultTheme.Config = {
 	nav: [
 		{ text: "Get started", link: "/en/getting-started" },
+		{ text: "What's new", link: "/en/whats-new" },
 		{ text: "Reference", link: "/en/reference" },
 		{
 			text: "GitHub",
@@ -91,6 +96,7 @@ const en: DefaultTheme.Config = {
 			items: [
 				{ text: "Getting started", link: "/en/getting-started" },
 				{ text: "The workstation", link: "/en/workstation" },
+				{ text: "What's new", link: "/en/whats-new" },
 				{ text: "Troubleshooting", link: "/en/troubleshooting" },
 			],
 		},
