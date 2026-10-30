@@ -18,11 +18,15 @@ Lo propio de cada máquina va en .bond/hub.local.toml.
 
 Comandos:
   init [dir]      Crea un hub o lo prepara en un repo que ya existe, e importa repos
-  add <url|ruta>  Añade un repo al hub (como submódulo o como enlace local)
+  add <url|ruta>  Añade un repo al hub (como submódulo o como enlace local);
+                  --description describe el repo en hub.toml
   sync            Deja el disco como dice hub.toml y actualiza el registro global
   check           Revisa cada repo de la sesión: qué falta y cómo arreglarlo (--fix, --json)
 
-Sin subcomando: enseña la sesión del hub (repos, ruta, base, enlace y rama actual).
+Sin subcomando: enseña la sesión del hub (repos, ruta, base, enlace, rama actual y,
+si se declaró en hub.toml, la descripción de cada repo). En el AGENTS.md del hub,
+bond sync mantiene un bloque generado con esa tabla, las reglas del hub y dónde
+viven docs/plans/ y docs/decisions/ (D18).
 `;
 
 const git = (cwd: string, args: string[]) => run("git", ["-C", cwd, ...args]);

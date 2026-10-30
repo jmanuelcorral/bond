@@ -383,21 +383,76 @@ link = "symlink"
 			expect(check(hubDir).status).toBe(0);
 		});
 
-		test("cambiar la descripcion en hub.toml: --check falla, sync actualiza el bloque y conserva lo escrito a mano", () => {
+		test("cambiar la descripcion en hub.toml: --check falla (bloque obsoleto), sync lo actualiza y conserva lo escrito a mano", () => {
 			const hubDir = repo("block-edit");
 			bond(["hub", "init", "--yes", frontUrl(), backReal], hubDir);
-			// Reescribimos el AGENTS.md a mano (fuera del bloque) y cambiamos la descripcion en hub.toml.
-			writeFileSync(join(hubDir, "AGENTS.md"), "# Mis notas del hub\n");
+			// Anadimos texto a mano delante del bloque (fuera de el) y cambiamos solo la descripcion
+			// de repos.front-real: --check tiene que fallar por bloque obsoleto, no por otra cosa.
+			writeFileSync(join(hubDir, "AGENTS.md"), "# Mis notas del hub\n\n" + readFileSync(join(hubDir, "AGENTS.md"), "utf8"));
 			const tomlPath = join(hubDir, "hub.toml");
-			writeFileSync(tomlPath, readFileSync(tomlPath, "utf8").replace("[repos.front-real]", '[repos.front]\ndescription = "el frontend rico"'));
-			expect(check(hubDir).status).toBe(1);
+			const before = readFileSync(tomlPath, "utf8");
+			expect(before).toContain("[repos.front-real]");
+			writeFileSync(tomlPath, before.replace("[repos.front-real]\n", '[repos.front-real]\ndescription = "el frontend rico"\n'));
+			const drift = check(hubDir);
+			expect(drift.status).toBe(1);
+			expect(drift.stdout + drift.stderr).toContain("AGENTS.md");
 			expect(bond(["sync"], hubDir).status).toBe(0);
 			expect(check(hubDir).status).toBe(0);
 			const text = agents(hubDir);
 			expect(text.startsWith("# Mis notas del hub")).toBe(true);
 			expect(text).toContain("el frontend rico");
+			// La clave del repo no se renombro: solo cambia la linea de descripcion.
+			expect(readFileSync(tomlPath, "utf8")).toContain("[repos.front-real]");
 			// Idempotencia: otra pasada no vuelve a tocar nada.
 			expect(agents(hubDir)).toBe(text);
+			expect(check(hubDir).status).toBe(0);
+		});
+
+		test("repetir bond hub add sin --description es no-op: conserva descripcion, agente y base", () => {
+			const hubDir = repo("add-idem");
+			bond(["hub", "init", "--yes", frontUrl()], hubDir);
+			bond(["hub", "add", backReal, "--base", "develop", "--agent", "pi", "--description", "el backend"], hubDir);
+			const tomlPath = join(hubDir, "hub.toml");
+			const before = readFileSync(tomlPath, "utf8");
+			expect(before).toMatch(/base\s+= "develop"/);
+			expect(before).toMatch(/agent\s+= "pi"/);
+			expect(before).toContain('description = "el backend"');
+			const again = bond(["hub", "add", backReal], hubDir);
+			expect(again.status).toBe(0);
+			expect(again.stdout).toContain("ya existe");
+			// Ni la descripcion, ni el agente, ni la base (que se recalcularia con la rama actual del clon).
+			expect(readFileSync(tomlPath, "utf8")).toBe(before);
+			expect(check(hubDir).status).toBe(0);
+		});
+
+		test("bond hub add --description sobre repo existente solo cambia la descripcion", () => {
+			const hubDir = repo("add-desc");
+			bond(["hub", "init", "--yes", frontUrl()], hubDir);
+			bond(["hub", "add", backReal, "--base", "develop", "--agent", "pi", "--description", "el backend viejo"], hubDir);
+			const tomlPath = join(hubDir, "hub.toml");
+			const r = bond(["hub", "add", backReal, "--description", "el backend nuevo"], hubDir);
+			expect(r.status).toBe(0);
+			const toml = readFileSync(tomlPath, "utf8");
+			expect(toml).toContain('description = "el backend nuevo"');
+			expect(toml).not.toContain("viejo");
+			expect(toml).toMatch(/base\s+= "develop"/);
+			expect(toml).toMatch(/agent\s+= "pi"/);
+			// Y el bloque del AGENTS.md se refresca con la descripcion nueva.
+			expect(agents(hubDir)).toContain("el backend nuevo");
+			expect(agents(hubDir)).not.toContain("viejo");
+			expect(check(hubDir).status).toBe(0);
+		});
+
+		test("con hub.toml invalido, el bloque existente en AGENTS.md se conserva intacto (no se vacia)", () => {
+			const hubDir = repo("block-invalid");
+			bond(["hub", "init", "--yes", frontUrl(), backReal], hubDir);
+			const before = agents(hubDir);
+			expect(before).toContain("<!-- >>> bond:hub >>>");
+			writeFileSync(join(hubDir, "hub.toml"), "esto no es TOML =\n");
+			const r = bond(["sync"], hubDir);
+			expect(r.status).toBe(0);
+			expect(r.stdout + r.stderr).toContain("no se actualiza");
+			expect(agents(hubDir)).toBe(before);
 			expect(check(hubDir).status).toBe(0);
 		});
 
