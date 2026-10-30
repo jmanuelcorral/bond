@@ -42,6 +42,10 @@ features:
     linkText: View catalogs
 ---
 
+::: tip What's new: hub mode
+Working across multiple repositories at once? With the new **hub mode**, bond coordinates cross-repo changes in a single vertical session with an agent per repository. [See what's new](whats-new.md).
+:::
+
 ## What is this about?
 
 If you use coding agents, you have probably been here: Claude Code wants a `CLAUDE.md`, pi

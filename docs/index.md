@@ -42,6 +42,10 @@ features:
     linkText: Ver catálogos
 ---
 
+::: tip Novedades: el modo hub
+¿Trabajas con varios repositorios a la vez? Con el nuevo **modo hub**, bond coordina cambios cruzados en una sola sesión vertical con un agente por repositorio. [Descubre todas las novedades](novedades.md).
+:::
+
 ## ¿De qué va esto?
 
 Si usas agentes de código, seguramente ya te ha pasado: Claude Code quiere un `CLAUDE.md`, pi
