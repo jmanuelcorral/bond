@@ -1,11 +1,11 @@
 ---
 id: "2026-10-29-modo-hub-prompt-no-manda-nada-si-algun-agente-de-la-rama-espera-una-respuesta"
 title: "Modo hub: prompt no manda nada si algún agente de la rama espera una respuesta"
-status: "proposed"
+status: "accepted"
 date: "2026-10-29"
 decided_by: "agent:claude/stuart"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "todas, y la de H4 dala por buena"
+accepted_via: "agent:claude"
 supersedes: ""
 superseded_by: ""
 links:
