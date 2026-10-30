@@ -12,8 +12,9 @@ if (!process.env.BOND_HOME) {
 }
 Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
 const { BOND_HOME } = await import("../cli/runtime.mts");
-const { hubSession, hubsPath, registerHubRepo } = await import("../cli/hub.mts");
+const { hubSession, hubsPath, readHubsRegistry, registerHubRepo } = await import("../cli/hub.mts");
 const { checkHubSession } = await import("../cli/hub-check.mts");
+const { canonical } = await import("../cli/util.mts");
 
 const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
 let tmp: string;
@@ -57,7 +58,8 @@ beforeEach(() => {
 
 	hub = repo("hub");
 	g(hub, "submodule", "add", "-q", "../front", "front");
-	if (process.platform !== "win32") symlinkSync(backReal, join(hub, "back"));
+	// En Windows, junction: no necesita permisos de administrador ni modo desarrollador.
+	symlinkSync(backReal, join(hub, "back"), process.platform === "win32" ? "junction" : "dir");
 	mkdirSync(join(hub, ".bond"), { recursive: true });
 	writeFileSync(join(hub, ".bond", "bond.toml"), "agents = []\n");
 	writeFileSync(
@@ -90,7 +92,7 @@ afterEach(() => {
 	rmSync(tmp, { recursive: true, force: true });
 });
 
-describe.skipIf(process.platform === "win32")("hub sano", () => {
+describe("hub sano", () => {
 	test("check da todo en verde y sale con 0", () => {
 		const r = bond(["hub", "check"]);
 		expect(r.status).toBe(0);
@@ -101,6 +103,11 @@ describe.skipIf(process.platform === "win32")("hub sano", () => {
 		expect(rep.ok).toBe(true);
 		expect(rep.problems).toBe(0);
 		expect(rep.repos.map((x) => x.path)).toEqual([".", "back", "front"]);
+		// Enlace reportado igual para submódulo que para symlink.
+		const front = rep.repos.find((x) => x.path === "front")!;
+		expect(front.checks.some((c) => c.check === "enlace" && c.ok && c.detail === "submódulo")).toBe(true);
+		const back = rep.repos.find((x) => x.path === "back")!;
+		expect(back.checks.some((c) => c.check === "enlace" && c.ok)).toBe(true);
 	});
 
 	test("--json enseña el informe completo, sin las funciones de arreglo", () => {
@@ -116,7 +123,7 @@ describe.skipIf(process.platform === "win32")("hub sano", () => {
 	});
 });
 
-describe.skipIf(process.platform === "win32")("comprobaciones con la sesión rota", () => {
+describe("comprobaciones con la sesión rota", () => {
 	test("symlink roto: nombra el repo, dice que falta el enlace y sale con 1", () => {
 		rmSync(join(hub, "back"));
 		const r = bond(["hub", "check"]);
@@ -175,15 +182,31 @@ describe.skipIf(process.platform === "win32")("comprobaciones con la sesión rot
 		const ok2 = bond(["hub", "check"]);
 		expect(ok2.status).toBe(0);
 	});
+
+	test("varias ramas verticales abiertas: más de una no cabe (D10)", () => {
+		g(join(hub, "front"), "worktree", "add", "-q", "-b", "fix/x", join(tmp, "wt-front-x"));
+		g(join(hub, "front"), "worktree", "add", "-q", "-b", "fix/y", join(tmp, "wt-front-y"));
+		// Ambas existen en el hub: lo que sobra es que haya dos abiertas a la vez.
+		g(hub, "branch", "fix/x", "main");
+		g(hub, "branch", "fix/y", "main");
+		const r = bond(["hub", "check"]);
+		expect(r.status).toBe(1);
+		expect(r.stdout).toContain("varias ramas verticales abiertas");
+		expect(r.stdout).toContain("fix/x, fix/y");
+	});
 });
 
-describe.skipIf(process.platform === "win32")("--fix", () => {
-	test("arregla el symlink que falta y sale con 0", () => {
+describe("--fix", () => {
+	test("arregla el symlink que falta, lo registra en ~/.bond/hubs.toml y sale con 0", () => {
 		rmSync(join(hub, "back"));
 		const r = bond(["hub", "check", "--fix"]);
 		expect(r.status).toBe(0);
 		expect(readlinkSync(join(hub, "back"))).toBe(backReal);
 		expect(r.stdout).toContain("enlazado");
+		// D14: el clon y el enlace quedan anotados en el registro global.
+		const reg = readHubsRegistry();
+		expect(reg[canonical(backReal)]).toBe(canonical(hub));
+		expect(reg[canonical(join(hub, "back"))]).toBe(canonical(hub));
 	});
 
 	test("arregla el submódulo sin inicializar", () => {
@@ -200,6 +223,16 @@ describe.skipIf(process.platform === "win32")("--fix", () => {
 		expect(r.status).toBe(1);
 		expect(existsSync(join(hub, "back"))).toBe(false);
 		expect(r.stdout).toContain("[dry-run]");
+	});
+
+	test("--fix con --json: la stdout es solo el informe y los mensajes del arreglo van a stderr", () => {
+		rmSync(join(hub, "back"));
+		const r = bond(["hub", "check", "--fix", "--json"]);
+		expect(r.status).toBe(0);
+		const rep = JSON.parse(r.stdout);
+		expect(rep.ok).toBe(true);
+		expect(r.stdout).not.toContain("enlazado");
+		expect(r.stderr).toContain("enlazado");
 	});
 
 	test("nunca descarta cambios ni cambia de rama: arregla el enlace y deja el repo sucio como estaba", () => {
@@ -223,9 +256,25 @@ describe("bond doctor y el hub", () => {
 		expect(r.stdout).not.toContain("bond hub check");
 	});
 
-	test("bond doctor dentro de un hub incluye el resumen de check", () => {
+	test("bond doctor dentro de un hub sano: resumen sin arreglo pendiente", () => {
+		const r = bond(["doctor", "--quick"], hub);
+		expect(r.stdout).toContain("hub hub");
+		expect(r.stdout).toContain("al día");
+		// Con el hub en verde no se ofrece el fix.
+		expect(r.stdout).not.toContain("bond hub check");
+	});
+
+	test("bond doctor con el hub roto ofrece bond hub check", () => {
+		rmSync(join(hub, "back"));
 		const r = bond(["doctor", "--quick"], hub);
 		expect(r.stdout).toContain("hub hub");
 		expect(r.stdout).toContain("bond hub check");
+	});
+
+	test("bond doctor con hub.toml inválido lo reporta como fallo con el error de parseo", () => {
+		writeFileSync(join(hub, "hub.toml"), "esto no es TOML válido [[[");
+		const r = bond(["doctor", "--quick"], hub);
+		expect(r.stdout).toContain("hub.toml inválido");
+		expect(r.stdout).toContain("corrige hub.toml");
 	});
 });
