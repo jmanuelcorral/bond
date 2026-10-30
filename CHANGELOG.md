@@ -2,6 +2,13 @@
 
 ## Sin publicar
 
+- Cada repo de `hub.toml` puede llevar `description` (opcional; el asistente de `bond hub init`
+  la pregunta y en `bond hub add` es `--description`), y `bond hub` la enseña en una columna
+  que solo aparece si algún repo la declara. En un hub, `bond sync` genera en su `AGENTS.md` un
+  bloque con marcador propio (`bond:hub`) con la tabla de la sesión (ruta, base, enlace,
+  agente y descripción), las reglas del hub y dónde viven `docs/plans/` y `docs/decisions/`;
+  lo escrito a mano fuera del bloque se conserva, `bond sync --check` lo comprueba y
+  `bond hub init` / `bond hub add` lo dejan al día (D18).
 - Los repos de un hub nuevo van por defecto en `repos/<nombre>` (D16): el asistente de
   `bond hub init` lo propone como valor inicial (editable), `bond hub add` lo usa sin preguntar
   y `--path` manda sobre él. Al importar submódulos que ya existían se conserva su ruta, y los

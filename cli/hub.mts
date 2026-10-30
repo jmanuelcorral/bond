@@ -70,6 +70,8 @@ export interface HubRepo {
 	source?: string;
 	/** Agente por defecto para este repo en el hub (si se declaró en hub.toml). */
 	agent?: string;
+	/** Qué es este repo (si se declaró en hub.toml); alimenta el bloque del hub en AGENTS.md (D18). */
+	description?: string;
 }
 
 export interface HubSession {
@@ -85,6 +87,7 @@ export interface HubTomlRepo {
 	link: "submodule" | "symlink";
 	url?: string;
 	agent?: string;
+	description?: string;
 }
 
 export interface HubToml {
@@ -152,12 +155,16 @@ export function parseHubToml(text: string, pathForError = "hub.toml"): HubToml {
 		if (r.agent !== undefined && (typeof r.agent !== "string" || !r.agent.trim())) {
 			die(`${pathForError}: repos.${key}.agent tiene que ser una cadena`);
 		}
+		if (r.description !== undefined && (typeof r.description !== "string" || !r.description.trim())) {
+			die(`${pathForError}: repos.${key}.description tiene que ser una cadena`);
+		}
 		repos[key] = {
 			path,
 			base: (r.base as string).trim(),
 			link,
 			url: typeof r.url === "string" ? r.url.trim() : undefined,
 			agent: typeof r.agent === "string" ? r.agent.trim() : undefined,
+			description: typeof r.description === "string" ? r.description.trim() : undefined,
 		};
 	}
 	return {
@@ -243,6 +250,7 @@ export function hubSession(root: string): HubSession | undefined {
 			url: entry.url,
 			source,
 			agent: entry.agent,
+			description: entry.description,
 		});
 	}
 
@@ -391,14 +399,18 @@ export function submodules(root: string): Submodule[] {
 
 /** Tabla de la sesión: repo, ruta, base, modo de enlace y rama actual. */
 export function printSession(s: HubSession): void {
+	// La columna DESCRIPCION (D18) solo aparece si algún repo la declara: sin descripciones,
+	// la tabla no se ensancha con huecos vacíos.
+	const hasDesc = s.repos.some((r) => r.description);
 	const rows = s.repos.map((r) => [
 		r.path === "." ? s.name : basename(r.path),
 		r.path,
 		r.base,
 		r.path === "." ? "-" : (r.link ?? "submodule"),
 		!r.present ? "(no está)" : (r.branch ?? "(HEAD separado)"),
+		...(hasDesc ? [r.description ?? "-"] : []),
 	]);
-	const all = [["REPO", "RUTA", "BASE", "ENLACE", "RAMA"], ...rows];
+	const all = [["REPO", "RUTA", "BASE", "ENLACE", "RAMA", ...(hasDesc ? ["DESCRIPCIÓN"] : [])], ...rows];
 	const widths = all[0].map((_, i) => Math.max(...all.map((r) => r[i].length)));
 	const fmt = (r: string[]) => `  ${r.map((c, i) => (i === r.length - 1 ? c : c.padEnd(widths[i]))).join("  ")}`;
 	log(`hub ${s.name} ${dim(`(${s.root})`)}`);

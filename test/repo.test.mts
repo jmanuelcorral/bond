@@ -105,6 +105,16 @@ describe("updateBondToml", () => {
 	});
 });
 
+describe("el bloque del hub solo vive en hubs (D18)", () => {
+	test("en un repo sin hub.toml, sync no toca AGENTS.md ni añade marcadores bond:hub", () => {
+		write("AGENTS.md", "# Mi repo normal\n");
+		bondToml({ agents: ["pi"] });
+		sync();
+		expect(read("AGENTS.md")).toBe("# Mi repo normal\n");
+		expect(sync({ check: true })).toEqual([]);
+	});
+});
+
 describe("memoria de decisiones ([decisions])", () => {
 	test("sync crea el README de decisiones si falta y no lo pisa si existe", () => {
 		bondToml({ agents: ["pi"], decisions: '[decisions]\ndir = "docs/decisions"' });

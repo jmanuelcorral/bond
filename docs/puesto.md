@@ -322,6 +322,7 @@ guiada con `bond hub init`, que hace primero `bond init` en el propio hub (con `
 (symlink) y hace `bond init` con la config del hub en los que no tienen bond; `bond hub check` revisa después que cada repo de la sesión esté listo para trabajar con
 agentes, y `--fix` arregla lo seguro. Los repos nuevos entran por defecto en `repos/<nombre>` (D16); un hub
 que ya los tenga en la raíz sigue funcionando igual — `bond hub check` solo avisa de ello, sin fallar (D17).
+Cada repo puede llevar descripción (`description` en `hub.toml`; el asistente de `bond hub init` la pregunta y en `bond hub add` es `--description`): `bond sync` genera en el `AGENTS.md` del hub un bloque con la tabla de la sesión, las reglas del hub (no editar `repos/` desde el hub; el trabajo en un repo va por `bond team`) y dónde viven `docs/plans/` y `docs/decisions/`, para que desde el hub se sepa qué es cada repo sin salir de él (D18).
 El flujo, de punta a punta (ver
 [referencia](reference.md#bond-hub)):
 

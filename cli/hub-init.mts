@@ -40,7 +40,9 @@ por URL (submódulo) o desde un clon local (symlink). En un repo con submódulos
 los importa a hub.toml con su rama base.
 
 Los repos nuevos entran en repos/<nombre> (D16); al importar submódulos
-que ya existían se conserva su ruta.
+que ya existían se conserva su ruta. Cada repo puede llevar una descripción
+opcional (el asistente la pregunta; en bond hub add, --description): alimenta
+el bloque que bond genera en el AGENTS.md del hub (D18).
 
 Opciones:
   --yes, -y       No pregunta: usa valores detectados y añade los repos indicados
@@ -74,6 +76,7 @@ Opciones:
   --base <rama>    Rama base del repo (por defecto, la rama actual o main)
   --link <modo>    Modo de enlace: "submodule" o "symlink"
   --agent <agente> Agente por defecto para este repo en el hub
+  --description <texto>  Qué es el repo (opcional); alimenta el bloque que bond genera en el AGENTS.md del hub (D18)
   --yes, -y        No pregunta
   --dry-run        Muestra qué haría sin escribir en disco
 `;
@@ -151,6 +154,7 @@ export function renderHubToml(hub: HubToml): string {
 		lines.push(`base  = ${JSON.stringify(repo.base)}`);
 		lines.push(`link  = ${JSON.stringify(repo.link)}`);
 		if (repo.agent) lines.push(`agent = ${JSON.stringify(repo.agent)}`);
+		if (repo.description) lines.push(`description = ${JSON.stringify(repo.description)}`);
 		lines.push("");
 	}
 	return lines.join("\n").trimEnd() + "\n";
@@ -727,12 +731,14 @@ export async function hubInit(args: string[]): Promise<void> {
 				const defaultBase = detectRemoteBranch(url) ?? "main";
 				const repoBase = await ask(p.text({ message: "Rama base:", initialValue: defaultBase }));
 				const agent = await ask(p.text({ message: "Agente por defecto (opcional):", placeholder: "pi, claude, codex..." }));
+				const description = await ask(p.text({ message: "Descripción del repo (opcional):", placeholder: "p. ej. el frontend del producto" }));
 				hubToml.repos[key] = {
 					path,
 					base: repoBase,
 					link: "submodule",
 					url,
 					...(agent.trim() ? { agent: agent.trim() } : {}),
+					...(description.trim() ? { description: description.trim() } : {}),
 				};
 			} else if (choice === "symlink") {
 				const localPath = await askLocalClone(p, "Ruta al clon local:", root);
@@ -743,6 +749,7 @@ export async function hubInit(args: string[]): Promise<void> {
 				const defaultBase = currentBranch(resolved) ?? "main";
 				const repoBase = await ask(p.text({ message: "Rama base:", initialValue: defaultBase }));
 				const agent = await ask(p.text({ message: "Agente por defecto (opcional):", placeholder: "pi, claude, codex..." }));
+				const description = await ask(p.text({ message: "Descripción del repo (opcional):", placeholder: "p. ej. el backend de la API" }));
 				const originUrl = git(resolved, ["remote", "get-url", "origin"]).stdout.trim() || undefined;
 				hubToml.repos[key] = {
 					path,
@@ -750,6 +757,7 @@ export async function hubInit(args: string[]): Promise<void> {
 					link: "symlink",
 					...(originUrl ? { url: originUrl } : {}),
 					...(agent.trim() ? { agent: agent.trim() } : {}),
+					...(description.trim() ? { description: description.trim() } : {}),
 				};
 				hubLocalToml.repos[key] = { source: localPath };
 			}
@@ -860,6 +868,7 @@ export async function hubAdd(args: string[]): Promise<void> {
 	let base: string | undefined;
 	let link: "submodule" | "symlink" | undefined;
 	let agent: string | undefined;
+	let description: string | undefined;
 	let yes = false;
 
 	for (let i = 0; i < args.length; i++) {
@@ -885,6 +894,9 @@ export async function hubAdd(args: string[]): Promise<void> {
 		} else if (a === "--agent") {
 			if (args[i + 1] === undefined) die("--agent necesita un valor");
 			agent = args[++i];
+		} else if (a === "--description") {
+			if (args[i + 1] === undefined) die("--description necesita un valor");
+			description = args[++i];
 		} else if (a.startsWith("-")) {
 			die(`opción desconocida: ${a} (bond hub add --help)`);
 		} else if (!target) {
@@ -931,10 +943,11 @@ export async function hubAdd(args: string[]): Promise<void> {
 			(detectedLink === "symlink" && hubLocalToml.repos[repoName]?.source !== newSource)
 		) {
 			die(`repos.${repoName} ya existe en hub.toml con otra configuración (usa otro --name o edita hub.toml)`);
-		} else {
+		} else if ((existing.description ?? "") === (description ?? "")) {
 			log(`repos.${repoName} ya existe en hub.toml`);
 			return;
 		}
+		// Solo cambia la descripción: se actualiza más abajo, y con ella el bloque del hub.
 	}
 	const existingByPath = Object.entries(hubToml.repos).find(([k, r]) => k !== repoName && r.path === repoPath);
 	if (existingByPath) {
@@ -949,6 +962,7 @@ export async function hubAdd(args: string[]): Promise<void> {
 			link: "submodule",
 			url: target,
 			...(agent ? { agent } : {}),
+			...(description ? { description } : {}),
 		};
 	} else {
 		const resolved = resolve(target);
@@ -960,6 +974,7 @@ export async function hubAdd(args: string[]): Promise<void> {
 			link: "symlink",
 			...(originUrl ? { url: originUrl } : {}),
 			...(agent ? { agent } : {}),
+			...(description ? { description } : {}),
 		};
 		hubLocalToml.repos[repoName] = { source: target.startsWith("~") ? target : resolved };
 	}
@@ -982,7 +997,27 @@ export async function hubAdd(args: string[]): Promise<void> {
 
 	await syncHub(root, { yes: true, hubToml, hubLocalToml });
 	await initSessionRepos(root, hubToml, { interactive: !yes && process.stdin.isTTY === true });
+	// D18: el bloque que bond genera en el AGENTS.md del hub se mantiene al día con hub.toml.
+	syncHubAgentsBlock(root);
 	log(`añadido ${repoName} a ${root}`);
+}
+
+/**
+ * Regenera el bloque del hub en su AGENTS.md (equivalente a bond sync desde la raíz del hub).
+ * Lo llaman `bond hub add` y `bond hub sync` para dejarlo al día con hub.toml; en un hub sin
+ * hub.toml no hace nada (bond sync lo daría por fuera de la sesión).
+ */
+export function syncHubAgentsBlock(root: string): void {
+	// Sin hub.toml no hay sesión; sin .bond/bond.toml (p. ej. en --dry-run, donde el bond init
+	// del hub todavia no se ha hecho) no hay config que sincronizar: el bloque llegara con el.
+	if (!existsSync(join(root, "hub.toml")) || !existsSync(join(root, ".bond", "bond.toml"))) return;
+	const prev = process.cwd();
+	try {
+		process.chdir(root);
+		syncRepo({ quiet: true });
+	} finally {
+		process.chdir(prev);
+	}
 }
 
 /** Comando bond hub sync */
@@ -1010,4 +1045,6 @@ export async function hubSync(args: string[]): Promise<void> {
 	await syncHub(root, { yes });
 	await initHub(root, { interactive: !yes && process.stdin.isTTY === true });
 	await initSessionRepos(root, parseHubToml(readFileSync(join(root, "hub.toml"), "utf8"), "hub.toml"), { interactive: !yes && process.stdin.isTTY === true });
+	// D18: tras cambiar la sesión, el bloque del AGENTS.md del hub se regenera desde hub.toml.
+	syncHubAgentsBlock(root);
 }

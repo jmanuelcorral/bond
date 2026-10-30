@@ -115,6 +115,13 @@ describe("hub.toml y .bond/hub.local.toml como fuente de la sesión", () => {
 		expect(frontRepo?.url).toBe("git@github.com:fluzo/front.git");
 	});
 
+	test("hubSession pasa la descripcion del repo declarada en hub.toml (D18)", () => {
+		writeFileSync(join(hub, "hub.toml"), readFileSync(join(hub, "hub.toml"), "utf8").replace("[repos.front]", '[repos.front]\ndescription = "el front de prueba"'));
+		const s = hubSession(hub)!;
+		expect(s.repos.find((r) => r.path === "front")?.description).toBe("el front de prueba");
+		expect(s.repos.find((r) => r.path === "back")?.description).toBeUndefined();
+	});
+
 	test("bond hub enseña la sesión: repos, ruta, base, enlace y rama", () => {
 		const show = bond(["hub"]);
 		expect(show.status).toBe(0);
@@ -125,6 +132,17 @@ describe("hub.toml y .bond/hub.local.toml como fuente de la sesión", () => {
 		if (process.platform !== "win32") {
 			expect(show.stdout).toContain("symlink");
 		}
+	});
+
+	test("bond hub enseña la descripcion de cada repo si la hay, y si no, la columna no aparece (D18)", () => {
+		const noDesc = bond(["hub"]);
+		expect(noDesc.stdout).not.toContain("DESCRIPCIÓN");
+		writeFileSync(join(hub, "hub.toml"), readFileSync(join(hub, "hub.toml"), "utf8").replace("[repos.front]", '[repos.front]\ndescription = "el frontend del producto"'));
+		const show = bond(["hub"]);
+		expect(show.status).toBe(0);
+		expect(show.stdout).toMatch(/REPO\s+RUTA\s+BASE\s+ENLACE\s+RAMA\s+DESCRIPCIÓN/);
+		expect(show.stdout).toContain("el frontend del producto");
+		expect(show.stdout).toContain("back");
 	});
 
 	test(".bond/hub.local.toml expande ~ a HOME", () => {
@@ -225,6 +243,13 @@ describe("validación de hub.toml", () => {
 		expect(catchDie(() => parseHubToml('name = "x"\nbase = "main"\n[repos.a]\npath = "a"\nlink = "submodule"\n')).error).toContain("necesita base");
 		expect(catchDie(() => parseHubToml('name = "x"\nbase = "main"\n[repos.a]\npath = "a"\nbase = "main"\nlink = "otro"\n')).error).toContain('link tiene que ser "submodule" o "symlink"');
 		expect(catchDie(() => parseHubToml('name = "x"\nbase = "main"\n[repos.a]\npath = "a"\nbase = "main"\nlink = "submodule"\n[repos.b]\npath = "a"\nbase = "main"\nlink = "submodule"\n')).error).toContain("repetida");
+	});
+
+	test("parseHubToml: description es opcional, se recorta y debe ser cadena (D18)", () => {
+		const base = 'name = "x"\nbase = "main"\n[repos.a]\npath = "a"\nbase = "main"\nlink = "submodule"\n';
+		expect(parseHubToml(`${base}description = "  el backend  "\n`).repos.a.description).toBe("el backend");
+		expect(parseHubToml(base).repos.a.description).toBeUndefined();
+		expect(catchDie(() => parseHubToml(`${base}description = 3\n`)).error).toContain("description tiene que ser una cadena");
 	});
 
 	test("un hub.toml inválido se explica con un mensaje que dice qué arreglar; bond team lo trata como repo normal con un aviso", () => {

@@ -353,6 +353,77 @@ link = "symlink"
 		expect(existsSync(join(hubDir, "front"))).toBe(false);
 		expect(existsSync(join(hubDir, "back"))).toBe(false);
 	});
+	describe("el bloque del hub en AGENTS.md (D18)", () => {
+		const agents = (dir: string) => readFileSync(join(dir, "AGENTS.md"), "utf8");
+		const check = (dir: string) => bond(["sync", "--check"], dir);
+		const frontUrl = () => `file://${frontReal}`;
+
+		test("bond hub init --yes deja el bloque al dia: tabla, reglas y punteros a plans y decisiones", () => {
+			const hubDir = repo("block-init");
+			bond(["hub", "init", "--yes", frontUrl(), backReal], hubDir);
+			const text = agents(hubDir);
+			expect(text).toContain("<!-- >>> bond:hub >>>");
+			expect(text).toContain("| REPO | RUTA | BASE | ENLACE | AGENTE | DESCRIPCIÓN |");
+			expect(text).toContain("*(el hub)*");
+			expect(text).toContain("`repos/" + basename(backReal) + "`");
+			expect(text).toContain("No edites los repos enlazados");
+			expect(text).toContain("bond team");
+			expect(text).toContain("docs/plans/");
+			expect(text).toContain("docs/decisions/");
+			expect(check(hubDir).status).toBe(0);
+		});
+
+		test("bond hub add --description lo escribe en hub.toml y actualiza el bloque", () => {
+			const hubDir = repo("block-add");
+			bond(["hub", "init", "--yes", frontUrl()], hubDir);
+			const add = bond(["hub", "add", backReal, "--description", "el backend de la API"], hubDir);
+			expect(add.status).toBe(0);
+			expect(readFileSync(join(hubDir, "hub.toml"), "utf8")).toContain('description = "el backend de la API"');
+			expect(agents(hubDir)).toContain("el backend de la API");
+			expect(check(hubDir).status).toBe(0);
+		});
+
+		test("cambiar la descripcion en hub.toml: --check falla, sync actualiza el bloque y conserva lo escrito a mano", () => {
+			const hubDir = repo("block-edit");
+			bond(["hub", "init", "--yes", frontUrl(), backReal], hubDir);
+			// Reescribimos el AGENTS.md a mano (fuera del bloque) y cambiamos la descripcion en hub.toml.
+			writeFileSync(join(hubDir, "AGENTS.md"), "# Mis notas del hub\n");
+			const tomlPath = join(hubDir, "hub.toml");
+			writeFileSync(tomlPath, readFileSync(tomlPath, "utf8").replace("[repos.front-real]", '[repos.front]\ndescription = "el frontend rico"'));
+			expect(check(hubDir).status).toBe(1);
+			expect(bond(["sync"], hubDir).status).toBe(0);
+			expect(check(hubDir).status).toBe(0);
+			const text = agents(hubDir);
+			expect(text.startsWith("# Mis notas del hub")).toBe(true);
+			expect(text).toContain("el frontend rico");
+			// Idempotencia: otra pasada no vuelve a tocar nada.
+			expect(agents(hubDir)).toBe(text);
+			expect(check(hubDir).status).toBe(0);
+		});
+
+		test("el bloque del hub no pisa otros bloques de bond en el mismo fichero", () => {
+			const hubDir = repo("block-coexist");
+			bond(["hub", "init", "--yes", frontUrl(), backReal], hubDir);
+			writeFileSync(join(hubDir, "AGENTS.md"), "# Mio\n\n<!-- >>> bond >>> nota propia\nsigue intacto\n<!-- <<< bond <<< -->\n");
+			expect(bond(["sync"], hubDir).status).toBe(0);
+			const text = agents(hubDir);
+			expect(text).toContain("sigue intacto");
+			expect(text).toContain("<!-- >>> bond:hub >>>");
+			expect(check(hubDir).status).toBe(0);
+		});
+
+		test("quitar la descripcion de hub.toml se detecta y el bloque vuelve a su hueco", () => {
+			const hubDir = repo("block-rm");
+			bond(["hub", "init", "--yes", frontUrl()], hubDir);
+			bond(["hub", "add", backReal, "--description", "temporal"], hubDir);
+			const tomlPath = join(hubDir, "hub.toml");
+			writeFileSync(tomlPath, readFileSync(tomlPath, "utf8").replace(/^description = .*\n/m, ""));
+			expect(check(hubDir).status).toBe(1);
+			expect(bond(["sync"], hubDir).status).toBe(0);
+			expect(agents(hubDir)).not.toContain("temporal");
+			expect(check(hubDir).status).toBe(0);
+		});
+	});
 
 	test("en Windows, si el symlink falla, crea una junction y lo dice (S3)", () => {
 		const testDir = join(tmp, "junction-test");
