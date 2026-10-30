@@ -184,9 +184,9 @@ Riesgos:
   - `sync --dry-run` dice qué haría y no toca nada; nunca borra un repo ni un clon existente.
   - En Windows, si el symlink falla, crea una junction y lo dice (prueba en CI).
 - Acciones:
-  - [ ] Asistente, `add`, `sync`, junctions en Windows, registro global, docs, CHANGELOG y
+  - [x] Asistente, `add`, `sync`, junctions en Windows, registro global, docs, CHANGELOG y
     pruebas (repos de fixture servidos por `file://`).
-  - [ ] Ejecutar las comprobaciones y anotar los resultados.
+  - [x] Ejecutar las comprobaciones y anotar los resultados.
   - [ ] Presentar la evidencia y parar para revisión.
 - Verificación: `npm run typecheck && bun test`; a mano, `bin/bond hub init` con un repo real
   por URL y otro por clon local.
@@ -251,7 +251,7 @@ Riesgos:
 | Fase | Implementación | Verificación | Revisión | Evidencia |
 | --- | --- | --- | --- | --- |
 | P5 | implemented | passed | pending | `f8e930e` + `b87a26b` (arreglos de la revisión) integrados en `plan/hub-session`; en el checkout principal `bun test` 386/0, y las pruebas no tocan el `~/.bond/hubs.toml` real (`BOND_HOME` temporal). Sin probar en Windows (canonical/realpath y junctions, a cubrir en P6). Runs: `2026-10-30-kevin-use-the-plan-execute-skill-to-implement.md`, `2026-10-30-reviewer-5-read-only-code-review-of-branch-plan-hub.md`, `2026-10-30-kevin-a-reviewer-requested-changes-on-your-p5.md` |
-| P6 | pending | not_run | pending | todavía nada |
+| P6 | implemented | passed | pending | `ad692c2` + `0821fa7` (arreglos de la revisión) integrados en `plan/hub-session`; en el checkout principal `bun test` 395/0. Sin probar en Windows real (junctions: lo dirá el CI) ni a mano con un repo real por URL. Runs: `2026-10-30-kevin-use-the-plan-execute-skill-to-implement-2.md`, `2026-10-30-reviewer-6-read-only-code-review-of-branch-plan-hub.md`, `2026-10-30-kevin-a-reviewer-requested-changes-on-your-p6.md` |
 | P7 | pending | not_run | pending | todavía nada |
 | P8 | pending | not_run | pending | todavía nada |
 
@@ -267,6 +267,14 @@ integrada (su revisión humana sigue pendiente).
   un worktree de un repo enlazado) y 4 nits, aplicados en `b87a26b`. Quedan para más adelante:
   pruebas de `canonical` en Windows (P6), caché de la sesión por proceso (rendimiento) y las
   skills/`docs/puesto.md` que aún hablan de `[hub]` (P8).
+
+- P6: rama `plan/hub-guided-p6` (kevin, agy), revisada por reviewer-6 (pi): cambios pedidos (un
+  bloqueante: `init --dry-run` moría siempre; clon interactivo que ignoraba `--dry-run`, `hub add`
+  que sobrescribía una entrada, junctions irreparables en Windows, ayuda de los subcomandos
+  inalcanzable), aplicados en `0821fa7`.
+- Incidente: una prueba manual de un agente con `bin/bond hub` sin `BOND_HOME` temporal escribió
+  el `~/.bond/hubs.toml` real (solo rutas de `/tmp`); el orquestador lo borró. Las pruebas
+  automáticas fijan `BOND_HOME` temporal; las pruebas manuales de P8 tienen que hacerlo también.
 
 Sin issues ni PRs todavía. Continúa `2026-10-29-hub-session` en la misma rama
 (`plan/hub-session`), que irá en un solo PR.
