@@ -21,6 +21,7 @@ Comandos:
   add <url|ruta>  Añade un repo al hub (como submódulo o como enlace local);
                   --description describe el repo en hub.toml
   sync            Deja el disco como dice hub.toml y actualiza el registro global
+  pull            Pone al día la base del hub y de sus repos en fast-forward (--dry-run, --json)
   check           Revisa cada repo de la sesión: qué falta y cómo arreglarlo (--fix, --json)
 
 Sin subcomando: enseña la sesión del hub (repos, ruta, base, enlace, rama actual y,
@@ -57,6 +58,8 @@ export const currentBranch = (dir: string) => {
 };
 
 export interface HubRepo {
+	/** Nombre o clave del repo en hub.toml (el nombre del hub para "."). */
+	name?: string;
 	/** Ruta relativa al hub con / ("." para el propio hub). */
 	path: string;
 	/** Carpeta del repo. */
@@ -231,6 +234,7 @@ export function hubSession(root: string): HubSession | undefined {
 	}
 
 	const hubSelf: HubRepo = {
+		name: hubToml.name,
 		path: ".",
 		dir: root,
 		base: hubToml.base,
@@ -245,6 +249,7 @@ export function hubSession(root: string): HubSession | undefined {
 		const rawSource = localToml?.repos[key]?.source ?? localToml?.repos[entry.path]?.source;
 		const source = rawSource ? expandSource(rawSource, root) : undefined;
 		subs.push({
+			name: key,
 			path: entry.path,
 			dir,
 			base: entry.base,
@@ -407,7 +412,7 @@ export function printSession(s: HubSession): void {
 	// la tabla no se ensancha con huecos vacíos.
 	const hasDesc = s.repos.some((r) => r.description);
 	const rows = s.repos.map((r) => [
-		r.path === "." ? s.name : basename(r.path),
+		r.path === "." ? s.name : (r.name ?? basename(r.path)),
 		r.path,
 		r.base,
 		r.path === "." ? "-" : (r.link ?? "submodule"),
@@ -439,6 +444,10 @@ export async function hub(args: string[]): Promise<void> {
 	if (sub === "check") {
 		const c = await import("./hub-check.mts");
 		return c.hubCheck(rest);
+	}
+	if (sub === "pull") {
+		const p = await import("./hub-pull.mts");
+		return p.hubPull(rest);
 	}
 	if (args.includes("-h") || args.includes("--help")) {
 		console.log(HUB_HELP.trimEnd());

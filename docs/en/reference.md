@@ -829,6 +829,7 @@ bond hub                 # shows the hub's session: repos, path, base, link mode
 bond hub init [dir]      # creates a hub or prepares it in an existing repo and imports repos
 bond hub add <url|path>  # adds a repo to the hub (as a submodule or a local link)
 bond hub sync            # mounts submodules, creates links and updates the global registry
+bond hub pull            # updates the hub's and each repo's base in fast-forward (--dry-run, --json)
 bond hub check           # reviews each repo of the session: what's missing and how to fix it (--fix, --json)
 ```
 
@@ -909,6 +910,7 @@ is not ready to work with agents; each problem names the repo, the check and the
 | `cambios` | no uncommitted changes |
 | `rama vertical` | there are no worktrees of branches that don't exist in the hub, and only one vertical branch is open (D10) |
 | `ruta` | **warning** (D16/D17): the repo sits outside `repos/`, the default path of new hubs |
+| `base atrasada` | **warning** (D17/D19): the base branch is behind its remote (per last fetch); fix: `bond hub pull` |
 
 Some checks are warnings (D17): they are shown with a "!" but they do not count as problems nor
 change the exit code. In `--json` each warning carries `warn: true` and the report counts
@@ -924,6 +926,17 @@ asks before each fix; with `--yes`/`-y` (or `--json`) it applies all of them at 
 `--dry-run` it only describes. With `--json` the full per-repo report goes to stdout and the fix
 messages go to stderr. `bond doctor` includes a summary (`hub <name>`) when you are in a hub and
 reports an invalid `hub.toml` as a failure with its parse error; outside one, nothing changes.
+
+### `bond hub pull`
+
+`cli/hub-pull.mts`. Updates the base branch of the hub and each session repo with `git fetch` and
+fast-forward advance (D19). It only acts if the repo is on its base branch and has no uncommitted
+changes. If a repo has changes, is on another branch, its base has diverged or lacks a
+remote/upstream, it skips it and explains why. It never performs a merge, rebase or push.
+
+- `--dry-run`: describes the advances without fetching or moving branches.
+- `--json`: JSON output with the structured per-repo result (`updated`, `up_to_date`, `skipped`),
+  upstream and advanced commits.
 
 ### `bond team` in a hub
 
