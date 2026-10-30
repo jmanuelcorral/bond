@@ -80,7 +80,7 @@ link = "symlink"
 	);
 	// Los symlinks y el fichero local del hub van ignorados en git (D13).
 	writeFileSync(join(hub, ".gitignore"), ".bond/hub.local.toml\nback\n");
-	writeFileSync(join(hub, ".bond", "hub.local.toml"), `[repos.back]\nsource = "${backReal}"\n`);
+	writeFileSync(join(hub, ".bond", "hub.local.toml"), `[repos.back]\nsource = ${JSON.stringify(backReal)}\n`);
 	const s = bond(["sync"], hub);
 	expect(s.status).toBe(0);
 	g(hub, "add", "-A");

@@ -235,7 +235,7 @@ describe("bond hub sync", () => {
 			(k) => parseHubToml(readFileSync(join(clonedHub, "hub.toml"), "utf8")).repos[k].link === "symlink",
 		)!;
 		mkdirSync(join(clonedHub, ".bond"), { recursive: true });
-		writeFileSync(join(clonedHub, ".bond", "hub.local.toml"), `[repos.${backKey}]\nsource = "${backReal}"\n`);
+		writeFileSync(join(clonedHub, ".bond", "hub.local.toml"), `[repos.${backKey}]\nsource = ${JSON.stringify(backReal)}\n`);
 
 		const syncSuccess = bond(["hub", "sync", "--yes"], clonedHub);
 		expect(syncSuccess.status).toBe(0);
@@ -261,7 +261,7 @@ link = "symlink"
 `;
 		writeFileSync(join(hubDir, "hub.toml"), toml);
 		mkdirSync(join(hubDir, ".bond"), { recursive: true });
-		writeFileSync(join(hubDir, ".bond", "hub.local.toml"), `[repos.back]\nsource = "${backReal}"\n`);
+		writeFileSync(join(hubDir, ".bond", "hub.local.toml"), `[repos.back]\nsource = ${JSON.stringify(backReal)}\n`);
 
 		const dryRes = bond(["hub", "sync", "--dry-run"], hubDir);
 		expect(dryRes.status).toBe(0);

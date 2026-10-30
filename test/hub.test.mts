@@ -88,7 +88,7 @@ link = "symlink"
 
 	// .bond/hub.local.toml con la ruta local
 	const hubLocalToml = `[repos.back]
-source = "${backReal}"
+source = ${JSON.stringify(backReal)}
 `;
 	writeFileSync(join(hub, ".bond", "hub.local.toml"), hubLocalToml);
 });
