@@ -111,7 +111,7 @@ bond team prompt <rama> "la tarea" [--repo <repo>] [--wait] [--timeout <ms>]
 bond team clean [repo] [rama...] [--repo <repo>] [--force] [--delete-branch] [--keep-table] [--dry-run]
 ```
 
-En un repo hub con submódulos, `bond team` trabaja en vertical: lo ves en
+En un hub (un repo con `hub.toml`), `bond team` trabaja en vertical: lo ves en
 [Una rama vertical en un hub](#una-rama-vertical-en-un-hub).
 
 ### Un ejemplo de principio a fin
@@ -145,10 +145,10 @@ Así sabes de un vistazo quién lleva qué. Su worktree vive en `~/.herdr/worktr
 
 A la derecha de tu panel se abre otro estrecho, `tabla · <repo>`, con la tabla en vivo
 (`bond team status --watch`) de todas las ramas del repo, estén donde estén. Si esa tabla ya
-estaba abierta de antes, bond la reutiliza en vez de abrir otra. En un hub con submódulos
-(`[hub]` en `.bond/bond.toml`), el panel se llama `tabla · <hub>` tanto si se lanza desde el hub
-como desde uno de sus submódulos, muestra una sola tabla con las filas de toda la sesión y solo se
-cierra cuando no queda trabajo pendiente en ningún repo.
+estaba abierta de antes, bond la reutiliza en vez de abrir otra. En un hub (sesión declarada en
+`hub.toml`), el panel se llama `tabla · <hub>` tanto si se lanza desde el hub como desde uno de
+sus repos, muestra una sola tabla con las filas de toda la sesión y solo se cierra cuando no queda
+trabajo pendiente en ningún repo.
 
 Si lanzas `bond team` fuera de Herdr, el comportamiento es el de siempre: un workspace por rama
 con `herdr worktree`.
@@ -200,8 +200,8 @@ rama y sin push) y actualiza el plan a medida que integras cada rama.
 
 `status` te da una fila por cada worktree del repo con su estado, su agente, los commits que
 lleva por delante de la base (por defecto, la rama del checkout principal) y los ficheros que
-toca. En un hub con submódulos (`[hub]` en `.bond/bond.toml`), enseña los worktrees de todos los
-repos de la sesión precedidos de la columna `REPO`, comparando cada uno con su base de `[hub]`.
+toca. En un hub (sesión declarada en `hub.toml`), enseña los worktrees de todos los repos de la
+sesión precedidos de la columna `REPO`, comparando cada uno con su base de `hub.toml`.
 Los estados son estos:
 
 | Estado | Qué quiere decir |
@@ -316,24 +316,32 @@ workspace del repo no lo cierra; te dice cómo hacerlo si quieres.
 
 ### Una rama vertical en un hub
 
-Si trabajas desde un repo hub (creado o preparado con `bond hub init`; ver
-[referencia](reference.md#bond-hub)), `bond team` cambia de forma: una rama ya no es un agente,
-es un cambio que cruza los repos. Desde el hub:
+Un hub es un repo git compartido que agrupa varios repos (p. ej. frontend y backend) declarados
+en `hub.toml`, cada uno como submódulo o como enlace (symlink) a un clon local. Se crea de forma
+guiada con `bond hub init`, que importa los repos por URL (submódulo) o desde un clon local
+(symlink); `bond hub check` revisa después que cada repo de la sesión esté listo para trabajar con
+agentes, y `--fix` arregla lo seguro. El flujo, de punta a punta (ver
+[referencia](reference.md#bond-hub)):
 
 ```bash
-bond team fix/login                 # la rama en el hub y un agente por submódulo
-bond team fix/login --repos backend # solo en esos repos (ruta o nombre, separados por comas)
+bond hub init                    # crea el hub e importa los repos (submódulo o symlink)
+bond hub check                   # revisa la sesión: qué falta y cómo arreglarlo (--fix)
+bond team fix/login              # la rama en el hub y un agente por repo de la sesión
+bond team fix/login --repos backend  # o solo en esos repos (ruta o nombre, separados por comas)
 bond team prompt fix/login "el login falla con emails en mayúsculas"
 bond team collect fix/login --repo backend
 bond team clean fix/login
 ```
 
+Si trabajas desde el hub, `bond team` cambia de forma: una rama ya no es un agente, es un cambio
+que cruza los repos:
+
 - **Crear**: `fix/login` se crea en el hub como rama, sin worktree ni agente, desde su base de
-  `[hub]`. En cada submódulo de la sesión (o en los de `--repos`) se abre un worktree desde su
+  `hub.toml`. En cada repo de la sesión (o en los de `--repos`) se abre un worktree desde su
   base y un agente: el de `fix/login:agente` o `--agent` si los das y, si no, el agente por
-  defecto del `bond.toml` de ese submódulo. Los worktrees van en
-  `~/.herdr/worktrees/<hub>/<submódulo>/<rama>`, así que dos hubs con un `frontend` no chocan.
-  `--base` no vale aquí: las bases son las de `[hub]`.
+  defecto del `bond.toml` de ese repo. Los worktrees van en
+  `~/.herdr/worktrees/<hub>/<repo>/<rama>`, así que dos hubs con un `frontend` no chocan.
+  `--base` no vale aquí: las bases son las de `hub.toml`.
 - **Una sola rama vertical a la vez**: con `fix/login` abierta, `bond team fix/pagos` se niega
   sin crear nada y te dice que la cierres antes con `bond team clean fix/login`. Repetir
   `bond team fix/login` abre solo lo que falte.
@@ -343,15 +351,16 @@ bond team clean fix/login
   manda nada a nadie.
 - **Recoger**: `collect` necesita `--repo` cuando la rama está en varios repos: se recoge repo a
   repo (o con `--agent <nombre>`, que vale también si ese agente ya no está en marcha). Los runs (encargos e informes) van a la memoria de decisiones del hub, junto al plan; si
-  el hub no tiene `[decisions]`, a la del submódulo. Los commits y las decisiones de cada run
-  salen de su submódulo.
+  el hub no tiene `[decisions]`, a la del repo. Los commits y las decisiones de cada run
+  salen de ese repo.
 - **Limpiar**: `clean fix/login` quita los worktrees de todos los repos (`--repo`, de uno) y deja
   las ramas, también la del hub. Sin ramas, los integrados de todos los repos. Con
   `--delete-branch` borra además las integradas, y la del hub si está integrada en su base y ya
   no le queda worktree en ningún repo.
 
-Dentro de un submódulo, `bond team` trabaja solo en ese repo, como siempre. Integrar las ramas,
-subir los punteros de los submódulos en la rama del hub y hacer push sigue siendo cosa tuya.
+Dentro de un repo de la sesión, `bond team` trabaja solo en ese repo, como siempre. Integrar las
+ramas, subir los punteros de los submódulos en la rama del hub (si tus repos entraron como
+submódulo) y hacer push sigue siendo cosa tuya.
 
 ## Conducir los agentes a mano
 

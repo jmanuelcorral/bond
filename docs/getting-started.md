@@ -190,6 +190,14 @@ workspace. La barra lateral de Herdr te enseña todos los agentes de todos los p
 vez, así que sabes cuál está trabajando, cuál está esperando y cuál ha terminado sin tener que
 abrir nada.
 
+**Un hub: varios repos, un puesto.** Si tu proyecto vive en varios repos (un frontend y un
+backend, digamos) y quieres trabajarlos como uno, `bond hub init` crea el hub: un repo git
+compartido que importa cada repo como submódulo (por URL) o como enlace a un clon local, todo
+declarado en `hub.toml`. `bond hub check` revisa que cada repo esté listo para trabajar con
+agentes (`--fix` arregla lo seguro) y `bond team fix/x` abre una rama vertical: un agente por
+repo de la sesión, en la misma rama. El flujo completo, en la
+[referencia](reference.md#bond-hub) y en [puesto.md](puesto.md#una-rama-vertical-en-un-hub).
+
 ## 6. Desconectarse y volver
 
 Llega la hora de irse y tienes tests corriendo y un agente a mitad de tarea. No pasa nada.

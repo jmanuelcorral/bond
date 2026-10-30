@@ -191,6 +191,14 @@ which agent you are, which branch and worktree you're on, and how much context y
 workspace. The Herdr sidebar shows you every agent from every project at once, so you know which
 one is working, which one is waiting and which one has finished without having to open anything.
 
+**A hub: several repos, one workstation.** If your project lives in several repos (a frontend and
+a backend, say) and you want to work them as one, `bond hub init` creates the hub: a shared git
+repo that imports each repo as a submodule (by URL) or as a link to a local clone, all declared
+in `hub.toml`. `bond hub check` reviews that every repo is ready to work with agents (`--fix`
+repairs the safe things) and `bond team fix/x` opens a vertical branch: one agent per repo of the
+session, on the same branch. The full flow is in the [reference](reference.md#bond-hub) and in
+[workstation.md](workstation.md#a-vertical-branch-in-a-hub).
+
 ## 6. Detaching and coming back
 
 Time to head off, and you've got tests running and an agent halfway through a task. No problem.

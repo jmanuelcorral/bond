@@ -14,7 +14,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 | `bond init` | Una vez por repo: agentes, agente por defecto y herramientas; genera la config de cada agente ([abajo](#configuración-por-repo-bond-init-y-bond-sync)) |
 | `bond` | Dentro de un repo: abre su puesto de trabajo en Herdr ([puesto.md](puesto.md)) |
 | `bond dev <dir>` | Lo mismo para otro directorio |
-| `bond team` | Un agente por rama, cada uno en su worktree (en Herdr, 4 en tu pestaña y el resto en pestañas nuevas, o lo que elijas); `status` (`--watch`: tabla en vivo agrupada por estado, que se cierra sola sin trabajo pendiente; en un hub, muestra todos los repos de la sesión en un único panel `tabla · <hub>`), `prompt` (con `[decisions]` guarda el encargo en un run; `--no-record` para no guardarlo), `collect` (guarda en el run la última respuesta del agente: de su sesión, o del panel recortado), `clean` (al quitar el último, cierra también la tabla). En un hub, una rama vertical: un agente por submódulo, `--repos`/`--repo` ([puesto.md](puesto.md#bond-team)) |
+| `bond team` | Un agente por rama, cada uno en su worktree (en Herdr, 4 en tu pestaña y el resto en pestañas nuevas, o lo que elijas); `status` (`--watch`: tabla en vivo agrupada por estado, que se cierra sola sin trabajo pendiente; en un hub, muestra todos los repos de la sesión en un único panel `tabla · <hub>`), `prompt` (con `[decisions]` guarda el encargo en un run; `--no-record` para no guardarlo), `collect` (guarda en el run la última respuesta del agente: de su sesión, o del panel recortado), `clean` (al quitar el último, cierra también la tabla). En un hub, una rama vertical: un agente por repo de la sesión, `--repos`/`--repo` ([puesto.md](puesto.md#bond-team)) |
 | `bond status` | Agentes vivos en Herdr |
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
 | `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
@@ -40,6 +40,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 | `keys/<endpoint>` | Claves, una por fichero, permisos 600 |
 | `AGENTS.md` | Tus instrucciones para todos los agentes |
 | `state.json` | Lo que detectó la sonda, lo que bond gestiona en cada agente y la última comprobación de versión |
+| `hubs.toml` | Registro global de hubs: los repos asociados a cada uno, para encontrar el hub desde un repo enlazado (`bond hub sync` lo mantiene) |
 | `runtime/<versión>/` | Ficheros que lleva dentro el binario, extraídos; solo se queda la versión en uso |
 | `catalogs/<host>/<repo>/<commit>/` | Catálogos del equipo por git, uno por commit; `bond catalog clean` los poda |
 | `pi` | Enlace a las Bond Extensions de la versión instalada |
@@ -55,7 +56,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 | Integración de Herdr | La instala `herdr integration install <agente>` |
 
 **En cada repo**: `.bond/bond.toml` (lo que pides), `.bond/lock.json` (el commit de cada catálogo por git), `.bond/manifest.json` (lo que generó bond),
-`AGENTS.md` (tuyo) y la config de cada agente ([abajo](#configuración-por-repo-bond-init-y-bond-sync)).
+`AGENTS.md` (tuyo) y la config de cada agente ([abajo](#configuración-por-repo-bond-init-y-bond-sync)). En un hub, además: `hub.toml` (la sesión declarada, versionada) y `.bond/hub.local.toml` (las rutas locales de los symlinks, ignorada en git).
 
 ## Bond Extensions (pi)
 
@@ -737,6 +738,7 @@ fuera, y sale con 1 si algo falla:
 | Sugerencias de prompt de pi: modelo, paquete instalado, `enabledModels` y si el config de la extensión coincide con `config.toml`; otras extensiones que reemplacen el editor (aviso, nunca fallo) | `bond setup` |
 | Catálogos del repo (`[[catalog]]` en `bond.toml`): por cada uno, el commit fijado en `.bond/lock.json`, si está descargado en `~/.bond/catalogs` y si la ref tiene un commit más nuevo (se consulta la red; con `--quick`, «sin verificar»); un catálogo local sale con su carpeta | `bond catalog update <nombre>` |
 | Memoria de decisiones (solo si el repo tiene `[decisions]`): errores de los ficheros y propuestas pendientes; sin el directorio, avisa | `bond decisions check`; `bond decisions accept <id>`; `bond sync` |
+| Hub (solo si estás en uno): resumen de `bond hub check` por repo de la sesión; un `hub.toml` inválido es un fallo | `bond hub check`; `bond hub check --fix`; `bond hub sync` |
 
 ## `bond decisions`
 
@@ -858,7 +860,6 @@ source = "~/gitrepos/fluzo-backend"
 - `.bond/hub.local.toml` guarda las rutas a los clones locales de la máquina (`source`), admitiendo `~` para expandir la carpeta de usuario.
 - `~/.bond/hubs.toml` es el registro global donde `bond` anota los repos asociados a cada hub. Permite que `hubRoot` encuentre el hub desde dentro de un repo enlazado por symlink.
 - Un `hub.toml` inválido se explica con un mensaje que dice qué corregir; `bond team` avisa y continúa como en un repo normal.
-- Un `.bond/bond.toml` con `[hub]` no hace nada especial y se ignora sin error.
 - Sin `hub.toml`, los comandos funcionan como siempre en un repo normal.
 
 ### `bond hub check`
