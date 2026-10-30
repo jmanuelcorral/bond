@@ -1,6 +1,6 @@
 ---
 name: bond-team
-description: Repartir una tarea entre varios agentes de código (pi, Claude Code, Codex, opencode, Antigravity...) que trabajan en paralelo, cada uno en su rama y su worktree de git, con Herdr. En un hub (repo con submódulos y sección [hub] en .bond/bond.toml) la tarea se reparte en vertical: una sola rama con un agente por repo de la sesión. Úsalo solo cuando el usuario pida expresamente un equipo, repartir en worktrees o use /team.
+description: Repartir una tarea entre varios agentes de código (pi, Claude Code, Codex, opencode, Antigravity...) que trabajan en paralelo, cada uno en su rama y su worktree de git, con Herdr. En un hub (repo cuya sesión se declara en hub.toml, creado con bond hub init) la tarea se reparte en vertical: una sola rama con un agente por repo de la sesión. Úsalo solo cuando el usuario pida expresamente un equipo, repartir en worktrees o use /team.
 ---
 
 # Equipo de agentes en worktrees (Herdr)
@@ -18,10 +18,11 @@ Si lo que se reparte son fases de un plan local (`docs/plans/`) y el repo tiene 
 `plan-team`, usa ese: comprueba qué fases pueden ir a la vez, manda cada una con `plan-execute`
 y lleva el progreso del plan al integrar cada rama.
 
-Antes de repartir, mira si es un **hub**: un repo con submódulos cuya sesión preparaste con
-`bond hub` (sección `[hub]` en `.bond/bond.toml`; `bond hub` la enseña). Si lo es, reparte
-en vertical como se describe en «En un hub» y todo desde la raíz del hub: desde dentro de un
-submódulo, `bond team` trabaja solo en ese repo, como siempre.
+Antes de repartir, mira si es un **hub**: un repo con `hub.toml` en la raíz, la sesión que se
+creó con `bond hub init` (`bond hub` la enseña y `bond hub check` revisa que cada repo esté
+listo para trabajar con agentes; `--fix` arregla lo seguro). Si lo es, reparte en vertical como
+se describe en «En un hub» y todo desde la raíz del hub: desde dentro de uno de sus repos,
+`bond team` trabaja solo en ese repo, como siempre.
 
 ## Procedimiento
 
@@ -82,22 +83,22 @@ repos que toca) con un agente por repo. Diferencias con el reparto normal:
   Divide la tarea por repos, no por subtareas sueltas. Si la división no encaja por repos,
   propón una sola sesión o rondas sucesivas: una rama vertical detrás de otra.
 - **Monta el equipo con una sola rama**: `bond team team/<nombre> --repos front,back` (ruta
-  o nombre de carpeta único; sin `--repos`, todos los submódulos de la sesión). `--base` no
-  vale: cada repo sale de su base de `[hub]`. La rama se crea en el hub sin worktree ni
-  agente, y cada submódulo abre su worktree y su agente en
-  `~/.herdr/worktrees/<hub>/<sub>/<rama>`. La tabla en vivo es un único panel
+  o nombre de carpeta único; sin `--repos`, todos los repos de la sesión). `--base` no
+  vale: cada repo sale de su base de `hub.toml`. La rama se crea en el hub sin worktree ni
+  agente, y cada repo de la sesión abre su worktree y su agente en
+  `~/.herdr/worktrees/<hub>/<repo>/<rama>`. La tabla en vivo es un único panel
   `tabla · <hub>` con columna `REPO` para toda la sesión.
 - **Manda la tarea con un solo `bond team prompt <rama> "<mensaje>"`**: llega a todos los
   agentes de la rama, cada uno con una nota que le dice en qué repo trabaja y quiénes son
   los demás. Si alguno espera una respuesta, no se manda nada: contéstale en su panel y
   repite. Con `--repo <sub>`, solo a uno. Espera a cada agente con `herdr agent wait` como
   en el paso 6.
-- **Recoge repo a repo**: `bond team collect <rama> --repo <sub>` por cada repo que tenga la
+- **Recoge repo a repo**: `bond team collect <rama> --repo <repo>` por cada repo que tenga la
   rama (sin `--repo` se niega si la rama está en varios). Los runs van a la memoria de
-  decisiones del hub; si el hub no la tiene, a la del submódulo.
-- **Al integrar hay un paso más**: además de mergear cada rama en su base, hay que subir los
-  punteros de los submódulos en la rama del hub y hacer push. Recuérdaselo al usuario al
-  recoger el informe de cada repo; nunca lo haces tú.
+  decisiones del hub; si el hub no la tiene, a la del repo.
+- **Al integrar puede haber un paso más**: además de mergear cada rama en su base, los repos
+  enlazados como submódulo requieren subir sus punteros en la rama del hub y hacer push.
+  Recuérdaselo al usuario al recoger el informe de cada repo; nunca lo haces tú.
 - **Limpia desde el hub**: `bond team clean <rama>` quita los worktrees de la rama en todos
-  los repos de la sesión (las ramas se quedan, también la del hub); `--repo <sub>`, en uno
+  los repos de la sesión (las ramas se quedan, también la del hub); `--repo <repo>`, en uno
   solo. Cuando no queda ningún agente del equipo, se cierra también el panel de la tabla.

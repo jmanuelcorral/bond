@@ -18,6 +18,7 @@ you see? Open an [issue on GitHub](https://github.com/jmanuelcorral/bond/issues)
 | `bond status` | Live agents in Herdr |
 | `bond sessions` | pi sessions and how to resume them |
 | `bond sync` | Regenerates the repo's agent config from `.bond/bond.toml` |
+| `bond hub` | In a hub: shows the work session declared in `hub.toml` (repos, path, base, link mode and branch) ([below](#bond-hub)) |
 | `bond decisions` | The repo's decision memory: list, `add`, `accept`, `show`, `runs`, `check` ([below](#bond-decisions)) |
 | `bond catalog create\|check` | Sets up a repo as your own catalog of skills, commands and MCP, and checks it ([below](#your-own-catalog-bond-catalog)) |
 | `bond catalog add\|list\|update\|remove\|clean` | Uses your team's catalog in the repo, via git (with the commit pinned) or via a folder ([below](#git-catalogs-bond-catalog-add)) |
@@ -39,6 +40,7 @@ you see? Open an [issue on GitHub](https://github.com/jmanuelcorral/bond/issues)
 | `keys/<endpoint>` | Keys, one per file, permissions 600 |
 | `AGENTS.md` | Your instructions for all agents |
 | `state.json` | What the probe detected, what bond manages in each agent and the last version check |
+| `hubs.toml` | Global registry of hubs: the repos associated with each one, so the hub is found from a linked repo (`bond hub sync` keeps it up to date) |
 | `runtime/<versión>/` | Files bundled inside the binary, extracted; only the version in use is kept |
 | `catalogs/<host>/<repo>/<commit>/` | Team catalogs via git, one per commit; `bond catalog clean` prunes them |
 | `pi` | Link to the Bond Extensions of the installed version |
@@ -54,7 +56,7 @@ you see? Open an [issue on GitHub](https://github.com/jmanuelcorral/bond/issues)
 | Herdr integration | Installed by `herdr integration install <agente>` |
 
 **In each repo**: `.bond/bond.toml` (what you ask for), `.bond/lock.json` (the commit of each git catalog), `.bond/manifest.json` (what bond generated),
-`AGENTS.md` (yours) and each agent's config ([below](#per-repo-configuration-bond-init-and-bond-sync)).
+`AGENTS.md` (yours) and each agent's config ([below](#per-repo-configuration-bond-init-and-bond-sync)). In a hub, also: `hub.toml` (the declared session, versioned) and `.bond/hub.local.toml` (the local paths of the symlinks, git-ignored).
 
 ## Bond Extensions (pi)
 
@@ -737,6 +739,7 @@ external things, and exits with 1 if something fails:
 | pi prompt suggestions: model, installed package, `enabledModels` and whether the extension's config matches `config.toml`; other extensions that replace the editor (warning, never failure) | `bond setup` |
 | Repo catalogs (`[[catalog]]` in `bond.toml`): for each one, the commit pinned in `.bond/lock.json`, whether it is downloaded in `~/.bond/catalogs` and whether the ref has a newer commit (the network is queried; with `--quick`, «sin verificar»); a local catalog shows its folder | `bond catalog update <nombre>` |
 | Decision memory (only when the repo has `[decisions]`): file errors and proposals awaiting acceptance; warns when the folder is missing | `bond decisions check`; `bond decisions accept <id>`; `bond sync` |
+| Hub (only when you are in one): a `bond hub check` summary per session repo; an invalid `hub.toml` is a failure | `bond hub check`; `bond hub check --fix`; `bond hub sync` |
 
 ## `bond decisions`
 
@@ -808,6 +811,116 @@ writes its own run.
 
 The file format is documented in the `decision-record` skill
 (`catalog/skills/decision-record/`).
+
+## `bond hub`
+
+`cli/hub.mts`. A hub is a shared git repo that groups several repos (e.g. frontend and backend in
+separate repos) declared in `hub.toml`, each one as a submodule (`link = "submodule"`) or as a link
+(`link = "symlink"`) to a local clone. The session is made up of the hub itself and its repos, each
+with its base branch and its link mode. Machine-specific data (the path to each symlink's local
+clone) lives in `.bond/hub.local.toml` (git-ignored).
+
+From a submodule, `hubRoot` finds the hub by going up through git
+(`git rev-parse --show-superproject-working-tree`). From a repo linked by symlink (which lives
+outside the hub), `hubRoot` finds it thanks to the global registry `~/.bond/hubs.toml`.
+
+```bash
+bond hub                 # shows the hub's session: repos, path, base, link mode and current branch
+bond hub init [dir]      # creates a hub or prepares it in an existing repo and imports repos
+bond hub add <url|path>  # adds a repo to the hub (as a submodule or a local link)
+bond hub sync            # mounts submodules, creates links and updates the global registry
+bond hub check           # reviews each repo of the session: what's missing and how to fix it (--fix, --json)
+```
+
+```toml
+# hub.toml at the hub's root (versioned)
+name = "fluzo"
+base = "main"
+
+[repos.frontend]
+url  = "git@github.com:fluzo/frontend.git"
+path = "frontend"
+base = "main"
+link = "submodule"
+agent = "claude"
+
+[repos.backend]
+url  = "git@github.com:fluzo/backend.git"
+path = "backend"
+base = "main"
+link = "symlink"
+
+# .bond/hub.local.toml (in .gitignore)
+[repos.backend]
+source = "~/gitrepos/fluzo-backend"
+```
+
+- `hub.toml` is the session's only source of truth: it declares the hub's name, its base branch
+  and the list of repos with their relative path, base branch and link mode (`submodule` or
+  `symlink`).
+- `bond hub init [dir]`: an assistant that creates the hub (`git init`, `.bond/`, `AGENTS.md`,
+  `hub.toml`, `.gitignore` and `hub.local.toml`) or prepares it in an existing repo. It imports
+  existing submodules with their base and adds repos by URL (submodule) or local path (symlink).
+  With `--yes` it uses detected values without asking.
+- `bond hub add <url|path>`: adds a repository to `hub.toml` (as a submodule if it is a URL, as
+  a symlink if it is a local clone) and syncs the disk.
+- `bond hub sync`: leaves the disk as `hub.toml` says: it mounts submodules, creates symlinks (or
+  junctions on Windows when the symlink fails) and updates the global registry. If a symlink's
+  local path is missing from `.bond/hub.local.toml`, with `--yes` it fails saying how to set it
+  and, interactively, it asks. With `--dry-run` it shows what it would do without touching the disk.
+- `.bond/hub.local.toml` stores the paths to this machine's local clones (`source`), accepting `~`
+  to expand the user folder.
+- `~/.bond/hubs.toml` is the global registry where bond notes the repos associated with each hub.
+  It lets `hubRoot` find the hub from inside a symlink-linked repo.
+- An invalid `hub.toml` is explained with a message saying what to fix; `bond team` warns and
+  continues as in a plain repo.
+- Without `hub.toml`, the commands work as always in a plain repo.
+
+### `bond hub check`
+
+`cli/hub-check.mts`. Reviews each repo of the session (the hub first) and exits with 1 if something
+is not ready to work with agents; each problem names the repo, the check and the fix:
+
+| Check | What it looks at |
+|---|---|
+| `existe` | the repo is on disk and is a git repo (initialized submodule, unbroken link) |
+| `enlace` | the link mode is what `hub.toml` says: symlink to the clone in `hub.local.toml`, registered submodule |
+| `base` | the declared base branch exists in the repo |
+| `bond init` | it has `.bond/bond.toml` |
+| `config` | its agent config is up to date (`bond sync --check`) |
+| `agentes` | its agents (those in its `bond.toml` and the `agent` in `hub.toml`) are installed |
+| `worktrees` | it supports worktrees (it is not a bare repo) |
+| `cambios` | no uncommitted changes |
+| `rama vertical` | there are no worktrees of branches that don't exist in the hub, and only one vertical branch is open (D10) |
+
+With `--fix` it repairs only the safe, announced things: creating or repairing the link to the
+local clone with `bond hub init`'s `linkRepo` (symlink, junction on Windows), registering the
+clone and the link in `~/.bond/hubs.toml` (D14), and `git submodule update --init` of
+uninitialized submodules. It never discards changes nor switches a repo's branch; the rest
+(`bond init`, `bond sync`) is offered with the command. With `--dry-run` it only describes. With
+`--json` the full per-repo report goes to stdout and the fix messages go to stderr. `bond doctor`
+includes a summary (`hub <name>`) when you are in a hub and reports an invalid `hub.toml` as a
+failure with its parse error; outside one, nothing changes.
+
+### `bond team` in a hub
+
+From the hub (not from a linked repo, which behaves like a plain repo), `bond team` opens a
+vertical branch ([workstation.md](workstation.md#a-vertical-branch-in-a-hub)):
+
+| Command | In a hub |
+|---|---|
+| `bond team <branch>[:agent] [--repos a,b]` | Creates the branch in the hub (no worktree or agent) and opens a worktree and an agent in each repo of the session (or those in `--repos`), from its base in `hub.toml`, with the agent from `:agent`, `--agent` or the repo's `bond.toml`. A single branch; no `--base` |
+| `bond team prompt <branch> "…" [--repo <r>]` | To every agent of the branch, with a note naming the others and their repos; `--repo`, to just one. If any is blocked, nothing is sent |
+| `bond team collect <branch> [--repo <r>] [--agent <a>]` | The branch agent's report; `--repo` or `--agent` if it is in several repos |
+| `bond team clean [branch...] [--repo <r>] [--delete-branch]` | Removes the worktrees of all repos (or of the `--repo` one); the branches stay, including the hub's. With `--delete-branch`, deletes the integrated ones and the hub's if it is integrated into its base and has no worktree left in any repo |
+
+- Worktrees in panes: `~/.herdr/worktrees/<hub>/<repo>/<branch>` (the `/` of a nested path become
+  `-`). With `--workspaces` or outside Herdr, wherever `herdr worktree` puts them.
+- With a vertical branch open (it has a worktree in some repo and exists in the hub; the session's
+  bases don't count), `bond team <other>` fails without creating anything, says where its worktree
+  is and how to close it.
+- Runs: in the hub's `<dir>/runs/` if it has `[decisions]`; otherwise, the repo's. The decision
+  memory note only goes to agents whose repo has `[decisions]`.
 
 ## Herdr snippet
 

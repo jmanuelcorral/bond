@@ -112,6 +112,9 @@ bond team prompt <rama> "la tarea" [--wait] [--timeout <ms>]
 bond team clean [repo] [rama...] [--force] [--delete-branch] [--keep-table] [--dry-run]
 ```
 
+In a hub (a repo with a `hub.toml`), `bond team` works vertically: see
+[A vertical branch in a hub](#a-vertical-branch-in-a-hub).
+
 ### An example from start to finish
 
 <figure class="bond-video">
@@ -144,7 +147,10 @@ can tell at a glance who's handling what. Its worktree lives in `~/.herdr/worktr
 
 To the right of your pane a narrow one opens, `tabla · <repo>` (the table pane), with the live
 table (`bond team status --watch`) of all the repo's branches, wherever they are. If that table
-was already open from before, bond reuses it instead of opening another one.
+was already open from before, bond reuses it instead of opening another one. In a hub (session
+declared in `hub.toml`), the pane is called `tabla · <hub>` whether it is launched from the hub or
+from one of its repos, it shows a single table with the rows of the whole session, and it only
+closes when no repo has pending work.
 
 If you run `bond team` outside Herdr, it behaves as it always has: one workspace per branch with
 `herdr worktree`.
@@ -196,6 +202,8 @@ commit on its branch and no push) and updates the plan as you integrate each bra
 
 `status` gives you one row per worktree of the repo with its status, its agent, the commits it
 has ahead of the base (by default, the branch of the main checkout) and the files it touches.
+In a hub (session declared in `hub.toml`), it shows the worktrees of every repo of the session
+preceded by a `REPO` column, comparing each one with its base in `hub.toml`.
 These are the statuses:
 
 | Status | What it means |
@@ -212,7 +220,8 @@ These are the statuses:
 With `--watch` you get the live table, which is what you see in the `tabla · <repo>` pane. It
 fills the screen, refreshes every 2 s and exits with `q` or Ctrl+C, leaving the terminal as it
 was. Branches are grouped by status, starting with whatever is waiting on you, and empty groups
-aren't shown. It looks like this:
+aren't shown. In a hub, the header carries the vertical branch (`bond team · <hub> · <branch>`)
+and the column is `REPO` instead of `RAMA`. It looks like this:
 
 ```text
 MINION  RAMA    COMMITS  FICHEROS
@@ -306,6 +315,54 @@ If no team agent is left when it's done, it also closes the live table pane and 
 back to how it was. With `--keep-table` the table stays open (although, if it has nothing pending,
 it then closes on its own, unless you launched it with `--keep-open`). It doesn't close the repo's
 workspace; it tells you how to do it if you want.
+
+### A vertical branch in a hub
+
+A hub is a shared git repo that groups several repos (say, frontend and backend) declared in
+`hub.toml`, each one as a submodule or as a link (symlink) to a local clone. It is created
+guided with `bond hub init`, which imports repos by URL (submodule) or from a local clone
+(symlink); `bond hub check` then reviews that every repo of the session is ready to work with
+agents, and `--fix` repairs the safe things. The flow, end to end (see
+[reference](reference.md#bond-hub)):
+
+```bash
+bond hub init                    # creates the hub and imports the repos (submodule or symlink)
+bond hub check                   # reviews the session: what's missing and how to fix it (--fix)
+bond team fix/login              # the branch in the hub and one agent per repo of the session
+bond team fix/login --repos backend  # or only in those repos (path or name, comma-separated)
+bond team prompt fix/login "the login fails with uppercase emails"
+bond team collect fix/login --repo backend
+bond team clean fix/login
+```
+
+When you work from the hub, `bond team` changes shape: a branch is no longer one agent, it's a
+change that crosses the repos:
+
+- **Create**: `fix/login` is created in the hub as a branch, without a worktree or agent, from
+  its base in `hub.toml`. In each repo of the session (or those in `--repos`) a worktree opens
+  from its base with an agent: the one from `fix/login:agent` or `--agent` if you give them and,
+  if not, the default agent of that repo's `bond.toml`. The worktrees go in
+  `~/.herdr/worktrees/<hub>/<repo>/<branch>`, so two hubs with a `frontend` don't collide.
+  `--base` doesn't apply here: the bases are the ones in `hub.toml`.
+- **One vertical branch at a time**: with `fix/login` open, `bond team fix/payments` refuses
+  without creating anything and tells you to close it first with `bond team clean fix/login`.
+  Repeating `bond team fix/login` opens only what's missing.
+- **Handing out**: `prompt` sends the task to every agent of the branch, adding to each one a
+  note with its repo and who the others are (name, repo and folder), so that what crosses from
+  one repo to another fits together. With `--repo` it goes to just one. If any is waiting for an
+  answer from you, nothing is sent to anyone.
+- **Collect**: `collect` needs `--repo` when the branch is in several repos: it collects repo
+  by repo (or with `--agent <name>`, which also works when that agent is no longer running).
+  Runs (requests and reports) go to the hub's decision memory, next to the plan; if the hub has
+  no `[decisions]`, to the repo's. Each run's commits and decisions come from that repo.
+- **Clean**: `clean fix/login` removes the worktrees of all repos (`--repo`, of one) and leaves
+  the branches, including the hub's. With no branches, the integrated ones of all repos. With
+  `--delete-branch` it also deletes the integrated ones, and the hub's if it is integrated into
+  its base and no worktree of it is left in any repo.
+
+Inside one repo of the session, `bond team` works on that repo only, as always. Integrating the
+branches, bumping the submodule pointers on the hub's branch (if your repos came in as
+submodules) and pushing remain your job.
 
 ## Driving the agents by hand
 
