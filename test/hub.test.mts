@@ -7,11 +7,15 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
-process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
+if (!process.env.BOND_HOME) {
+	process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
+}
 Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
+const { BOND_HOME } = await import("../cli/runtime.mts");
 const {
 	hubRoot,
 	hubSession,
+	hubsPath,
 	parseHubToml,
 	parseHubLocalToml,
 	readHubsRegistry,
@@ -42,9 +46,10 @@ const repo = (name: string) => {
 	return dir;
 };
 const bond = (args: string[], cwd = hub) =>
-	spawnSync(process.execPath, [MAIN, ...args], { cwd, env: { ...process.env, NO_COLOR: "1" }, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+	spawnSync(process.execPath, [MAIN, ...args], { cwd, env: { ...process.env, BOND_HOME, NO_COLOR: "1" }, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
 beforeEach(() => {
+	rmSync(hubsPath(), { force: true });
 	tmp = realpathSync(mkdtempSync(join(tmpdir(), "bond-hub-")));
 	const front = repo("front");
 	backReal = repo("back-real");
@@ -78,6 +83,8 @@ base = "main"
 link = "symlink"
 `;
 	writeFileSync(join(hub, "hub.toml"), hubToml);
+	g(hub, "add", "hub.toml");
+	g(hub, "commit", "-qm", "add hub.toml");
 
 	// .bond/hub.local.toml con la ruta local
 	const hubLocalToml = `[repos.back]
@@ -86,7 +93,10 @@ source = "${backReal}"
 	writeFileSync(join(hub, ".bond", "hub.local.toml"), hubLocalToml);
 });
 
-afterEach(() => rmSync(tmp, { recursive: true, force: true }));
+afterEach(() => {
+	rmSync(hubsPath(), { force: true });
+	rmSync(tmp, { recursive: true, force: true });
+});
 
 describe("hub.toml y .bond/hub.local.toml como fuente de la sesión", () => {
 	test("un hub de prueba con un submódulo y un symlink en hub.toml da una sesión con los dos repos, sus bases y su modo de enlace", () => {
@@ -159,25 +169,42 @@ describe("registro global ~/.bond/hubs.toml y hubRoot", () => {
 		const read = readHubsRegistry();
 		expect(read[canonical(backReal)]).toBe(canonical(hub));
 	});
+
+	test("hubRoot desde un worktree de un repo enlazado devuelve el hub mediante el registro (--git-common-dir)", () => {
+		registerHubRepo(backReal, hub);
+		const wt = join(tmp, "wt-back-worktree");
+		g(backReal, "worktree", "add", "-q", "-b", "feat/wt-test", wt);
+		expect(hubRoot(wt)).toBe(canonical(hub));
+	});
+
+	test("readHubsRegistry avisa una sola vez si ~/.bond/hubs.toml está corrupto", () => {
+		const p = hubsPath();
+		writeFileSync(p, "esto no es toml [[[\n");
+		const r = bond(["team", "status"], backReal);
+		expect(r.stderr).toContain("no es TOML válido");
+	});
 });
 
 describe.skipIf(process.platform === "win32")("bond team status en un hub con submódulo y symlink", () => {
-	test("enseña una sola tabla con los dos repos", () => {
+	test("enseña una sola tabla con los repos; la fila del hub lleva repo '.' y enseña el nombre del hub", () => {
 		registerHubRepo(backReal, hub);
+		g(hub, "worktree", "add", "-q", "-b", "fix/x", join(tmp, "wt-hub-x"));
 		g(join(hub, "front"), "worktree", "add", "-q", "-b", "fix/x", join(tmp, "wt-front-x"));
 		g(backReal, "worktree", "add", "-q", "-b", "fix/x", join(tmp, "wt-back-x"));
 
 		const fromHub = bond(["team", "status", "--json"]);
 		expect(fromHub.status).toBe(0);
 		const rows = JSON.parse(fromHub.stdout);
-		expect(rows).toHaveLength(2);
+		expect(rows).toHaveLength(3);
+		expect(rows.some((r: { repo: string; branch: string }) => r.repo === "." && r.branch === "fix/x")).toBe(true);
 		expect(rows.some((r: { repo: string; branch: string }) => r.repo === "front" && r.branch === "fix/x")).toBe(true);
 		expect(rows.some((r: { repo: string; branch: string }) => r.repo === "back" && r.branch === "fix/x")).toBe(true);
 
-		// En la salida formateada plana sale la cabecera REPO
+		// En la salida formateada plana sale la cabecera REPO y el nombre del hub para la fila '.'
 		const plain = bond(["team", "status"]);
 		expect(plain.status).toBe(0);
 		expect(plain.stdout).toContain("REPO");
+		expect(plain.stdout).toContain("hub");
 		expect(plain.stdout).toContain("front");
 		expect(plain.stdout).toContain("back");
 
@@ -210,6 +237,24 @@ describe("validación de hub.toml", () => {
 		const rHub = bond(["hub"]);
 		expect(rHub.status).toBe(1);
 		expect(rHub.stderr).toContain("link tiene que ser \"submodule\" o \"symlink\"");
+	});
+
+	test("un hub.toml o hub.local.toml inválido avisa una sola vez desde un repo de la sesión y degrada a repo normal", () => {
+		registerHubRepo(backReal, hub);
+		writeFileSync(join(hub, ".bond", "hub.local.toml"), "local inválido [[[\n");
+		// Desde el submódulo front
+		const rSub = bond(["team", "status"], join(hub, "front"));
+		expect(rSub.status).toBe(0);
+		expect(rSub.stderr).toContain("no es TOML válido");
+		expect(rSub.stderr).toContain("sigo sin el modo hub");
+		const occurrences = rSub.stderr.split("sigo sin el modo hub").length - 1;
+		expect(occurrences).toBe(1);
+
+		// Desde el repo enlazado por symlink
+		const rLinked = bond(["team", "status"], backReal);
+		expect(rLinked.status).toBe(0);
+		expect(rLinked.stderr).toContain("no es TOML válido");
+		expect(rLinked.stderr).toContain("sigo sin el modo hub");
 	});
 });
 

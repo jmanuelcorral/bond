@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, writeFileS
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { loadDecisions, parseFm, type Parsed, resolveAuthor, slugify } from "./decisions.mts";
-import { type HubRepo, type HubSession, hubRoot, hubSession } from "./hub.mts";
+import { type HubRepo, type HubSession, hubRoot, hubSession, warnedInvalidHub } from "./hub.mts";
 import { chooseAgent, gitRoot, openWorkspace } from "./launch.mts";
 import { agents, defaultAgentArgs, ensureServer, firstFreeName, herdr, type HerdrAgent, insideHerdr, preparePane, questionIn, requireHerdr, serverRunning, startedBlocked, startupNoticeIn, visibleScreen, workspaces } from "./herdr.mts";
 import { repoDecisions } from "./repo.mts";
@@ -646,7 +646,7 @@ export function sessionRows(root: string, base?: string): Row[] {
 				agent: a ? { name: a.name, kind: a.agent, status, question, pane: a.pane_id, ...(notice ? { notice } : {}) } : undefined,
 				state: classify({ agentStatus: question ? "blocked" : status, ...info }),
 				managed: !!workspace || w.path.includes(herdrDir),
-				repo: hr.path === "." ? session.name : hr.path,
+				repo: hr.path,
 				base: hr.base,
 			});
 		}
@@ -674,6 +674,12 @@ function printStatus(rows: Row[]): void {
 	const head = isHub
 		? ["REPO", "RAMA", "ESTADO", "AGENTE", "COMMITS", "FICHEROS", "DÓNDE"]
 		: ["RAMA", "ESTADO", "AGENTE", "COMMITS", "FICHEROS", "DÓNDE"];
+	const repoLabel = (r: Row) => {
+		if (r.repo !== ".") return r.repo ?? "-";
+		const h = hubRoot(r.path);
+		const s = h ? catchDie(() => hubSession(h)).value : undefined;
+		return s?.name ?? (h ? basename(h) : ".");
+	};
 	const table = rows.map((r) => {
 		const cols = [
 			r.branch,
@@ -683,7 +689,7 @@ function printStatus(rows: Row[]): void {
 			r.files.length ? String(r.files.length) : "-",
 			r.workspace ?? (r.agent?.pane ? `panel ${r.agent.pane}` : dim("cerrado")),
 		];
-		if (isHub) cols.unshift(r.repo ?? "-");
+		if (isHub) cols.unshift(repoLabel(r));
 		return cols;
 	});
 	const w = head.map((h, i) => Math.max(h.length, ...table.map((t) => visible(t[i]))));
@@ -719,13 +725,6 @@ function status(args: string[]): void | Promise<void> {
 	if (positional.length > 1) die("uso: bond team status [repo] [--base <ref>] [--json | --watch [--keep-open]]");
 	const root = repoOf(positional[0]);
 	const base = (opts["--base"] ?? opts["-b"]) as string | undefined;
-	if (existsSync(join(root, "hub.toml"))) {
-		const r = catchDie(() => hubSession(root));
-		if (r.error !== undefined && !warnedInvalidHub.has(root)) {
-			warnedInvalidHub.add(root);
-			warn(`${r.error}: sigo sin el modo hub`);
-		}
-	}
 	const hub = hubRoot(root);
 	if (hub && base) die("en un hub cada repo usa su base de hub.toml; quita --base");
 	if (opts["--watch"] || opts["-w"]) {
@@ -799,7 +798,7 @@ export function renderWatch(rows: Row[], o: { width: number; color: boolean; rep
 	else {
 		const cells = rows.map((r) => [
 			r.agent?.name ?? "-",
-			(isHub ? r.repo : r.branch) ?? "-",
+			(isHub ? (r.repo === "." ? o.repo : r.repo) : r.branch) ?? "-",
 			r.ahead ? `+${r.ahead}` : "-",
 			r.files.length ? String(r.files.length) : "-",
 		]);
@@ -1644,7 +1643,7 @@ function closeIdleTable(root: string, left: Row[]): void {
 // worktree y un agente (D2). Una sola rama vertical por sesión (D10). Desde un repo de la sesión,
 // bond team trabaja solo en ese repo, como siempre.
 
-export const warnedInvalidHub = new Set<string>();
+export { warnedInvalidHub };
 
 /**
  * La sesión si `root` es un hub; undefined si no (un repo normal o un submódulo). Un hub.toml
@@ -1710,7 +1709,7 @@ async function createInHub(s: HubSession, o: TeamArgs): Promise<void> {
 	const open = openVerticals(s).filter((v) => v.branch !== branch);
 	if (open.length) die(`${s.name} ya tiene abierta la rama vertical ${open.map((v) => `${v.branch} (worktree en ${v.repo}: ${v.path})`).join(", ")} y solo cabe una por sesión: ciérrala antes con bond team clean ${open[0].branch} (las ramas se quedan)`);
 	const noBase = [s.repos[0], ...targets].filter((r) => git(r.dir, ["rev-parse", "--verify", "--quiet", `${r.base}^{commit}`]).status !== 0);
-	if (noBase.length) die(`la base no existe en ${noBase.map((r) => `${r.path === "." ? s.name : r.path} (${r.base})`).join(", ")}: cámbiala con bond hub --base <ruta>=<ref> ("." es el hub)`);
+	if (noBase.length) die(`la base no existe en ${noBase.map((r) => `${r.path === "." ? s.name : r.path} (${r.base})`).join(", ")}: cámbiala en hub.toml (base o [repos.<x>].base)`);
 
 	// El agente de cada repo: el de rama:agente, si no --agent, si no el de su bond.toml.
 	const plan: PlanItem[] = [];
