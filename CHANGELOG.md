@@ -10,9 +10,11 @@
   lo escrito a mano fuera del bloque se conserva, `bond sync --check` lo comprueba y
   `bond hub init` / `bond hub add` lo dejan al día (D18).
 - `bond hub pull` pone al día la base del hub y de cada repo de la sesión con `git fetch` y avance
-  en fast-forward (D19). Solo actúa si el repo está en su rama base y sin cambios sin commitear.
-  Si un repo tiene cambios, está en otra rama, su base ha divergido o no tiene remoto/upstream,
-  lo salta y explica el motivo; nunca hace merge, rebase ni push. Con `--dry-run` y `--json`.
+  en fast-forward (D19). Si el repo está en su base, la avanza solo si no tiene cambios sin
+  commitear; si la base no tiene checkout en ningún worktree (un submódulo con HEAD separado, o
+  un repo en otra rama), avanza la ref sin tocar la carpeta de trabajo. Si la base tiene
+  cambios, está en uso en otro worktree, ha divergido o no tiene remoto/upstream, la salta y
+  explica el motivo; nunca hace merge, rebase ni push. Con `--dry-run` y `--json`.
 - `bond hub check` avisa de las bases atrasadas respecto a su remoto según el último fetch con el
   arreglo `bond hub pull` (D17/D19), y muestra la clave de `hub.toml` como etiqueta de cada repo
   (p. ej. `api (repos/api)`) manteniendo la compatibilidad con `--json`.
