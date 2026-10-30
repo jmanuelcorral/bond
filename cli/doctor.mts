@@ -246,16 +246,27 @@ async function checkRepo(): Promise<void> {
  * Fuera de un hub no añade nada. El detalle lo da `bond hub check`.
  */
 async function checkHubRow(): Promise<void> {
-	const { hubRoot, hubSession } = await import("./hub.mts");
-	const root = hubRoot(process.cwd());
-	if (!root) return;
+	const { hubRoot, hubSession, repoChain } = await import("./hub.mts");
+	const cwd = process.cwd();
+	const root = hubRoot(cwd);
+	if (!root) {
+		// Un hub.toml inválido hace que hubRoot descarte el repo; en doctor eso es un fallo,
+		// no un silencio: se reporta con el error de parseo.
+		const bad = repoChain(cwd).find((d) => existsSync(join(d, "hub.toml")));
+		if (!bad) return;
+		const b = catchDie(() => hubSession(bad));
+		if (b.error !== undefined) add("fail", "hub", `hub.toml inválido: ${b.error}`, "corrige hub.toml (bond hub --help)");
+		return;
+	}
 	const s = catchDie(() => hubSession(root));
-	if (s.error !== undefined || !s.value) return; // hub.toml inválido: ya lo avisó bond hub / bond team
+	if (s.error !== undefined) return add("fail", "hub", `hub.toml inválido: ${s.error}`, "corrige hub.toml (bond hub --help)");
+	if (!s.value) return;
 	const { checkHubSession } = await import("./hub-check.mts");
 	const r = catchDie(() => checkHubSession(s.value!));
 	if (r.error !== undefined) return add("fail", `hub ${s.value.name}`, r.error, "bond hub check");
 	const failed = r.value.repos.flatMap((rp) => rp.checks.filter((c) => !c.ok).map((c) => `${rp.repo} · ${c.check}`));
-	add(failed.length ? "fail" : "ok", `hub ${r.value.hub}`, failed.length ? `${failed.length} problema(s): ${failed.join("; ")}` : `${r.value.repos.length - 1} repo(s) de la sesión al día`, "bond hub check");
+	if (failed.length) add("fail", `hub ${r.value.hub}`, `${failed.length} problema(s): ${failed.join("; ")}`, "bond hub check");
+	else add("ok", `hub ${r.value.hub}`, `${r.value.repos.length - 1} repo(s) de la sesión al día`);
 }
 
 /**

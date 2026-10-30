@@ -2,16 +2,33 @@
 // que existe y es un repo git, que su enlace es el que dice hub.toml, que tiene la base, que
 // tiene bond init hecho y su config al día, que sus agentes están instalados, que admite
 // worktrees y que no tiene cambios sin commitear ni una rama vertical a medias. Con --fix
-// arregla solo lo seguro (crear un enlace, git submodule update --init); nunca descarta
+// arregla solo lo seguro (enlazar con linkRepo, git submodule update --init); nunca descarta
 // cambios ni cambia de rama un repo. Lo demás se ofrece con el comando a pasar.
 
-import { existsSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { hubRoot, hubSession, submodules, type HubRepo, type HubSession } from "./hub.mts";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { hubRoot, hubSession, registerHubRepo, submodules, type HubRepo, type HubSession } from "./hub.mts";
+import { linkRepo } from "./hub-init.mts";
+import { agentInstalled } from "./catalog-agents.mts";
 import { gitWorktrees } from "./team.mts";
 import { loadRepoAgents, syncRepo } from "./repo.mts";
-import { agyLocalBin } from "./catalog-agents.mts";
-import { act, bad, brokenLink, canonical, catchDie, die, dim, isDryRun, linkTarget, log, ok, run, warn, which } from "./util.mts";
+import { act, bad, brokenLink, canonical, catchDie, die, dim, isDryRun, linkTarget, log, ok, run, setDryRun, warn } from "./util.mts";
+
+export const HUB_CHECK_HELP = `Uso: bond hub check [opciones]
+
+Revisa cada repo de la sesión del hub (el hub primero) y sale con 1 si algo no está
+listo para trabajar con agentes. Cada problema nombra el repo, la comprobación y el
+arreglo: existe y es un repo git, el enlace es el que dice hub.toml, la base existe,
+bond init hecho y config al día, agentes instalados, admite worktrees, sin cambios
+sin commitear y sin ramas verticales a medias.
+
+  --fix     Arregla solo lo seguro: crea o repara el enlace al clon local (symlink,
+            junction en Windows) y registra el repo en ~/.bond/hubs.toml (D14), e
+            inicializa los submódulos sin iniciar. Nunca descarta cambios ni cambia
+            de rama un repo.
+  --json    Salida en JSON (los mensajes del arreglo van a stderr).
+  --dry-run Describe los arreglos sin aplicarlos.
+`;
 
 const git = (cwd: string, args: string[]) => run("git", ["-C", cwd, ...args]);
 const firstLine = (s: string) => s.trim().split("\n")[0] ?? "";
@@ -44,22 +61,13 @@ export interface CheckOpts {
 	hasAgent?: (agent: string) => boolean;
 }
 
-const defaultHasAgent = (agent: string) => !!which(agent) || (agent === "agy" && existsSync(agyLocalBin()));
-
 const label = (s: HubSession, r: HubRepo) => (r.path === "." ? s.name : r.path);
 
-/** Enlace de directorio: symlink y, en Windows sin permisos, junction (D15). */
-function makeDirLink(src: string, dest: string): void {
-	mkdirSync(dirname(dest), { recursive: true });
-	try {
-		symlinkSync(src, dest);
-		log(`enlazado: ${dest} -> ${src}`);
-	} catch (e) {
-		if (process.platform !== "win32") throw e;
-		const j = run("cmd", ["/c", "mklink", "/J", dest, src]);
-		if (j.status !== 0) throw e;
-		log(`junction: ${dest} -> ${src}`);
-	}
+/** Enlaza el clon local en la ruta del hub y registra ambos en el registro global (D14). */
+function fixLink(r: HubRepo, s: HubSession): void {
+	linkRepo(r.source!, r.dir);
+	registerHubRepo(r.source!, s.root);
+	registerHubRepo(r.dir, s.root);
 }
 
 /** Las comprobaciones de un repo de la sesión. Si no está en disco, solo se reporta eso. */
@@ -91,10 +99,7 @@ function checkRepo(r: HubRepo, s: HubSession, hasAgent: (agent: string) => boole
 				ok: false,
 				detail: `el enlace está roto (apuntaba a ${linkTarget(r.dir)})`,
 				fix: "bond hub check --fix",
-				fixFn: () => {
-					rmSync(r.dir);
-					makeDirLink(r.source!, r.dir);
-				},
+				fixFn: () => fixLink(r, s),
 			});
 		} else if (existsSync(r.dir)) {
 			checks.push({ check: "existe", ok: false, detail: "hay algo en su ruta que no es un repo git", fix: `revisa ${r.path}: ni repo ni enlace (${r.dir})` });
@@ -104,20 +109,24 @@ function checkRepo(r: HubRepo, s: HubSession, hasAgent: (agent: string) => boole
 				ok: false,
 				detail: `falta el enlace a ${r.source}`,
 				fix: "bond hub check --fix",
-				fixFn: () => makeDirLink(r.source!, r.dir),
+				fixFn: () => fixLink(r, s),
 			});
 		}
 		return checks;
 	}
 
-	// 2. El enlace es el que dice hub.toml.
+	// 2. El enlace es el que dice hub.toml (symlink y submódulo se reportan igual).
 	if (r.link === "symlink") {
 		const isLink = linkTarget(r.dir) !== undefined;
 		if (!isLink) checks.push({ check: "enlace", ok: false, detail: 'es un directorio normal; en hub.toml link = "symlink"', fix: "enlaza la ruta al clon local o cambia link en hub.toml" });
 		else if (r.source && canonical(r.dir) !== canonical(r.source)) checks.push({ check: "enlace", ok: false, detail: `apunta a ${canonical(r.dir)}, no al clon de .bond/hub.local.toml (${canonical(r.source)})`, fix: "recrea el enlace o corrige source en .bond/hub.local.toml" });
 		else checks.push({ check: "enlace", ok: true, detail: `symlink -> ${canonical(r.dir)}` });
-	} else if (r.link === "submodule" && !submodules(s.root).some((m) => m.path === r.path)) {
-		checks.push({ check: "enlace", ok: false, detail: "no está registrado como submódulo del hub", fix: "bond hub add <url> o cambia link en hub.toml" });
+	} else if (r.link === "submodule") {
+		checks.push(
+			submodules(s.root).some((m) => m.path === r.path)
+				? { check: "enlace", ok: true, detail: "submódulo" }
+				: { check: "enlace", ok: false, detail: "no está registrado como submódulo del hub", fix: "bond hub add <url> o cambia link en hub.toml" },
+		);
 	}
 
 	// 3. Tiene la base declarada.
@@ -194,7 +203,7 @@ function verticalChecks(s: HubSession): HubCheck[] {
 
 /** El informe completo de la sesión: una fila de comprobaciones por repo. */
 export function checkHubSession(s: HubSession, opts: CheckOpts = {}): HubCheckReport {
-	const hasAgent = opts.hasAgent ?? defaultHasAgent;
+	const hasAgent = opts.hasAgent ?? agentInstalled;
 	const repos: RepoReport[] = s.repos.map((r) => {
 		const checks = checkRepo(r, s, hasAgent);
 		if (r.path === ".") checks.push(...verticalChecks(s));
@@ -230,12 +239,17 @@ function printCheck(r: HubCheckReport): void {
 		console.log(`  ${bad("✗")} ${rp.repo} ${dim(`(${rp.path})`)}`);
 		for (const c of failed) console.log(`      ${bad("✗")} ${c.check.padEnd(13)} ${c.detail ?? ""}${c.fix ? dim(`  → ${c.fix}`) : ""}`);
 	}
-	console.log(r.ok ? `\n${ok("el hub está listo para trabajar con agentes")}` : `\n${bad(`${r.problems} problema(s)`)}${dim(fixableHint(r))}`);
+	console.log(r.ok ? `\n${ok("el hub está listo para trabajar con agentes")}` : `\n${bad(`${r.problems} problema(s)`)}` + dim(fixableHint(r)));
 }
 
 const fixableHint = (r: HubCheckReport) => (r.repos.some((rp) => rp.checks.some((c) => !c.ok && c.fixFn)) ? " → bond hub check --fix arregla lo seguro" : "");
 
 export function hubCheck(args: string[]): void {
+	if (args.includes("-h") || args.includes("--help")) {
+		console.log(HUB_CHECK_HELP.trimEnd());
+		return;
+	}
+	if (args.includes("--dry-run")) setDryRun(true);
 	const fix = args.includes("--fix");
 	const json = args.includes("--json");
 	for (const a of args) if (!["--fix", "--json", "--dry-run"].includes(a)) die(`opción desconocida: ${a} (bond hub check --help)`);
@@ -246,14 +260,21 @@ export function hubCheck(args: string[]): void {
 	let report = checkHubSession(s);
 	if (fix) {
 		const autos = report.repos.flatMap((rp) => rp.checks.filter((c) => !c.ok && c.fixFn).map((c) => ({ rp, c })));
-		for (const { rp, c } of autos) {
-			act(`arreglar ${c.check} en ${rp.repo}: ${c.detail ?? ""}`, () => {
-				try {
-					c.fixFn!();
-				} catch (e) {
-					warn(`${rp.repo}: no se pudo arreglar ${c.check}: ${(e as Error).message}`);
-				}
-			});
+		// Con --json la stdout es solo el informe: los mensajes del arreglo van a stderr.
+		const origLog = console.log;
+		if (json) console.log = (...a: unknown[]) => console.error(...a); // eslint-disable-line no-console
+		try {
+			for (const { rp, c } of autos) {
+				act(`arreglar ${c.check} en ${rp.repo}: ${c.detail ?? ""}`, () => {
+					try {
+						c.fixFn!();
+					} catch (e) {
+						warn(`${rp.repo}: no se pudo arreglar ${c.check}: ${(e as Error).message}`);
+					}
+				});
+			}
+		} finally {
+			if (json) console.log = origLog;
 		}
 		if (autos.length && !isDryRun()) report = checkHubSession(hubSession(s.root) ?? s);
 	}
