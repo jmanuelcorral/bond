@@ -4,10 +4,10 @@
 // Lo propio de cada máquina va en .bond/hub.local.toml.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { parse } from "smol-toml";
-import { canonical, catchDie, die, dim, HOME, log, run, warn } from "./util.mts";
+import { BOND_HOME } from "./runtime.mts";
+import { act, canonical, catchDie, die, dim, HOME, log, run, warn } from "./util.mts";
 
 export const HUB_HELP = `Uso: bond hub [opciones]
 
@@ -34,7 +34,7 @@ const superproject = (root: string) => {
 };
 
 /** El repo de `dir` y sus superproyectos, de dentro hacia fuera. */
-function repoChain(dir: string): string[] {
+export function repoChain(dir: string): string[] {
 	const out: string[] = [];
 	for (let r = toplevel(dir); r && !out.includes(r); r = superproject(r)) out.push(r);
 	return out;
@@ -248,7 +248,9 @@ export function hubSession(root: string): HubSession | undefined {
 }
 
 /** Ubicación del registro global ~/.bond/hubs.toml */
-export const hubsPath = () => join(process.env.BOND_HOME || join(HOME, ".bond"), "hubs.toml");
+export const hubsPath = () => join(BOND_HOME, "hubs.toml");
+
+export let warnedCorruptRegistry = false;
 
 /** Lee el registro global ~/.bond/hubs.toml: repo -> hub (rutas canónicas). */
 export function readHubsRegistry(): Record<string, string> {
@@ -257,7 +259,14 @@ export function readHubsRegistry(): Record<string, string> {
 	try {
 		const parsed = parse(readFileSync(p, "utf8")) as Record<string, unknown>;
 		const repos = parsed.repos;
-		if (!repos || typeof repos !== "object" || Array.isArray(repos)) return {};
+		if (repos !== undefined && (typeof repos !== "object" || repos === null || Array.isArray(repos))) {
+			if (!warnedCorruptRegistry) {
+				warnedCorruptRegistry = true;
+				warn(`${p}: repos tiene que ser una tabla: [repos]`);
+			}
+			return {};
+		}
+		if (!repos) return {};
 		const out: Record<string, string> = {};
 		for (const [k, v] of Object.entries(repos as Record<string, unknown>)) {
 			let h: string | undefined;
@@ -268,15 +277,18 @@ export function readHubsRegistry(): Record<string, string> {
 			if (h) out[canonical(k)] = canonical(h);
 		}
 		return out;
-	} catch {
+	} catch (e) {
+		if (!warnedCorruptRegistry) {
+			warnedCorruptRegistry = true;
+			warn(`${p} no es TOML válido: ${(e as Error).message}`);
+		}
 		return {};
 	}
 }
 
-/** Guarda el registro global ~/.bond/hubs.toml. */
+/** Guarda el registro global ~/.bond/hubs.toml respetando --dry-run. */
 export function writeHubsRegistry(registry: Record<string, string>): void {
 	const p = hubsPath();
-	mkdirSync(dirname(p), { recursive: true });
 	const lines = [
 		"# ~/.bond/hubs.toml",
 		"# Registro global de repos enlazados a hubs (generado por bond)",
@@ -286,7 +298,10 @@ export function writeHubsRegistry(registry: Record<string, string>): void {
 	for (const [r, h] of Object.entries(registry).sort(([a], [b]) => a.localeCompare(b))) {
 		lines.push(`${JSON.stringify(r)} = ${JSON.stringify(h)}`);
 	}
-	writeFileSync(p, `${lines.join("\n")}\n`);
+	act(`escribir registro en ${p}`, () => {
+		mkdirSync(dirname(p), { recursive: true });
+		writeFileSync(p, `${lines.join("\n")}\n`);
+	});
 }
 
 /** Anota un repo y su hub en el registro global ~/.bond/hubs.toml. */
@@ -296,11 +311,24 @@ export function registerHubRepo(repoDir: string, hubRoot: string): void {
 	writeHubsRegistry(reg);
 }
 
-/** ¿Tiene `root` un hub.toml válido? Sin avisos en stderr. */
+/** Hubs cuya config inválida ya se avisó en este proceso. */
+export const warnedInvalidHub = new Set<string>();
+
+/**
+ * ¿Tiene `root` un hub.toml válido?
+ * Si existe un hub.toml o hub.local.toml que no parsea o es inválido,
+ * avisa una sola vez por proceso y devuelve false (degradación a repo normal).
+ */
 export const hasHub = (root: string): boolean => {
 	const p = join(root, "hub.toml");
 	if (!existsSync(p)) return false;
-	return catchDie(() => hubSession(root)).value !== undefined;
+	const r = catchDie(() => hubSession(root));
+	if (r.value !== undefined) return true;
+	if (r.error && !warnedInvalidHub.has(root)) {
+		warnedInvalidHub.add(root);
+		warn(`${r.error}: sigo sin el modo hub`);
+	}
+	return false;
 };
 
 /**
@@ -310,7 +338,14 @@ export const hasHub = (root: string): boolean => {
 export function hubRoot(dir = process.cwd()): string | undefined {
 	const chain = repoChain(dir);
 	const fromGit = chain.slice().reverse().find(hasHub);
-	if (fromGit) return fromGit;
+	if (fromGit) {
+		const common = git(fromGit, ["rev-parse", "--git-common-dir"]);
+		if (common.status === 0 && common.stdout.trim()) {
+			const mainTop = canonical(join(resolve(fromGit, common.stdout.trim()), ".."));
+			if (mainTop !== fromGit && hasHub(mainTop)) return mainTop;
+		}
+		return fromGit;
+	}
 
 	// Si git no encuentra superproyecto (p. ej. un repo enlazado por symlink),
 	// busca la raíz del repo actual en ~/.bond/hubs.toml (D14).
@@ -320,10 +355,11 @@ export function hubRoot(dir = process.cwd()): string | undefined {
 	const mapped = reg[canonical(top)];
 	if (mapped && hasHub(mapped)) return mapped;
 
-	// Si es un worktree de un repo enlazado, prueba con el repo principal del worktree
+	// Si es un worktree de un repo enlazado o del propio hub
 	const common = git(top, ["rev-parse", "--git-common-dir"]);
 	if (common.status === 0 && common.stdout.trim()) {
 		const mainTop = canonical(join(resolve(top, common.stdout.trim()), ".."));
+		if (mainTop !== top && hasHub(mainTop)) return mainTop;
 		const mappedMain = reg[mainTop];
 		if (mappedMain && hasHub(mappedMain)) return mappedMain;
 	}
@@ -375,9 +411,11 @@ export async function hub(args: string[]): Promise<void> {
 	const cwd = process.cwd();
 	const root = hubRoot(cwd);
 	if (!root) {
-		if (existsSync(join(cwd, "hub.toml"))) {
-			// Si hub.toml existe pero tiene error, hubSession morirá con el motivo exacto
-			hubSession(cwd);
+		const chain = repoChain(cwd);
+		const candidate = chain.slice().reverse().find((d) => existsSync(join(d, "hub.toml")));
+		if (candidate) {
+			// Si hub.toml existe en la cadena pero falló la validación, muere con el error exacto
+			hubSession(candidate);
 		}
 		die("no es un hub: falta hub.toml (bond hub --help)");
 	}
