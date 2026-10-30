@@ -316,9 +316,9 @@ workspace del repo no lo cierra; te dice cómo hacerlo si quieres.
 
 ### Una rama vertical en un hub
 
-Si trabajas desde un repo hub con submódulos (p. ej. `frontend` y `backend` en repos aparte) y
-ya lo preparaste con `bond hub` ([referencia](reference.md#bond-hub)), `bond team` cambia de
-forma: una rama ya no es un agente, es un cambio que cruza los repos. Desde el hub:
+Si trabajas desde un repo hub (creado o preparado con `bond hub init`; ver
+[referencia](reference.md#bond-hub)), `bond team` cambia de forma: una rama ya no es un agente,
+es un cambio que cruza los repos. Desde el hub:
 
 ```bash
 bond team fix/login                 # la rama en el hub y un agente por submódulo

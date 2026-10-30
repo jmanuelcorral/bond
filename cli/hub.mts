@@ -9,14 +9,19 @@ import { parse } from "smol-toml";
 import { BOND_HOME } from "./runtime.mts";
 import { act, canonical, catchDie, die, dim, HOME, log, run, warn } from "./util.mts";
 
-export const HUB_HELP = `Uso: bond hub [opciones]
+export const HUB_HELP = `Uso: bond hub [subcomando] [opciones]
 
 Un hub es un repo git compartido que agrupa varios repos (p. ej. frontend y backend)
 declarados en hub.toml, cada uno como submódulo o como enlace (symlink) a un clon local.
 La sesión la forman el hub y sus repos, cada uno con su rama base y su modo de enlace.
 Lo propio de cada máquina va en .bond/hub.local.toml.
 
-  bond hub        Enseña la sesión del hub: repos, ruta, base, enlace y rama actual
+Comandos:
+  init [dir]      Crea un hub o lo prepara en un repo que ya existe, e importa repos
+  add <url|ruta>  Añade un repo al hub (como submódulo o como enlace local)
+  sync            Deja el disco como dice hub.toml y actualiza el registro global
+
+Sin subcomando: enseña la sesión del hub (repos, ruta, base, enlace y rama actual).
 `;
 
 const git = (cwd: string, args: string[]) => run("git", ["-C", cwd, ...args]);
@@ -191,7 +196,7 @@ export function parseHubLocalToml(text: string, pathForError = ".bond/hub.local.
 }
 
 /** Expande ~ a HOME y resuelve rutas relativas al hub. */
-function expandSource(source: string, hubRoot: string): string {
+export function expandSource(source: string, hubRoot: string): string {
 	if (source.startsWith("~/") || source === "~") {
 		return join(HOME, source.slice(source === "~" ? 1 : 2));
 	}
@@ -404,6 +409,19 @@ export async function hub(args: string[]): Promise<void> {
 	if (args.includes("-h") || args.includes("--help")) {
 		console.log(HUB_HELP.trimEnd());
 		return;
+	}
+	const [sub, ...rest] = args;
+	if (sub === "init") {
+		const { hubInit } = await import("./hub-init.mts");
+		return hubInit(rest);
+	}
+	if (sub === "add") {
+		const { hubAdd } = await import("./hub-init.mts");
+		return hubAdd(rest);
+	}
+	if (sub === "sync") {
+		const { hubSync } = await import("./hub-init.mts");
+		return hubSync(rest);
 	}
 	if (args.length > 0) {
 		die(`opción desconocida: ${args[0]} (bond hub --help)`);

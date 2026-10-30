@@ -14,6 +14,14 @@
   dentro del hub con el clon real.
 - `bond hub` enseña la sesión de trabajo declarada en `hub.toml`: ruta, base, modo de enlace
   (`submodule` o `symlink`) y rama actual de cada repositorio.
+- `bond hub init [dir]`: asistente para crear un nuevo hub o prepararlo en un repo git existente.
+  Genera `hub.toml`, `.bond/`, `AGENTS.md`, `.gitignore` y `.bond/hub.local.toml`, importa
+  submódulos existentes con su base y añade repos por URL (submódulo) o desde un clon local (symlink).
+- `bond hub add <url|ruta>`: importa un repositorio adicional a `hub.toml`, configurando su modo
+  de enlace, rama base y agente opcional, y sincroniza el disco.
+- `bond hub sync`: sincroniza el disco con `hub.toml` montando submódulos, creando symlinks
+  (con fallback a junction en Windows si el symlink falla) y registrando los repositorios en
+  `~/.bond/hubs.toml`. Con `--dry-run` detalla las acciones sin alterar el disco.
 - Las skills `plan-team` (catálogo) y `bond-team` (global) trabajan en modo hub: en un repo con
   `hub.toml`, una fase o subtarea es una rama vertical (un agente por repo de la sesión, una sola
   rama abierta a la vez, `--repos` para elegirlos), la tarea se manda con un único

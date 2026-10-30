@@ -821,7 +821,10 @@ Desde un repo enlazado por symlink (que vive fuera del hub), `hubRoot` lo encuen
 `~/.bond/hubs.toml`.
 
 ```bash
-bond hub        # enseña la sesión del hub: repos, ruta, base, enlace y rama actual
+bond hub                 # enseña la sesión del hub: repos, ruta, base, enlace y rama actual
+bond hub init [dir]      # crea un hub o lo prepara en un repo existente e importa repos
+bond hub add <url|ruta>  # añade un repo al hub (como submódulo o enlace local)
+bond hub sync            # monta submódulos, crea enlaces y actualiza el registro global
 ```
 
 ```toml
@@ -848,6 +851,9 @@ source = "~/gitrepos/fluzo-backend"
 ```
 
 - `hub.toml` es la única fuente de la sesión: declara el nombre del hub, su rama base y la lista de repos con su ruta relativa, rama base y modo de enlace (`submodule` o `symlink`).
+- `bond hub init [dir]`: asistente que crea el hub (`git init`, `.bond/`, `AGENTS.md`, `hub.toml`, `.gitignore` y `hub.local.toml`) o lo prepara en un repo existente. Importa submódulos existentes con su base y añade repos por URL (submódulo) o ruta local (symlink). Con `--yes` usa valores detectados sin preguntar.
+- `bond hub add <url|ruta>`: añade un repositorio a `hub.toml` (como submódulo si es URL o symlink si es clon local) y sincroniza el disco.
+- `bond hub sync`: deja el disco como dice `hub.toml`: monta submódulos, crea symlinks (o junctions en Windows si el symlink falla) y actualiza el registro global. Si falta la ruta de un symlink en `.bond/hub.local.toml`, con `--yes` falla indicando cómo configurarla y de forma interactiva la pregunta. Con `--dry-run` muestra qué haría sin tocar el disco.
 - `.bond/hub.local.toml` guarda las rutas a los clones locales de la máquina (`source`), admitiendo `~` para expandir la carpeta de usuario.
 - `~/.bond/hubs.toml` es el registro global donde `bond` anota los repos asociados a cada hub. Permite que `hubRoot` encuentre el hub desde dentro de un repo enlazado por symlink.
 - Un `hub.toml` inválido se explica con un mensaje que dice qué corregir; `bond team` avisa y continúa como en un repo normal.

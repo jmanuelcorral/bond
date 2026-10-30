@@ -969,7 +969,7 @@ informe recibido. Los escribe el orquestador, nunca el agente de la rama.
 
 // --- init ---------------------------------------------------------------------------------
 
-function agentsMd(name: string): string {
+export function agentsMd(name: string): string {
 	return `# ${name}
 
 Instrucciones del proyecto para todos los agentes de código que lo usan (vía bond).
