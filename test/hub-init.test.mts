@@ -267,7 +267,7 @@ base = "main"
 path = "front"
 base = "main"
 link = "submodule"
-url  = "file://${frontReal}"
+url  = ${JSON.stringify(`file://${frontReal}`)}
 
 [repos.back]
 path = "back"
