@@ -1,11 +1,11 @@
 ---
 id: "2026-10-30-la-config-de-bond-que-pone-el-hub-se-commitea-solo-si-el-repo-estaba-limpio"
 title: "La config de bond que pone el hub se commitea solo si el repo estaba limpio"
-status: "proposed"
+status: "accepted"
 date: "2026-10-30"
 decided_by: "agent:claude"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "acepta la decisión del commit"
+accepted_via: "agent:claude"
 supersedes: ""
 superseded_by: ""
 links:
