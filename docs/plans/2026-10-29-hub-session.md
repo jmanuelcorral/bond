@@ -76,7 +76,8 @@ Decisiones (registradas aceptadas en la memoria de decisiones):
 - D5 — Los runs van a la memoria del hub; si el hub no tiene `[decisions]`, a la del submódulo
   (usuario, 2026-10-29). [`docs/decisions/2026-10-29-modo-hub-los-runs-de-los-agentes-se-guardan-en-la-memoria-del-hub.md`](../decisions/2026-10-29-modo-hub-los-runs-de-los-agentes-se-guardan-en-la-memoria-del-hub.md)
 - D6 — `bond hub` configura la sesión, con la base de cada repo, en `[hub]` de
-  `.bond/bond.toml` (usuario, 2026-10-29). [`docs/decisions/2026-10-29-bond-hub-configura-la-sesion-en-hub-de-bond-bond-toml.md`](../decisions/2026-10-29-bond-hub-configura-la-sesion-en-hub-de-bond-bond-toml.md)
+  `.bond/bond.toml` (usuario, 2026-10-29). **Sustituida el 2026-10-30** por D13 de
+  [`2026-10-30-hub-guided`](2026-10-30-hub-guided.md): la sesión pasa a `hub.toml` y `[hub]` desaparece. [`docs/decisions/2026-10-29-bond-hub-configura-la-sesion-en-hub-de-bond-bond-toml.md`](../decisions/2026-10-29-bond-hub-configura-la-sesion-en-hub-de-bond-bond-toml.md)
 - D7 — En el hub, la rama vertical es solo una rama, sin worktree ni agente (propuesta,
   aprobada con el plan, 2026-10-29). [`docs/decisions/2026-10-29-modo-hub-en-el-hub-la-rama-vertical-es-solo-una-rama-sin-worktree-ni-agente.md`](../decisions/2026-10-29-modo-hub-en-el-hub-la-rama-vertical-es-solo-una-rama-sin-worktree-ni-agente.md)
 - D8 — `bond team prompt fix/x` manda la tarea a todos los agentes de la rama, con una nota de
