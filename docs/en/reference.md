@@ -913,9 +913,31 @@ is not ready to work with agents; each problem names the repo, the check and the
 | `base atrasada` | **warning** (D17/D19): the base branch is behind its remote (per last fetch); fix: `bond hub pull` |
 
 Some checks are warnings (D17): they are shown with a "!" but they do not count as problems nor
-change the exit code. In `--json` each warning carries `warn: true` and the report counts
-`warnings` apart from `problems`; `bond doctor` reflects the warnings in its hub row as a
-warning without turning it into a failure.
+change the exit code. In `--json`, as in `bond doctor`, each check carries `level` (`ok`,
+`warn` or `fail`); each repo and the report carry the worst level of what they contain, and
+the report counts `failures` and `warnings`. The exit code is 1 only when `level` is `fail`.
+`bond doctor` reflects the warnings in its hub row as a warning without turning it into a
+failure.
+
+```json
+{
+  "hub": "ops",
+  "level": "warn",
+  "failures": 0,
+  "warnings": 1,
+  "repos": [
+    {
+      "repo": "api",
+      "path": "repos/api",
+      "level": "warn",
+      "checks": [
+        { "check": "base", "level": "ok", "detail": "main" },
+        { "check": "base atrasada", "level": "warn", "detail": "1 commit(s) por detrás de origin/main", "fix": "bond hub pull" }
+      ]
+    }
+  ]
+}
+```
 
 With `--fix` it repairs only the safe, announced things: creating or repairing the link to the
 local clone with `bond hub init`'s `linkRepo` (symlink, junction on Windows), registering the

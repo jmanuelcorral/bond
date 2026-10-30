@@ -103,14 +103,16 @@ describe("hub sano", () => {
 		expect(r.stdout).toContain("listo para trabajar");
 
 		const rep = checkHubSession(hubSession(hub)!);
-		expect(rep.ok).toBe(true);
-		expect(rep.problems).toBe(0);
+		// Sin fallos; los repos en la raíz solo dan avisos de ruta.
+		expect(rep.level).toBe("warn");
+		expect(rep.failures).toBe(0);
 		expect(rep.repos.map((x) => x.path)).toEqual([".", "back", "front"]);
+		expect(rep.repos[0].level).toBe("ok");
 		// Enlace reportado igual para submódulo que para symlink.
 		const front = rep.repos.find((x) => x.path === "front")!;
-		expect(front.checks.some((c) => c.check === "enlace" && c.ok && c.detail === "submódulo")).toBe(true);
+		expect(front.checks.some((c) => c.check === "enlace" && c.level === "ok" && c.detail === "submódulo")).toBe(true);
 		const back = rep.repos.find((x) => x.path === "back")!;
-		expect(back.checks.some((c) => c.check === "enlace" && c.ok)).toBe(true);
+		expect(back.checks.some((c) => c.check === "enlace" && c.level === "ok")).toBe(true);
 	});
 
 	test("--json enseña el informe completo, sin las funciones de arreglo", () => {
@@ -118,10 +120,12 @@ describe("hub sano", () => {
 		expect(r.status).toBe(0);
 		const rep = JSON.parse(r.stdout);
 		expect(rep.hub).toBe("hub");
-		expect(rep.ok).toBe(true);
-		expect(rep.problems).toBe(0);
+		expect(rep.level).toBe("warn");
+		expect(rep.failures).toBe(0);
+		expect(rep).not.toHaveProperty("ok");
+		expect(rep).not.toHaveProperty("problems");
 		expect(rep.repos).toHaveLength(3);
-		expect(rep.repos[0].checks.some((c: { check: string; ok: boolean }) => c.check === "base" && c.ok)).toBe(true);
+		expect(rep.repos[0].checks.some((c: { check: string; level: string }) => c.check === "base" && c.level === "ok")).toBe(true);
 		expect(r.stdout).not.toContain("fixFn");
 	});
 });
@@ -135,22 +139,25 @@ describe("nivel de aviso (D17): repos fuera de repos/", () => {
 		expect(r.stdout).toContain("2 aviso(s) que no impiden trabajar");
 
 		const rep = checkHubSession(hubSession(hub)!);
-		expect(rep.ok).toBe(true);
-		expect(rep.problems).toBe(0);
+		expect(rep.level).toBe("warn");
+		expect(rep.failures).toBe(0);
 		expect(rep.warnings).toBe(2);
 
 		const j = JSON.parse(bond(["hub", "check", "--json"]).stdout) as {
+			level: string;
 			warnings: number;
-			problems: number;
-			ok: boolean;
-			repos: { checks: { check: string; ok: boolean; warn?: boolean }[] }[];
+			failures: number;
+			repos: { path: string; level: string; checks: { check: string; level: string }[] }[];
 		};
+		expect(j.level).toBe("warn");
 		expect(j.warnings).toBe(2);
-		expect(j.problems).toBe(0);
-		expect(j.ok).toBe(true);
+		expect(j.failures).toBe(0);
+		// Cada repo lleva el peor nivel de sus comprobaciones.
+		expect(j.repos.find((x) => x.path === ".")!.level).toBe("ok");
+		expect(j.repos.find((x) => x.path === "back")!.level).toBe("warn");
 		const rutas = j.repos.flatMap((x) => x.checks).filter((c) => c.check === "ruta");
 		expect(rutas).toHaveLength(2);
-		expect(rutas.every((c) => c.ok === true && c.warn === true)).toBe(true);
+		expect(rutas.every((c) => c.level === "warn")).toBe(true);
 	});
 
 	test("un hub con los repos en repos/ no tiene avisos y doctor lo da al día", () => {
@@ -223,12 +230,12 @@ link = "symlink"
 		expect(conAviso.stdout).toContain("bond hub pull");
 
 		const rep = checkHubSession(hubSession(hub)!);
-		expect(rep.ok).toBe(true);
+		expect(rep.level).toBe("warn");
 		expect(rep.warnings).toBe(3);
 		const baseWarnings = rep.repos.flatMap((x) => x.checks).filter((c) => c.check === "base atrasada");
 		expect(baseWarnings).toHaveLength(1);
 		const backRep = rep.repos.find((x) => x.path === "back")!;
-		expect(backRep.checks.some((c) => c.check === "base atrasada" && c.warn && c.ok)).toBe(true);
+		expect(backRep.checks.some((c) => c.check === "base atrasada" && c.level === "warn")).toBe(true);
 
 		// bond hub pull avanza la base
 		const p = bond(["hub", "pull"]);
@@ -279,9 +286,14 @@ describe("comprobaciones con la sesión rota", () => {
 		const rep = checkHubSession(hubSession(hub)!, { hasAgent: () => false });
 		const back = rep.repos.find((x) => x.path === "back")!;
 		const agentes = back.checks.find((c) => c.check === "agentes")!;
-		expect(agentes.ok).toBe(false);
+		expect(agentes.level).toBe("fail");
 		expect(agentes.detail).toContain("pi");
-		expect(rep.ok).toBe(false);
+		// Un fallo manda sobre los avisos, en el repo y en el informe.
+		expect(back.level).toBe("fail");
+		expect(rep.level).toBe("fail");
+		// El total del informe es la suma de los fallos de cada repo.
+		expect(rep.failures).toBe(rep.repos.flatMap((x) => x.checks).filter((c) => c.level === "fail").length);
+		expect(rep.failures).toBeGreaterThan(0);
 	});
 
 	test("cambios sin commitear en un repo de la sesión", () => {
@@ -360,7 +372,7 @@ describe("--fix", () => {
 		const r = bond(["hub", "check", "--fix", "--json"]);
 		expect(r.status).toBe(0);
 		const rep = JSON.parse(r.stdout);
-		expect(rep.ok).toBe(true);
+		expect(rep.level).not.toBe("fail");
 		expect(r.stdout).not.toContain("enlazado");
 		expect(r.stderr).toContain("enlazado");
 	});
