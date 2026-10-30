@@ -825,7 +825,7 @@ From a submodule, `hubRoot` finds the hub by going up through git
 outside the hub), `hubRoot` finds it thanks to the global registry `~/.bond/hubs.toml`.
 
 ```bash
-bond hub                 # shows the hub's session: repos, path, base, link mode and current branch
+bond hub                 # shows the hub's session: repos, path, base, link mode, branch and description (if any)
 bond hub init [dir]      # creates a hub or prepares it in an existing repo and imports repos
 bond hub add <url|path>  # adds a repo to the hub (as a submodule or a local link)
 bond hub sync            # mounts submodules, creates links and updates the global registry
@@ -843,6 +843,7 @@ path = "repos/frontend"
 base = "main"
 link = "submodule"
 agent = "claude"
+description = "The product's web frontend"
 
 [repos.backend]
 url  = "git@github.com:fluzo/backend.git"
@@ -857,7 +858,8 @@ source = "~/gitrepos/fluzo-backend"
 
 - `hub.toml` is the session's only source of truth: it declares the hub's name, its base branch
   and the list of repos with their relative path, base branch and link mode (`submodule` or
-  `symlink`).
+  `symlink`). Each repo may also declare `agent` (its default agent) and `description` (what the
+  repo is, optional; it feeds the generated block in `AGENTS.md`).
 - The default path of a new repo is `repos/<name>` (D16): the `bond hub init` assistant proposes
   it as an editable initial value, `bond hub add` uses it without asking and `--path` overrides
   it. Submodules that already existed in the repo keep their path; hubs with repos at the root keep
@@ -870,7 +872,13 @@ source = "~/gitrepos/fluzo-backend"
   (with a terminal, with its questions; with `--yes`, what `bond setup` chose), with the default
   skills plus `plan-team`. Session repos without bond get a `bond init` with the hub's config (its agents, with the repo's `agent` as the default one, and the catalog's default skills); those that already have it keep their own. That config is committed on the repo's current branch if it was clean (otherwise it is left uncommitted with a warning); in a submodule that commit is local: run `git push` in it before pushing the hub. With `--yes` it uses detected values without asking.
 - `bond hub add <url|path>`: adds a repository to `hub.toml` (as a submodule if it is a URL, as
-  a symlink if it is a local clone) and syncs the disk.
+  a symlink if it is a local clone) and syncs the disk. With `--description "text"` it gives the
+  repo a description.
+- In a hub, `bond sync` generates in its `AGENTS.md` a block with its own marker (`bond:hub`)
+  carrying the session table (repo, path, base, link, agent and description), the hub's rules
+  (don't edit `repos/` from the hub; work in a repo goes through `bond team`) and where
+  `docs/plans/` and `docs/decisions/` live. Hand-written content outside the block is preserved,
+  `bond sync --check` validates it, and `bond hub init` and `bond hub add` keep it up to date (D18).
 - `bond hub sync`: leaves the disk as `hub.toml` says: it mounts submodules, creates symlinks (or
   junctions on Windows when the symlink fails) and updates the global registry; the hub and the repos without bond get a `bond init`,
   as in `bond hub init`. If a symlink's

@@ -19,7 +19,8 @@ import { agentInstalled } from "./catalog-agents.mts";
 import { catalogSlug, count, type McpServer, readCommandNames, readMcps, validateCatalog } from "./catalog.mts";
 import { ensureFetched, gitKey, type Lock, readLock, repoRelative } from "./catalog-git.mts";
 import { assetsPath, ensureBondLink } from "./runtime.mts";
-import { bad, catchingDie, caution, die, dim, isDryRun, log, ok, run, STAMP, warn } from "./util.mts";
+import { bad, catchingDie, catchDie, caution, die, dim, isDryRun, log, ok, run, STAMP, warn } from "./util.mts";
+import { hubSession, type HubSession } from "./hub.mts";
 
 export const SUPPORTED_AGENTS = ["pi", "claude", "copilot", "codex", "opencode", "crush", "gemini", "agy"];
 /** Catálogo: carpeta del repo o extraída del binario. */
@@ -423,7 +424,7 @@ type Output =
 	/** Bloque entre marcas al final de un fichero de texto: comentario HTML (md) o almohadilla (hash). */
 	| { kind: "block"; path: string; body: string; style: BlockStyle };
 
-export type BlockStyle = "md" | "hash";
+export type BlockStyle = "md" | "hash" | "hub";
 
 interface Manifest {
 	files: Record<string, string>;
@@ -663,7 +664,61 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 		];
 		for (const [name, md] of commands) out.push({ kind: "file", path: plugin("skills", name, "SKILL.md"), content: agyCommand(name, md) });
 	}
+
+	// Hub (D18): en un repo con hub.toml, el AGENTS.md lleva un bloque generado con la sesión
+	// y las reglas del hub, para que el orquestador sepa qué es cada repo sin salir del hub.
+	// Si hub.toml existe pero no parsea, se omite el bloque (el aviso lo da hasHub; mejor que
+	// morir en plena sincronización) y lo que hubiera en él se queda como está: sin sesión no la
+	// regeneramos, y al arreglar hub.toml y pasar bond sync vuelve a actualizarse.
+	if (existsSync(join(root, "hub.toml"))) {
+		const { value: hub, error } = catchDie(() => hubSession(root));
+		if (hub) out.push({ kind: "block", path: "AGENTS.md", body: hubAgentsBlock(hub, cfg.decisions?.dir ?? "docs/decisions"), style: "hub" });
+		else if (error) warn(`${error}: el bloque del hub en AGENTS.md no se actualiza`);
+	}
 	return out;
+}
+
+/**
+ * El bloque que bond genera en el AGENTS.md del hub (D18): la tabla de repos de la sesión
+ * (ruta, base, enlace, agente y descripción), las reglas del hub y dónde viven los planes y
+ * las decisiones. Con marcador propio (estilo "hub") para no pisar otros bloques de bond.
+ */
+export function hubAgentsBlock(hub: HubSession, decisionsDir: string): string {
+	const row = (cells: string[]) => `| ${cells.join(" | ")} |`;
+	const repos = hub.repos.map((r) =>
+		row([
+			r.path === "." ? `${hub.name} *(el hub)*` : basename(r.path),
+			`\`${r.path}\``,
+			r.base,
+			r.path === "." ? "-" : (r.link ?? "submodule"),
+			r.agent ?? "-",
+			r.description ?? "-",
+		]),
+	);
+	return [
+		"## El hub: sesión y reglas",
+		"",
+		"Este repo es un hub de bond: agrupa la sesión declarada en `hub.toml` —el hub y sus repos",
+		"enlazados— y sirve de puesto desde el que coordinarlos. Este bloque lo generan `bond sync`,",
+		"`bond hub init` y `bond hub add` a partir de `hub.toml`: no lo edites aquí; si cambia la",
+		"sesión, cambia `hub.toml` y pasa `bond sync`.",
+		"",
+		"### Repos de la sesión",
+		"",
+		row(["REPO", "RUTA", "BASE", "ENLACE", "AGENTE", "DESCRIPCIÓN"]),
+		row(["---", "---", "---", "---", "---", "---"]),
+		...repos,
+		"",
+		"### Reglas del hub",
+		"",
+		"- No edites los repos enlazados (`repos/`) desde el hub: cada repo tiene sus propias reglas",
+		"  y su agente. El trabajo en un repo va por `bond team <rama>` —una rama vertical, un agente",
+		"  por repo—, en el worktree de ese repo.",
+		`- En el hub se coordina la sesión: los planes viven en \`docs/plans/\` y las decisiones en`,
+		`\`${decisionsDir}/\`; desde aquí se lanza el trabajo sobre los repos y se revisa lo que vuelve.`,
+		"- `bond hub check` revisa el estado de cada repo de la sesión y `bond hub sync` deja el disco",
+		"  como dice `hub.toml`.",
+	].join("\n");
 }
 
 // --- aplicar ------------------------------------------------------------------------------
@@ -672,6 +727,9 @@ const DEFAULT_NOTE = "generado por `bond sync`; no editar";
 const MARKER_TEXT: Record<BlockStyle, { open: string; begin: (note: string) => string; end: string }> = {
 	md: { open: "<!-- >>> bond >>>", begin: (n) => `<!-- >>> bond >>> ${n} -->`, end: "<!-- <<< bond <<< -->" },
 	hash: { open: "# >>> bond >>>", begin: (n) => `# >>> bond >>> ${n}`, end: "# <<< bond <<<" },
+	// El bloque del hub usa un marcador propio (D18): si el AGENTS.md del hub tuviera ya un
+	// bloque de bond de otro origen, el del hub no lo pisa ni se confunde con él.
+	hub: { open: "<!-- >>> bond:hub >>>", begin: (n) => `<!-- >>> bond:hub >>> ${n} -->`, end: "<!-- <<< bond:hub <<< -->" },
 };
 
 /**

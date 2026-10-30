@@ -823,7 +823,7 @@ Desde un repo enlazado por symlink (que vive fuera del hub), `hubRoot` lo encuen
 `~/.bond/hubs.toml`.
 
 ```bash
-bond hub                 # enseña la sesión del hub: repos, ruta, base, enlace y rama actual
+bond hub                 # enseña la sesión del hub: repos, ruta, base, enlace, rama y descripción (si la hay)
 bond hub init [dir]      # crea un hub o lo prepara en un repo existente e importa repos
 bond hub add <url|ruta>  # añade un repo al hub (como submódulo o enlace local)
 bond hub sync            # monta submódulos, crea enlaces y actualiza el registro global
@@ -841,6 +841,7 @@ path = "repos/frontend"
 base = "main"
 link = "submodule"
 agent = "claude"
+description = "Frontend web del producto"
 
 [repos.backend]
 url  = "git@github.com:fluzo/backend.git"
@@ -853,10 +854,11 @@ link = "symlink"
 source = "~/gitrepos/fluzo-backend"
 ```
 
-- `hub.toml` es la única fuente de la sesión: declara el nombre del hub, su rama base y la lista de repos con su ruta relativa, rama base y modo de enlace (`submodule` o `symlink`).
+- `hub.toml` es la única fuente de la sesión: declara el nombre del hub, su rama base y la lista de repos con su ruta relativa, rama base y modo de enlace (`submodule` o `symlink`). Cada repo puede declarar además `agent` (agente por defecto) y `description` (qué es el repo, opcional; alimenta el bloque generado en `AGENTS.md`).
 - La ruta por defecto de un repo nuevo es `repos/<nombre>` (D16): el asistente de `bond hub init` la propone como valor inicial (editable), `bond hub add` la usa sin preguntar y `--path` manda sobre ella. Al importar submódulos que ya existían en el repo se conserva su ruta; los hubs con los repos en la raíz siguen funcionando igual (`bond hub check` solo avisa).
 - `bond hub init [dir]`: asistente que crea el hub (`git init`, `.bond/`, `AGENTS.md`, `hub.toml`, `.gitignore` y `hub.local.toml`) o lo prepara en un repo existente. Importa submódulos existentes con su base y añade repos por URL (submódulo) o ruta local (symlink). Antes de nada hace `bond init` en el propio hub si no lo tiene (con terminal, con sus preguntas; con `--yes`, lo elegido en `bond setup`), con las skills por defecto más `plan-team`. Los repos de la sesión que no tienen bond reciben un `bond init` con la config del hub (sus agentes, con el `agent` del repo como el de por defecto, y las skills por defecto del catálogo); los que ya lo tienen conservan la suya. Esa config se commitea en la rama actual del repo si estaba limpio (si no, se deja sin commitear y se avisa); en un submódulo ese commit es local: haz `git push` en él antes de subir el hub. La ruta al clon local se elige navegando por disco desde la carpeta que contiene el hub (flechas para elegir, Tab completa, `/` entra en la carpeta) y solo acepta un repo git. Con `--yes` usa valores detectados sin preguntar.
-- `bond hub add <url|ruta>`: añade un repositorio a `hub.toml` (como submódulo si es URL o symlink si es clon local) y sincroniza el disco.
+- `bond hub add <url|ruta>`: añade un repositorio a `hub.toml` (como submódulo si es URL o symlink si es clon local) y sincroniza el disco. Con `--description "texto"` le pone descripción al repo.
+- En un hub, `bond sync` genera en su `AGENTS.md` un bloque con marcador propio (`bond:hub`) con la tabla de la sesión (repo, ruta, base, enlace, agente y descripción), las reglas del hub (no editar `repos/` desde el hub; el trabajo en un repo va por `bond team`) y dónde viven `docs/plans/` y `docs/decisions/`. Lo escrito a mano fuera del bloque se conserva, `bond sync --check` lo comprueba, y `bond hub init` y `bond hub add` lo dejan al día (D18).
 - `bond hub sync`: deja el disco como dice `hub.toml`: monta submódulos, crea symlinks (o junctions en Windows si el symlink falla) y actualiza el registro global; al hub y a los repos sin bond les hace `bond init`, como `bond hub init`. Si falta la ruta de un symlink en `.bond/hub.local.toml`, con `--yes` falla indicando cómo configurarla y de forma interactiva la pregunta. Con `--dry-run` muestra qué haría sin tocar el disco.
 - `.bond/hub.local.toml` guarda las rutas a los clones locales de la máquina (`source`), admitiendo `~` para expandir la carpeta de usuario.
 - `~/.bond/hubs.toml` es el registro global donde `bond` anota los repos asociados a cada hub. Permite que `hubRoot` encuentre el hub desde dentro de un repo enlazado por symlink.

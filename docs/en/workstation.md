@@ -324,7 +324,12 @@ guided with `bond hub init`, which first runs `bond init` in the hub itself (wit
 (symlink) and runs `bond init` with the hub's config in those without bond; `bond hub check` then reviews that every repo of the session is ready to work with
 agents, and `--fix` repairs the safe things. New repos go into `repos/<name>` by default (D16); a hub
 that already keeps them at the root keeps working as before — `bond hub check` only warns about it,
-without failing (D17). The flow, end to end (see
+without failing (D17). Each repo may carry a description (`description` in `hub.toml`; the
+`bond hub init` assistant asks for it and in `bond hub add` it is `--description`): `bond sync`
+generates in the hub's `AGENTS.md` a block with the session table, the hub's rules (don't edit
+`repos/` from the hub; work in a repo goes through `bond team`) and where `docs/plans/` and
+`docs/decisions/` live, so you can tell what each repo is without leaving the hub (D18).
+The flow, end to end (see
 [reference](reference.md#bond-hub)):
 
 ```bash
