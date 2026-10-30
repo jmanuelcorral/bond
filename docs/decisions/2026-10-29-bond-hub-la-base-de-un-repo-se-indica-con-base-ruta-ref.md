@@ -1,11 +1,11 @@
 ---
 id: "2026-10-29-bond-hub-la-base-de-un-repo-se-indica-con-base-ruta-ref"
 title: "bond hub: la base de un repo se indica con --base <ruta>=<ref>"
-status: "proposed"
+status: "accepted"
 date: "2026-10-29"
 decided_by: "agent:claude/kevin"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "todas, y la de H4 dala por buena"
+accepted_via: "agent:claude"
 supersedes: ""
 superseded_by: ""
 links:

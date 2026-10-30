@@ -1,11 +1,11 @@
 ---
 id: "2026-10-29-modo-hub-una-rama-vertical-esta-abierta-si-tiene-worktree-en-un-submodulo-y-existe-en-el-hub"
 title: "Modo hub: una rama vertical está abierta si tiene worktree en un submódulo y existe en el hub"
-status: "proposed"
+status: "accepted"
 date: "2026-10-29"
 decided_by: "agent:claude/stuart"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "todas, y la de H4 dala por buena"
+accepted_via: "agent:claude"
 supersedes: ""
 superseded_by: ""
 links:

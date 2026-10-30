@@ -1,11 +1,11 @@
 ---
 id: "2026-10-30-en-bond-hub-check-rama-vertical-a-medias-son-worktrees-de-ramas-que-no-existen-en-el-hub-o-mas-de-una-vertical-abierta"
-title: "En bond hub check, \"rama vertical a medias\" son worktrees de ramas que no existen en el hub, o más de una vertical abierta"
-status: "proposed"
+title: "En bond hub check, \\\"rama vertical a medias\\\" son worktrees de ramas que no existen en el hub, o más de una vertical abierta"
+status: "accepted"
 date: "2026-10-30"
 decided_by: "agent:pi/stuart"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "todas, y la de H4 dala por buena"
+accepted_via: "agent:claude"
 supersedes: ""
 superseded_by: ""
 links:
