@@ -943,11 +943,21 @@ export async function hubAdd(args: string[]): Promise<void> {
 			(detectedLink === "symlink" && hubLocalToml.repos[repoName]?.source !== newSource)
 		) {
 			die(`repos.${repoName} ya existe en hub.toml con otra configuración (usa otro --name o edita hub.toml)`);
-		} else if ((existing.description ?? "") === (description ?? "")) {
+		}
+		// El mismo repo: solo --description toca algo, y solo la descripcion. Reconstruir la
+		// entrada perderia el agent, recalcularia la base contra la rama actual del clon y,
+		// sin --description, se quedaba ademas sin la descripcion que ya habia.
+		if (description === undefined || description === existing.description) {
 			log(`repos.${repoName} ya existe en hub.toml`);
 			return;
 		}
-		// Solo cambia la descripción: se actualiza más abajo, y con ella el bloque del hub.
+		existing.description = description;
+		act("guardar hub.toml", () => {
+			writeFileSync(tomlPath, renderHubToml(hubToml));
+		});
+		syncHubAgentsBlock(root);
+		log(`actualizada la descripcion de repos.${repoName}`);
+		return;
 	}
 	const existingByPath = Object.entries(hubToml.repos).find(([k, r]) => k !== repoName && r.path === repoPath);
 	if (existingByPath) {

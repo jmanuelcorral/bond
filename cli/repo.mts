@@ -668,8 +668,9 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 	// Hub (D18): en un repo con hub.toml, el AGENTS.md lleva un bloque generado con la sesión
 	// y las reglas del hub, para que el orquestador sepa qué es cada repo sin salir del hub.
 	// Si hub.toml existe pero no parsea, se omite el bloque (el aviso lo da hasHub; mejor que
-	// morir en plena sincronización) y lo que hubiera en él se queda como está: sin sesión no la
-	// regeneramos, y al arreglar hub.toml y pasar bond sync vuelve a actualizarse.
+	// morir en plena sincronización); lo que hubiera en AGENTS.md se conserva tal cual gracias a
+	// que diffActions no poda el bloque "hub" en ese caso, y al arreglar hub.toml y pasar
+	// bond sync vuelve a actualizarse.
 	if (existsSync(join(root, "hub.toml"))) {
 		const { value: hub, error } = catchDie(() => hubSession(root));
 		if (hub) out.push({ kind: "block", path: "AGENTS.md", body: hubAgentsBlock(hub, cfg.decisions?.dir ?? "docs/decisions"), style: "hub" });
@@ -838,7 +839,13 @@ function diffActions(root: string, outputs: Output[], prev: Manifest, force: boo
 	for (const [p, list] of Object.entries(prev.json)) {
 		for (const j of list) if (!jsonPlanned.has(`${p}\0${j.parent ?? ""}`)) outputs.push({ kind: "json", path: p, parent: j.parent, entries: {} });
 	}
-	for (const [p, style] of Object.entries(prev.blocks)) if (!planned.has(p)) outputs.push({ kind: "block", path: p, body: "", style });
+	for (const [p, style] of Object.entries(prev.blocks)) {
+		if (planned.has(p)) continue;
+		// Hub (D18): con hub.toml inválido plan() avisa y no regenera el bloque: se conserva
+		// tal cual en vez de vaciarlo sin sesión; al arreglar hub.toml y pasar sync se actualiza.
+		if (style === "hub" && existsSync(join(root, "hub.toml"))) continue;
+		outputs.push({ kind: "block", path: p, body: "", style });
+	}
 
 	// JSON: todas las salidas de un mismo fichero se aplican juntas sobre su contenido actual.
 	const jsonByPath = new Map<string, Array<Extract<Output, { kind: "json" }>>>();
