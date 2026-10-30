@@ -1,11 +1,14 @@
 // bond hub (cli/hub.mts): la sesión de un repo hub, declarada en hub.toml (más
 // .bond/hub.local.toml para rutas locales) y encontrada con ~/.bond/hubs.toml.
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+
+// Montar el hub (git init, submódulos, enlaces) y lanzar bond tarda varios segundos en macOS y Windows.
+setDefaultTimeout(30_000);
 
 if (!process.env.BOND_HOME) {
 	process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));

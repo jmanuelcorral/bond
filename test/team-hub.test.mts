@@ -4,11 +4,14 @@
 // prompts en un JSON y responde como Herdr. HOME también es temporal (los worktrees van en
 // ~/.herdr/worktrees/<hub>/<sub>/<rama>).
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+// Montar el hub (git init, submódulos, enlaces) y lanzar bond tarda varios segundos en macOS y Windows.
+setDefaultTimeout(30_000);
 
 process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
 Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
