@@ -264,10 +264,11 @@ async function checkHubRow(): Promise<void> {
 	const { checkHubSession } = await import("./hub-check.mts");
 	const r = catchDie(() => checkHubSession(s.value!));
 	if (r.error !== undefined) return add("fail", `hub ${s.value.name}`, r.error, "bond hub check");
-	const failed = r.value.repos.flatMap((rp) => rp.checks.filter((c) => !c.ok).map((c) => `${rp.repo} · ${c.check}`));
-	const warned = r.value.repos.flatMap((rp) => rp.checks.filter((c) => c.warn && c.ok).map((c) => `${rp.repo} · ${c.check}`));
+	const named = (level: string) => r.value!.repos.flatMap((rp) => rp.checks.filter((c) => c.level === level).map((c) => `${rp.repo} · ${c.check}`));
+	const failed = named("fail");
+	const warned = named("warn");
 	if (failed.length) add("fail", `hub ${r.value.hub}`, `${failed.length} problema(s): ${failed.join("; ")}`, "bond hub check");
-	// D17: los avisos del hub se reflejan sin pasar la fila a fallo.
+	// Los avisos del hub se reflejan sin pasar la fila a fallo.
 	else if (warned.length) add("warn", `hub ${r.value.hub}`, `${warned.length} aviso(s): ${warned.join("; ")}`, "bond hub check");
 	else add("ok", `hub ${r.value.hub}`, `${r.value.repos.length - 1} repo(s) de la sesión al día`);
 }

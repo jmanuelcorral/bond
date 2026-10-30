@@ -33,20 +33,25 @@ respecto a su remoto, D19).
             de rama un repo. Con terminal y sin --yes pregunta antes de cada arreglo.
   --yes, -y Aplica los arreglos seguros sin preguntar (necesario sin terminal si se
             quiere arreglar; con --fix y terminal, evita la confirmación).
-  --json    Salida en JSON (los mensajes del arreglo van a stderr).
+  --json    Salida en JSON: level (ok, warn o fail) por comprobación, repo e informe
+            (los mensajes del arreglo van a stderr).
   --dry-run Describe los arreglos sin aplicarlos.
 `;
 
 const git = (cwd: string, args: string[]) => run("git", ["-C", cwd, ...args]);
 const firstLine = (s: string) => s.trim().split("\n")[0] ?? "";
 
+/** Como en bond doctor: un aviso se muestra pero no impide trabajar ni cambia la salida. */
+export type CheckLevel = "ok" | "warn" | "fail";
+
+/** El peor nivel de una lista: fail sobre warn sobre ok. */
+export const worstLevel = (levels: CheckLevel[]): CheckLevel => (levels.includes("fail") ? "fail" : levels.includes("warn") ? "warn" : "ok");
+
 export interface HubCheck {
 	check: string;
-	ok: boolean;
+	level: CheckLevel;
 	detail?: string;
 	fix?: string;
-	/** Aviso (D17): se muestra pero no cuenta como problema ni cambia la salida. */
-	warn?: boolean;
 	/** Cambio seguro que aplica --fix. No se incluye en --json. */
 	fixFn?: () => void;
 }
@@ -54,15 +59,17 @@ export interface HubCheck {
 export interface RepoReport {
 	repo: string;
 	path: string;
+	/** El peor nivel de sus comprobaciones. */
+	level: CheckLevel;
 	checks: HubCheck[];
 }
 
 export interface HubCheckReport {
 	hub: string;
 	root: string;
-	ok: boolean;
-	problems: number;
-	/** Avisos (D17): no suman en problems ni cambian la salida. */
+	/** El peor nivel de la sesión; el código de salida es 1 solo con fail. */
+	level: CheckLevel;
+	failures: number;
 	warnings: number;
 	repos: RepoReport[];
 }
@@ -83,8 +90,7 @@ function baseBehindCheck(r: HubRepo): HubCheck[] {
 	if (behind <= 0) return [];
 	return [{
 		check: "base atrasada",
-		ok: true,
-		warn: true,
+		level: "warn",
 		detail: `${behind} commit(s) por detrás de ${upstream}`,
 		fix: "bond hub pull",
 	}];
@@ -95,8 +101,7 @@ function routeChecks(r: HubRepo): HubCheck[] {
 	if (r.path === "." || r.path.startsWith("repos/")) return [];
 	return [{
 		check: "ruta",
-		ok: true,
-		warn: true,
+		level: "warn",
 		detail: `fuera de repos/ (la ruta por defecto es repos/<nombre>)`,
 		fix: "si quieres la convención, mueve el repo a repos/<nombre> y actualiza su path en hub.toml",
 	}];
@@ -120,7 +125,7 @@ function checkRepo(r: HubRepo, s: HubSession, hasAgent: (agent: string) => boole
 		if (r.link === "submodule") {
 			checks.push({
 				check: "existe",
-				ok: false,
+				level: "fail",
 				detail: "submódulo sin inicializar",
 				fix: `bond hub check --fix (git -C ${s.root} submodule update --init ${r.path})`,
 				fixFn: () => {
@@ -130,23 +135,23 @@ function checkRepo(r: HubRepo, s: HubSession, hasAgent: (agent: string) => boole
 				},
 			});
 		} else if (!r.source) {
-			checks.push({ check: "existe", ok: false, detail: "falta el enlace y no hay clon local declarado", fix: "añade source a [repos.<x>] en .bond/hub.local.toml" });
+			checks.push({ check: "existe", level: "fail", detail: "falta el enlace y no hay clon local declarado", fix: "añade source a [repos.<x>] en .bond/hub.local.toml" });
 		} else if (!existsSync(r.source)) {
-			checks.push({ check: "existe", ok: false, detail: `falta el enlace y el clon local ${r.source} no existe`, fix: "restaura el clon o cambia source en .bond/hub.local.toml" });
+			checks.push({ check: "existe", level: "fail", detail: `falta el enlace y el clon local ${r.source} no existe`, fix: "restaura el clon o cambia source en .bond/hub.local.toml" });
 		} else if (brokenLink(r.dir)) {
 			checks.push({
 				check: "existe",
-				ok: false,
+				level: "fail",
 				detail: `el enlace está roto (apuntaba a ${linkTarget(r.dir)})`,
 				fix: "bond hub check --fix",
 				fixFn: () => fixLink(r, s),
 			});
 		} else if (existsSync(r.dir)) {
-			checks.push({ check: "existe", ok: false, detail: "hay algo en su ruta que no es un repo git", fix: `revisa ${r.path}: ni repo ni enlace (${r.dir})` });
+			checks.push({ check: "existe", level: "fail", detail: "hay algo en su ruta que no es un repo git", fix: `revisa ${r.path}: ni repo ni enlace (${r.dir})` });
 		} else {
 			checks.push({
 				check: "existe",
-				ok: false,
+				level: "fail",
 				detail: `falta el enlace a ${r.source}`,
 				fix: "bond hub check --fix",
 				fixFn: () => fixLink(r, s),
@@ -158,25 +163,25 @@ function checkRepo(r: HubRepo, s: HubSession, hasAgent: (agent: string) => boole
 	// 2. El enlace es el que dice hub.toml (symlink y submódulo se reportan igual).
 	if (r.link === "symlink") {
 		const isLink = linkTarget(r.dir) !== undefined;
-		if (!isLink) checks.push({ check: "enlace", ok: false, detail: 'es un directorio normal; en hub.toml link = "symlink"', fix: "enlaza la ruta al clon local o cambia link en hub.toml" });
-		else if (r.source && canonical(r.dir) !== canonical(r.source)) checks.push({ check: "enlace", ok: false, detail: `apunta a ${canonical(r.dir)}, no al clon de .bond/hub.local.toml (${canonical(r.source)})`, fix: "recrea el enlace o corrige source en .bond/hub.local.toml" });
-		else checks.push({ check: "enlace", ok: true, detail: `symlink -> ${canonical(r.dir)}` });
+		if (!isLink) checks.push({ check: "enlace", level: "fail", detail: 'es un directorio normal; en hub.toml link = "symlink"', fix: "enlaza la ruta al clon local o cambia link en hub.toml" });
+		else if (r.source && canonical(r.dir) !== canonical(r.source)) checks.push({ check: "enlace", level: "fail", detail: `apunta a ${canonical(r.dir)}, no al clon de .bond/hub.local.toml (${canonical(r.source)})`, fix: "recrea el enlace o corrige source en .bond/hub.local.toml" });
+		else checks.push({ check: "enlace", level: "ok", detail: `symlink -> ${canonical(r.dir)}` });
 	} else if (r.link === "submodule") {
 		checks.push(
 			submodules(s.root).some((m) => m.path === r.path)
-				? { check: "enlace", ok: true, detail: "submódulo" }
-				: { check: "enlace", ok: false, detail: "no está registrado como submódulo del hub", fix: "bond hub add <url> o cambia link en hub.toml" },
+				? { check: "enlace", level: "ok", detail: "submódulo" }
+				: { check: "enlace", level: "fail", detail: "no está registrado como submódulo del hub", fix: "bond hub add <url> o cambia link en hub.toml" },
 		);
 	}
 
 	// 3. Tiene la base declarada.
 	const hasBase = git(r.dir, ["rev-parse", "--verify", "--quiet", `${r.base}^{commit}`]).status === 0;
-	checks.push(hasBase ? { check: "base", ok: true, detail: r.base } : { check: "base", ok: false, detail: `la base "${r.base}" no existe en ${name}`, fix: "cambia base en hub.toml o haz git fetch en el repo" });
+	checks.push(hasBase ? { check: "base", level: "ok", detail: r.base } : { check: "base", level: "fail", detail: `la base "${r.base}" no existe en ${name}`, fix: "cambia base en hub.toml o haz git fetch en el repo" });
 	if (hasBase) checks.push(...baseBehindCheck(r));
 
 	// 4. bond init hecho y config de agentes al día (bond sync --check).
 	if (!existsSync(join(r.dir, ".bond", "bond.toml"))) {
-		checks.push({ check: "bond init", ok: false, detail: "el repo no tiene .bond/bond.toml", fix: "bond hub sync (hace el bond init que falta)" });
+		checks.push({ check: "bond init", level: "fail", detail: "el repo no tiene .bond/bond.toml", fix: "bond hub sync (hace el bond init que falta)" });
 	} else {
 		const prev = process.cwd();
 		let cfgActions: ReturnType<typeof syncRepo> | undefined;
@@ -189,28 +194,28 @@ function checkRepo(r: HubRepo, s: HubSession, hasAgent: (agent: string) => boole
 		} finally {
 			process.chdir(prev);
 		}
-		if (cfgError !== undefined) checks.push({ check: "config", ok: false, detail: cfgError, fix: `bond sync (en ${r.dir})` });
-		else if (cfgActions && cfgActions.length) checks.push({ check: "config", ok: false, detail: `${cfgActions.length} cambio(s) de config de agente pendientes`, fix: `bond sync (en ${r.dir})` });
-		else checks.push({ check: "config", ok: true, detail: "al día" });
+		if (cfgError !== undefined) checks.push({ check: "config", level: "fail", detail: cfgError, fix: `bond sync (en ${r.dir})` });
+		else if (cfgActions && cfgActions.length) checks.push({ check: "config", level: "fail", detail: `${cfgActions.length} cambio(s) de config de agente pendientes`, fix: `bond sync (en ${r.dir})` });
+		else checks.push({ check: "config", level: "ok", detail: "al día" });
 
 		// 5. Sus agentes están instalados (los de su bond.toml y el agent de hub.toml).
 		const agents = catchDie(() => loadRepoAgents(r.dir));
-		if (agents.error !== undefined) checks.push({ check: "agentes", ok: false, detail: agents.error, fix: "revisa .bond/bond.toml" });
+		if (agents.error !== undefined) checks.push({ check: "agentes", level: "fail", detail: agents.error, fix: "revisa .bond/bond.toml" });
 		else {
 			const wanted = [...new Set([...agents.value.agents, ...(r.agent ? [r.agent] : [])])];
 			const missing = wanted.filter((a) => !hasAgent(a));
-			checks.push(missing.length ? { check: "agentes", ok: false, detail: `no están instalados: ${missing.join(", ")}`, fix: "bond setup, o instala el agente y repite bond hub check" } : { check: "agentes", ok: true, detail: wanted.length ? wanted.join(", ") : "sin agentes" });
+			checks.push(missing.length ? { check: "agentes", level: "fail", detail: `no están instalados: ${missing.join(", ")}`, fix: "bond setup, o instala el agente y repite bond hub check" } : { check: "agentes", level: "ok", detail: wanted.length ? wanted.join(", ") : "sin agentes" });
 		}
 	}
 
 	// 6. Admite worktrees (bond team trabaja con worktrees).
 	const bare = git(r.dir, ["rev-parse", "--is-bare-repository"]).stdout.trim() === "true";
 	const wt = !bare && git(r.dir, ["worktree", "list", "--porcelain"]).status === 0;
-	checks.push(wt ? { check: "worktrees", ok: true } : { check: "worktrees", ok: false, detail: bare ? "el repo es bare: bond team no puede crear worktrees en él" : `git worktree list falla en ${name}`, fix: bare ? "importa un clon normal (git clone) y enlázalo" : undefined });
+	checks.push(wt ? { check: "worktrees", level: "ok" } : { check: "worktrees", level: "fail", detail: bare ? "el repo es bare: bond team no puede crear worktrees en él" : `git worktree list falla en ${name}`, fix: bare ? "importa un clon normal (git clone) y enlázalo" : undefined });
 
 	// 7. Sin cambios sin commitear (bond team sale de lo commiteado).
 	const dirty = git(r.dir, ["status", "--porcelain"]).stdout.split("\n").filter(Boolean).length;
-	checks.push(dirty ? { check: "cambios", ok: false, detail: `${dirty} cambio(s) sin commitear`, fix: "commitea o guarda los cambios: el worktree de bond team sale de lo commiteado" } : { check: "cambios", ok: true, detail: "limpio" });
+	checks.push(dirty ? { check: "cambios", level: "fail", detail: `${dirty} cambio(s) sin commitear`, fix: "commitea o guarda los cambios: el worktree de bond team sale de lo commiteado" } : { check: "cambios", level: "ok", detail: "limpio" });
 
 	return checks;
 }
@@ -234,11 +239,11 @@ function verticalChecks(s: HubSession): HubCheck[] {
 	const branches = [...byBranch.keys()].sort();
 	for (const branch of branches) {
 		if (git(s.root, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).status !== 0) {
-			checks.push({ check: "rama vertical", ok: false, detail: `${branch} tiene worktree en ${byBranch.get(branch)!.join(", ")} pero no existe en el hub`, fix: `bond team clean ${branch}, o crea la rama en el hub antes de abrir worktrees` });
+			checks.push({ check: "rama vertical", level: "fail", detail: `${branch} tiene worktree en ${byBranch.get(branch)!.join(", ")} pero no existe en el hub`, fix: `bond team clean ${branch}, o crea la rama en el hub antes de abrir worktrees` });
 		}
 	}
-	if (branches.length > 1) checks.push({ check: "rama vertical", ok: false, detail: `varias ramas verticales abiertas (${branches.join(", ")}): en un hub solo cabe una por sesión`, fix: `bond team clean ${branches[0]} (las ramas se quedan)` });
-	if (!checks.length) checks.push({ check: "rama vertical", ok: true, detail: branches.length === 1 ? `${branches[0]} en la sesión` : "ninguna abierta" });
+	if (branches.length > 1) checks.push({ check: "rama vertical", level: "fail", detail: `varias ramas verticales abiertas (${branches.join(", ")}): en un hub solo cabe una por sesión`, fix: `bond team clean ${branches[0]} (las ramas se quedan)` });
+	if (!checks.length) checks.push({ check: "rama vertical", level: "ok", detail: branches.length === 1 ? `${branches[0]} en la sesión` : "ninguna abierta" });
 	return checks;
 }
 
@@ -248,11 +253,12 @@ export function checkHubSession(s: HubSession, opts: CheckOpts = {}): HubCheckRe
 	const repos: RepoReport[] = s.repos.map((r) => {
 		const checks = checkRepo(r, s, hasAgent);
 		if (r.path === ".") checks.push(...verticalChecks(s));
-		return { repo: hubRepoLabel(s, r), path: r.path, checks };
+		return { repo: hubRepoLabel(s, r), path: r.path, level: worstLevel(checks.map((c) => c.level)), checks };
 	});
-	const problems = repos.reduce((n, rp) => n + rp.checks.filter((c) => !c.ok).length, 0);
-	const warnings = repos.reduce((n, rp) => n + rp.checks.filter((c) => c.warn && c.ok).length, 0);
-	return { hub: s.name, root: s.root, ok: problems === 0, problems, warnings, repos };
+	const all = repos.flatMap((rp) => rp.checks);
+	const failures = all.filter((c) => c.level === "fail").length;
+	const warnings = all.filter((c) => c.level === "warn").length;
+	return { hub: s.name, root: s.root, level: worstLevel(repos.map((rp) => rp.level)), failures, warnings, repos };
 }
 
 /** El informe en JSON, sin las funciones de arreglo. */
@@ -273,8 +279,8 @@ export function hubCheckJson(r: HubCheckReport): string {
 function printCheck(r: HubCheckReport): void {
 	log(`hub ${r.hub} ${dim(`(${r.root})`)}`);
 	for (const rp of r.repos) {
-		const failed = rp.checks.filter((c) => !c.ok);
-		const warned = rp.checks.filter((c) => c.warn && c.ok);
+		const failed = rp.checks.filter((c) => c.level === "fail");
+		const warned = rp.checks.filter((c) => c.level === "warn");
 		if (!failed.length && !warned.length) {
 			console.log(`  ${ok("✓")} ${rp.repo} ${dim(`(${rp.path})`)}`);
 			continue;
@@ -284,10 +290,10 @@ function printCheck(r: HubCheckReport): void {
 		for (const c of warned) console.log(`      ${caution("!")} ${c.check.padEnd(13)} ${c.detail ?? ""}${c.fix ? dim(`  → ${c.fix}`) : ""}`);
 	}
 	const warnHint = r.warnings ? dim(` · ${r.warnings} aviso(s) que no impiden trabajar`) : "";
-	console.log(r.ok ? `\n${ok("el hub está listo para trabajar con agentes")}${warnHint}` : `\n${bad(`${r.problems} problema(s)`)}` + dim(fixableHint(r)));
+	console.log(r.level !== "fail" ? `\n${ok("el hub está listo para trabajar con agentes")}${warnHint}` : `\n${bad(`${r.failures} problema(s)`)}` + dim(fixableHint(r)));
 }
 
-const fixableHint = (r: HubCheckReport) => (r.repos.some((rp) => rp.checks.some((c) => !c.ok && c.fixFn)) ? " → bond hub check --fix arregla lo seguro" : "");
+const fixableHint = (r: HubCheckReport) => (r.repos.some((rp) => rp.checks.some((c) => c.level === "fail" && c.fixFn)) ? " → bond hub check --fix arregla lo seguro" : "");
 
 export async function hubCheck(args: string[]): Promise<void> {
 	if (args.includes("-h") || args.includes("--help")) {
@@ -305,7 +311,7 @@ export async function hubCheck(args: string[]): Promise<void> {
 	if (!s) die(`${root} no es un hub: falta hub.toml`);
 	let report = checkHubSession(s);
 	if (fix) {
-		const autos = report.repos.flatMap((rp) => rp.checks.filter((c) => !c.ok && c.fixFn).map((c) => ({ rp, c })));
+		const autos = report.repos.flatMap((rp) => rp.checks.filter((c) => c.level === "fail" && c.fixFn).map((c) => ({ rp, c })));
 		// Sin --yes y con terminal, se pregunta antes de cada arreglo; sin terminal o con
 		// --yes, se aplican todos los seguros de una vez (como siempre).
 		const ask = !yes && !json && process.stdin.isTTY === true;
@@ -338,5 +344,5 @@ export async function hubCheck(args: string[]): Promise<void> {
 	}
 	if (json) console.log(hubCheckJson(report));
 	else printCheck(report);
-	if (!report.ok) process.exitCode = 1;
+	if (report.level === "fail") process.exitCode = 1;
 }

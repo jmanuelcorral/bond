@@ -1,11 +1,11 @@
 ---
 id: "2026-10-30-el-nivel-de-aviso-de-bond-hub-check-se-modela-con-warn-true-por-comprobacion-y-warnings-en-el-informe"
 title: "El nivel de aviso de bond hub check se modela con warn:true por comprobación y warnings en el informe"
-status: "proposed"
+status: "rejected"
 date: "2026-10-30"
 decided_by: "agent:pi/kevin"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "nadie esta usando la herramienta aun, por lo que podemos cambiar el aviso; si, hazlo y prepara la PR"
+accepted_via: "agent:claude"
 supersedes: ""
 superseded_by: ""
 links:

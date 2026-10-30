@@ -886,9 +886,31 @@ para trabajar con agentes; cada problema nombra el repo, la comprobación y el a
 | `base atrasada` | **aviso** (D17/D19): la base va por detrás de su remoto (según el último fetch); arreglo: `bond hub pull` |
 
 Algunas comprobaciones son avisos (D17): se muestran con «!» pero no cuentan como problemas
-ni cambian el código de salida. En `--json` cada aviso lleva `warn: true` y el informe suma
-`warnings` aparte de `problems`; `bond doctor` refleja los avisos en su fila del hub como
-aviso, sin pasarla a fallo.
+ni cambian el código de salida. En `--json`, como en `bond doctor`, cada comprobación lleva
+`level` (`ok`, `warn` o `fail`); cada repo y el informe llevan el peor nivel de lo que
+contienen, y el informe cuenta `failures` y `warnings`. El código de salida es 1 solo si
+`level` es `fail`. `bond doctor` refleja los avisos en su fila del hub como aviso, sin pasarla
+a fallo.
+
+```json
+{
+  "hub": "ops",
+  "level": "warn",
+  "failures": 0,
+  "warnings": 1,
+  "repos": [
+    {
+      "repo": "api",
+      "path": "repos/api",
+      "level": "warn",
+      "checks": [
+        { "check": "base", "level": "ok", "detail": "main" },
+        { "check": "base atrasada", "level": "warn", "detail": "1 commit(s) por detrás de origin/main", "fix": "bond hub pull" }
+      ]
+    }
+  ]
+}
+```
 
 Con `--fix` arregla solo lo seguro y anunciado: crear o reparar el enlace al clon local con el
 `linkRepo` de `bond hub init` (symlink, junction en Windows) registrando el clon y el enlace en

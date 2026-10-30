@@ -24,9 +24,11 @@
   hubs con los repos en la raíz siguen funcionando igual (`bond hub sync`, `bond hub check`,
   `bond team`).
 - `bond hub check` tiene un nivel de aviso que no cambia el código de salida (D17): avisa de los
-  repos fuera de `repos/` sin contarlos como problema. En `--json` cada aviso lleva `warn: true`
-  y el informe suma `warnings` aparte de `problems`; `bond doctor` refleja los avisos en su fila
-  del hub como aviso, sin pasarla a fallo.
+  repos fuera de `repos/` sin contarlos como problema. En `--json`, como en `bond doctor`, cada
+  comprobación lleva `level` (`ok`, `warn` o `fail`), cada repo y el informe llevan el peor
+  nivel de lo que contienen y el informe cuenta `failures` y `warnings`; el código de salida es
+  1 solo con `fail`. `bond doctor` refleja los avisos en su fila del hub como aviso, sin pasarla
+  a fallo.
 - `bond hub init` hace primero `bond init` en el propio hub si no lo tiene (con terminal, con
   sus preguntas; con `--yes`, lo elegido en `bond setup`), con las skills por defecto más
   `plan-team`, en lugar del `bond.toml` mínimo de antes; así el orquestador tiene las skills del

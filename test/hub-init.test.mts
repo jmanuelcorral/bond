@@ -137,8 +137,8 @@ describe("bond hub init", () => {
 		expect(bondToml).toContain("plan-team");
 		expect(existsSync(join(hubDir, ".agents", "skills", "plan-team", "SKILL.md"))).toBe(true);
 		// H1: `bond hub check` ya no reporta que falte la base en ninguno de los repos.
-		const chk = JSON.parse(bond(["hub", "check", "--json"], hubDir).stdout) as { repos: Array<{ checks: Array<{ check: string; ok: boolean }> }> };
-		const baseFail = chk.repos.flatMap((r) => r.checks).filter((c) => c.check === "base" && !c.ok);
+		const chk = JSON.parse(bond(["hub", "check", "--json"], hubDir).stdout) as { repos: Array<{ checks: Array<{ check: string; level: string }> }> };
+		const baseFail = chk.repos.flatMap((r) => r.checks).filter((c) => c.check === "base" && c.level === "fail");
 		expect(baseFail).toEqual([]);
 	});
 
