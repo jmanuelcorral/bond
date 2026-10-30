@@ -2,6 +2,15 @@
 
 ## Sin publicar
 
+- Los repos de un hub nuevo van por defecto en `repos/<nombre>` (D16): el asistente de
+  `bond hub init` lo propone como valor inicial (editable), `bond hub add` lo usa sin preguntar
+  y `--path` manda sobre él. Al importar submódulos que ya existían se conserva su ruta, y los
+  hubs con los repos en la raíz siguen funcionando igual (`bond hub sync`, `bond hub check`,
+  `bond team`).
+- `bond hub check` tiene un nivel de aviso que no cambia el código de salida (D17): avisa de los
+  repos fuera de `repos/` sin contarlos como problema. En `--json` cada aviso lleva `warn: true`
+  y el informe suma `warnings` aparte de `problems`; `bond doctor` refleja los avisos en su fila
+  del hub como aviso, sin pasarla a fallo.
 - `bond hub init` hace primero `bond init` en el propio hub si no lo tiene (con terminal, con
   sus preguntas; con `--yes`, lo elegido en `bond setup`), con las skills por defecto más
   `plan-team`, en lugar del `bond.toml` mínimo de antes; así el orquestador tiene las skills del

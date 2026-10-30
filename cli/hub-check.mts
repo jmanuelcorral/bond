@@ -12,7 +12,7 @@ import { linkRepo } from "./hub-init.mts";
 import { agentInstalled } from "./catalog-agents.mts";
 import { gitWorktrees } from "./team.mts";
 import { loadRepoAgents, syncRepo } from "./repo.mts";
-import { act, bad, brokenLink, canonical, catchDie, die, dim, isDryRun, linkTarget, log, ok, run, setDryRun, warn } from "./util.mts";
+import { act, bad, brokenLink, canonical, catchDie, caution, die, dim, isDryRun, linkTarget, log, ok, run, setDryRun, warn } from "./util.mts";
 
 export const HUB_CHECK_HELP = `Uso: bond hub check [opciones]
 
@@ -21,6 +21,10 @@ listo para trabajar con agentes. Cada problema nombra el repo, la comprobación 
 arreglo: existe y es un repo git, el enlace es el que dice hub.toml, la base existe,
 bond init hecho y config al día, agentes instalados, admite worktrees, sin cambios
 sin commitear y sin ramas verticales a medias.
+
+Algunas comprobaciones son avisos (D17): se muestran con «!» pero no
+cuentan como problemas ni cambian el código de salida (p. ej. los repos
+fuera de repos/, la ruta por defecto desde D16).
 
   --fix     Arregla solo lo seguro: crea o repara el enlace al clon local (symlink,
             junction en Windows) y registra el repo en ~/.bond/hubs.toml (D14), e
@@ -40,6 +44,8 @@ export interface HubCheck {
 	ok: boolean;
 	detail?: string;
 	fix?: string;
+	/** Aviso (D17): se muestra pero no cuenta como problema ni cambia la salida. */
+	warn?: boolean;
 	/** Cambio seguro que aplica --fix. No se incluye en --json. */
 	fixFn?: () => void;
 }
@@ -55,6 +61,8 @@ export interface HubCheckReport {
 	root: string;
 	ok: boolean;
 	problems: number;
+	/** Avisos (D17): no suman en problems ni cambian la salida. */
+	warnings: number;
 	repos: RepoReport[];
 }
 
@@ -64,6 +72,18 @@ export interface CheckOpts {
 }
 
 const label = (s: HubSession, r: HubRepo) => (r.path === "." ? s.name : r.path);
+
+/** Aviso (D16/D17): un repo declarado fuera de repos/, la ruta por defecto de los hubs nuevos. */
+function routeChecks(r: HubRepo): HubCheck[] {
+	if (r.path === "." || r.path.startsWith("repos/")) return [];
+	return [{
+		check: "ruta",
+		ok: true,
+		warn: true,
+		detail: `fuera de repos/ (la ruta por defecto es repos/<nombre>)`,
+		fix: "si quieres la convención, mueve el repo a repos/<nombre> y actualiza su path en hub.toml",
+	}];
+}
 
 /** Enlaza el clon local en la ruta del hub y registra ambos en el registro global (D14). */
 function fixLink(r: HubRepo, s: HubSession): void {
@@ -75,7 +95,8 @@ function fixLink(r: HubRepo, s: HubSession): void {
 /** Las comprobaciones de un repo de la sesión. Si no está en disco, solo se reporta eso. */
 function checkRepo(r: HubRepo, s: HubSession, hasAgent: (agent: string) => boolean): HubCheck[] {
 	const name = label(s, r);
-	const checks: HubCheck[] = [];
+	// El aviso de ruta depende solo de la declaración, no de que el repo esté en disco.
+	const checks: HubCheck[] = [...routeChecks(r)];
 
 	// 1. Existe y es un repo git.
 	if (!r.present) {
@@ -212,7 +233,8 @@ export function checkHubSession(s: HubSession, opts: CheckOpts = {}): HubCheckRe
 		return { repo: label(s, r), path: r.path, checks };
 	});
 	const problems = repos.reduce((n, rp) => n + rp.checks.filter((c) => !c.ok).length, 0);
-	return { hub: s.name, root: s.root, ok: problems === 0, problems, repos };
+	const warnings = repos.reduce((n, rp) => n + rp.checks.filter((c) => c.warn && c.ok).length, 0);
+	return { hub: s.name, root: s.root, ok: problems === 0, problems, warnings, repos };
 }
 
 /** El informe en JSON, sin las funciones de arreglo. */
@@ -234,14 +256,17 @@ function printCheck(r: HubCheckReport): void {
 	log(`hub ${r.hub} ${dim(`(${r.root})`)}`);
 	for (const rp of r.repos) {
 		const failed = rp.checks.filter((c) => !c.ok);
-		if (!failed.length) {
+		const warned = rp.checks.filter((c) => c.warn && c.ok);
+		if (!failed.length && !warned.length) {
 			console.log(`  ${ok("✓")} ${rp.repo} ${dim(`(${rp.path})`)}`);
 			continue;
 		}
-		console.log(`  ${bad("✗")} ${rp.repo} ${dim(`(${rp.path})`)}`);
+		console.log(`  ${failed.length ? bad("✗") : caution("!")} ${rp.repo} ${dim(`(${rp.path})`)}`);
 		for (const c of failed) console.log(`      ${bad("✗")} ${c.check.padEnd(13)} ${c.detail ?? ""}${c.fix ? dim(`  → ${c.fix}`) : ""}`);
+		for (const c of warned) console.log(`      ${caution("!")} ${c.check.padEnd(13)} ${c.detail ?? ""}${c.fix ? dim(`  → ${c.fix}`) : ""}`);
 	}
-	console.log(r.ok ? `\n${ok("el hub está listo para trabajar con agentes")}` : `\n${bad(`${r.problems} problema(s)`)}` + dim(fixableHint(r)));
+	const warnHint = r.warnings ? dim(` · ${r.warnings} aviso(s) que no impiden trabajar`) : "";
+	console.log(r.ok ? `\n${ok("el hub está listo para trabajar con agentes")}${warnHint}` : `\n${bad(`${r.problems} problema(s)`)}` + dim(fixableHint(r)));
 }
 
 const fixableHint = (r: HubCheckReport) => (r.repos.some((rp) => rp.checks.some((c) => !c.ok && c.fixFn)) ? " → bond hub check --fix arregla lo seguro" : "");

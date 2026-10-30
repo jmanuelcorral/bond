@@ -126,6 +126,66 @@ describe("hub sano", () => {
 	});
 });
 
+describe("nivel de aviso (D17): repos fuera de repos/", () => {
+	test("un hub con los repos en la raíz avisa por cada uno y sale con 0, en texto y en --json", () => {
+		// El hub de prueba tiene front y back en la raíz (layout anterior a D16).
+		const r = bond(["hub", "check"]);
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain("fuera de repos/");
+		expect(r.stdout).toContain("2 aviso(s) que no impiden trabajar");
+
+		const rep = checkHubSession(hubSession(hub)!);
+		expect(rep.ok).toBe(true);
+		expect(rep.problems).toBe(0);
+		expect(rep.warnings).toBe(2);
+
+		const j = JSON.parse(bond(["hub", "check", "--json"]).stdout) as {
+			warnings: number;
+			problems: number;
+			ok: boolean;
+			repos: { checks: { check: string; ok: boolean; warn?: boolean }[] }[];
+		};
+		expect(j.warnings).toBe(2);
+		expect(j.problems).toBe(0);
+		expect(j.ok).toBe(true);
+		const rutas = j.repos.flatMap((x) => x.checks).filter((c) => c.check === "ruta");
+		expect(rutas).toHaveLength(2);
+		expect(rutas.every((c) => c.ok === true && c.warn === true)).toBe(true);
+	});
+
+	test("un hub con los repos en repos/ no tiene avisos y doctor lo da al día", () => {
+		const hub2 = repo("hub-en-repos");
+		bondInit(hub2);
+		mkdirSync(join(hub2, "repos"), { recursive: true });
+		symlinkSync(backReal, join(hub2, "repos", "back"), process.platform === "win32" ? "junction" : "dir");
+		writeFileSync(
+			hub2 + "/hub.toml",
+			`name = "hub-en-repos"
+base = "main"
+
+[repos.back]
+path = ${JSON.stringify("repos/back")}
+base = "main"
+link = "symlink"
+`,
+		);
+		writeFileSync(join(hub2, ".gitignore"), ".bond/hub.local.toml\n/repos/back\n");
+		writeFileSync(join(hub2, ".bond", "hub.local.toml"), `[repos.back]\nsource = ${JSON.stringify(backReal)}\n`);
+		expect(bond(["sync"], hub2).status).toBe(0);
+		g(hub2, "add", "-A");
+		g(hub2, "commit", "-qm", "hub con los repos en repos/");
+
+		const r = bond(["hub", "check"], hub2);
+		expect(r.status).toBe(0);
+		expect(r.stdout).not.toContain("fuera de repos/");
+		expect(checkHubSession(hubSession(hub2)!).warnings).toBe(0);
+
+		const doc = bond(["doctor", "--quick"], hub2);
+		expect(doc.stdout).toContain("hub hub-en-repos");
+		expect(doc.stdout).toContain("al día");
+	});
+});
+
 describe("comprobaciones con la sesión rota", () => {
 	test("symlink roto: nombra el repo, dice que falta el enlace y sale con 1", () => {
 		rmSync(join(hub, "back"));
@@ -267,12 +327,12 @@ describe("bond doctor y el hub", () => {
 		expect(r.stdout).not.toContain("bond hub check");
 	});
 
-	test("bond doctor dentro de un hub sano: resumen sin arreglo pendiente", () => {
+	test("bond doctor con un hub con avisos: fila de aviso, sin problema (D17)", () => {
+		// El hub de prueba tiene los repos en la raíz: la fila refleja los avisos sin pasar a fallo.
 		const r = bond(["doctor", "--quick"], hub);
 		expect(r.stdout).toContain("hub hub");
-		expect(r.stdout).toContain("al día");
-		// Con el hub en verde no se ofrece el fix.
-		expect(r.stdout).not.toContain("bond hub check");
+		expect(r.stdout).toContain("2 aviso(s):");
+		expect(r.stdout).not.toContain("problema(s)");
 	});
 
 	test("bond doctor con el hub roto ofrece bond hub check", () => {

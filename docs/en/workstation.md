@@ -322,7 +322,9 @@ A hub is a shared git repo that groups several repos (say, frontend and backend)
 `hub.toml`, each one as a submodule or as a link (symlink) to a local clone. It is created
 guided with `bond hub init`, which first runs `bond init` in the hub itself (with `plan-team`), imports repos by URL (submodule) or from a local clone
 (symlink) and runs `bond init` with the hub's config in those without bond; `bond hub check` then reviews that every repo of the session is ready to work with
-agents, and `--fix` repairs the safe things. The flow, end to end (see
+agents, and `--fix` repairs the safe things. New repos go into `repos/<name>` by default (D16); a hub
+that already keeps them at the root keeps working as before — `bond hub check` only warns about it,
+without failing (D17). The flow, end to end (see
 [reference](reference.md#bond-hub)):
 
 ```bash
