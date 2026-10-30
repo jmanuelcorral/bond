@@ -238,8 +238,8 @@ Riesgos:
   - Las skills no mencionan `[hub]` de `bond.toml`; `bond sync --check` al día.
   - El site de docs construye (`cd site && npm run build`).
 - Acciones:
-  - [ ] Docs y skills, prueba manual y arreglos que salgan, cada uno con su prueba.
-  - [ ] Ejecutar las comprobaciones y anotar los resultados.
+  - [x] Docs y skills, prueba manual y arreglos que salgan, cada uno con su prueba.
+  - [x] Ejecutar las comprobaciones y anotar los resultados.
   - [ ] Presentar la evidencia y parar para revisión.
 - Verificación: `npm run typecheck && bun test`, `bond sync --check`, build del site y la prueba
   manual descrita.
@@ -253,12 +253,12 @@ Riesgos:
 | P5 | implemented | passed | pending | `f8e930e` + `b87a26b` (arreglos de la revisión) integrados en `plan/hub-session`; en el checkout principal `bun test` 386/0, y las pruebas no tocan el `~/.bond/hubs.toml` real (`BOND_HOME` temporal). Sin probar en Windows (canonical/realpath y junctions, a cubrir en P6). Runs: `2026-10-30-kevin-use-the-plan-execute-skill-to-implement.md`, `2026-10-30-reviewer-5-read-only-code-review-of-branch-plan-hub.md`, `2026-10-30-kevin-a-reviewer-requested-changes-on-your-p5.md` |
 | P6 | implemented | passed | pending | `ad692c2` + `0821fa7` (arreglos de la revisión) integrados en `plan/hub-session`; en el checkout principal `bun test` 395/0. Sin probar en Windows real (junctions: lo dirá el CI) ni a mano con un repo real por URL. Runs: `2026-10-30-kevin-use-the-plan-execute-skill-to-implement-2.md`, `2026-10-30-reviewer-6-read-only-code-review-of-branch-plan-hub.md`, `2026-10-30-kevin-a-reviewer-requested-changes-on-your-p6.md` |
 | P7 | implemented | passed | pending | `9f4ff33` + `8f5936c` (rebasados sobre P6, con los arreglos de la revisión y el `linkRepo` de P6) integrados en `plan/hub-session`; en el checkout principal `npm run typecheck` limpio, `bun test` 413/0, `bond decisions check` sin errores. Sin probar en Windows real. Runs: `2026-10-30-stuart-use-the-plan-execute-skill-to-implement.md`, `2026-10-30-reviewer-7-read-only-code-review-of-branch-plan-hub.md`, `2026-10-30-stuart-a-reviewer-requested-changes-on-your-p7.md` |
-| P8 | pending | not_run | pending | todavía nada |
+| P8 | implemented | passed | pending | `5b55acc` (docs y skills) + `6c569f2` (arreglos H1, H2, H4, H5 de la prueba manual) + `6b8064d` (decisión H4) integrados en `plan/hub-session`; en el worktree `npm run typecheck` limpio, `bun test` 418/0, `bond sync --check` al día, build del site correcto (según kevin); prueba manual repetida tras los arreglos (ver Evidencia). Sin probar en Windows real. Runs: `2026-10-30-kevin-use-the-plan-execute-skill-to-implement-3.md` (encargo e informe de los arreglos), `2026-10-30-kevin-the-orchestrator-ran-p8-s-manual-end-to.md` (encargo de los arreglos) |
 
 ## Siguiente paso
 
-P8 (flujo completo de punta a punta), ya con P5–P7 integradas en `plan/hub-session` (sus
-revisiones humanas siguen pendientes).
+Revisión humana de P5–P8 (todas integradas en `plan/hub-session`) y aceptar o rechazar las
+decisiones propuestas; después, PR de `plan/hub-session` contra `main`.
 
 ## Evidencia y seguimiento
 
@@ -281,6 +281,26 @@ revisiones humanas siguen pendientes).
   actualizar en `--fix`, `hub.toml` inválido invisible en doctor), aplicados en `8f5936c` tras
   rebasar sobre P6 y reutilizar su `linkRepo`. Decisión propuesta por stuart sobre qué es una
   "rama vertical a medias" en `check`, pendiente de aceptar.
+- P8: rama `plan/hub-guided-p8` (kevin, pi). Prueba manual del orquestador en Herdr, con
+  `BOND_HOME` temporal, sobre un hub `fluzo` con `frontend` por submódulo (`file://…/frontend.git`)
+  y `backend` por symlink en `develop`: `bond hub init`, `bond hub check`, `bond team fix/x` (con
+  la tabla `tabla · fluzo` y los dos repos), la negativa de D10 a una segunda rama, `bond team
+  prompt` con la nota de coordinación, `bond team collect --repo` y `bond team clean` dejándolo todo
+  como estaba (sin tocar los worktrees reales de `~/.herdr/worktrees/fluzo/`). Hallazgos, arreglados
+  en `6c569f2` con su prueba cada uno: H1, `hub init` dejaba el hub sin commit (check: base
+  inexistente) y con config de agente pendiente (ahora hace `bond sync` y el commit inicial si el
+  hub no tenía commits); H2, `check --fix --yes` no existía (ahora `--yes`/`-y`, y `--fix` pregunta
+  con terminal); H4, el primer prompt a un agente recién arrancado se perdía
+  (`agent_prompt_stalled`: ahora se reintenta una vez si el panel no muestra la tarea y después
+  falla con error, decisión `2026-10-30-h4-…` propuesta); H5, el hub nacía sin `[decisions]` y los
+  runs iban a los submódulos (ahora `hub init` la propone, activada con `--yes`). Repetida tras los
+  arreglos: el hub queda con el commit `bond hub init`, `[decisions]` y sin config pendiente, y
+  `check --fix --yes` se acepta.
+- Quedan para más adelante: `bond hub init` acepta un origen vacío (`file://`) y escribe
+  `[repos.]` inválido en `hub.toml`; un hub con el mismo nombre que un repo comparte carpeta en
+  `~/.herdr/worktrees/`; `bond team prompt` manda al agente equivocado si hay dos en el mismo
+  worktree (el primero cuyo cwd cae dentro); `bond team collect` puede guardar el informe en un run
+  anterior de la misma rama (el de los arreglos de P8 cayó en el run del encargo inicial).
 
 Sin issues ni PRs todavía. Continúa `2026-10-29-hub-session` en la misma rama
 (`plan/hub-session`), que irá en un solo PR.
