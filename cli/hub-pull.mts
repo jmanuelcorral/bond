@@ -82,14 +82,15 @@ export function pullRepo(r: HubRepo, s: HubSession, opts: PullOpts = {}): RepoPu
 	}
 	const remote = remoteConfig || (upInitial.status === 0 ? upInitial.stdout.trim().split("/")[0] : undefined) || remotes[0];
 
-	// 5. Comprobar dónde tiene checkout la base
-	const worktrees = gitWorktrees(r.dir);
-	const checkedOutElsewhere = worktrees.find((w) => w.branch === r.base && w.path !== canonical(r.dir));
+	// 5. Comprobar dónde tiene checkout la base. Si es la rama actual de este repo no puede estar
+	// en otro worktree (git no lo permite); así no depende de la ruta que dé git worktree list,
+	// que en un submódulo es la de su carpeta en .git/modules y no la del repo.
+	const isCheckedOutHere = currentBranch(r.dir) === r.base;
+	const checkedOutElsewhere = isCheckedOutHere ? undefined : gitWorktrees(r.dir).find((w) => w.branch === r.base && w.path !== canonical(r.dir));
 	if (checkedOutElsewhere) {
 		const reason = `la base "${r.base}" tiene checkout en otro worktree (${checkedOutElsewhere.path})`;
 		return { ...res, reason, detail: reason };
 	}
-	const isCheckedOutHere = currentBranch(r.dir) === r.base;
 	if (isCheckedOutHere) {
 		const dirty = git(r.dir, ["status", "--porcelain"]).stdout.split("\n").filter(Boolean).length;
 		if (dirty > 0) {

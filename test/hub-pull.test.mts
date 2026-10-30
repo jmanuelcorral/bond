@@ -257,6 +257,26 @@ describe("bond hub pull", () => {
 		expect(chk2.stdout).not.toContain("base atrasada");
 	});
 
+	test("submódulo real en su base (como lo deja hub init) por detrás de su remoto: pull lo avanza", () => {
+		const subHub = join(tmp, "sub-hub");
+		mkdirSync(subHub);
+		expect(bond(["hub", "init", ".", "--yes", "--name", "subhub", `file://${subRemote}`], subHub).status).toBe(0);
+		const sub = join(subHub, "repos", "sub-remote");
+		expect(g(sub, "rev-parse", "--abbrev-ref", "HEAD")).toBe("main");
+		// hub init commitea la config de bond en el submódulo: se publica, y el remoto avanza.
+		g(sub, "push", "-q", "origin", "main");
+		const worker = join(tmp, "worker-real-sub");
+		g(tmp, "clone", subRemote, worker);
+		writeFileSync(join(worker, "nuevo.txt"), "x\n");
+		g(worker, "add", "nuevo.txt");
+		g(worker, "commit", "-qm", "nuevo");
+		g(worker, "push", "origin", "main");
+		const p = bond(["hub", "pull"], subHub);
+		expect(p.stdout).toContain("sub-remote (repos/sub-remote)  avanzado 1 commit(s)");
+		expect(p.stdout).not.toContain("otro worktree");
+		expect(g(sub, "rev-parse", "HEAD")).toBe(g(worker, "rev-parse", "HEAD"));
+	});
+
 	test("salta repos con cambios sin commitear en su base y explica el motivo sin fallar", () => {
 		writeFileSync(join(subReal, "cambio-sucio.txt"), "sucio\n");
 
