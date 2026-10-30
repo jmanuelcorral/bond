@@ -406,10 +406,6 @@ export function printSession(s: HubSession): void {
 }
 
 export async function hub(args: string[]): Promise<void> {
-	if (args.includes("-h") || args.includes("--help")) {
-		console.log(HUB_HELP.trimEnd());
-		return;
-	}
 	const [sub, ...rest] = args;
 	if (sub === "init") {
 		const { hubInit } = await import("./hub-init.mts");
@@ -422,6 +418,10 @@ export async function hub(args: string[]): Promise<void> {
 	if (sub === "sync") {
 		const { hubSync } = await import("./hub-init.mts");
 		return hubSync(rest);
+	}
+	if (args.includes("-h") || args.includes("--help")) {
+		console.log(HUB_HELP.trimEnd());
+		return;
 	}
 	if (args.length > 0) {
 		die(`opción desconocida: ${args[0]} (bond hub --help)`);
