@@ -1,13 +1,13 @@
 ---
 id: "2026-10-30-bond-hub-pull-solo-avanza-la-base-en-fast-forward"
 title: "bond hub pull solo avanza la base en fast-forward"
-status: "accepted"
+status: "superseded"
 date: "2026-10-30"
 decided_by: "agent:claude"
-accepted_by: "si, guárdalo y arranca P9"
+accepted_by: "acéptalo y fusiona la PR"
 accepted_via: "agent:claude"
 supersedes: ""
-superseded_by: ""
+superseded_by: "2026-10-30-bond-hub-pull-avanza-la-base-sin-tocar-la-carpeta-de-trabajo-cuando-no-esta-en-uso"
 links:
   - "plan: docs/plans/2026-10-30-hub-ops.md"
   - "phase: P11"
