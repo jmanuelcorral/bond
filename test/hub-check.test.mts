@@ -178,11 +178,68 @@ link = "symlink"
 		const r = bond(["hub", "check"], hub2);
 		expect(r.status).toBe(0);
 		expect(r.stdout).not.toContain("fuera de repos/");
+		expect(r.stdout).toContain("back (repos/back)");
+		expect(r.stdout).not.toContain("repos/back (repos/back)");
 		expect(checkHubSession(hubSession(hub2)!).warnings).toBe(0);
+
+		const j = JSON.parse(bond(["hub", "check", "--json"], hub2).stdout) as {
+			repos: { repo: string; path: string }[];
+		};
+		const backRepo = j.repos.find((x) => x.path === "repos/back");
+		expect(backRepo?.repo).toBe("back");
+		expect(backRepo?.path).toBe("repos/back");
 
 		const doc = bond(["doctor", "--quick"], hub2);
 		expect(doc.stdout).toContain("hub hub-en-repos");
 		expect(doc.stdout).toContain("al día");
+	});
+
+	test("avisa si la base está por detrás de su remoto tras un fetch, y deja de avisar al ponerse al día (D17/D19)", () => {
+		// Creamos un upstream remoto para backReal clonándolo como bare
+		const backUpstream = join(tmp, "back-upstream.git");
+		g(tmp, "clone", "--bare", backReal, backUpstream);
+		g(backReal, "remote", "add", "origin", backUpstream);
+		g(backReal, "push", "-u", "origin", "main");
+
+		// Clonamos para añadir un commit en el upstream remoto
+		const worker = join(tmp, "worker");
+		g(tmp, "clone", backUpstream, worker);
+		writeFileSync(join(worker, "nuevo.txt"), "nuevo\n");
+		g(worker, "add", "nuevo.txt");
+		g(worker, "commit", "-qm", "nuevo en remoto");
+		g(worker, "push", "origin", "main");
+
+		// Antes del fetch en el clon local, check no avisa (según el último fetch está al día)
+		const antesFetch = bond(["hub", "check"]);
+		expect(antesFetch.stdout).not.toContain("base atrasada");
+
+		// Fetch en el clon local: ahora va 1 por detrás de origin/main
+		g(backReal, "fetch", "origin");
+
+		const conAviso = bond(["hub", "check"]);
+		expect(conAviso.status).toBe(0);
+		expect(conAviso.stdout).toContain("base atrasada");
+		expect(conAviso.stdout).toContain("1 commit(s) por detrás de origin/main");
+		expect(conAviso.stdout).toContain("bond hub pull");
+
+		const rep = checkHubSession(hubSession(hub)!);
+		expect(rep.ok).toBe(true);
+		expect(rep.warnings).toBeGreaterThan(0);
+		const backRep = rep.repos.find((x) => x.path === "back")!;
+		expect(backRep.checks.some((c) => c.check === "base atrasada" && c.warn && c.ok)).toBe(true);
+
+		// bond hub pull avanza la base
+		const p = bond(["hub", "pull"]);
+		expect(p.status).toBe(0);
+		expect(p.stdout).toContain("avanzado 1 commit(s)");
+
+		// Ahora check deja de avisar
+		const trasPull = bond(["hub", "check"]);
+		expect(trasPull.status).toBe(0);
+		expect(trasPull.stdout).not.toContain("base atrasada");
+		const repTras = checkHubSession(hubSession(hub)!);
+		const backTras = repTras.repos.find((x) => x.path === "back")!;
+		expect(backTras.checks.some((c) => c.check === "base atrasada")).toBe(false);
 	});
 });
 

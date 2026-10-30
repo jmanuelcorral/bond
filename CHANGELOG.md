@@ -9,6 +9,13 @@
   agente y descripción), las reglas del hub y dónde viven `docs/plans/` y `docs/decisions/`;
   lo escrito a mano fuera del bloque se conserva, `bond sync --check` lo comprueba y
   `bond hub init` / `bond hub add` lo dejan al día (D18).
+- `bond hub pull` pone al día la base del hub y de cada repo de la sesión con `git fetch` y avance
+  en fast-forward (D19). Solo actúa si el repo está en su rama base y sin cambios sin commitear.
+  Si un repo tiene cambios, está en otra rama, su base ha divergido o no tiene remoto/upstream,
+  lo salta y explica el motivo; nunca hace merge, rebase ni push. Con `--dry-run` y `--json`.
+- `bond hub check` avisa de las bases atrasadas respecto a su remoto según el último fetch con el
+  arreglo `bond hub pull` (D17/D19), y muestra la clave de `hub.toml` como etiqueta de cada repo
+  (p. ej. `api (repos/api)`) manteniendo la compatibilidad con `--json`.
 - Los repos de un hub nuevo van por defecto en `repos/<nombre>` (D16): el asistente de
   `bond hub init` lo propone como valor inicial (editable), `bond hub add` lo usa sin preguntar
   y `--path` manda sobre él. Al importar submódulos que ya existían se conserva su ruta, y los

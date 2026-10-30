@@ -827,6 +827,7 @@ bond hub                 # enseña la sesión del hub: repos, ruta, base, enlace
 bond hub init [dir]      # crea un hub o lo prepara en un repo existente e importa repos
 bond hub add <url|ruta>  # añade un repo al hub (como submódulo o enlace local)
 bond hub sync            # monta submódulos, crea enlaces y actualiza el registro global
+bond hub pull            # pone al día la base del hub y de cada repo en fast-forward (--dry-run, --json)
 bond hub check           # revisa cada repo de la sesión y dice qué falta y cómo arreglarlo (--fix, --json)
 ```
 
@@ -882,6 +883,7 @@ para trabajar con agentes; cada problema nombra el repo, la comprobación y el a
 | `cambios` | sin cambios sin commitear |
 | `rama vertical` | no hay worktrees de ramas que no existen en el hub, y solo hay una rama vertical abierta (D10) |
 | `ruta` | **aviso** (D16/D17): el repo está fuera de `repos/`, la ruta por defecto de los hubs nuevos |
+| `base atrasada` | **aviso** (D17/D19): la base va por detrás de su remoto (según el último fetch); arreglo: `bond hub pull` |
 
 Algunas comprobaciones son avisos (D17): se muestran con «!» pero no cuentan como problemas
 ni cambian el código de salida. En `--json` cada aviso lleva `warn: true` y el informe suma
@@ -897,6 +899,17 @@ los aplica todos de una vez. Con `--dry-run` solo lo describe. `--json` emite el
 por repos y manda a stderr los mensajes del arreglo. `bond doctor` incluye un resumen (`hub <nombre>`)
 cuando estás en un hub y reporta como fallo un `hub.toml` inválido con su error de parseo; fuera, no
 cambia nada.
+
+### `bond hub pull`
+
+`cli/hub-pull.mts`. Pone al día la rama base del hub y de cada repo de la sesión con `git fetch` y
+avance en fast-forward (D19). Solo actúa si el repo está en su rama base y sin cambios sin commitear.
+Si un repo tiene cambios, está en otra rama, su base ha divergido o no tiene remoto/upstream, lo salta
+y explica el motivo. Nunca hace merge, rebase ni push.
+
+- `--dry-run`: describe los avances sin hacer fetch ni mover las ramas.
+- `--json`: salida estructurada en JSON con el resultado por repo (`updated`, `up_to_date`, `skipped`),
+  upstream y commits avanzados.
 
 ### `bond team` en un hub
 

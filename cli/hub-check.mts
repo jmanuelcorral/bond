@@ -24,7 +24,8 @@ sin commitear y sin ramas verticales a medias.
 
 Algunas comprobaciones son avisos (D17): se muestran con «!» pero no
 cuentan como problemas ni cambian el código de salida (p. ej. los repos
-fuera de repos/, la ruta por defecto desde D16).
+fuera de repos/, la ruta por defecto desde D16, o una base atrasada
+respecto a su remoto, D19).
 
   --fix     Arregla solo lo seguro: crea o repara el enlace al clon local (symlink,
             junction en Windows) y registra el repo en ~/.bond/hubs.toml (D14), e
@@ -71,7 +72,25 @@ export interface CheckOpts {
 	hasAgent?: (agent: string) => boolean;
 }
 
-const label = (s: HubSession, r: HubRepo) => (r.path === "." ? s.name : r.path);
+const label = (s: HubSession, r: HubRepo) => (r.path === "." ? s.name : (r.name ?? r.path));
+
+/** Aviso (D17/D19): la base va por detrás de su remoto según el último fetch. */
+function baseBehindCheck(r: HubRepo): HubCheck[] {
+	const up = git(r.dir, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", `${r.base}@{upstream}`]);
+	if (up.status !== 0 || !up.stdout.trim()) return [];
+	const upstream = up.stdout.trim();
+	const count = git(r.dir, ["rev-list", "--left-right", "--count", `${r.base}...${upstream}`]);
+	if (count.status !== 0) return [];
+	const [, behind = 0] = count.stdout.trim().split(/\s+/).map(Number);
+	if (behind <= 0) return [];
+	return [{
+		check: "base atrasada",
+		ok: true,
+		warn: true,
+		detail: `${behind} commit(s) por detrás de ${upstream}`,
+		fix: "bond hub pull",
+	}];
+}
 
 /** Aviso (D16/D17): un repo declarado fuera de repos/, la ruta por defecto de los hubs nuevos. */
 function routeChecks(r: HubRepo): HubCheck[] {
@@ -155,6 +174,7 @@ function checkRepo(r: HubRepo, s: HubSession, hasAgent: (agent: string) => boole
 	// 3. Tiene la base declarada.
 	const hasBase = git(r.dir, ["rev-parse", "--verify", "--quiet", `${r.base}^{commit}`]).status === 0;
 	checks.push(hasBase ? { check: "base", ok: true, detail: r.base } : { check: "base", ok: false, detail: `la base "${r.base}" no existe en ${name}`, fix: "cambia base en hub.toml o haz git fetch en el repo" });
+	if (hasBase) checks.push(...baseBehindCheck(r));
 
 	// 4. bond init hecho y config de agentes al día (bond sync --check).
 	if (!existsSync(join(r.dir, ".bond", "bond.toml"))) {
