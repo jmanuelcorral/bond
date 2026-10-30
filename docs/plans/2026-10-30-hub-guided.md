@@ -3,6 +3,7 @@ name: "2026-10-30-hub-guided"
 description: "bond crea el hub e importa sus repos de forma guiada (submódulo o symlink), con hub.toml como fuente de la sesión y una revisión que asegura que todo funciona"
 created_at: "2026-10-30T06:52:48Z"
 has_completed_all_phases: false
+last_implementation_at: "2026-10-30T10:00:00Z"
 ---
 
 # Hub guiado: crear el hub, importar los repos y comprobar que todo funciona
@@ -150,10 +151,10 @@ Riesgos:
   - Un `bond.toml` con `[hub]` ya no hace nada especial (ni error).
   - Repos sin hub: sin cambios (pruebas de no regresión existentes).
 - Acciones:
-  - [ ] Formato, lectura y validación de los tres ficheros; `hubSession`/`hubRoot` desde
+  - [x] Formato, lectura y validación de los tres ficheros; `hubSession`/`hubRoot` desde
     `hub.toml` y el registro; quitar `[hub]`; `canonical` con realpath; docs, CHANGELOG y
     pruebas (fixture con submódulo y symlink).
-  - [ ] Ejecutar las comprobaciones y anotar los resultados.
+  - [x] Ejecutar las comprobaciones y anotar los resultados.
   - [ ] Presentar la evidencia y parar para revisión.
 - Verificación: `npm run typecheck && bun test` en la raíz.
 - Riesgos y recuperación: si algo del modo hub deja de funcionar, la fase no se acepta hasta que
@@ -249,17 +250,23 @@ Riesgos:
 
 | Fase | Implementación | Verificación | Revisión | Evidencia |
 | --- | --- | --- | --- | --- |
-| P5 | pending | not_run | pending | todavía nada |
+| P5 | implemented | passed | pending | `f8e930e` + `b87a26b` (arreglos de la revisión) integrados en `plan/hub-session`; en el checkout principal `bun test` 386/0, y las pruebas no tocan el `~/.bond/hubs.toml` real (`BOND_HOME` temporal). Sin probar en Windows (canonical/realpath y junctions, a cubrir en P6). Runs: `2026-10-30-kevin-use-the-plan-execute-skill-to-implement.md`, `2026-10-30-reviewer-5-read-only-code-review-of-branch-plan-hub.md`, `2026-10-30-kevin-a-reviewer-requested-changes-on-your-p5.md` |
 | P6 | pending | not_run | pending | todavía nada |
 | P7 | pending | not_run | pending | todavía nada |
 | P8 | pending | not_run | pending | todavía nada |
 
 ## Siguiente paso
 
-Ejecutar P5 (`hub.toml` como fuente de la sesión): es la única fase sin dependencias y P6 y P7 la
-necesitan. Respuesta corta: "ejecuta P5". Alternativa: parar aquí.
+P6 (crear e importar) y P7 (revisión guiada) en paralelo desde `plan/hub-session`, ya con P5
+integrada (su revisión humana sigue pendiente).
 
 ## Evidencia y seguimiento
+
+- P5: rama `plan/hub-guided-p5` (kevin, agy), revisada por reviewer-5 (pi): cambios pedidos
+  (ayuda y mensaje obsoletos, aviso de config inválida desde un repo de la sesión, prueba desde
+  un worktree de un repo enlazado) y 4 nits, aplicados en `b87a26b`. Quedan para más adelante:
+  pruebas de `canonical` en Windows (P6), caché de la sesión por proceso (rendimiento) y las
+  skills/`docs/puesto.md` que aún hablan de `[hub]` (P8).
 
 Sin issues ni PRs todavía. Continúa `2026-10-29-hub-session` en la misma rama
 (`plan/hub-session`), que irá en un solo PR.
