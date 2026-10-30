@@ -1,124 +1,59 @@
 # Cambios
 
-## Sin publicar
+## 1.10.0
 
-- La skill global `bond-team` vuelve a cargar en pi: su `description` tenía un `: ` sin comillas
-  (YAML inválido) y pi la descartaba. Una prueba comprueba ahora el frontmatter de todas las
-  skills globales.
-- Cada repo de `hub.toml` puede llevar `description` (opcional; el asistente de `bond hub init`
-  la pregunta y en `bond hub add` es `--description`), y `bond hub` la enseña en una columna
-  que solo aparece si algún repo la declara. En un hub, `bond sync` genera en su `AGENTS.md` un
-  bloque con marcador propio (`bond:hub`) con la tabla de la sesión (ruta, base, enlace,
-  agente y descripción), las reglas del hub y dónde viven `docs/plans/` y `docs/decisions/`;
-  lo escrito a mano fuera del bloque se conserva, `bond sync --check` lo comprueba y
-  `bond hub init` / `bond hub add` lo dejan al día (D18).
-- `bond hub pull` pone al día la base del hub y de cada repo de la sesión con `git fetch` y avance
-  en fast-forward (D19). Si el repo está en su base, la avanza solo si no tiene cambios sin
-  commitear; si la base no tiene checkout en ningún worktree (un submódulo con HEAD separado, o
-  un repo en otra rama), avanza la ref sin tocar la carpeta de trabajo. Si la base tiene
-  cambios, está en uso en otro worktree, ha divergido o no tiene remoto/upstream, la salta y
-  explica el motivo; nunca hace merge, rebase ni push. Con `--dry-run` y `--json`.
-- `bond hub check` avisa de las bases atrasadas respecto a su remoto según el último fetch con el
-  arreglo `bond hub pull` (D17/D19), y muestra la clave de `hub.toml` como etiqueta de cada repo
-  (p. ej. `api (repos/api)`) manteniendo la compatibilidad con `--json`.
-- Los repos de un hub nuevo van por defecto en `repos/<nombre>` (D16): el asistente de
-  `bond hub init` lo propone como valor inicial (editable), `bond hub add` lo usa sin preguntar
-  y `--path` manda sobre él. Al importar submódulos que ya existían se conserva su ruta, y los
-  hubs con los repos en la raíz siguen funcionando igual (`bond hub sync`, `bond hub check`,
-  `bond team`).
-- `bond hub check` tiene un nivel de aviso que no cambia el código de salida (D17): avisa de los
-  repos fuera de `repos/` sin contarlos como problema. En `--json`, como en `bond doctor`, cada
-  comprobación lleva `level` (`ok`, `warn` o `fail`), cada repo y el informe llevan el peor
-  nivel de lo que contienen y el informe cuenta `failures` y `warnings`; el código de salida es
-  1 solo con `fail`. `bond doctor` refleja los avisos en su fila del hub como aviso, sin pasarla
-  a fallo.
-- `bond hub init` hace primero `bond init` en el propio hub si no lo tiene (con terminal, con
-  sus preguntas; con `--yes`, lo elegido en `bond setup`), con las skills por defecto más
-  `plan-team`, en lugar del `bond.toml` mínimo de antes; así el orquestador tiene las skills del
-  catálogo en el hub. `bond hub sync` también se lo hace a un hub que no lo tenga, y
-  `bond hub check` lo marca en la fila del hub.
-- `bond hub init`, `bond hub add` y `bond hub sync` hacen `bond init` con la config del hub
-  (sus agentes y las skills por defecto del catálogo) en los repos de la sesión que no tienen
-  bond, y respetan la de los que ya lo tienen. Con terminal preguntan antes. La config se
-  commitea en la rama actual del repo si estaba limpio (los worktrees de `bond team` salen de lo
-  commiteado); si no, se deja sin commitear y se avisa. En un submódulo ese commit es local, y
-  se avisa de hacer `git push` en él antes de subir el hub. `bond hub check` propone
-  `bond hub sync` para un repo sin bond.
-- `bond hub init` (y `bond hub sync` cuando falta la ruta de un symlink) pide la ruta al clon
-  local navegando por disco: empieza en la carpeta que contiene el hub, autocompleta carpetas
-  (flechas para elegir, Tab completa, `/` entra en la carpeta) y solo acepta un repo git.
-- Arreglos del flujo guiado del hub probado de punta a punta:
-  - `bond hub init` deja ahora el hub recién creado (sin ningún commit) con su config de agente
-    generada (equivalente a `bond sync`) y un commit inicial de sus ficheros (`hub.toml`,
-    `.gitmodules`, `.gitignore`, `AGENTS.md`, `.bond/` y la config de agente), para que
-    `bond hub check` encuentre la base. En un hub preexistente con commits no commitea: los
-    cambios se dejan para el usuario. Con `--dry-run` solo lo describe.
-  - El hub nace con memoria de decisiones (`decision-record` y `[decisions]`, del `bond init` del
-    hub), de modo que los runs de `bond team` quedan en el hub y no caen en cada repo de la
-    sesión (D5).
-  - `bond hub check` acepta `--yes`/`-y` para aplicar los arreglos seguros sin preguntar; con
-    terminal y sin `--yes`, `--fix` pregunta antes de cada arreglo.
-  - `bond team prompt` reintenta una vez un prompt que Herdr devuelve estancado
-    (`agent_prompt_stalled`) cuando el panel no muestra señales de haberlo recibido (p. ej. un
-    agente recién arrancado); si vuelve a estancarse sin señales, falla con un mensaje claro en
-    lugar de solo avisar. Si el panel ya muestra la tarea, se da por entregada y no se reenvía.
-- `bond hub check` revisa cada repo de la sesión del hub y dice qué falta y cómo arreglarlo: que
-  existe y es un repo git, que su enlace es el que dice `hub.toml` (symlink al clon de
-  `.bond/hub.local.toml` o submódulo registrado), que tiene la base, que tiene `bond init` hecho y
-  su config al día (`bond sync --check`), que sus agentes están instalados, que admite worktrees y
-  que no tiene cambios sin commitear ni una rama vertical a medias (worktrees de ramas que no
-  existen en el hub, o más de una abierta). Sale con 0 si todo está en verde y con 1 si algo falla,
-  nombrando cada problema por repo con su arreglo. Con `--fix` arregla solo lo seguro (crear o
-  reparar el enlace al clon local, registrándolo en `~/.bond/hubs.toml` (D14), e inicializar
-  submódulos sin iniciar) y nunca descarta cambios ni cambia de rama un repo; con `--json` emite
-  el informe completo (los mensajes del arreglo van a stderr).
-- `bond doctor` incluye un resumen de `bond hub check` (`hub <nombre>`) cuando estás en un hub y
-  reporta como fallo un `hub.toml` inválido con su error de parseo; fuera de uno no cambia nada.
-- `hub.toml` como única fuente de la sesión de un hub: declara el nombre del hub, su rama base
-  y los repositorios asociados, cada uno como submódulo (`link = "submodule"`) o como enlace
-  (`link = "symlink"`). La sección `[hub]` desaparece de `.bond/bond.toml` y deja de usarse.
-  Las rutas locales a los clones de la máquina se declaran en `.bond/hub.local.toml` (en `.gitignore`),
-  admitiendo `~` para la carpeta de usuario.
-- Registro global `~/.bond/hubs.toml` para localizar el hub: `hubRoot` encuentra el hub subiendo
-  por superproyectos de git o, en repos enlazados por symlink que viven fuera del hub, consultando
-  el registro global.
-- `canonical` resuelve enlaces simbólicos en ambas direcciones, casando rutas relativas al symlink
-  dentro del hub con el clon real.
-- `bond hub` enseña la sesión de trabajo declarada en `hub.toml`: ruta, base, modo de enlace
-  (`submodule` o `symlink`) y rama actual de cada repositorio.
-- `bond hub init [dir]`: asistente para crear un nuevo hub o prepararlo en un repo git existente.
-  Genera `hub.toml`, `.bond/`, `AGENTS.md`, `.gitignore` y `.bond/hub.local.toml`, importa
-  submódulos existentes con su base y añade repos por URL (submódulo) o desde un clon local (symlink).
-- `bond hub add <url|ruta>`: importa un repositorio adicional a `hub.toml`, configurando su modo
-  de enlace, rama base y agente opcional, y sincroniza el disco.
-- `bond hub sync`: sincroniza el disco con `hub.toml` montando submódulos, creando symlinks
-  (con fallback a junction en Windows si el symlink falla) y registrando los repositorios en
-  `~/.bond/hubs.toml`. Con `--dry-run` detalla las acciones sin alterar el disco.
-- Las skills `plan-team` (catálogo) y `bond-team` (global) trabajan en modo hub: en un repo con
-  `hub.toml`, una fase o subtarea es una rama vertical (un agente por repo de la sesión, una sola
-  rama abierta a la vez, `--repos` para elegirlos), la tarea se manda con un único
-  `bond team prompt` que llega a todos los agentes con una nota de coordinación, y se recoge
-  repo a repo con `bond team collect --repo`. Al integrar recuerdan que falta subir los
-  punteros de los submódulos en la rama del hub y hacer push: nunca lo hacen ellas.
-- `bond team status` y `--watch` en modo hub (con `hub.toml`): enseñan los
-  worktrees de todos los repos de la sesión en una única tabla, tanto si se lanzan desde el hub
-  como desde cualquiera de sus repos. Cada repo se compara contra su base de `hub.toml`, con una
-  columna `REPO` en `status` y en la tabla en vivo. En Herdr, la tabla en vivo se abre en un panel
-  único `tabla · <hub>` que se reutiliza desde cualquier repo y solo se cierra cuando no queda
-  trabajo pendiente en ningún repo de la sesión. Sin `hub.toml`, la salida de `status`, `--json` y
-  `--watch` no cambia.
-- `bond team` en un hub (con `hub.toml`): `bond team fix/x` abre una rama vertical, que se crea en
-  el hub sin worktree ni agente y con un worktree y un agente en cada repo de la sesión (o en los de
-  `--repos`), cada uno desde su base de `hub.toml` y con el agente por defecto de su `bond.toml`.
-  Los worktrees van en `~/.herdr/worktrees/<hub>/<repo>/<rama>`. Con una rama vertical
-  abierta, `bond team` se niega a abrir otra. Desde el hub, `bond team prompt fix/x` manda la
-  tarea a todos los agentes de la rama con una nota que nombra a los demás y su repo
-  (`--repo`, a uno); `collect` y `clean` buscan la rama en todos los repos (`--repo` para
-  elegir), y los runs van a la memoria de decisiones del hub. Dentro de un repo de la sesión,
-  `bond team` sigue trabajando solo en ese repo.
+Llega el **modo hub**: un repo de operaciones que agrupa otros repos (como submódulos o como
+symlinks a tus clones) y trabaja con ellos en vertical, con una rama del mismo nombre en todos y
+un agente por repo. La web estrena diseño y una página de novedades con un vídeo del modo hub.
+
+- **`hub.toml`**, la sesión del hub: el nombre y la base del hub y, por repo, `path`, `base`,
+  `link = "submodule"` o `"symlink"`, `url`, `agent` y `description`. Las rutas a tus clones van
+  en `.bond/hub.local.toml` (en `.gitignore`, admite `~`), y `~/.bond/hubs.toml` permite encontrar
+  el hub desde un repo enlazado por symlink.
+- **`bond hub init`**, asistente para crear un hub o prepararlo en un repo que ya existe:
+  - primero hace `bond init` en el propio hub (con `plan-team` y la memoria de decisiones, para
+    que los runs del equipo queden en el hub);
+  - importa los submódulos que ya hubiera y añade repos por URL (submódulo) o desde un clon local
+    (symlink), que se elige navegando por el disco; los repos nuevos van en `repos/<nombre>`;
+  - hace `bond init` con la config del hub en los repos que no tienen bond (los que ya lo tienen
+    conservan la suya) y commitea esa config si el repo estaba limpio; en un submódulo avisa de
+    que ese commit hay que subirlo con `git push` antes que el hub;
+  - deja un hub nuevo con su config generada y un commit inicial.
+- **`bond hub add <url|ruta>`** añade un repo (`--path`, `--base`, `--link`, `--agent`,
+  `--description`); **`bond hub sync`** deja el disco como dice `hub.toml` (junctions en Windows
+  si no se puede crear el symlink) y hace el `bond init` que falte; **`bond hub`** enseña la
+  sesión.
+- **`bond hub check`** revisa cada repo de la sesión y dice cómo arreglar lo que falla: enlace,
+  base, `bond init` y config, agentes, worktrees, cambios sin commitear y ramas verticales a
+  medias. Los avisos (un repo fuera de `repos/`, una base atrasada respecto a su remoto) no
+  cambian el código de salida. `--fix` arregla lo seguro (enlaces y submódulos sin iniciar),
+  pregunta antes de cada cambio salvo con `--yes`, y nunca descarta cambios ni cambia de rama.
+  `--json` da un `level` (`ok`, `warn` o `fail`) por comprobación, por repo y por informe, como
+  `bond doctor`, que resume el hub en su fila.
+- **`bond hub pull`** pone al día la base del hub y de cada repo con `git fetch` y avance solo en
+  fast-forward; si la base no está en uso en ningún worktree (un submódulo con HEAD separado),
+  avanza la rama sin tocar la carpeta de trabajo. Salta, explicando por qué, lo que tiene cambios
+  o ha divergido; nunca hace merge, rebase ni push.
+- En un hub, **`bond sync`** genera en su `AGENTS.md` un bloque (`bond:hub`) con la tabla de
+  repos y las reglas del hub, para que el orquestador sepa qué es cada repo; lo que escribas fuera
+  del bloque se conserva.
+- **`bond team` en un hub**: `bond team fix/x` abre una rama vertical, con un worktree y un agente
+  en cada repo de la sesión (o en los de `--repos`), cada uno desde su base; solo cabe una abierta
+  a la vez. `bond team prompt` manda la tarea a todos con una nota que nombra a los demás agentes;
+  `collect --repo` guarda los runs en el hub y `clean` lo deja todo como estaba. `status` y la
+  tabla en vivo (`tabla · <hub>`) enseñan toda la sesión, también desde dentro de un repo.
+- Las skills `plan-team` y `bond-team` saben trabajar en un hub: una fase o tarea es una rama
+  vertical, se ponen al día las bases antes de abrirla y se recoge repo a repo. Al integrar
+  recuerdan subir los punteros de los submódulos, sin hacerlo ellas.
+- `bond team prompt` reintenta una vez un encargo que no llega a un agente recién arrancado
+  (`agent_prompt_stalled`) y, si vuelve a fallar, da error en lugar de un aviso.
+- La skill global `bond-team` vuelve a cargar en pi: su `description` no era YAML válido. Una
+  prueba comprueba ahora el frontmatter de todas las skills globales.
 - `bond` dentro de su propio workspace de Herdr abre el agente por defecto (o el de `--agent`) en
   el panel donde lo escribes, en la raíz del repo; al salir del agente vuelves a la shell. Antes
   solo decía que el workspace ya estaba abierto.
+- La web (josecorral.dev/bond) estrena diseño y logo, y una página de **Novedades** / **What's
+  new** con el modo hub y un vídeo en castellano y otro en inglés.
 
 ## 1.9.1
 
