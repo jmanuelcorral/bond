@@ -2,8 +2,8 @@
 name: "2026-10-30-whats-new-hub"
 description: "Página de novedades en la web que presenta el modo hub, con un vídeo en castellano y otro en inglés en el que un orquestador pi monta un hola mundo React + Express en un hub"
 created_at: "2026-10-30T16:00:00Z"
-has_completed_all_phases: false
-last_implementation_at: "2026-10-30T16:50:00Z"
+has_completed_all_phases: true
+last_implementation_at: "2026-10-30T17:30:00Z"
 ---
 
 # Novedades en la web: el modo hub, con su vídeo
@@ -124,13 +124,14 @@ Riesgos:
 | Fase | Implementación | Verificación | Revisión | Evidencia |
 | --- | --- | --- | --- | --- |
 | F1 | implemented | passed | pending | `f5190ab` (kevin, agy) integrado en `feat/whats-new`: `docs/novedades.md` (publicada como `whats-new.md`) y `docs/en/whats-new.md`, «Novedades»/«What's new» en la barra y en la guía, aviso en las dos portadas; build del site correcto y anclas a la referencia y al puesto comprobadas. Revisado por el orquestador. Run: `2026-10-30-kevin-use-the-plan-execute-skill-to-implement-6.md` |
-| F2 | pending | not_run | pending | todavía nada |
-| F3 | pending | not_run | pending | todavía nada |
+| F2 | implemented | passed | pending | `reset-hub.sh`, `hub-es.tape`, `hub-en.tape` y `record.sh hub-es|hub-en` (orquestador); `hub-es.mp4` (1:54) y `hub-en.mp4` (1:53) con su póster, revisados fotograma a fotograma: init → check → orquestador pi → `bond team feat/hello` con un pi por repo → verificación (`/api/hello` 200, build del frontend) y `bond team status`. La toma en inglés se repitió: `~/.pi/agent/AGENTS.md` del usuario fija el castellano y el encargo pide ahora inglés. Revisados por el usuario en la web local. |
+| F3 | implemented | passed | pending | Vídeo de cada idioma en su página de novedades y en su portada (bajo el del orquestador); la versión pasa a «bond 1.10.0» a petición del usuario («en vez de próxima versión pon la versión que es»). Site visto por el usuario en `npm run dev`. |
 
 ## Siguiente paso
 
-F2 (los vídeos del hub): guiones listos; falta la confianza de pi en el hub de demo (usuario) y grabar.
+PR de `feat/whats-new` y release 1.10.0 con el modo hub y la web.
 
 ## Evidencia y seguimiento
 
-Sin evidencia todavía.
+- Por el camino: la skill global `bond-team` no cargaba en pi (un `: ` sin comillas en su
+  `description`); arreglada en el PR #28 y aplicada también en esta rama para grabar.

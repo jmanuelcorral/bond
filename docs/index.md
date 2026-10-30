@@ -42,7 +42,7 @@ features:
     linkText: Ver catálogos
 ---
 
-::: tip Novedades: el modo hub
+::: tip Novedades en bond 1.10.0: el modo hub
 ¿Trabajas con varios repositorios a la vez? Con el nuevo **modo hub**, bond coordina cambios cruzados en una sola sesión vertical con un agente por repositorio. [Descubre todas las novedades](novedades.md).
 :::
 
@@ -90,6 +90,21 @@ y recoge el equipo. Sin cortes: dura lo que dura.
   <video src="/videos/orquestador.mp4" poster="/videos/poster-orquestador.webp" autoplay muted loop playsinline controls preload="metadata"></video>
 </div>
 <p class="terminal-caption">Claude orquesta a dos agentes pi: plan, reparto, cuatro paneles a la vez, revisión con correcciones, integración y limpieza.</p>
+
+Y el nuevo **modo hub**: un orquestador pi y un agente por repo, en un frontend y un backend a la vez ([novedades](novedades.md)):
+
+<div class="terminal-window">
+  <div class="terminal-header">
+    <div class="terminal-dots">
+      <span class="terminal-dot dot-red"></span>
+      <span class="terminal-dot dot-yellow"></span>
+      <span class="terminal-dot dot-green"></span>
+    </div>
+    <div class="terminal-title">bond hub: demo-hub</div>
+  </div>
+  <video src="/videos/hub-es.mp4" poster="/videos/poster-hub-es.webp" controls muted loop playsinline preload="metadata"></video>
+</div>
+<p class="terminal-caption">Un hub con un frontend React (submódulo) y un backend Express (symlink): <code>bond hub init</code>, <code>bond hub check</code> y un orquestador pi que reparte la historia en una rama vertical con <code>bond team</code>, un agente pi por repo, y lo comprueba todo al final.</p>
 
 Y cuatro más, cortos, sobre [fluzo](https://github.com/fluzo-labs/fluzo), un proyecto real en Rust:
 
