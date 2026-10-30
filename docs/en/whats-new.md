@@ -2,7 +2,7 @@
 
 Notable changes and highlights across bond releases.
 
-## Next release: hub mode
+## bond 1.10.0: hub mode
 
 Until now, bond helped you work with coding agents in standalone git repositories: `bond init` set up the configuration, `bond` opened your workstation in Herdr, and `bond team` distributed parallel branches among agents in their own worktrees.
 
@@ -10,7 +10,6 @@ In real-world projects, however, code is frequently split across multiple reposi
 
 That is why **hub mode** is here.
 
-<!-- VIDEO: F3 will insert hub-en.mp4 here -->
 <div class="terminal-window">
   <div class="terminal-header">
     <div class="terminal-dots">
@@ -18,12 +17,11 @@ That is why **hub mode** is here.
       <span class="terminal-dot dot-yellow"></span>
       <span class="terminal-dot dot-green"></span>
     </div>
-    <div class="terminal-title">bond hub in action</div>
+    <div class="terminal-title">bond hub: demo-hub</div>
   </div>
-  <p class="terminal-caption" style="text-align: center; padding: 2.5rem 1rem; margin: 0; color: var(--vp-c-text-2);">
-    <em>The hub mode demo video will be included here soon.</em>
-  </p>
+  <video src="/videos/hub-en.mp4" poster="/videos/poster-hub-en.webp" controls muted loop playsinline preload="metadata"></video>
 </div>
+<p class="terminal-caption">A hub with a React frontend (submodule) and an Express backend (symlink): <code>bond hub init</code>, <code>bond hub check</code> and a pi orchestrator that splits the story into a vertical branch with <code>bond team</code>, one pi agent per repo, and checks it all at the end.</p>
 
 ### What is a hub?
 
