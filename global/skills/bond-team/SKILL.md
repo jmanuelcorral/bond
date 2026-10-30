@@ -1,6 +1,6 @@
 ---
 name: bond-team
-description: Repartir una tarea entre varios agentes de código (pi, Claude Code, Codex, opencode, Antigravity...) que trabajan en paralelo, cada uno en su rama y su worktree de git, con Herdr. En un hub (repo cuya sesión se declara en hub.toml, creado con bond hub init) la tarea se reparte en vertical: una sola rama con un agente por repo de la sesión. Úsalo solo cuando el usuario pida expresamente un equipo, repartir en worktrees o use /team.
+description: Repartir una tarea entre varios agentes de código (pi, Claude Code, Codex, opencode, Antigravity...) que trabajan en paralelo, cada uno en su rama y su worktree de git, con Herdr. En un hub (repo cuya sesión se declara en hub.toml, creado con bond hub init) la tarea se reparte en vertical, con una sola rama y un agente por repo de la sesión. Úsalo solo cuando el usuario pida expresamente un equipo, repartir en worktrees o use /team.
 ---
 
 # Equipo de agentes en worktrees (Herdr)

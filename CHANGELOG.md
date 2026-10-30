@@ -2,6 +2,9 @@
 
 ## Sin publicar
 
+- La skill global `bond-team` vuelve a cargar en pi: su `description` tenía un `: ` sin comillas
+  (YAML inválido) y pi la descartaba. Una prueba comprueba ahora el frontmatter de todas las
+  skills globales.
 - Cada repo de `hub.toml` puede llevar `description` (opcional; el asistente de `bond hub init`
   la pregunta y en `bond hub add` es `--description`), y `bond hub` la enseña en una columna
   que solo aparece si algún repo la declara. En un hub, `bond sync` genera en su `AGENTS.md` un
