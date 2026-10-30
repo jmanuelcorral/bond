@@ -1,23 +1,31 @@
-// bond hub (cli/hub.mts): la sesión de un repo hub con submódulos, en [hub] de bond.toml.
-// Cada prueba monta un hub de fixture en un directorio temporal: repos locales enlazados con
-// git submodule add, uno de ellos con un submódulo anidado y otro sin inicializar.
+// bond hub (cli/hub.mts): la sesión de un repo hub, declarada en hub.toml (más
+// .bond/hub.local.toml para rutas locales) y encontrada con ~/.bond/hubs.toml.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
 process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
 Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
-const { hubBlock, hubRoot, hubSession, submodules, withHub } = await import("../cli/hub.mts");
-const { parseHub, repoHub } = await import("../cli/repo.mts");
-const { canonical } = await import("../cli/util.mts");
+const {
+	hubRoot,
+	hubSession,
+	parseHubToml,
+	parseHubLocalToml,
+	readHubsRegistry,
+	writeHubsRegistry,
+	registerHubRepo,
+	submodules,
+} = await import("../cli/hub.mts");
+const { loadRepoConfig } = await import("../cli/repo.mts");
+const { canonical, catchDie } = await import("../cli/util.mts");
 
 const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
-const TOML = 'agents = ["pi"]\n\n# memoria\n[decisions]\ndir = "docs/decisions"\n';
 let tmp: string;
 let hub: string;
+let backReal: string;
 
 const g = (cwd: string, ...args: string[]) => {
 	const r = spawnSync("git", ["-c", "protocol.file.allow=always", "-C", cwd, ...args], { encoding: "utf8" });
@@ -26,7 +34,7 @@ const g = (cwd: string, ...args: string[]) => {
 };
 const repo = (name: string) => {
 	const dir = join(tmp, name);
-	mkdirSync(dir);
+	mkdirSync(dir, { recursive: true });
 	g(dir, "init", "-q", "-b", "main");
 	writeFileSync(join(dir, "README"), `${name}\n`);
 	g(dir, "add", "README");
@@ -35,317 +43,223 @@ const repo = (name: string) => {
 };
 const bond = (args: string[], cwd = hub) =>
 	spawnSync(process.execPath, [MAIN, ...args], { cwd, env: { ...process.env, NO_COLOR: "1" }, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-const toml = () => readFileSync(join(hub, ".bond", "bond.toml"), "utf8");
 
 beforeEach(() => {
 	tmp = realpathSync(mkdtempSync(join(tmpdir(), "bond-hub-")));
-	repo("lib");
 	const front = repo("front");
-	repo("back");
+	backReal = repo("back-real");
 	hub = repo("hub");
-	// front lleva lib anidada; el hub, front y back (back se queda sin inicializar).
-	g(front, "submodule", "add", "-q", "../lib", "libs/lib");
-	g(front, "commit", "-qm", "sub");
+
+	// front entra como submódulo
 	g(hub, "submodule", "add", "-q", "../front", "front");
-	g(hub, "submodule", "add", "-q", "../back", "back");
-	g(hub, "commit", "-qm", "subs");
-	g(hub, "submodule", "update", "--init", "--recursive", "-q");
-	g(hub, "submodule", "deinit", "-q", "back");
-	mkdirSync(join(hub, ".bond"));
-	writeFileSync(join(hub, ".bond", "bond.toml"), TOML);
+	g(hub, "commit", "-qm", "add front submodule");
+
+	// back entra como symlink
+	if (process.platform !== "win32") {
+		symlinkSync(backReal, join(hub, "back"));
+	}
+
+	mkdirSync(join(hub, ".bond"), { recursive: true });
+	writeFileSync(join(hub, ".bond", "bond.toml"), 'agents = ["pi"]\n');
+
+	// hub.toml en la raíz del hub
+	const hubToml = `name = "hub"
+base = "main"
+
+[repos.front]
+path = "front"
+base = "main"
+link = "submodule"
+url  = "git@github.com:fluzo/front.git"
+
+[repos.back]
+path = "back"
+base = "main"
+link = "symlink"
+`;
+	writeFileSync(join(hub, "hub.toml"), hubToml);
+
+	// .bond/hub.local.toml con la ruta local
+	const hubLocalToml = `[repos.back]
+source = "${backReal}"
+`;
+	writeFileSync(join(hub, ".bond", "hub.local.toml"), hubLocalToml);
 });
 
 afterEach(() => rmSync(tmp, { recursive: true, force: true }));
 
-describe("bond hub", () => {
-	test("escribe [hub] con el hub, el submódulo y el anidado; repetirlo no cambia nada", () => {
-		expect(submodules(hub)).toEqual([
-			{ path: "back", initialized: false },
-			{ path: "front", initialized: true },
-			{ path: "front/libs/lib", initialized: true },
+describe("hub.toml y .bond/hub.local.toml como fuente de la sesión", () => {
+	test("un hub de prueba con un submódulo y un symlink en hub.toml da una sesión con los dos repos, sus bases y su modo de enlace", () => {
+		const s = hubSession(hub);
+		expect(s).toBeDefined();
+		expect(s?.name).toBe("hub");
+		expect(s?.repos.map((r) => [r.path, r.base, r.link, r.present])).toEqual([
+			[".", "main", undefined, true],
+			["back", "main", "symlink", process.platform !== "win32"],
+			["front", "main", "submodule", true],
 		]);
-		const r = bond(["hub", "--yes", "--base", "front/libs/lib=main"]);
-		expect(r.status).toBe(0);
-		expect(r.stderr).toContain("back: submódulo sin inicializar");
-		const written = toml();
-		// Lo que había se conserva, comentarios incluidos.
-		expect(written.startsWith(TOML)).toBe(true);
-		expect(repoHub(hub)).toEqual({ base: "main", repos: { front: { base: "main" }, "front/libs/lib": { base: "main" } }, exclude: [] });
-		for (const args of [["hub", "--yes"], ["hub", "--yes", "--base", "front/libs/lib=main"], ["hub", "sync", "--yes"]]) {
-			const again = bond(args);
-			expect(again.status).toBe(0);
-			expect(toml()).toBe(written);
-		}
-		expect(bond(["hub", "sync", "--yes"]).stdout).toContain("sin cambios en [hub]");
+
+		const backRepo = s?.repos.find((r) => r.path === "back");
+		expect(backRepo?.source).toBe(backReal);
+		const frontRepo = s?.repos.find((r) => r.path === "front");
+		expect(frontRepo?.url).toBe("git@github.com:fluzo/front.git");
 	});
 
-	test("un repo en HEAD separado necesita su base: con --yes falla, dice cómo y no escribe", () => {
-		const r = bond(["hub", "--yes"]);
-		expect(r.status).toBe(1);
-		expect(r.stderr).toContain("front/libs/lib");
-		expect(r.stderr).toContain("--base front/libs/lib=");
-		expect(toml()).toBe(TOML);
-	});
-
-	test("--base con un repo que no es de la sesión o una ref que no existe, falla sin escribir", () => {
-		expect(bond(["hub", "--yes", "--base", "back=main"]).stderr).toContain("no es un repo de la sesión");
-		expect(bond(["hub", "--yes", "--base", "front/libs/lib=nope"]).stderr).toContain("nope no existe");
-		expect(toml()).toBe(TOML);
-	});
-
-	test("--base trima la ruta y el ref", () => {
-		const r = bond(["hub", "--yes", "--dry-run", "--base", " front = main ", "--base", "front/libs/lib=main"]);
-		expect(r.status).toBe(0);
-		expect(r.stdout).toContain('"front" = { base = "main" }');
-		expect(toml()).toBe(TOML);
-	});
-
-	test("--dry-run enseña el bloque que escribiría y no toca el fichero", () => {
-		const r = bond(["hub", "--yes", "--dry-run", "--base", "front/libs/lib=main"]);
-		expect(r.status).toBe(0);
-		expect(r.stdout).toContain("[dry-run]");
-		expect(r.stdout).toContain("[hub]");
-		expect(r.stdout).toContain('"front/libs/lib" = { base = "main" }');
-		expect(toml()).toBe(TOML);
-	});
-
-	test("en un repo sin submódulos explica qué hace falta y no escribe nada", () => {
-		const solo = repo("solo");
-		mkdirSync(join(solo, ".bond"));
-		writeFileSync(join(solo, ".bond", "bond.toml"), TOML);
-		const r = bond(["hub", "--yes"], solo);
-		expect(r.status).toBe(1);
-		expect(r.stderr).toContain("no tiene submódulos");
-		expect(r.stderr).toContain("git submodule add");
-		expect(readFileSync(join(solo, ".bond", "bond.toml"), "utf8")).toBe(TOML);
-	});
-
-	test("sin .bond/bond.toml pide bond init", () => {
-		rmSync(join(hub, ".bond"), { recursive: true });
-		const r = bond(["hub", "--yes"]);
-		expect(r.status).toBe(1);
-		expect(r.stderr).toContain("bond init");
-	});
-
-	test("con [hub], bond hub enseña la sesión y avisa de lo pendiente; sync lo aplica", () => {
-		bond(["hub", "--yes", "--base", "front/libs/lib=main"]);
+	test("bond hub enseña la sesión: repos, ruta, base, enlace y rama", () => {
 		const show = bond(["hub"]);
 		expect(show.status).toBe(0);
-		expect(show.stdout).toMatch(/REPO\s+RUTA\s+BASE\s+RAMA/);
-		expect(show.stdout).toMatch(/lib\s+front\/libs\/lib\s+main\s+\(HEAD separado\)/);
-		// back se inicializa: bond hub lo avisa sin tocar nada; sync lo añade (desde el anidado).
-		g(hub, "submodule", "update", "--init", "-q", "back");
-		const before = toml();
-		expect(bond(["hub"]).stderr).toContain("back: submódulo nuevo");
-		expect(toml()).toBe(before);
-		const sync = bond(["hub", "sync", "--yes", "--base", "back=main"], join(hub, "front", "libs", "lib"));
-		expect(sync.status).toBe(0);
-		expect(repoHub(hub)?.repos.back).toEqual({ base: "main" });
-		// Y si se desinicializa, sync lo quita.
-		g(hub, "submodule", "deinit", "-q", "back");
-		bond(["hub", "sync", "--yes"]);
-		expect(repoHub(hub)?.repos.back).toBeUndefined();
+		expect(show.stdout).toMatch(/REPO\s+RUTA\s+BASE\s+ENLACE\s+RAMA/);
+		expect(show.stdout).toContain("front");
+		expect(show.stdout).toContain("submodule");
+		expect(show.stdout).toContain("back");
+		if (process.platform !== "win32") {
+			expect(show.stdout).toContain("symlink");
+		}
 	});
 
-	test("exclude deja fuera un submódulo y lo que cuelga de él", () => {
-		writeFileSync(join(hub, ".bond", "bond.toml"), `${TOML}\n[hub]\nbase = "main"\nexclude = ["front"]\n`);
-		// Sin nada fuera de exclude, no hay sesión que escribir.
-		expect(bond(["hub", "sync", "--yes"]).stderr).toContain("fuera de exclude");
-		g(hub, "submodule", "update", "--init", "-q", "back");
-		const r = bond(["hub", "sync", "--yes", "--base", "back=main"]);
-		expect(r.status).toBe(0);
-		expect(repoHub(hub)).toEqual({ base: "main", repos: { back: { base: "main" } }, exclude: ["front"] });
-		expect(toml()).toContain('exclude = ["front"]');
-	});
-
-	test("una [hub] inválida: bond hub no escribe encima", () => {
-		const bad = `${TOML}\n[hub]\nbase = 3\n`;
-		writeFileSync(join(hub, ".bond", "bond.toml"), bad);
-		const r = bond(["hub", "--yes"]);
-		expect(r.status).toBe(1);
-		expect(r.stderr).toContain("hub.base");
-		expect(toml()).toBe(bad);
-	});
-});
-
-describe("no regresión: un repo sin [hub] se comporta como siempre", () => {
-	test("bond team status mira solo los worktrees de su propio repo, sin agregar los de los submódulos", () => {
-		// Sin [hub] escrita: ni el hub agrega los submódulos ni el submódulo ve los del hub.
-		g(hub, "worktree", "add", "-q", "-b", "feat/hub-wt", join(tmp, "wt-hub"));
-		g(join(hub, "front"), "worktree", "add", "-q", "-b", "feat/front-wt", join(tmp, "wt-front"));
-		const fromHub = bond(["team", "status", "--json"]);
-		expect(fromHub.status).toBe(0);
-		expect(JSON.parse(fromHub.stdout).map((r: { branch: string }) => r.branch)).toEqual(["feat/hub-wt"]);
-		const fromSub = bond(["team", "status", "--json"], join(hub, "front"));
-		expect(fromSub.status).toBe(0);
-		expect(JSON.parse(fromSub.stdout).map((r: { branch: string }) => r.branch)).toEqual(["feat/front-wt"]);
-	});
-
-	test("filas sin [hub] no tienen campos repo ni base en --json, y la cabecera no tiene columna REPO", () => {
-		g(hub, "worktree", "add", "-q", "-b", "feat/wt-test", join(tmp, "wt-test"));
-		const fromHub = bond(["team", "status", "--json"]);
-		expect(fromHub.status).toBe(0);
-		const parsed = JSON.parse(fromHub.stdout);
-		expect(parsed.length).toBeGreaterThan(0);
-		expect("repo" in parsed[0]).toBe(false);
-		expect("base" in parsed[0]).toBe(false);
-
-		const plain = bond(["team", "status"]);
-		expect(plain.status).toBe(0);
-		expect(plain.stdout).not.toContain("REPO");
-		expect(plain.stdout).toContain("RAMA");
-	});
-});
-
-describe("hubRoot y hubSession", () => {
-	test("desde un submódulo anidado, el hub de arriba; sin [hub], nada", () => {
-		expect(hubRoot(join(hub, "front", "libs", "lib"))).toBeUndefined();
-		bond(["hub", "--yes", "--base", "front/libs/lib=main"]);
-		expect(hubRoot(join(hub, "front", "libs", "lib"))).toBe(canonical(hub));
-		expect(hubRoot(join(hub, "front"))).toBe(canonical(hub));
-		expect(hubRoot(hub)).toBe(canonical(hub));
-		expect(hubRoot(join(tmp, "lib"))).toBeUndefined();
-	});
-
-	test("la sesión: el hub primero y sus repos con base y rama", () => {
-		expect(hubSession(hub)).toBeUndefined();
-		bond(["hub", "--yes", "--base", "front/libs/lib=main"]);
+	test(".bond/hub.local.toml expande ~ a HOME", () => {
+		const local = `[repos.back]\nsource = "~/gitrepos/fluzo-backend"\n`;
+		writeFileSync(join(hub, ".bond", "hub.local.toml"), local);
 		const s = hubSession(hub)!;
-		expect(s.name).toBe("hub");
-		expect(s.repos.map((r) => [r.path, r.base, r.branch, r.present])).toEqual([
-			[".", "main", "main", true],
-			["front", "main", "main", true],
-			["front/libs/lib", "main", undefined, true],
-		]);
-		expect(s.repos[2].dir).toBe(join(hub, "front", "libs", "lib"));
+		const backRepo = s.repos.find((r) => r.path === "back");
+		expect(backRepo?.source?.startsWith("~")).toBe(false);
+		expect(backRepo?.source).toBe(join(process.env.HOME || "", "gitrepos", "fluzo-backend"));
 	});
 });
 
-describe("P2: una sola tabla para toda la sesión", () => {
-	test("con [hub], status y --json desde el hub o submódulos enseñan todos los worktrees de la sesión", () => {
-		bond(["hub", "--yes", "--base", "front/libs/lib=main"]);
-		g(join(hub, "front"), "worktree", "add", "-q", "-b", "fix/x", join(tmp, "wt-front-v"));
-		g(join(hub, "front", "libs", "lib"), "worktree", "add", "-q", "-b", "fix/x", join(tmp, "wt-lib-v"));
+describe("registro global ~/.bond/hubs.toml y hubRoot", () => {
+	test("desde dentro del repo enlazado (por su ruta real, no por el symlink) hubRoot devuelve el hub gracias al registro; sin registro, nada", () => {
+		// Antes de registrarlo: sin registro, nada
+		expect(hubRoot(backReal)).toBeUndefined();
+
+		// Anotar en ~/.bond/hubs.toml
+		registerHubRepo(backReal, hub);
+
+		// Ahora hubRoot devuelve el hub gracias al registro
+		expect(hubRoot(backReal)).toBe(canonical(hub));
+
+		// Y desde una subcarpeta dentro del repo enlazado también
+		const sub = join(backReal, "some", "nested", "dir");
+		mkdirSync(sub, { recursive: true });
+		expect(hubRoot(sub)).toBe(canonical(hub));
+	});
+
+	test("hubRoot sube por superproyectos para submódulos", () => {
+		expect(hubRoot(join(hub, "front"))).toBe(canonical(hub));
+	});
+
+	test("hubRoot devuelve undefined en un repo sin hub", () => {
+		const solo = repo("solo");
+		expect(hubRoot(solo)).toBeUndefined();
+	});
+
+	test("readHubsRegistry y writeHubsRegistry persisten mapeos", () => {
+		const reg = { [canonical(backReal)]: canonical(hub) };
+		writeHubsRegistry(reg);
+		const read = readHubsRegistry();
+		expect(read[canonical(backReal)]).toBe(canonical(hub));
+	});
+});
+
+describe.skipIf(process.platform === "win32")("bond team status en un hub con submódulo y symlink", () => {
+	test("enseña una sola tabla con los dos repos", () => {
+		registerHubRepo(backReal, hub);
+		g(join(hub, "front"), "worktree", "add", "-q", "-b", "fix/x", join(tmp, "wt-front-x"));
+		g(backReal, "worktree", "add", "-q", "-b", "fix/x", join(tmp, "wt-back-x"));
 
 		const fromHub = bond(["team", "status", "--json"]);
 		expect(fromHub.status).toBe(0);
 		const rows = JSON.parse(fromHub.stdout);
 		expect(rows).toHaveLength(2);
-		expect(rows[0].repo).toBe("front");
-		expect(rows[0].branch).toBe("fix/x");
-		expect(rows[0].base).toBe("main");
-		expect(rows[1].repo).toBe("front/libs/lib");
-		expect(rows[1].branch).toBe("fix/x");
-		expect(rows[1].base).toBe("main");
+		expect(rows.some((r: { repo: string; branch: string }) => r.repo === "front" && r.branch === "fix/x")).toBe(true);
+		expect(rows.some((r: { repo: string; branch: string }) => r.repo === "back" && r.branch === "fix/x")).toBe(true);
 
-		// Desde un submódulo da exactamente las mismas filas
+		// En la salida formateada plana sale la cabecera REPO
+		const plain = bond(["team", "status"]);
+		expect(plain.status).toBe(0);
+		expect(plain.stdout).toContain("REPO");
+		expect(plain.stdout).toContain("front");
+		expect(plain.stdout).toContain("back");
+
+		// Desde el submódulo front da la misma tabla
 		const fromSub = bond(["team", "status", "--json"], join(hub, "front"));
 		expect(fromSub.status).toBe(0);
 		expect(JSON.parse(fromSub.stdout)).toEqual(rows);
-
-		// Desde un submódulo anidado da lo mismo
-		const fromNested = bond(["team", "status", "--json"], join(hub, "front", "libs", "lib"));
-		expect(fromNested.status).toBe(0);
-		expect(JSON.parse(fromNested.stdout)).toEqual(rows);
-
-		// La tabla plana incluye la columna REPO
-		const plainStatus = bond(["team", "status"]);
-		expect(plainStatus.status).toBe(0);
-		expect(plainStatus.stdout).toContain("REPO");
-		expect(plainStatus.stdout).toContain("front");
-		expect(plainStatus.stdout).toContain("front/libs/lib");
-	});
-
-	test("watchCommand desde un submódulo apunta al hub", async () => {
-		bond(["hub", "--yes", "--base", "front/libs/lib=main"]);
-		const { watchCommand } = await import("../cli/team.mts");
-		const cmd = watchCommand(join(hub, "front"), undefined, ["bond"]);
-		expect(cmd).toBe(`bond team status ${canonical(hub)} --watch`);
-	});
-
-	test("en modo hub se rechaza --base para status y --watch", () => {
-		bond(["hub", "--yes", "--base", "front/libs/lib=main"]);
-		const resStatus = bond(["team", "status", "--base", "main"]);
-		expect(resStatus.status).toBe(1);
-		expect(resStatus.stderr).toContain("en un hub cada repo usa su base de [hub]");
-
-		const resWatch = bond(["team", "status", "--watch", "--base", "main"]);
-		expect(resWatch.status).toBe(1);
-		expect(resWatch.stderr).toContain("en un hub cada repo usa su base de [hub]");
-	});
-
-	test("un repo cuya base en [hub] no existe no tira la tabla: avisa una vez y lo salta", async () => {
-		bond(["hub", "--yes", "--base", "front/libs/lib=main"]);
-		const tomlPath = join(hub, ".bond", "bond.toml");
-		const content = readFileSync(tomlPath, "utf8");
-		writeFileSync(tomlPath, content.replace('"front" = { base = "main" }', '"front" = { base = "inexistente" }'));
-
-		const { sessionRows, warnedMissingBases } = await import("../cli/team.mts");
-		warnedMissingBases.clear();
-
-		const warnings: string[] = [];
-		const origWarn = console.error;
-		console.error = (msg: string) => warnings.push(msg);
-		try {
-			const rows1 = sessionRows(hub);
-			expect(warnings.length).toBe(1);
-			expect(warnings[0]).toContain("la base no existe en front: inexistente");
-
-			// Segunda llamada (como el tick de 2 s de watch): no vuelve a avisar
-			const rows2 = sessionRows(hub);
-			expect(warnings.length).toBe(1);
-			expect(rows2).toEqual(rows1);
-		} finally {
-			console.error = origWarn;
-			writeFileSync(tomlPath, content);
-			warnedMissingBases.clear();
-		}
-	});
-
-	test("openWatch y findWatchPane reutilizan tabla · <hub> desde un submódulo", async () => {
-		bond(["hub", "--yes", "--base", "front/libs/lib=main"]);
-		const { findWatchPane, watchLabel } = await import("../cli/team.mts");
-		const hubName = basename(hub);
-		expect(watchLabel(hubName)).toBe(`tabla · ${hubName}`);
-
-		const panes = [
-			{ pane_id: "w1:p1", tab_id: "w1:t1", label: `tabla · ${hubName}` },
-			{ pane_id: "w1:p2", tab_id: "w1:t1", label: "tabla · front" },
-		];
-
-		const hRoot = hubRoot(join(hub, "front"))!;
-		expect(hRoot).toBe(canonical(hub));
-		const repo = basename(hRoot);
-		expect(findWatchPane(panes, "w1:t1", repo)).toBe("w1:p1");
 	});
 });
 
-describe("[hub] en bond.toml", () => {
-	test("validación", () => {
-		expect(parseHub(undefined)).toEqual({});
-		expect(parseHub({ base: "main" }).hub).toEqual({ base: "main", repos: {}, exclude: [] });
-		expect(parseHub("x").error).toContain("tabla");
-		expect(parseHub({}).error).toContain("hub.base");
-		expect(parseHub({ base: "main", repos: { "../x": { base: "main" } } }).error).toContain("ruta relativa");
-		expect(parseHub({ base: "main", repos: { "/abs": { base: "main" } } }).error).toContain("ruta relativa");
-		expect(parseHub({ base: "main", repos: { "a\\b": { base: "main" } } }).error).toContain("ruta relativa");
-		expect(parseHub({ base: "main", repos: { a: {} } }).error).toContain("necesita su base");
-		expect(parseHub({ base: "main", exclude: ["../x"] }).error).toContain("exclude");
+describe("validación de hub.toml", () => {
+	test("parseHubToml valida campos obligatorios y formato", () => {
+		expect(catchDie(() => parseHubToml("")).error).toContain("falta name");
+		expect(catchDie(() => parseHubToml('name = "x"\n')).error).toContain("falta base");
+		expect(catchDie(() => parseHubToml('name = "x"\nbase = "main"\nrepos = 3\n')).error).toContain("tabla de repositorios");
+		expect(catchDie(() => parseHubToml('name = "x"\nbase = "main"\n[repos.a]\nbase = "main"\nlink = "submodule"\n')).error).toContain("necesita path");
+		expect(catchDie(() => parseHubToml('name = "x"\nbase = "main"\n[repos.a]\npath = "../out"\nbase = "main"\nlink = "submodule"\n')).error).toContain("ruta relativa");
+		expect(catchDie(() => parseHubToml('name = "x"\nbase = "main"\n[repos.a]\npath = "a"\nlink = "submodule"\n')).error).toContain("necesita base");
+		expect(catchDie(() => parseHubToml('name = "x"\nbase = "main"\n[repos.a]\npath = "a"\nbase = "main"\nlink = "otro"\n')).error).toContain('link tiene que ser "submodule" o "symlink"');
+		expect(catchDie(() => parseHubToml('name = "x"\nbase = "main"\n[repos.a]\npath = "a"\nbase = "main"\nlink = "submodule"\n[repos.b]\npath = "a"\nbase = "main"\nlink = "submodule"\n')).error).toContain("repetida");
 	});
 
-	test("leerla inválida avisa y la ignora, sin abortar", () => {
-		writeFileSync(join(hub, ".bond", "bond.toml"), `${TOML}\n[hub]\nbase = "main"\nrepos = 3\n`);
-		expect(repoHub(hub)).toBeUndefined();
-		expect(hubRoot(hub)).toBeUndefined();
+	test("un hub.toml inválido se explica con un mensaje que dice qué arreglar; bond team lo trata como repo normal con un aviso", () => {
+		writeFileSync(join(hub, "hub.toml"), 'name = "hub"\nbase = "main"\n[repos.front]\npath = "front"\nbase = "main"\nlink = "invalido"\n');
+		const r = bond(["team", "status"]);
+		expect(r.status).toBe(0);
+		expect(r.stderr).toContain("link tiene que ser \"submodule\" o \"symlink\"");
+		expect(r.stderr).toContain("sigo sin el modo hub");
+
+		const rHub = bond(["hub"]);
+		expect(rHub.status).toBe(1);
+		expect(rHub.stderr).toContain("link tiene que ser \"submodule\" o \"symlink\"");
+	});
+});
+
+describe("un bond.toml con [hub] ya no hace nada especial", () => {
+	test("no produce error ni se interpreta como hub sin hub.toml", () => {
+		const solo = repo("solo-hub-toml");
+		mkdirSync(join(solo, ".bond"), { recursive: true });
+		writeFileSync(join(solo, ".bond", "bond.toml"), 'agents = ["pi"]\n\n[hub]\nbase = "main"\n\n[hub.repos]\n"a" = { base = "main" }\n');
+
+		expect(hubRoot(solo)).toBeUndefined();
+		expect(hubSession(solo)).toBeUndefined();
+		const cfg = loadRepoConfig(solo);
+		expect(cfg.agents).toEqual(["pi"]);
+		expect("hub" in cfg).toBe(false);
+
+		const r = bond(["team", "status"], solo);
+		expect(r.status).toBe(0);
+		expect(r.stderr).not.toContain("error");
+		expect(r.stderr).not.toContain("hub");
+	});
+});
+
+describe("no regresión: un repo sin hub se comporta como siempre", () => {
+	test("bond team status mira solo los worktrees de su propio repo", () => {
+		const solo = repo("solo-normal");
+		g(solo, "worktree", "add", "-q", "-b", "feat/solo-wt", join(tmp, "wt-solo"));
+		const res = bond(["team", "status", "--json"], solo);
+		expect(res.status).toBe(0);
+		const rows = JSON.parse(res.stdout);
+		expect(rows.map((r: { branch: string }) => r.branch)).toEqual(["feat/solo-wt"]);
+		expect("repo" in rows[0]).toBe(false);
+		expect("base" in rows[0]).toBe(false);
+
+		const plain = bond(["team", "status"], solo);
+		expect(plain.status).toBe(0);
+		expect(plain.stdout).not.toContain("REPO");
+	});
+});
+
+describe("ayuda y submodules", () => {
+	test("bond hub --help enseña la ayuda", () => {
+		const r = bond(["hub", "--help"]);
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain("Un hub es un repo git compartido");
+		expect(r.stdout).toContain("hub.toml");
 	});
 
-	test("withHub sustituye la sección en su sitio y deja lo demás igual", () => {
-		const block = hubBlock({ base: "dev", repos: { b: { base: "main" }, a: { base: "x" } }, exclude: [] });
-		expect(block).toBe('[hub]\n# Sesión del hub: la escribe bond hub (y bond hub sync, si cambian los submódulos).\nbase = "dev"\n\n[hub.repos]\n"a" = { base = "x" }\n"b" = { base = "main" }');
-		const text = 'agents = ["pi"]\n\n[hub]\nbase = "main"\n\n[hub.repos]\n"a" = { base = "main" }\n\n# servidores propios\n[mcp_servers.x]\ncommand = "x"\n';
-		const out = withHub(text, block);
-		expect(out).toBe(`agents = ["pi"]\n\n${block}\n\n# servidores propios\n[mcp_servers.x]\ncommand = "x"\n`);
-		expect(withHub(out, block)).toBe(out);
-		expect(withHub('agents = ["pi"]\n', block)).toBe(`agents = ["pi"]\n\n${block}\n`);
+	test("submodules detecta los submódulos inicializados del repo", () => {
+		expect(submodules(hub)).toEqual([
+			{ path: "front", initialized: true },
+		]);
 	});
 });
