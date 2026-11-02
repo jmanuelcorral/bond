@@ -13,6 +13,7 @@ import { createInterface } from "node:readline";
 import { join } from "node:path";
 import { t } from "./messages.mts";
 import { agents } from "./herdr.mts";
+import { configExists, loadConfigOrEmpty } from "./config.mts";
 import { repoDecisions, repoRoot } from "./repo.mts";
 import { bad, catchDie, die, dim, ok, run } from "./util.mts";
 
@@ -126,8 +127,45 @@ export const slugify = (s: string) =>
 		.replace(/[^a-z0-9]+/g, "-")
 		.replace(/^-+|-+$/g, "");
 
-/** Autoría según D12: en un panel de Herdr, el agente del panel; fuera (o sin agente), user. */
+/**
+ * Forma canónica de una autoría (D12): `user` y `agent:<kind>[/<nombre>]` tal cual; una
+ * pareja `kind/nombre` se normaliza a `agent:kind/nombre`. Lo que no encaja muere: la
+ * autoría queda escrita en ficheros que audita `bond decisions check`, y un valor a medias
+ * no se arregla solo. Un nombre suelto ("gru") no se acepta a propósito: no se puede
+ * saber si es el kind o el nombre, y adivinar mal sale peor que pedirlo explícito.
+ */
+export function normalizeAuthor(value: string): string {
+	const s = value.trim();
+	const v = s.startsWith("agent:") || !s.includes("/") ? s : `agent:${s}`;
+	if (v === "user" || /^agent:[a-z][a-z0-9_-]*(\/[^\s/]+)?$/.test(v)) return v;
+	die(t("decisions.invalid_author", { value: s }));
+}
+
+/**
+ * Autoría fijada a mano (D12): `BOND_DECISION_AGENT` manda sobre `[decisions] author` de
+ * ~/.bond/config.toml. Sirve para que un panel delegado firme con la identidad con la que
+ * se habla -el orquestador- en vez del minion que bond arrancó en el worktree (MINIONS en
+ * team.mts), que es un nombre de instancia y dice poco de quién decidió.
+ */
+export function authorOverride(env: NodeJS.ProcessEnv = process.env): string | undefined {
+	const raw = env.BOND_DECISION_AGENT?.trim() || globalAuthor();
+	return raw ? normalizeAuthor(raw) : undefined;
+}
+
+/** `[decisions] author` de la config global; undefined si no hay config o no dice nada. */
+function globalAuthor(): string | undefined {
+	if (!configExists()) return undefined;
+	return loadConfigOrEmpty().decisions?.author?.trim() || undefined;
+}
+
+/**
+ * Autoría según D12: la fijada a mano si la hay; si no, en un panel de Herdr el agente del
+ * panel, y fuera (o sin agente) user. El override va primero porque es lo que el usuario
+ * decidió que conste; lo demás es lo que bond puede deducir del entorno.
+ */
 export function resolveAuthor(): string {
+	const fixed = authorOverride();
+	if (fixed) return fixed;
 	const pane = process.env.HERDR_ENV === "1" ? process.env.HERDR_PANE_ID : undefined;
 	if (!pane) return "user";
 	const a = agents(10_000).find((x) => x.pane_id === pane && x.agent);

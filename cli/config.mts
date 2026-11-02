@@ -86,6 +86,13 @@ export interface Config {
 	suggestions?: { enabled?: boolean; model?: string };
 	/** [ui] icons: iconos del pie de pi; [ui] lang: idioma de la consola (los pregunta `bond setup`). */
 	ui?: { icons?: IconStyle; lang?: Lang };
+	/**
+	 * [decisions] author: autoría fija para los registros de decisión (D12). Sin ella la
+	 * autoría es el agente del panel de Herdr, que en un worktree delegado es un minion con
+	 * nombre propio (MINIONS en team.mts) y no el orquestador con el que se habla. Se guarda
+	 * tal cual: se valida al usarla, para que un valor malo no rompa `bond models`.
+	 */
+	decisions?: { author?: string };
 }
 
 /** Lo que recuerda el aviso de versión nueva al arrancar (ver offerUpdate en update.mts). */
@@ -129,6 +136,7 @@ export function loadConfig(): Config {
 		providers,
 		suggestions: readSuggestions(raw),
 		ui: readUi(raw),
+		decisions: readDecisions(raw),
 	};
 }
 
@@ -152,6 +160,15 @@ function readUi(raw: Record<string, unknown>): Config["ui"] {
 	return Object.keys(out).length ? out : undefined;
 }
 
+/** [decisions] de config.toml; undefined si no hay sección o no dice nada útil. */
+function readDecisions(raw: Record<string, unknown>): Config["decisions"] {
+	if (!raw.decisions || typeof raw.decisions !== "object" || Array.isArray(raw.decisions)) return undefined;
+	const d = raw.decisions as Record<string, unknown>;
+	const out: { author?: string } = {};
+	if (typeof d.author === "string" && d.author.trim()) out.author = d.author.trim();
+	return Object.keys(out).length ? out : undefined;
+}
+
 /** Config vacía (primera vez) o la que haya. */
 export function loadConfigOrEmpty(): Config {
 	return configExists() ? loadConfig() : { agents: [], providers: [] };
@@ -172,6 +189,7 @@ export function saveConfig(cfg: Config): void {
 	if (cfg.update) data.update = cfg.update;
 	if (cfg.suggestions) data.suggestions = cfg.suggestions;
 	if (cfg.ui) data.ui = cfg.ui;
+	if (cfg.decisions) data.decisions = cfg.decisions;
 	writeFileSync(CONFIG_FILE, `${SAVED_HEADER}\n${stringify(data)}\n`);
 }
 

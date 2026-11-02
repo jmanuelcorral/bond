@@ -51,11 +51,18 @@ lista las decisiones.
   --json     Salida JSON estable en lista, add, runs y check.
   -h, --help Esta ayuda.
 
+Autoría: la calcula bond (en un panel de Herdr, agent:<kind>/<nombre>; fuera, user).
+Se puede fijar a mano con BOND_DECISION_AGENT o con [decisions] author en
+~/.bond/config.toml, para que un panel delegado firme con la identidad con la que se
+habla y no con el minion que bond arrancó en su worktree. Vale "user" o
+"agent:<kind>[/<nombre>]"; "pi/gru" se normaliza a "agent:pi/gru".
+
 Sin la sección [decisions], solo "add" falla (dice cómo activarla); lo demás sale con 0
 explicando que el repo no usa la memoria.`,
 	"decisions.need_title": 'add necesita un título (--title "..." o "title" en el JSON)',
 	"decisions.need_decision": 'add necesita la decisión (--decision "..." o "decision" en el JSON)',
 	"decisions.confirmed_by_empty": "--confirmed-by necesita una referencia no vacía: lo que dijo el usuario (bond decisions --help)",
+	"decisions.invalid_author": '"{value}" no vale como autoría: usa "user" o "agent:<kind>[/<nombre>]" ("pi/gru" se normaliza a "agent:pi/gru") (bond decisions --help)',
 	"decisions.not_found": "no existe la decisión {id} en {dir}/ (bond decisions para ver las que hay)",
 	"decisions.invalid_fm": "{file}: sin frontmatter válido; arreglalo antes (bond decisions check)",
 	"decisions.verb_accept": "aceptar",
@@ -150,11 +157,18 @@ lists decisions.
   --json     Stable JSON output for list, add, runs, and check.
   -h, --help This help.
 
+Authorship: bond computes it (in a Herdr pane, agent:<kind>/<name>; outside, user).
+It can be pinned with BOND_DECISION_AGENT or [decisions] author in ~/.bond/config.toml,
+so a delegated pane signs with the identity you talk to instead of the minion bond
+started in its worktree. Valid: "user" or "agent:<kind>[/<name>]"; "pi/gru" normalizes
+to "agent:pi/gru".
+
 Without the [decisions] section, only "add" fails (explaining how to enable it);
 everything else exits with 0 explaining that the repo does not use decision memory.`,
 	"decisions.need_title": 'add requires a title (--title "..." or "title" in JSON)',
 	"decisions.need_decision": 'add requires the decision (--decision "..." or "decision" in JSON)',
 	"decisions.confirmed_by_empty": "--confirmed-by requires a non-empty reference: what the user said (bond decisions --help)",
+	"decisions.invalid_author": '"{value}" is not a valid author: use "user" or "agent:<kind>[/<name>]" ("pi/gru" normalizes to "agent:pi/gru") (bond decisions --help)',
 	"decisions.not_found": "decision {id} does not exist in {dir}/ (bond decisions to see existing ones)",
 	"decisions.invalid_fm": "{file}: missing valid frontmatter; fix it first (bond decisions check)",
 	"decisions.verb_accept": "accept",

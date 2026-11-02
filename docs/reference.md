@@ -785,7 +785,14 @@ sale con 0 explicando que no se usa la memoria.
 
 La autoría (`decided_by`): en un panel de Herdr, `agent:<kind>/<nombre>` —bond mira el agente
 del panel, el agente no necesita saber su propio nombre—; fuera de Herdr o sin agente en el
-panel, `user`. Aceptar es solo del usuario, pero puede hacerlo desde la conversación:
+panel, `user`. Se puede fijar a mano, y entonces manda sobre lo que bond deduce:
+`BOND_DECISION_AGENT` (la variable gana) o `[decisions] author` en `~/.bond/config.toml`.
+Sirve para que un panel delegado firme con la identidad con la que se habla —el
+orquestador— y no con el minion que bond arrancó en su worktree (`MINIONS` en
+`cli/team.mts`): el nombre del minion identifica la instancia y dice poco de quién
+decidió. Vale `user` o `agent:<kind>[/<nombre>]`; `pi/gru` se normaliza a
+`agent:pi/gru`, y un valor que no encaja muere en vez de escribirse a medias. Aceptar
+es solo del usuario, pero puede hacerlo desde la conversación:
 `accept`, `reject` y `supersede` piden confirmación interactiva con terminal, o
 `--confirmed-by "<lo que dijo el usuario>"` sin ella; en ese caso `accepted_by` guarda la
 cita y `accepted_via` quién ejecutó (`check` valida su formato). Sin una cosa ni la otra, se

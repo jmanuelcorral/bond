@@ -2,6 +2,13 @@
 
 ## Sin publicar
 
+- La autoría de las decisiones (`decided_by`, `accepted_via`) se puede fijar a mano con
+  `BOND_DECISION_AGENT` o con `[decisions] author` en `~/.bond/config.toml`, y manda sobre lo
+  que bond deduce del panel. En un worktree delegado bond firma como el minion que arrancó ahí
+  (`MINIONS` en `cli/team.mts`) y no como el orquestador con el que se habla; el override
+  permite que el registro diga la identidad que importa. Vale `user` o
+  `agent:<kind>[/<nombre>]` (`pi/gru` se normaliza a `agent:pi/gru`); un valor que no encaja
+  muere en vez de escribirse a medias.
 - Espacio de nombres único para worktrees de `bond team`: las carpetas en `~/.herdr/worktrees`
   llevan un sufijo hash corto derivado de la ruta absoluta del repositorio o hub (`<nombre>-<hash>`),
   evitando colisiones entre repositorios con la misma carpeta base (#36). Los worktrees existentes
