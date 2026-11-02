@@ -25,8 +25,7 @@ describe("Nerd Fonts", () => {
 	test("carpetas de fuentes de cada sistema", () => {
 		expect(fontDirs("darwin", {}, "/Users/ana")).toContain("/Users/ana/Library/Fonts");
 		const win = fontDirs("win32", { LOCALAPPDATA: "C:\\Users\\ana\\AppData\\Local", WINDIR: "C:\\Windows" }, "C:\\Users\\ana");
-		expect(win.some((d) => d.includes("Microsoft") && d.endsWith("Fonts"))).toBe(true);
-		expect(win.some((d) => d.startsWith("C:\\Windows") && d.endsWith("Fonts"))).toBe(true);
+		expect(win).toEqual(["C:\\Users\\ana\\AppData\\Local\\Microsoft\\Windows\\Fonts", "C:\\Windows\\Fonts"]);
 		expect(fontDirs("linux", {}, "/home/ana")).toContain("/home/ana/.local/share/fonts");
 	});
 });
