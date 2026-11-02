@@ -613,6 +613,10 @@ describe("origenes y nombres vacios o malformados (issue #35)", () => {
 		expect(repoNameFromUrl("git@github.com:fluzo/front.git")).toBe("front");
 		expect(repoNameFromUrl("https://github.com/fluzo/front")).toBe("front");
 		expect(repoNameFromUrl("file:///tmp/x/back-real")).toBe("back-real");
+		// Windows: ruta absoluta con contrabarras, con y sin barra extra tras el esquema.
+		expect(repoNameFromUrl("file://C:\\Users\\runner\\back-real")).toBe("back-real");
+		expect(repoNameFromUrl("file:///C:/Users/runner/back-real")).toBe("back-real");
+		expect(repoNameFromUrl("file://localhost/C$/repos/front")).toBe("front");
 		expect(repoNameFromUrl("ssh://git@host/path/repo")).toBe("repo");
 		expect(repoNameFromUrl("file://")).toBe("");
 		expect(repoNameFromUrl("file:///")).toBe("");
