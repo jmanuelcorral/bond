@@ -13,30 +13,9 @@ import { agentInstalled } from "./catalog-agents.mts";
 import { gitWorktrees } from "./team.mts";
 import { loadRepoAgents, syncRepo } from "./repo.mts";
 import { act, bad, brokenLink, canonical, catchDie, caution, die, dim, isDryRun, linkTarget, log, ok, run, setDryRun, warn } from "./util.mts";
+import { t } from "./messages.mts";
 
-export const HUB_CHECK_HELP = `Uso: bond hub check [opciones]
-
-Revisa cada repo de la sesión del hub (el hub primero) y sale con 1 si algo no está
-listo para trabajar con agentes. Cada problema nombra el repo, la comprobación y el
-arreglo: existe y es un repo git, el enlace es el que dice hub.toml, la base existe,
-bond init hecho y config al día, agentes instalados, admite worktrees, sin cambios
-sin commitear y sin ramas verticales a medias.
-
-Algunas comprobaciones son avisos (D17): se muestran con «!» pero no
-cuentan como problemas ni cambian el código de salida (p. ej. los repos
-fuera de repos/, la ruta por defecto desde D16, o una base atrasada
-respecto a su remoto, D19).
-
-  --fix     Arregla solo lo seguro: crea o repara el enlace al clon local (symlink,
-            junction en Windows) y registra el repo en ~/.bond/hubs.toml (D14), e
-            inicializa los submódulos sin iniciar. Nunca descarta cambios ni cambia
-            de rama un repo. Con terminal y sin --yes pregunta antes de cada arreglo.
-  --yes, -y Aplica los arreglos seguros sin preguntar (necesario sin terminal si se
-            quiere arreglar; con --fix y terminal, evita la confirmación).
-  --json    Salida en JSON: level (ok, warn o fail) por comprobación, repo e informe
-            (los mensajes del arreglo van a stderr).
-  --dry-run Describe los arreglos sin aplicarlos.
-`;
+export const hubCheckHelp = (): string => t("hub.check.help");
 
 const git = (cwd: string, args: string[]) => run("git", ["-C", cwd, ...args]);
 const firstLine = (s: string) => s.trim().split("\n")[0] ?? "";
@@ -89,9 +68,9 @@ function baseBehindCheck(r: HubRepo): HubCheck[] {
 	const [, behind = 0] = count.stdout.trim().split(/\s+/).map(Number);
 	if (behind <= 0) return [];
 	return [{
-		check: "base atrasada",
+		check: t("hub.check_base_behind"),
 		level: "warn",
-		detail: `${behind} commit(s) por detrás de ${upstream}`,
+		detail: t("hub.check_base_behind_detail", { count: behind, upstream }),
 		fix: "bond hub pull",
 	}];
 }
@@ -100,10 +79,10 @@ function baseBehindCheck(r: HubRepo): HubCheck[] {
 function routeChecks(r: HubRepo): HubCheck[] {
 	if (r.path === "." || r.path.startsWith("repos/")) return [];
 	return [{
-		check: "ruta",
+		check: t("hub.check_route"),
 		level: "warn",
-		detail: `fuera de repos/ (la ruta por defecto es repos/<nombre>)`,
-		fix: "si quieres la convención, mueve el repo a repos/<nombre> y actualiza su path en hub.toml",
+		detail: t("hub.check_route_detail"),
+		fix: t("hub.check_route_fix"),
 	}];
 }
 
@@ -124,35 +103,35 @@ function checkRepo(r: HubRepo, s: HubSession, hasAgent: (agent: string) => boole
 	if (!r.present) {
 		if (r.link === "submodule") {
 			checks.push({
-				check: "existe",
+				check: t("hub.check_exists"),
 				level: "fail",
-				detail: "submódulo sin inicializar",
-				fix: `bond hub check --fix (git -C ${s.root} submodule update --init ${r.path})`,
+				detail: t("hub.check_submodule_uninit"),
+				fix: t("hub.check_submodule_fix", { root: s.root, path: r.path }),
 				fixFn: () => {
 					const g = git(s.root, ["submodule", "update", "--init", "--", r.path]);
-					if (g.status !== 0) warn(`${name}: git submodule update --init: ${firstLine(g.stderr)}`);
-					else log(`${name}: submódulo inicializado`);
+					if (g.status !== 0) warn(t("hub.check_fix_submodule_warn", { name, error: firstLine(g.stderr) }));
+					else log(t("hub.check_fix_submodule_log", { name }));
 				},
 			});
 		} else if (!r.source) {
-			checks.push({ check: "existe", level: "fail", detail: "falta el enlace y no hay clon local declarado", fix: "añade source a [repos.<x>] en .bond/hub.local.toml" });
+			checks.push({ check: t("hub.check_exists"), level: "fail", detail: t("hub.check_missing_link_no_source"), fix: t("hub.check_missing_link_no_source_fix") });
 		} else if (!existsSync(r.source)) {
-			checks.push({ check: "existe", level: "fail", detail: `falta el enlace y el clon local ${r.source} no existe`, fix: "restaura el clon o cambia source en .bond/hub.local.toml" });
+			checks.push({ check: t("hub.check_exists"), level: "fail", detail: t("hub.check_missing_link_source_not_found", { source: r.source }), fix: t("hub.check_missing_link_source_not_found_fix") });
 		} else if (brokenLink(r.dir)) {
 			checks.push({
-				check: "existe",
+				check: t("hub.check_exists"),
 				level: "fail",
-				detail: `el enlace está roto (apuntaba a ${linkTarget(r.dir)})`,
+				detail: t("hub.check_broken_link_detail", { target: linkTarget(r.dir) ?? "" }),
 				fix: "bond hub check --fix",
 				fixFn: () => fixLink(r, s),
 			});
 		} else if (existsSync(r.dir)) {
-			checks.push({ check: "existe", level: "fail", detail: "hay algo en su ruta que no es un repo git", fix: `revisa ${r.path}: ni repo ni enlace (${r.dir})` });
+			checks.push({ check: t("hub.check_exists"), level: "fail", detail: t("hub.check_path_not_git"), fix: t("hub.check_path_not_git_fix", { path: r.path, dir: r.dir }) });
 		} else {
 			checks.push({
-				check: "existe",
+				check: t("hub.check_exists"),
 				level: "fail",
-				detail: `falta el enlace a ${r.source}`,
+				detail: t("hub.check_missing_link_to_source", { source: r.source! }),
 				fix: "bond hub check --fix",
 				fixFn: () => fixLink(r, s),
 			});
@@ -163,25 +142,25 @@ function checkRepo(r: HubRepo, s: HubSession, hasAgent: (agent: string) => boole
 	// 2. El enlace es el que dice hub.toml (symlink y submódulo se reportan igual).
 	if (r.link === "symlink") {
 		const isLink = linkTarget(r.dir) !== undefined;
-		if (!isLink) checks.push({ check: "enlace", level: "fail", detail: 'es un directorio normal; en hub.toml link = "symlink"', fix: "enlaza la ruta al clon local o cambia link en hub.toml" });
-		else if (r.source && canonical(r.dir) !== canonical(r.source)) checks.push({ check: "enlace", level: "fail", detail: `apunta a ${canonical(r.dir)}, no al clon de .bond/hub.local.toml (${canonical(r.source)})`, fix: "recrea el enlace o corrige source en .bond/hub.local.toml" });
-		else checks.push({ check: "enlace", level: "ok", detail: `symlink -> ${canonical(r.dir)}` });
+		if (!isLink) checks.push({ check: t("hub.check_link"), level: "fail", detail: t("hub.check_link_is_normal_dir"), fix: t("hub.check_link_is_normal_dir_fix") });
+		else if (r.source && canonical(r.dir) !== canonical(r.source)) checks.push({ check: t("hub.check_link"), level: "fail", detail: t("hub.check_link_points_elsewhere", { actual: canonical(r.dir), expected: canonical(r.source) }), fix: t("hub.check_link_points_elsewhere_fix") });
+		else checks.push({ check: t("hub.check_link"), level: "ok", detail: t("hub.check_link_symlink_ok", { target: canonical(r.dir) }) });
 	} else if (r.link === "submodule") {
 		checks.push(
 			submodules(s.root).some((m) => m.path === r.path)
-				? { check: "enlace", level: "ok", detail: "submódulo" }
-				: { check: "enlace", level: "fail", detail: "no está registrado como submódulo del hub", fix: "bond hub add <url> o cambia link en hub.toml" },
+				? { check: t("hub.check_link"), level: "ok", detail: t("hub.check_link_submodule_ok") }
+				: { check: t("hub.check_link"), level: "fail", detail: t("hub.check_link_submodule_not_reg"), fix: t("hub.check_link_submodule_not_reg_fix") },
 		);
 	}
 
 	// 3. Tiene la base declarada.
 	const hasBase = git(r.dir, ["rev-parse", "--verify", "--quiet", `${r.base}^{commit}`]).status === 0;
-	checks.push(hasBase ? { check: "base", level: "ok", detail: r.base } : { check: "base", level: "fail", detail: `la base "${r.base}" no existe en ${name}`, fix: "cambia base en hub.toml o haz git fetch en el repo" });
+	checks.push(hasBase ? { check: t("hub.check_base"), level: "ok", detail: r.base } : { check: t("hub.check_base"), level: "fail", detail: t("hub.check_base_not_found", { base: r.base, name }), fix: t("hub.check_base_not_found_fix") });
 	if (hasBase) checks.push(...baseBehindCheck(r));
 
 	// 4. bond init hecho y config de agentes al día (bond sync --check).
 	if (!existsSync(join(r.dir, ".bond", "bond.toml"))) {
-		checks.push({ check: "bond init", level: "fail", detail: "el repo no tiene .bond/bond.toml", fix: "bond hub sync (hace el bond init que falta)" });
+		checks.push({ check: t("hub.check_bond_init"), level: "fail", detail: t("hub.check_bond_init_missing"), fix: t("hub.check_bond_init_missing_fix") });
 	} else {
 		const prev = process.cwd();
 		let cfgActions: ReturnType<typeof syncRepo> | undefined;
@@ -194,28 +173,28 @@ function checkRepo(r: HubRepo, s: HubSession, hasAgent: (agent: string) => boole
 		} finally {
 			process.chdir(prev);
 		}
-		if (cfgError !== undefined) checks.push({ check: "config", level: "fail", detail: cfgError, fix: `bond sync (en ${r.dir})` });
-		else if (cfgActions && cfgActions.length) checks.push({ check: "config", level: "fail", detail: `${cfgActions.length} cambio(s) de config de agente pendientes`, fix: `bond sync (en ${r.dir})` });
-		else checks.push({ check: "config", level: "ok", detail: "al día" });
+		if (cfgError !== undefined) checks.push({ check: t("hub.check_config"), level: "fail", detail: cfgError, fix: t("hub.check_config_fix", { dir: r.dir }) });
+		else if (cfgActions && cfgActions.length) checks.push({ check: t("hub.check_config"), level: "fail", detail: t("hub.check_config_pending", { count: cfgActions.length }), fix: t("hub.check_config_fix", { dir: r.dir }) });
+		else checks.push({ check: t("hub.check_config"), level: "ok", detail: t("hub.check_config_up_to_date") });
 
 		// 5. Sus agentes están instalados (los de su bond.toml y el agent de hub.toml).
 		const agents = catchDie(() => loadRepoAgents(r.dir));
-		if (agents.error !== undefined) checks.push({ check: "agentes", level: "fail", detail: agents.error, fix: "revisa .bond/bond.toml" });
+		if (agents.error !== undefined) checks.push({ check: t("hub.check_agents"), level: "fail", detail: agents.error, fix: t("hub.check_agents_review_fix") });
 		else {
 			const wanted = [...new Set([...agents.value.agents, ...(r.agent ? [r.agent] : [])])];
 			const missing = wanted.filter((a) => !hasAgent(a));
-			checks.push(missing.length ? { check: "agentes", level: "fail", detail: `no están instalados: ${missing.join(", ")}`, fix: "bond setup, o instala el agente y repite bond hub check" } : { check: "agentes", level: "ok", detail: wanted.length ? wanted.join(", ") : "sin agentes" });
+			checks.push(missing.length ? { check: t("hub.check_agents"), level: "fail", detail: t("hub.check_agents_missing", { list: missing.join(", ") }), fix: t("hub.check_agents_missing_fix") } : { check: t("hub.check_agents"), level: "ok", detail: wanted.length ? wanted.join(", ") : t("hub.check_agents_none") });
 		}
 	}
 
 	// 6. Admite worktrees (bond team trabaja con worktrees).
 	const bare = git(r.dir, ["rev-parse", "--is-bare-repository"]).stdout.trim() === "true";
 	const wt = !bare && git(r.dir, ["worktree", "list", "--porcelain"]).status === 0;
-	checks.push(wt ? { check: "worktrees", level: "ok" } : { check: "worktrees", level: "fail", detail: bare ? "el repo es bare: bond team no puede crear worktrees en él" : `git worktree list falla en ${name}`, fix: bare ? "importa un clon normal (git clone) y enlázalo" : undefined });
+	checks.push(wt ? { check: t("hub.check_worktrees"), level: "ok" } : { check: t("hub.check_worktrees"), level: "fail", detail: bare ? t("hub.check_worktrees_bare") : t("hub.check_worktrees_failed", { name }), fix: bare ? t("hub.check_worktrees_bare_fix") : undefined });
 
 	// 7. Sin cambios sin commitear (bond team sale de lo commiteado).
 	const dirty = git(r.dir, ["status", "--porcelain"]).stdout.split("\n").filter(Boolean).length;
-	checks.push(dirty ? { check: "cambios", level: "fail", detail: `${dirty} cambio(s) sin commitear`, fix: "commitea o guarda los cambios: el worktree de bond team sale de lo commiteado" } : { check: "cambios", level: "ok", detail: "limpio" });
+	checks.push(dirty ? { check: t("hub.check_changes"), level: "fail", detail: t("hub.check_changes_dirty", { count: dirty }), fix: t("hub.check_changes_dirty_fix") } : { check: t("hub.check_changes"), level: "ok", detail: t("hub.check_changes_clean") });
 
 	return checks;
 }
@@ -239,11 +218,11 @@ function verticalChecks(s: HubSession): HubCheck[] {
 	const branches = [...byBranch.keys()].sort();
 	for (const branch of branches) {
 		if (git(s.root, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).status !== 0) {
-			checks.push({ check: "rama vertical", level: "fail", detail: `${branch} tiene worktree en ${byBranch.get(branch)!.join(", ")} pero no existe en el hub`, fix: `bond team clean ${branch}, o crea la rama en el hub antes de abrir worktrees` });
+			checks.push({ check: t("hub.check_vertical_branch"), level: "fail", detail: t("hub.check_vertical_missing_in_hub", { branch, repos: byBranch.get(branch)!.join(", ") }), fix: t("hub.check_vertical_missing_in_hub_fix", { branch }) });
 		}
 	}
-	if (branches.length > 1) checks.push({ check: "rama vertical", level: "fail", detail: `varias ramas verticales abiertas (${branches.join(", ")}): en un hub solo cabe una por sesión`, fix: `bond team clean ${branches[0]} (las ramas se quedan)` });
-	if (!checks.length) checks.push({ check: "rama vertical", level: "ok", detail: branches.length === 1 ? `${branches[0]} en la sesión` : "ninguna abierta" });
+	if (branches.length > 1) checks.push({ check: t("hub.check_vertical_branch"), level: "fail", detail: t("hub.check_vertical_multiple", { branches: branches.join(", ") }), fix: t("hub.check_vertical_multiple_fix", { branch: branches[0] }) });
+	if (!checks.length) checks.push({ check: t("hub.check_vertical_branch"), level: "ok", detail: branches.length === 1 ? t("hub.check_vertical_one", { branch: branches[0] }) : t("hub.check_vertical_none") });
 	return checks;
 }
 
@@ -289,26 +268,26 @@ function printCheck(r: HubCheckReport): void {
 		for (const c of failed) console.log(`      ${bad("✗")} ${c.check.padEnd(13)} ${c.detail ?? ""}${c.fix ? dim(`  → ${c.fix}`) : ""}`);
 		for (const c of warned) console.log(`      ${caution("!")} ${c.check.padEnd(13)} ${c.detail ?? ""}${c.fix ? dim(`  → ${c.fix}`) : ""}`);
 	}
-	const warnHint = r.warnings ? dim(` · ${r.warnings} aviso(s) que no impiden trabajar`) : "";
-	console.log(r.level !== "fail" ? `\n${ok("el hub está listo para trabajar con agentes")}${warnHint}` : `\n${bad(`${r.failures} problema(s)`)}` + dim(fixableHint(r)));
+	const warnHint = r.warnings ? dim(t("hub.check_warn_hint", { count: r.warnings })) : "";
+	console.log(r.level !== "fail" ? `\n${ok(t("hub.check_ok"))}${warnHint}` : `\n${bad(t("hub.check_failures", { count: r.failures }))}` + dim(fixableHint(r)));
 }
 
-const fixableHint = (r: HubCheckReport) => (r.repos.some((rp) => rp.checks.some((c) => c.level === "fail" && c.fixFn)) ? " → bond hub check --fix arregla lo seguro" : "");
+const fixableHint = (r: HubCheckReport) => (r.repos.some((rp) => rp.checks.some((c) => c.level === "fail" && c.fixFn)) ? t("hub.check_fixable_hint") : "");
 
 export async function hubCheck(args: string[]): Promise<void> {
 	if (args.includes("-h") || args.includes("--help")) {
-		console.log(HUB_CHECK_HELP.trimEnd());
+		console.log(hubCheckHelp().trimEnd());
 		return;
 	}
 	if (args.includes("--dry-run")) setDryRun(true);
 	const fix = args.includes("--fix");
 	const json = args.includes("--json");
 	const yes = args.includes("--yes") || args.includes("-y");
-	for (const a of args) if (!["--fix", "--json", "--dry-run", "--yes", "-y"].includes(a)) die(`opción desconocida: ${a} (bond hub check --help)`);
+	for (const a of args) if (!["--fix", "--json", "--dry-run", "--yes", "-y"].includes(a)) die(t("hub.check_unknown_opt", { opt: a }));
 	const root = hubRoot(process.cwd());
-	if (!root) die("no es un hub: falta hub.toml (bond hub --help)");
+	if (!root) die(t("hub.not_a_hub"));
 	const s = hubSession(root);
-	if (!s) die(`${root} no es un hub: falta hub.toml`);
+	if (!s) die(t("hub.dir_not_a_hub", { name: root }));
 	let report = checkHubSession(s);
 	if (fix) {
 		const autos = report.repos.flatMap((rp) => rp.checks.filter((c) => c.level === "fail" && c.fixFn).map((c) => ({ rp, c })));
@@ -322,18 +301,18 @@ export async function hubCheck(args: string[]): Promise<void> {
 		try {
 			for (const { rp, c } of autos) {
 				if (p) {
-					const go = await p.confirm({ message: `¿Arreglar ${c.check} en ${rp.repo}: ${c.detail ?? ""}?` });
+					const go = await p.confirm({ message: t("hub.check_prompt_fix", { check: c.check, repo: rp.repo, detail: c.detail ?? "" }) });
 					if (typeof go === "symbol") {
-						p.cancel("Cancelado");
+						p.cancel(t("hub.cancelled"));
 						process.exit(130);
 					}
 					if (!go) continue;
 				}
-				act(`arreglar ${c.check} en ${rp.repo}: ${c.detail ?? ""}`, () => {
+				act(t("hub.check_act_fix", { check: c.check, repo: rp.repo, detail: c.detail ?? "" }), () => {
 					try {
 						c.fixFn!();
 					} catch (e) {
-						warn(`${rp.repo}: no se pudo arreglar ${c.check}: ${(e as Error).message}`);
+						warn(t("hub.check_warn_fix_failed", { repo: rp.repo, check: c.check, error: (e as Error).message }));
 					}
 				});
 			}
