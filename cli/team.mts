@@ -1209,8 +1209,10 @@ export const withMemoryNote = (task: string, dir: string) =>
  */
 export function lastAssistantText(file: string): string | undefined {
 	let text: string;
+	const full = file.endsWith("transcript.jsonl") ? file.replace(/transcript\.jsonl$/, "transcript_full.jsonl") : undefined;
+	const target = full && existsSync(full) ? full : file;
 	try {
-		text = readFileSync(file, "utf8");
+		text = readFileSync(target, "utf8");
 	} catch {
 		return undefined;
 	}
@@ -1324,9 +1326,17 @@ export function trimAgyPane(text: string): string {
  */
 export function sessionFile(s?: { agent?: string; kind?: string; value?: string }, claudeDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), agyDir = join(homedir(), ".gemini", "antigravity-cli")): string | undefined {
 	if (!s?.value) return undefined;
-	if (s.kind === "path") return s.value;
+	if (s.kind === "path") {
+		if (s.value.endsWith("transcript.jsonl")) {
+			const full = s.value.replace(/transcript\.jsonl$/, "transcript_full.jsonl");
+			if (existsSync(full)) return full;
+		}
+		return s.value;
+	}
 	if (s.kind !== "id" || !/^[\w-]+$/.test(s.value)) return undefined;
 	if (s.agent === "agy") {
+		const full = join(agyDir, "brain", s.value, ".system_generated", "logs", "transcript_full.jsonl");
+		if (existsSync(full)) return full;
 		const f = join(agyDir, "brain", s.value, ".system_generated", "logs", "transcript.jsonl");
 		return existsSync(f) ? f : undefined;
 	}
@@ -1393,16 +1403,20 @@ function readRun(name: string, rel: string, text: string): RunOnDisk | undefined
 	return { name, rel, fm: p, request, report };
 }
 
-/** Los runs de <dir>/runs/, del más reciente al más antiguo (el nombre lleva la fecha). */
+/** Los runs de <dir>/runs/, del más reciente al más antiguo (por started_at, y luego por nombre). */
 export function loadRuns(root: string, dirRel: string): RunOnDisk[] {
 	const dir = runsDirAbs(root, dirRel);
 	if (!existsSync(dir)) return [];
 	return readdirSync(dir)
 		.filter((f) => f.endsWith(".md") && f !== "README.md")
-		.sort()
-		.reverse()
 		.map((f) => readRun(f, `${dirRel}/runs/${f}`, readFileSync(join(dir, f), "utf8")))
-		.filter((r): r is RunOnDisk => !!r);
+		.filter((r): r is RunOnDisk => !!r)
+		.sort((a, b) => {
+			const sA = a.fm.scalars.started_at ?? "";
+			const sB = b.fm.scalars.started_at ?? "";
+			if (sA && sB && sA !== sB) return sB.localeCompare(sA);
+			return b.name.localeCompare(a.name);
+		});
 }
 
 export const runsDirAbs = (root: string, dirRel: string) => join(root, ...dirRel.split("/"), "runs");
@@ -1449,7 +1463,8 @@ export function collectRun(ctx: RunCtx, report: string, o: { request?: string; t
 	const ts = o.ts ?? utcNow();
 	const dir = runsDirAbs(ctx.mainRoot, ctx.dir);
 	mkdirSync(dir, { recursive: true });
-	const run_ = loadRuns(ctx.mainRoot, ctx.dir).find((r) => r.fm.scalars.branch === ctx.branch && (!ctx.agent || r.fm.scalars.agent === ctx.agent));
+	const runs = loadRuns(ctx.mainRoot, ctx.dir).filter((r) => r.fm.scalars.branch === ctx.branch && (!ctx.agent || r.fm.scalars.agent === ctx.agent));
+	const run_ = runs.find((r) => r.fm.scalars.status === "sent") ?? runs[0];
 	// La base es la que se guardó al mandar el encargo, no la de ahora: si la rama ya se
 	// integró, la base actual la contiene y no quedarían commits ni decisiones suyas.
 	const at = run_?.fm.scalars.base ? { ...ctx, base: run_.fm.scalars.base } : ctx;
