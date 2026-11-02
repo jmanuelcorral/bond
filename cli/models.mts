@@ -4,27 +4,14 @@
 import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import { inspect } from "node:util";
 import { activeProviders, type Api, CONFIG_DIR, CONFIG_FILE, initialConfig, loadConfig, loadState, providerApis, saveState } from "./config.mts";
 import { INCOMPATIBLE, readCurrent, hasComments, TARGETS } from "./agents.mts";
+import { t } from "./messages.mts";
 import { act, AGENT_DIR, bad, caution, die, dim, isDryRun, log, ok, REPO_DIR, run, STAMP, warn } from "./util.mts";
 
-export const MODELS_HELP = `Uso: bond models <subcomando> [opciones]
-
-Registro global de modelos en ${CONFIG_FILE}: se declaran una vez y bond genera la
-configuración de cada agente que pueda usarlos.
-
-  init              Crea config.toml (importa los proveedores del models.json de pi, si hay)
-  list              Proveedores, modelos y qué agentes pueden usarlos
-  probe [id...]     Pregunta a cada pasarela qué APIs sirve (chat, responses, messages)
-  sync [opciones]   Escribe la configuración de modelos de cada agente
-      --agent <a>   Solo ese agente (repetible): pi, opencode, crush, codex
-      --dry-run     Enseña los cambios sin escribir
-      --check       No escribe; sale con 1 si algún agente está desfasado
-  path              Ruta de config.toml
-
-Agentes: pi, opencode y Crush usan la API de chat; Codex, la API Responses; Copilot se
-lanza con \`bond run copilot\`. Claude Code y Gemini no pueden usar pasarelas compatibles
-con OpenAI.`;
+export const modelsHelp = (): string => t("models.help", { file: CONFIG_FILE });
+export const MODELS_HELP = modelsHelp;
 
 export async function models(args: string[]): Promise<void> {
 	const [sub, ...rest] = args;
@@ -41,7 +28,7 @@ export async function models(args: string[]): Promise<void> {
 		case "path":
 			return console.log(CONFIG_FILE);
 		default:
-			die(`subcomando desconocido: models ${sub} (bond models --help)`, 2);
+			die(t("models.unknown_sub", { sub }), 2);
 	}
 }
 
@@ -55,17 +42,17 @@ function legacyPiModels(): string | undefined {
 
 export function init(args: string[] = []): void {
 	if (existsSync(CONFIG_FILE) && !args.includes("--force")) {
-		log(`ya existe ${CONFIG_FILE} (--force para recrearlo; se guarda copia)`);
+		log(t("models.init_exists", { file: CONFIG_FILE }));
 		return;
 	}
 	const source = legacyPiModels();
 	const text = initialConfig(source);
 	if (existsSync(CONFIG_FILE)) act(`cp ${CONFIG_FILE} ${CONFIG_FILE}.bak.${STAMP}`, () => copyFileSync(CONFIG_FILE, `${CONFIG_FILE}.bak.${STAMP}`));
-	act(`escribir ${CONFIG_FILE}`, () => {
+	act(t("util.write", { file: CONFIG_FILE }), () => {
 		mkdirSync(CONFIG_DIR, { recursive: true });
 		writeFileSync(CONFIG_FILE, text);
 	});
-	log(`creado ${CONFIG_FILE}${source ? ` (importado de ${source})` : " (vacío, con un ejemplo)"}`);
+	log(source ? t("models.init_created_imported", { file: CONFIG_FILE, source }) : t("models.init_created_empty", { file: CONFIG_FILE }));
 	if (isDryRun()) console.log(dim(text));
 }
 
@@ -74,24 +61,29 @@ export function init(args: string[] = []): void {
 function list(): void {
 	const cfg = loadConfig();
 	const state = loadState();
-	if (!cfg.providers.length) return console.log(`Sin proveedores. Edita ${CONFIG_FILE} (bond models init crea uno de ejemplo).`);
+	if (!cfg.providers.length) return console.log(t("models.list_none", { file: CONFIG_FILE }));
 	for (const p of cfg.providers) {
 		const apis = providerApis(p, state);
 		const probed = state.probes[p.id];
-		const off = p.enabled === false ? caution(" (desactivado)") : "";
+		const off = p.enabled === false ? caution(t("models.list_disabled")) : "";
 		console.log(`\n${p.id}${off}  ${dim(p.base_url)}`);
-		console.log(dim(`  APIs: ${apis.join(", ")}${p.apis ? " (declaradas)" : probed ? ` (probe ${probed.at.slice(0, 16).replace("T", " ")})` : " (supuesto: bond models probe)"}`));
+		const apisDetail = p.apis
+			? t("models.list_apis_declared")
+			: probed
+				? t("models.list_apis_probe", { date: probed.at.slice(0, 16).replace("T", " ") })
+				: t("models.list_apis_assumed");
+		console.log(dim(`  APIs: ${apis.join(", ")}${apisDetail}`));
 		for (const m of p.models) {
-			const served = probed ? (probed.served.includes(m.id) ? "" : caution("  no lo sirve la pasarela")) : "";
+			const served = probed ? (probed.served.includes(m.id) ? "" : caution(t("models.list_not_served"))) : "";
 			const limits = [m.context && `ctx ${m.context}`, m.max_output && `out ${m.max_output}`].filter(Boolean).join(", ");
-			console.log(`  ${m.enabled === false ? dim(`· ${m.id} (desactivado)`) : `• ${m.id}`}  ${dim(limits)}${served}`);
+			console.log(`  ${m.enabled === false ? dim(t("models.list_model_disabled", { id: m.id })) : `• ${m.id}`}  ${dim(limits)}${served}`);
 		}
 		const agents = [
 			...TARGETS.map((t) => [t.agent, apis.includes(t.needs) ? ok("✓") : bad("✗")] as const),
 			["copilot", apis.includes("chat") || apis.includes("responses") ? ok("✓") : bad("✗")] as const,
 			...Object.keys(INCOMPATIBLE).map((a) => [a, apis.includes("messages") && a === "claude" ? ok("✓") : bad("✗")] as const),
 		];
-		console.log(`  agentes: ${agents.map(([a, m]) => `${m} ${a}`).join("  ")}`);
+		console.log(t("models.list_agents", { agents: agents.map(([a, m]) => `${m} ${a}`).join("  ") }));
 	}
 }
 
@@ -116,11 +108,11 @@ async function probe(ids: string[]): Promise<void> {
 	const cfg = loadConfig();
 	const state = loadState();
 	const targets = cfg.providers.filter((p) => !ids.length || ids.includes(p.id));
-	if (!targets.length) die(`ningún proveedor coincide: ${ids.join(", ")}`);
+	if (!targets.length) die(t("models.probe_no_match", { ids: ids.join(", ") }));
 	for (const p of targets) {
 		const base = p.base_url.replace(/\/$/, "");
 		const key = p.api_key_env ? process.env[p.api_key_env] : undefined;
-		if (p.api_key_env && !key) warn(`${p.id}: la variable ${p.api_key_env} no está definida`);
+		if (p.api_key_env && !key) warn(t("models.probe_var_undefined", { id: p.id, var: p.api_key_env }));
 		const auth: Record<string, string> = key ? { authorization: `Bearer ${key}`, "x-api-key": key } : {};
 		log(`${p.id}: ${base}`);
 		let served: string[] = [];
@@ -128,11 +120,11 @@ async function probe(ids: string[]): Promise<void> {
 			const res = await fetch(`${base}/models`, { headers: auth, signal: AbortSignal.timeout(15_000) });
 			served = (((await res.json()) as { data?: Array<{ id: string }> }).data ?? []).map((m) => m.id);
 		} catch (e) {
-			warn(`${p.id}: GET /models falló (${(e as Error).message})`);
+			warn(t("models.probe_models_failed", { id: p.id, err: (e as Error).message }));
 		}
 		const model = p.models.find((m) => m.enabled !== false)?.id;
 		if (!model) {
-			warn(`${p.id}: sin modelos activos que probar`);
+			warn(t("models.probe_no_active_models", { id: p.id }));
 			continue;
 		}
 		// Una detrás de otra: las pasarelas locales no suelen atender varias a la vez (429).
@@ -149,11 +141,13 @@ async function probe(ids: string[]): Promise<void> {
 		}
 		const declared = p.models.filter((m) => m.enabled !== false).map((m) => m.id);
 		const missing = declared.filter((m) => served.length && !served.includes(m));
-		console.log(`  ${missing.length ? caution("!") : ok("✓")} modelos: ${served.length ? `sirve ${served.length}` : "lista no disponible"}${missing.length ? `; no sirve ${missing.join(", ")}` : ""}`);
+		const status = served.length ? t("models.probe_models_serves", { count: served.length }) : t("models.probe_models_unavailable");
+		const missingStr = missing.length ? t("models.probe_models_missing", { missing: missing.join(", ") }) : "";
+		console.log(`  ${missing.length ? caution("!") : ok("✓")} ` + t("models.probe_models_summary", { status, missing: missingStr }));
 		state.probes[p.id] = { apis, served, at: new Date().toISOString() };
 	}
 	saveState(state);
-	if (targets.some((p) => p.apis)) console.log(dim("\nNota: los proveedores con 'apis' en config.toml usan lo declarado, no lo detectado."));
+	if (targets.some((p) => p.apis)) console.log(dim(t("models.probe_apis_note")));
 }
 
 // --- sync ---------------------------------------------------------------------------------
@@ -184,32 +178,32 @@ export function syncAgents(opts: SyncOptions = {}): string[] {
 	const say = (s: string) => !opts.quiet && console.log(s);
 	const stale: string[] = [];
 	const chosen = opts.agents?.length ? TARGETS.filter((t) => opts.agents!.includes(t.agent)) : TARGETS.filter((t) => t.installed());
-	if (opts.agents) for (const a of opts.agents) if (!TARGETS.some((t) => t.agent === a)) die(`agente sin generador de modelos: ${a} (pi, opencode, crush, codex)`);
+	if (opts.agents) for (const a of opts.agents) if (!TARGETS.some((t) => t.agent === a)) die(t("models.sync_unsupported_agent", { agent: a }));
 
-	for (const t of chosen) {
-		const usable = providers.filter((p) => providerApis(p, state).includes(t.needs));
+	for (const target of chosen) {
+		const usable = providers.filter((p) => providerApis(p, state).includes(target.needs));
 		const unusable = providers.filter((p) => !usable.includes(p));
-		const file = t.file();
+		const file = target.file();
 		const current = readCurrent(file);
-		const out = t.render(current, usable, state);
+		const out = target.render(current, usable, state);
 		const notes = [
-			...unusable.map((p) => `${p.id}: la pasarela no sirve la API ${t.needs}`),
+			...unusable.map((p) => t("models.sync_api_unsupported", { id: p.id, api: target.needs })),
 			...out.skipped.map((s) => `${s.id}: ${s.why}`),
 		];
 		const changed = out.text !== (current ?? "");
-		const label = `${t.agent.padEnd(9)}`;
+		const label = `${target.agent.padEnd(9)}`;
 		if (!changed) {
-			say(`${ok("✓")} ${label}${dim(`al día  ${file}`)}`);
+			say(`${ok("✓")} ${label}${dim(`${t("models.sync_up_to_date")}  ${file}`)}`);
 		} else if (opts.check) {
-			stale.push(t.agent);
-			say(`${bad("✗")} ${label}desfasado  ${dim(file)}`);
+			stale.push(target.agent);
+			say(`${bad("✗")} ${label}${t("models.sync_outdated")}  ${dim(file)}`);
 		} else {
-			stale.push(t.agent);
+			stale.push(target.agent);
 			if (current && /\.jsonc?$/.test(file) && hasComments(current)) {
-				warn(`${file} tiene comentarios; al reescribirlo se pierden (queda copia .bak)`);
+				warn(t("models.sync_comments_warn", { file }));
 			}
 			if (isDryRun()) {
-				say(`${caution("~")} ${label}cambiaría ${file}`);
+				say(`${caution("~")} ${label}${t("models.sync_would_change")} ${file}`);
 				showDiff(file, current, out.text);
 			} else {
 				// Copia la primera vez que bond toca el fichero.
@@ -221,16 +215,16 @@ export function syncAgents(opts: SyncOptions = {}): string[] {
 				// El models.json de pi era un symlink al repo: pasa a ser un fichero de esta máquina.
 				rmSync(file, { force: true });
 				writeFileSync(file, out.text);
-				state.managed[t.agent] = out.managed;
-				say(`${ok("✓")} ${label}actualizado  ${dim(file)}`);
+				state.managed[target.agent] = out.managed;
+				say(`${ok("✓")} ${label}${t("models.sync_updated")}  ${dim(file)}`);
 			}
 		}
-		if (out.managed.length && changed && !opts.check) say(dim(`    ${out.managed.join(", ")}  → comprobar: ${t.verify}`));
+		if (out.managed.length && changed && !opts.check) say(dim(t("models.sync_verify", { models: out.managed.join(", "), verify: target.verify })));
 		for (const n of notes) say(`    ${caution("!")} ${n}`);
-		if (t.note && changed && !opts.check) say(dim(`    ${t.note}`));
+		if (target.note && changed && !opts.check) say(dim(`    ${target.note}`));
 	}
 	const notInstalled = TARGETS.filter((t) => !chosen.includes(t) && !t.installed()).map((t) => t.agent);
-	if (notInstalled.length && !opts.agents) say(dim(`no instalados (se omiten): ${notInstalled.join(", ")}  · forzar: --agent <a>`));
+	if (notInstalled.length && !opts.agents) say(dim(t("models.sync_not_installed", { agents: notInstalled.join(", ") })));
 	if (!opts.check && !isDryRun()) saveState(state);
 	return stale;
 }
@@ -239,10 +233,10 @@ function sync(args: string[]): void {
 	const agents: string[] = [];
 	let check = false;
 	for (let i = 0; i < args.length; i++) {
-		if (args[i] === "--agent") agents.push(args[++i] ?? die("--agent necesita un valor"));
+		if (args[i] === "--agent") agents.push(args[++i] ?? die(t("models.sync_agent_needs_val")));
 		else if (args[i] === "--check") check = true;
 		else if (args[i] === "--dry-run") continue;
-		else die(`opción desconocida: ${args[i]} (bond models --help)`);
+		else die(t("models.sync_unknown_opt", { opt: args[i] }));
 	}
 	const stale = syncAgents({ agents: agents.length ? agents : undefined, check });
 	if (check && stale.length) process.exitCode = 1;
