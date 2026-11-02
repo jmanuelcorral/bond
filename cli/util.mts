@@ -5,6 +5,7 @@ import { cpSync, existsSync, lstatSync, readdirSync, readFileSync, readlinkSync,
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { t } from "./messages.mts";
 
 export const REPO_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const HOME = homedir();
@@ -14,7 +15,7 @@ const color = process.stdout.isTTY && !process.env.NO_COLOR;
 const paint = (code: string, s: string) => (color ? `\x1b[${code}m${s}\x1b[0m` : s);
 
 export const log = (msg: string) => console.log(`${paint("1;36", "==>")} ${msg}`);
-export const warn = (msg: string) => console.error(`${paint("1;33", "aviso:")} ${msg}`);
+export const warn = (msg: string) => console.error(`${paint("1;33", t("util.warn"))} ${msg}`);
 /** El error de un die() dentro de catchDie(): su mensaje, sin terminar el proceso. */
 export class DieError extends Error {}
 let catching = 0;
@@ -74,7 +75,7 @@ export function run(cmd: string, args: string[] = [], opts: { cwd?: string; time
 export function runAct(cmd: string, args: string[], opts: { cwd?: string } = {}): void {
 	act([cmd, ...args].join(" "), () => {
 		const r = spawnSync(cmd, args, { stdio: "inherit", cwd: opts.cwd });
-		if (r.status !== 0) die(`falló: ${cmd} ${args.join(" ")}`);
+		if (r.status !== 0) die(t("util.failed", { cmd: `${cmd} ${args.join(" ")}` }));
 	});
 }
 
@@ -129,18 +130,18 @@ export function brokenLink(p: string): boolean {
 /** Deja `dest` como symlink a `src`; lo que hubiera antes se guarda como .bak.<fecha>. */
 export function linkPath(src: string, dest: string): void {
 	if (exists(dest) && lstatSync(dest).isSymbolicLink() && samePath(dest, src)) {
-		log(`ya enlazado: ${dest}`);
+		log(t("util.already_linked", { path: dest }));
 		return;
 	}
 	if (brokenLink(dest)) {
 		// Un enlace roto no guarda nada: se sustituye sin copia.
 		act(`rm ${dest}`, () => rmSync(dest));
 	} else if (exists(dest)) {
-		warn(`${dest} ya existe; lo guardo como ${basename(dest)}.bak.${STAMP}`);
+		warn(t("util.exists_backed_up", { dest, bak: `${basename(dest)}.bak.${STAMP}` }));
 		act(`mv ${dest} ${dest}.bak.${STAMP}`, () => renameSync(dest, `${dest}.bak.${STAMP}`));
 	}
 	act(`ln -s ${src} ${dest}`, () => symlinkSync(src, dest));
-	log(`enlazado: ${dest} -> ${src}`);
+	log(t("util.linked", { dest, src }));
 }
 
 /** Marca de las carpetas que copia bond (donde no enlaza): se pueden sustituir sin copia .bak. */

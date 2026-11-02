@@ -1,0 +1,5 @@
+# Las pruebas se ejecutan siempre en español: si no, el idioma del que las lanza (LANG=en_US
+# en una macOS, C en un runner) cambiaría las cadenas que comprueban. Los tests de inglés
+# fijan BOND_LANG a su aire, caso por caso.
+[test]
+preload = ["./test/lang-pinned.mts"]

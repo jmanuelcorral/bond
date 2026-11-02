@@ -10,6 +10,8 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import { join } from "node:path";
 import { parse, stringify } from "smol-toml";
 import { ICON_STYLES, type IconStyle } from "../lib/status-bar.mts";
+import { LANGS, type Lang } from "../lib/lang.mts";
+import { t } from "./messages.mts";
 import { BOND_HOME } from "./runtime.mts";
 import { die, HOME, log } from "./util.mts";
 
@@ -28,7 +30,7 @@ function migrateLegacy(): void {
 	for (const f of ["config.toml", "state.json"]) {
 		if (existsSync(join(LEGACY_DIR, f))) copyFileSync(join(LEGACY_DIR, f), join(CONFIG_DIR, f));
 	}
-	log(`configuración global movida de ${LEGACY_DIR} a ${CONFIG_DIR} (la antigua se queda como copia)`);
+	log(t("config.migrated", { from: LEGACY_DIR, to: CONFIG_DIR }));
 }
 
 /** ¿Hay configuración global? */
@@ -82,8 +84,8 @@ export interface Config {
 	update?: { auto?: boolean };
 	/** [suggestions] sugerencias de prompt de pi: modelo barato del registro y si van activas. */
 	suggestions?: { enabled?: boolean; model?: string };
-	/** [ui] icons: iconos del pie de pi (lo pregunta `bond setup` si hay una Nerd Font). */
-	ui?: { icons?: IconStyle };
+	/** [ui] icons: iconos del pie de pi; [ui] lang: idioma de la consola (los pregunta `bond setup`). */
+	ui?: { icons?: IconStyle; lang?: Lang };
 }
 
 /** Lo que recuerda el aviso de versión nueva al arrancar (ver offerUpdate en update.mts). */
@@ -140,12 +142,14 @@ function readSuggestions(raw: Record<string, unknown>): Config["suggestions"] {
 	return Object.keys(out).length ? out : undefined;
 }
 
-/** [ui] de config.toml; undefined si no hay sección o no dice nada útil. */
+/** [ui] de config.toml; undefined si no hay sección o no dice nada útil. Un valor inválido se ignora. */
 function readUi(raw: Record<string, unknown>): Config["ui"] {
 	if (!raw.ui || typeof raw.ui !== "object" || Array.isArray(raw.ui)) return undefined;
-	const icons = (raw.ui as Record<string, unknown>).icons;
-	if (typeof icons !== "string" || !ICON_STYLES.includes(icons as IconStyle)) return undefined;
-	return { icons: icons as IconStyle };
+	const ui = raw.ui as Record<string, unknown>;
+	const out: NonNullable<Config["ui"]> = {};
+	if (typeof ui.icons === "string" && ICON_STYLES.includes(ui.icons as IconStyle)) out.icons = ui.icons as IconStyle;
+	if (typeof ui.lang === "string" && LANGS.includes(ui.lang as Lang)) out.lang = ui.lang as Lang;
+	return Object.keys(out).length ? out : undefined;
 }
 
 /** Config vacía (primera vez) o la que haya. */

@@ -59,6 +59,5 @@ export function herdrInstallHelp(): string[] {
 	return [
 		win ? `powershell -ExecutionPolicy Bypass -c "irm https://herdr.dev/install.ps1 | iex"` : "curl -fsSL https://herdr.dev/install.sh | sh",
 		...(win ? [] : ["brew install herdr"]),
-		"Más opciones: https://herdr.dev/docs/install/",
 	];
 }
