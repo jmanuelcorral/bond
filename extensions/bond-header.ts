@@ -1,31 +1,49 @@
 /**
- * Cabecera de BOND al arrancar pi: logo de 4 filas con degradado de magenta a azul oscuro y
- * campo de diagonales (lib/bond-logo.mts). Se adapta al ancho: ancho, compacto o una línea.
+ * Cabecera de bond al arrancar pi: el isotipo de la web con su degradado de índigo a teal y la
+ * palabra "bond" (lib/bond-logo.mts). Entra animado y se queda en la forma media (">>" y la
+ * palabra); en paneles estrechos sale quieto, en la forma que quepa.
  *
  * /header alterna entre esta cabecera y la de pi (con sus atajos de teclado).
  */
 
 import { type ExtensionAPI, type ExtensionContext, type Theme, VERSION } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
-import { randomStretch, renderLogo } from "../lib/bond-logo.mts";
+import { type TUI, truncateToWidth } from "@earendil-works/pi-tui";
+import { type Frame, frameAt, LARGE_WIDTH, logoFrames } from "../lib/bond-logo.mts";
 
 export default function (pi: ExtensionAPI) {
 	let enabled = true;
-	// Como en Crush: se estira una letra al azar, una vez por proceso, para que no baile al redimensionar.
-	const stretch = randomStretch();
 
-	function render(theme: Theme, width: number): string[] {
-		const logo = renderLogo({ width: width - 1, version: `pi v${VERSION}`, stretch });
-		const hints = theme.fg("dim", "licence to code · /delegate /team /review /handoff /commit /header");
-		return ["", ...logo.map((l) => ` ${l}`), truncateToWidth(` ${hints}`, width), ""];
+	const version = `pi v${VERSION}`;
+	// Lo que dura la animación (con la forma grande; en paneles estrechos no hay animación).
+	const duration = logoFrames({ width: LARGE_WIDTH }).reduce((t, f) => t + f.ms, 0);
+
+	function header(tui: TUI, theme: Theme) {
+		const start = Date.now();
+		let frames: { width: number; list: Frame[] } | undefined;
+		// Mientras dura la animación, pide redibujar; al acabar, un último dibujo con la forma final.
+		let timer: ReturnType<typeof setInterval> | undefined = setInterval(() => {
+			if (Date.now() - start > duration) stop();
+			tui.requestRender();
+		}, 20);
+		const stop = () => {
+			if (timer) clearInterval(timer);
+			timer = undefined;
+		};
+		return {
+			render(width: number): string[] {
+				if (frames?.width !== width) frames = { width, list: logoFrames({ width: width - 1, version }) };
+				const { lines } = frameAt(frames.list, Date.now() - start);
+				const hints = theme.fg("dim", "/delegate /team /review /handoff /commit /header");
+				return ["", ...lines.map((l) => ` ${l}`), truncateToWidth(` ${hints}`, width), ""];
+			},
+			invalidate() {},
+			dispose: stop,
+		};
 	}
 
 	function install(ctx: ExtensionContext) {
 		if (ctx.mode !== "tui") return;
-		ctx.ui.setHeader((_tui, theme) => ({
-			render: (width: number) => render(theme, width),
-			invalidate() {},
-		}));
+		ctx.ui.setHeader(header);
 	}
 
 	pi.on("session_start", async (_event, ctx) => {

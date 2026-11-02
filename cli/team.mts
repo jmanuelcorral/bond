@@ -1231,7 +1231,9 @@ export function trimAgentBanner(text: string): string {
 	const lines = text.split("\n");
 	let i = 0;
 	while (i < lines.length && !lines[i].trim()) i++;
-	while (i < lines.length && (/[╱╲]{3}/.test(lines[i]) || /\bpi v\d/.test(lines[i]) || /licence to code/i.test(lines[i]) || isAgyBanner(lines[i]))) i++;
+	// El logo de bond (bloques) cae en isAgyBanner; [╱╲] es el de antes de 1.11. Debajo, la línea
+	// de comandos de la cabecera.
+	while (i < lines.length && (/[╱╲]{3}/.test(lines[i]) || /\bpi v\d/.test(lines[i]) || /licence to code/i.test(lines[i]) || /^\s*\/delegate \/team\b/.test(lines[i]) || isAgyBanner(lines[i]))) i++;
 	const kept: string[] = [];
 	for (let j = i; j < lines.length; j++) {
 		// Aviso de skills en conflicto: de la cabecera hasta el bloque en blanco que lo cierra

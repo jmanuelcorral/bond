@@ -3,7 +3,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { randomStretch, renderLogo } from "../lib/bond-logo.mts";
+import { animateLogo } from "../lib/bond-logo.mts";
 import { DOCTOR_HELP, doctor } from "./doctor.mts";
 import { SETUP_HELP, setup } from "./setup.mts";
 import { assetsDir, VERSION } from "./runtime.mts";
@@ -13,10 +13,9 @@ import { die, run, setDryRun } from "./util.mts";
 const termWidth = () => process.stdout.columns || Number(process.env.COLUMNS) || 80;
 
 
-function help(): void {
-	const logo = renderLogo({ width: Math.min(termWidth(), 72), version: `v${VERSION}`, stretch: randomStretch() });
-	console.log(`${logo.join("\n")}
-
+async function help(): Promise<void> {
+	await animateLogo({ width: Math.min(termWidth(), 72), version: `v${VERSION}` });
+	console.log(`
 Uso: bond [comando] [opciones]   (bond <comando> --help para el detalle)
 
 Máquina
@@ -156,7 +155,7 @@ async function main(argv: string[]): Promise<void> {
 		case "key":
 			return (await import("./keys.mts")).keyCommand(rest);
 		case "logo":
-			return console.log(renderLogo({ width: termWidth(), version: `v${VERSION}`, stretch: randomStretch() }).join("\n"));
+			return animateLogo({ width: termWidth(), version: `v${VERSION}` });
 	}
 	die(`comando desconocido: ${cmd} (bond help)`, 2);
 }

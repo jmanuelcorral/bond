@@ -1,9 +1,14 @@
 /**
- * Status line: pie de pi pensado para tener varios agentes en paneles de Herdr.
+ * Status line: pie de pi pensado para tener varios agentes en paneles de Herdr. A la izquierda,
+ * la insignia de bond (">>" en dos filas y "bond"); a su lado, cada dato con su icono:
  *
- *   L1  agente@panel · carpeta · rama [wt] · modelo (thinking) [→ modelo enrutado]
- *   L2  barra de contexto % · coste/tokens · tiempo sesión/api · +líneas/-líneas · req ✓ ✗ · espera por rate limit
+ *   L1  agente@panel  carpeta  rama [worktree]  modelo thinking [→ modelo enrutado]
+ *   L2  barra de contexto %  coste ↑entrada ↓salida  tiempo sesión  tiempo api  +líneas -líneas  ✓ ✗  [espera por rate limit]
  *   L3  estados de otras extensiones (ctx.ui.setStatus), solo si hay alguno
+ *
+ * Si no cabe todo, se quitan primero los datos menos importantes (tiempos, contadores...); en
+ * paneles estrechos la insignia se queda en los ">>". Iconos Nerd Font; con BOND_ICONS=unicode,
+ * símbolos que traen todas las fuentes.
  *
  * /statusline lo activa o desactiva (vuelve el pie por defecto de pi).
  *
@@ -16,9 +21,15 @@ import { basename } from "node:path";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { badgeWidth, paintIcon, renderBadge } from "../lib/bond-logo.mts";
+import { fitSegments, iconSet, type Segment } from "../lib/status-bar.mts";
 
 const HERDR_REFRESH_MS = 30_000;
-const BAR_WIDTH = 12;
+const BAR_WIDTH = 10;
+/** Desde aquí la insignia lleva la palabra «bond»; por debajo, solo los «>>». */
+const BADGE_WORD_WIDTH = 90;
+/** Por debajo de este ancho no hay insignia. */
+const BADGE_MIN_WIDTH = 50;
 
 function run(cmd: string, args: string[], cwd?: string): Promise<string> {
 	return new Promise((resolve) => {
@@ -119,7 +130,9 @@ export default function (pi: ExtensionAPI) {
 	function makeFooter(tui: { requestRender(): void }, theme: Theme, footerData: any) {
 		const tick = setInterval(() => tui.requestRender(), 1000);
 		const unsub = footerData.onBranchChange(() => tui.requestRender());
-		const sep = theme.fg("dim", " · ");
+		const I = iconSet();
+		const seg = (text: string, drop: number): Segment => ({ text, width: visibleWidth(text), drop });
+		const item = (icon: string, text: string, drop: number) => seg(`${paintIcon(icon)} ${text}`, drop);
 
 		return {
 			dispose() {
@@ -133,55 +146,64 @@ export default function (pi: ExtensionAPI) {
 				const now = Date.now();
 				const totals = sessionTotals(ctx);
 
-				// L1: quién soy y dónde.
-				const who = paneId ? theme.fg("accent", herdrName ? `${herdrName}@${paneId}` : paneId) : null;
+				// Insignia a la izquierda, con la misma sangría para las tres líneas.
+				const badge = width >= BADGE_MIN_WIDTH ? renderBadge(width >= BADGE_WORD_WIDTH) : undefined;
+				const indent = badge ? badgeWidth(width >= BADGE_WORD_WIDTH) + 2 : 0;
+				const room = width - indent;
+
+				// L1: quién soy y dónde. Si no cabe, se va antes la carpeta, luego el agente y la rama.
 				const branch = footerData.getGitBranch();
 				const model = ctx.model;
-				let modelStr = model ? `${model.id}${ctx.thinkingLevel ? ` (${ctx.thinkingLevel})` : ""}` : "sin modelo";
+				let modelStr = model ? model.id : "sin modelo";
 				if (model && totals.lastModel && totals.lastModel !== model.id) modelStr += ` → ${totals.lastModel}`;
-				const l1 = [
-					who,
-					theme.fg("text", folder),
-					branch ? theme.fg("muted", branch) + (isWorktree ? theme.fg("warning", " [wt]") : "") : null,
-					theme.fg("accent", modelStr),
-				].filter(Boolean) as string[];
+				const l1: Segment[] = [
+					paneId ? item(I.agent, theme.fg("accent", herdrName ? `${herdrName}@${paneId}` : paneId), 2) : seg("", 0),
+					item(I.folder, theme.fg("text", folder), 3),
+					branch ? item(I.branch, theme.fg("muted", branch) + (isWorktree ? ` ${theme.fg("warning", I.worktree)}` : ""), 1) : seg("", 0),
+					item(I.model, theme.fg("accent", modelStr) + (model && ctx.thinkingLevel ? ` ${theme.fg("dim", ctx.thinkingLevel)}` : ""), 0),
+				];
 
-				// L2: cuánto queda y cuánto ha costado.
+				// L2: cuánto queda y cuánto ha costado. Se van antes los tiempos y los contadores.
 				const usage = ctx.getContextUsage();
 				const pct = usage?.percent ?? null;
 				let bar: string;
 				if (pct == null) {
-					bar = theme.fg("dim", `${"░".repeat(BAR_WIDTH)} --%`);
+					bar = theme.fg("dim", `${"━".repeat(BAR_WIDTH)} --%`);
 				} else {
 					const filled = Math.max(0, Math.min(BAR_WIDTH, Math.round((pct / 100) * BAR_WIDTH)));
 					const color = pct < 50 ? "success" : pct < 80 ? "warning" : "error";
-					bar = theme.fg(color, "█".repeat(filled)) + theme.fg("dim", "░".repeat(BAR_WIDTH - filled)) + theme.fg(color, ` ${Math.round(pct)}%`);
+					bar = theme.fg(color, "━".repeat(filled)) + theme.fg("dim", "━".repeat(BAR_WIDTH - filled)) + theme.fg(color, ` ${Math.round(pct)}%`);
 				}
 				const tokens = theme.fg("muted", `↑${fmtTokens(totals.input)} ↓${fmtTokens(totals.output)}`);
 				const cost = totals.cost > 0 ? `${theme.fg("text", `$${totals.cost.toFixed(2)}`)} ` : "";
-				const parts = [
-					bar,
-					cost + tokens,
-					theme.fg("dim", `sess ${fmtDur(now - sessionStart)} api ${fmtDur(apiTimeMs + (streamingSince ? now - streamingSince : 0))}`),
-					theme.fg("toolDiffAdded", `+${linesAdded}`) + theme.fg("dim", "/") + theme.fg("toolDiffRemoved", `-${linesRemoved}`),
+				const l2: Segment[] = [
+					item(I.context, bar, 0),
+					item(I.cost, cost + tokens, 2),
+					item(I.time, theme.fg("dim", fmtDur(now - sessionStart)), 4),
+					item(I.api, theme.fg("dim", fmtDur(apiTimeMs + (streamingSince ? now - streamingSince : 0))), 5),
+					item(I.diff, `${theme.fg("toolDiffAdded", `+${linesAdded}`)} ${theme.fg("toolDiffRemoved", `-${linesRemoved}`)}`, 3),
 				];
 				if (reqOk + reqFail > 0) {
-					parts.push(theme.fg("dim", "req ") + theme.fg("success", `✓${reqOk}`) + (reqFail ? theme.fg("error", ` ✗${reqFail}`) : ""));
+					l2.push(seg(theme.fg("success", `${I.ok} ${reqOk}`) + (reqFail ? ` ${theme.fg("error", `${I.fail} ${reqFail}`)}` : ""), 3));
 				}
-				let line2 = parts.join(sep);
+				// La espera por rate limit no se quita nunca: va a la derecha, y lo demás cede el sitio.
 				const wait = rateLimitedUntil - now;
+				let line2: string;
 				if (wait > 0) {
-					const right = theme.fg("error", "rate limit · reintento en ") + theme.fg("warning", fmtDur(wait));
-					const gap = Math.max(1, width - visibleWidth(line2) - visibleWidth(right));
-					line2 = line2 + " ".repeat(gap) + right;
+					const right = `${paintIcon(I.wait)} ${theme.fg("error", "rate limit · reintento en ")}${theme.fg("warning", fmtDur(wait))}`;
+					const left = fitSegments(l2, Math.max(0, room - visibleWidth(right) - 2));
+					line2 = left + " ".repeat(Math.max(2, room - visibleWidth(left) - visibleWidth(right))) + right;
+				} else {
+					line2 = fitSegments(l2, room);
 				}
 
-				const lines = [truncateToWidth(l1.join(sep), width), truncateToWidth(line2, width)];
-
+				const body = [fitSegments(l1, room), line2];
 				// L3: estados de otras extensiones, que un pie propio taparía si no se pintan aquí.
 				const statuses = [...(footerData.getExtensionStatuses?.() ?? new Map()).values()].filter(Boolean);
-				if (statuses.length) lines.push(truncateToWidth(statuses.join(sep), width));
-				return lines;
+				if (statuses.length) body.push(statuses.map((st) => `${theme.fg("dim", I.status)} ${st}`).join("  "));
+
+				const pad = " ".repeat(indent);
+				return body.map((line, i) => truncateToWidth((badge ? (i < 2 ? `${badge[i]}  ` : pad) : "") + line, width));
 			},
 		};
 	}
