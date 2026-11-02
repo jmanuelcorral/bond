@@ -7,6 +7,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { dirname, join } from "node:path";
 import { agentInfo } from "./catalog-agents.mts";
 import { withBlock } from "./repo.mts";
+import { t } from "./messages.mts";
 import { BOND_HOME } from "./runtime.mts";
 import { act } from "./util.mts";
 
@@ -47,7 +48,7 @@ function seedPersonal(legacy?: string): string {
 
 export function ensurePersonal(legacy?: string): void {
 	if (existsSync(PERSONAL_FILE)) return;
-	act(`escribir ${PERSONAL_FILE}`, () => {
+	act(t("util.write", { file: PERSONAL_FILE }), () => {
 		mkdirSync(BOND_HOME, { recursive: true });
 		writeFileSync(PERSONAL_FILE, seedPersonal(legacy));
 	});
@@ -67,8 +68,15 @@ export function blockCurrent(file: string): boolean {
 	return withBlock(current, blockBody(), "md", BLOCK_NOTE) === current;
 }
 
+/**
+ * Estado de un fichero de instrucciones. Son códigos, no texto: lo que se imprime se traduce en
+ * el llamador (cli/setup.mts), que es consola de bond. Aquí no hay idioma porque lo que se
+ * escribe en el fichero son las reglas, que no se traducen.
+ */
+export type PropagateResult = "updated" | "current" | "skipped";
+
 /** Escribe el bloque de bond en el fichero de instrucciones global de cada agente. */
-export function propagate(agents: string[]): Array<{ agent: string; file: string; result: "actualizado" | "al día" | "omitido"; why?: string }> {
+export function propagate(agents: string[]): Array<{ agent: string; file: string; result: PropagateResult; why?: "symlink" }> {
 	const body = blockBody();
 	const out = [];
 	for (const id of agents) {
@@ -82,20 +90,20 @@ export function propagate(agents: string[]): Array<{ agent: string; file: string
 			// No existe: se crea.
 		}
 		if (isLink) {
-			out.push({ agent: id, file, result: "omitido" as const, why: "es un enlace: no se escribe a través de él (bond migrate convierte los de bond 0.7)" });
+			out.push({ agent: id, file, result: "skipped" as const, why: "symlink" as const });
 			continue;
 		}
 		const current = existsSync(file) ? readFileSync(file, "utf8") : "";
 		const next = withBlock(current, body, "md", BLOCK_NOTE);
 		if (next === current) {
-			out.push({ agent: id, file, result: "al día" as const });
+			out.push({ agent: id, file, result: "current" as const });
 			continue;
 		}
-		act(`bloque de bond en ${file}`, () => {
+		act(t("util.bond_block", { file }), () => {
 			mkdirSync(dirname(file), { recursive: true });
 			writeFileSync(file, next);
 		});
-		out.push({ agent: id, file, result: "actualizado" as const });
+		out.push({ agent: id, file, result: "updated" as const });
 	}
 	return out;
 }

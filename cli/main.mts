@@ -5,9 +5,10 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { animateLogo } from "../lib/bond-logo.mts";
 import { DOCTOR_HELP, doctor } from "./doctor.mts";
-import { SETUP_HELP, setup } from "./setup.mts";
+import { langFlag, setup, setupHelp } from "./setup.mts";
 import { assetsDir, VERSION } from "./runtime.mts";
 import { die, run, setDryRun } from "./util.mts";
+import { setLang } from "./messages.mts";
 
 // Ancho de la terminal; si la salida no es una terminal, $COLUMNS o 80.
 const termWidth = () => process.stdout.columns || Number(process.env.COLUMNS) || 80;
@@ -87,8 +88,12 @@ async function main(argv: string[]): Promise<void> {
 		case "--version":
 		case "-v":
 			return console.log(VERSION);
-		case "setup":
-			return wantsHelp ? console.log(SETUP_HELP) : setup(rest);
+		case "setup": {
+			// El idioma del flag se aplica antes de imprimir, para que --lang valga también para la ayuda.
+			const l = langFlag(rest);
+			if (l) setLang(l);
+			return wantsHelp ? console.log(setupHelp()) : setup(rest);
+		}
 		case "doctor":
 			return wantsHelp ? console.log(DOCTOR_HELP) : doctor(rest);
 		// models y run dependen de smol-toml: se cargan solo al usarlos, para que `bond setup`

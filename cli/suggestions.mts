@@ -11,6 +11,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { activeProviders, type Config, type Model } from "./config.mts";
+import { t } from "./messages.mts";
 import { act, AGENT_DIR, run, which } from "./util.mts";
 
 /** Paquete de pi con las sugerencias. El pin se actualiza al preparar la release. */
@@ -206,10 +207,10 @@ export function applySuggestions(
 	}
 
 	const pi = withEnabledModels(readJsonFile(paths.piSettings));
-	act(`enabledModels de pi: ${pi.changed ? '["*"] (no estaba puesto)' : "ya estaba puesto, se respeta"}`, () => {
+	act(t("suggestions.enabled_models", { state: t(pi.changed ? "suggestions.em_not_set" : "suggestions.em_already") }), () => {
 		if (pi.changed) writeJson(paths.piSettings, pi.settings);
 	});
-	if (!pi.changed) notes.push("enabledModels de pi ya estaba puesto");
+	if (!pi.changed) notes.push(t("suggestions.note_em_already"));
 
 	act(`${paths.supiConfig}: ${SUGGESTIONS_SECTION}.model = ${finalModel}`, () => {
 		writeJson(paths.supiConfig, mergeSupiConfig(readJsonFile(paths.supiConfig), finalModel));
@@ -217,7 +218,7 @@ export function applySuggestions(
 
 	const declared = isPackageDeclared(readJsonFile(paths.piSettings));
 	let installed = declared;
-	if (declared) notes.push(`${SUGGESTIONS_NAME} ya estaba declarado en la config de pi`);
+	if (declared) notes.push(t("suggestions.note_declared", { name: SUGGESTIONS_NAME }));
 	else {
 		let res: InstallResult | undefined;
 		act(`pi install ${SUGGESTIONS_PACKAGE}`, () => {

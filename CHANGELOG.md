@@ -21,6 +21,11 @@
   `~/.bond/config.toml`, y `BOND_ICONS` (`nerd`, `emoji` o `unicode`) manda sobre él.
 - La línea de marca de `bond`, `bond team`, `bond setup` y `bond init` pasa a ser
   `»» bond texto ───▪` y ya no se sale del panel cuando es muy estrecho: recorta el texto.
+- `bond setup` pregunta el idioma de la consola (español o inglés) al arrancar y lo guarda en
+  `[ui] lang` de `~/.bond/config.toml`. Toda la CLI responde en ese idioma; `BOND_LANG` manda
+  por encima de lo guardado y `bond setup --lang es|en` lo fija sin preguntar, también con
+  `--yes` y sin terminal. Lo que bond escribe para el agente (sus reglas y las skills) no cambia
+  de idioma: eso se edita en `~/.bond/AGENTS.md`.
 
 ## 1.10.0
 
