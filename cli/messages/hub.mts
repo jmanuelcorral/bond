@@ -34,6 +34,15 @@ Crea un hub o lo prepara en un repo git existente e importa repositorios:
 por URL (submódulo) o desde un clon local (symlink). En un repo con submódulos,
 los importa a hub.toml con su rama base.
 
+Con una sola ruta, esa ruta es el HUB, no un repo a importar. Para importar un repo
+en el hub del directorio actual, escribelo explicitamente:
+
+  bond hub init . <ruta>        importa <ruta> en el hub de aqui
+  bond hub init --repo <ruta>   lo mismo, sin ambigüedad
+
+Fuera de un repo, si esa ruta única ya es un repo git que no es un hub, bond avisa
+antes de crear nada (y pregunta si hay terminal).
+
 Los repos nuevos entran en repos/<nombre> (D16); al importar submódulos
 que ya existían se conserva su ruta. Cada repo puede llevar una descripción
 opcional (el asistente la pregunta; en bond hub add, --description): alimenta
@@ -210,6 +219,9 @@ Opciones:
 	"hub.import_err_url_no_repo": "la URL \"{url}\" no nombra ningún repositorio: le falta la ruta del repo",
 	"hub.import_err_empty_name": "el nombre del repo en hub.toml no puede estar vacío",
 	"hub.import_err_bad_name": "\"{key}\" no vale como nombre de repo en hub.toml: usa letras, números, guion o guion bajo (sin puntos ni barras)",
+	"hub.init_ambiguous_prompt": "\"{path}\" ya es un repo git y no un hub: con una sola ruta, bond la toma como el directorio del HUB. ¿Crear el hub en \"{path}\"?",
+	"hub.init_ambiguous_warn": "una sola ruta: \"{path}\" es el directorio del HUB, no un repo a importar; para importar un repo en el directorio actual, bond hub init . {path} (o bond hub init --repo {path})",
+	"hub.init_ambiguous_declined": "sin confirmar: para importar \"{path}\" en el directorio actual usa bond hub init . {path} (o bond hub init --repo {path})",
 	"hub.git_init_failed": "git init falló: {error}",
 	"hub.act_create_bond_dir": "crear .bond",
 	"hub.act_create_agents_md": "crear AGENTS.md",
@@ -365,6 +377,15 @@ docs/plans/ and docs/decisions/ live (D18).`,
 Create a hub or prepare an existing git repo and import repositories:
 by URL (submodule) or from a local clone (symlink). In a repo with submodules,
 imports them into hub.toml with their base branch.
+
+With a single path, that path is the HUB, not a repo to import. To import a repo
+into the hub of the current directory, say it explicitly:
+
+  bond hub init . <path>        imports <path> into the hub here
+  bond hub init --repo <path>   same thing, with no ambiguity
+
+Outside a repo, if that single path is already a git repo that is not a hub, bond
+warns before creating anything (and asks when there is a terminal).
 
 New repos go into repos/<name> (D16); existing submodules keep their path.
 Each repo can have an optional description (the wizard asks for it; in bond
@@ -541,6 +562,9 @@ Options:
 	"hub.import_err_url_no_repo": "URL \"{url}\" names no repository: its repo path is missing",
 	"hub.import_err_empty_name": "the repo name in hub.toml cannot be empty",
 	"hub.import_err_bad_name": "\"{key}\" is not a valid repo name in hub.toml: use letters, digits, dash or underscore (no dots or slashes)",
+	"hub.init_ambiguous_prompt": "\"{path}\" is already a git repo and not a hub: with a single path, bond takes it as the HUB directory. Create the hub in \"{path}\"?",
+	"hub.init_ambiguous_warn": "single path: \"{path}\" is the HUB directory, not a repo to import; to import a repo into the current directory, bond hub init . {path} (or bond hub init --repo {path})",
+	"hub.init_ambiguous_declined": "not confirmed: to import \"{path}\" into the current directory use bond hub init . {path} (or bond hub init --repo {path})",
 	"hub.git_init_failed": "git init failed: {error}",
 	"hub.act_create_bond_dir": "create .bond",
 	"hub.act_create_agents_md": "create AGENTS.md",

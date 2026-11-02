@@ -6,6 +6,11 @@
   llevan un sufijo hash corto derivado de la ruta absoluta del repositorio o hub (`<nombre>-<hash>`),
   evitando colisiones entre repositorios con la misma carpeta base (#36). Los worktrees existentes
   del esquema anterior se siguen reconociendo y limpiando con `bond team clean`.
+- `bond hub init` con una sola ruta: esa ruta es el hub, no un repo a importar (#40). El
+  comportamiento se mantiene pero deja de ser silencioso: fuera de un repo, si esa ruta única ya
+  es un repo git que no es un hub, `bond` avisa antes de crear nada (y pregunta si hay
+  terminal), y la ayuda documenta las formas explícitas `bond hub init . <ruta>` y
+  `bond hub init --repo <ruta>`.
 - `bond hub init` y `bond hub add` validan los orígenes antes de tocar disco (#35): un origen
   vacío (`file://`, `--repo ""`), una ruta que no existe o no es un repo git, un `--name` vacío
   o una clave de repo con puntos o barras fallan con un mensaje claro y ya no dejan un `hub.toml`

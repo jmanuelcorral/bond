@@ -512,6 +512,47 @@ link = "symlink"
 	});
 });
 
+describe("una sola ruta en bond hub init (issue #40)", () => {
+	test("fuera de un repo, una sola ruta es el HUB: avisa antes de crear nada y dice como importar", () => {
+		const outside = join(tmp, "outside-40");
+		mkdirSync(outside);
+		const res = bond(["hub", "init", "../" + basename(backReal), "--yes"], outside);
+		expect(res.status).toBe(0);
+		// El comportamiento se mantiene (la ruta es el hub) pero deja de ser silencioso.
+		expect(res.stderr).toContain("una sola ruta");
+		expect(res.stderr).toContain(`bond hub init . ../${basename(backReal)}`);
+		expect(existsSync(join(backReal, "hub.toml"))).toBe(true);
+	});
+
+	test("bond hub init . <ruta> importa la ruta en el hub del directorio actual, sin aviso", () => {
+		const hubDir = join(tmp, "explicit-hub");
+		mkdirSync(hubDir);
+		const res = bond(["hub", "init", ".", "--yes", "../" + basename(backReal)], hubDir);
+		expect(res.status).toBe(0);
+		expect(res.stderr).not.toContain("una sola ruta");
+		const toml = parseHubToml(readFileSync(join(hubDir, "hub.toml"), "utf8"));
+		expect(toml.repos[basename(backReal)]?.link).toBe("symlink");
+		expect(toml.repos[basename(backReal)]?.path).toBe(`repos/${basename(backReal)}`);
+	});
+
+	test("bond hub init --repo <ruta> importa sin ambiguedad desde una carpeta que no es un repo", () => {
+		const hubDir = join(tmp, "flag-hub");
+		mkdirSync(hubDir);
+		const res = bond(["hub", "init", "--yes", "--repo", "../" + basename(backReal)], hubDir);
+		expect(res.status).toBe(0);
+		expect(res.stderr).not.toContain("una sola ruta");
+		const toml = parseHubToml(readFileSync(join(hubDir, "hub.toml"), "utf8"));
+		expect(toml.repos[basename(backReal)]?.link).toBe("symlink");
+	});
+
+	test("la ayuda de bond hub init dice que con una sola ruta esa ruta es el hub", () => {
+		const h = bond(["hub", "init", "--help"], tmp);
+		expect(h.status).toBe(0);
+		expect(h.stdout).toContain("esa ruta es el HUB");
+		expect(h.stdout).toContain("bond hub init --repo <ruta>");
+	});
+});
+
 describe("origenes y nombres vacios o malformados (issue #35)", () => {
 	test("bond hub init con un origen vacio falla y no escribe nada en disco", () => {
 		const hubDir = join(tmp, "empty-src");
