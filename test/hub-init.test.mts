@@ -21,7 +21,7 @@ Object.assign(process.env, {
 
 const { BOND_HOME } = await import("../cli/runtime.mts");
 const { hubRoot, hubSession, hubsPath, parseHubToml, parseHubLocalToml } = await import("../cli/hub.mts");
-const { isLink, isBrokenLink, linkRepo, localCloneError, renderHubToml, renderHubLocalToml, defaultRepoPath } = await import("../cli/hub-init.mts");
+const { isLink, isBrokenLink, linkRepo, localCloneError, renderHubToml, renderHubLocalToml, defaultRepoPath, repoKeyError, repoNameFromUrl, repoSourceError } = await import("../cli/hub-init.mts");
 const { canonical } = await import("../cli/util.mts");
 
 const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
@@ -509,6 +509,90 @@ link = "symlink"
 
 		// isLink reconoce el destino
 		expect(isLink(dest) || junctionCreated).toBe(true);
+	});
+});
+
+describe("origenes y nombres vacios o malformados (issue #35)", () => {
+	test("bond hub init con un origen vacio falla y no escribe nada en disco", () => {
+		const hubDir = join(tmp, "empty-src");
+		mkdirSync(hubDir);
+		const res = bond(["hub", "init", ".", "--yes", "file://", backReal], hubDir);
+		expect(res.status).not.toBe(0);
+		expect(res.stderr).toContain("no nombra ningún repositorio");
+		// Nada en disco: ni hub.toml, ni .bond, ni repo git, ni AGENTS.md.
+		expect(existsSync(join(hubDir, "hub.toml"))).toBe(false);
+		expect(existsSync(join(hubDir, ".bond"))).toBe(false);
+		expect(existsSync(join(hubDir, ".git"))).toBe(false);
+		expect(existsSync(join(hubDir, "AGENTS.md"))).toBe(false);
+	});
+
+	test("bond hub init rechaza antes de escribir cada origen o nombre vacio o malformado", () => {
+		const hubDir = join(tmp, "bad-src");
+		mkdirSync(hubDir);
+		const plain = join(tmp, "plain-dir");
+		mkdirSync(plain);
+		const cases: [string[], string][] = [
+			[["hub", "init", ".", "--yes", ""], "origen vacío"],
+			[["hub", "init", ".", "--yes", "--repo", "   "], "origen vacío"],
+			[["hub", "init", ".", "--yes", "https://github.com"], "no nombra ningún repositorio"],
+			[["hub", "init", ".", "--yes", join(tmp, "no-existe")], "no existe"],
+			[["hub", "init", ".", "--yes", plain], "no es un repo git"],
+			[["hub", "init", ".", "--yes", "--name", ""], "nombre del hub"],
+			[["hub", "init", ".", "--yes", "--base", ""], "rama base del hub"],
+		];
+		for (const [args, msg] of cases) {
+			const res = bond(args, hubDir);
+			expect(res.status, args.join(" ")).not.toBe(0);
+			expect(res.stderr, args.join(" ")).toContain(msg);
+			expect(existsSync(join(hubDir, "hub.toml")), args.join(" ")).toBe(false);
+			expect(existsSync(join(hubDir, ".bond")), args.join(" ")).toBe(false);
+		}
+	});
+
+	test("bond hub add rechaza origen vacio y clave invalida sin tocar hub.toml", () => {
+		const hubDir = repo("add-validate");
+		expect(bond(["hub", "init", "--yes"], hubDir).status).toBe(0);
+		const tomlBefore = readFileSync(join(hubDir, "hub.toml"), "utf8");
+		const cases: [string[], string][] = [
+			[["hub", "add", ""], "necesita una URL o ruta local"],
+			[["hub", "add", "file://"], "no nombra ningún repositorio"],
+			[["hub", "add", join(tmp, "no-existe")], "no existe"],
+			[["hub", "add", backReal, "--name", ""], "nombre del repo en hub.toml no puede estar vacío"],
+			[["hub", "add", backReal, "--name", "mi.repo"], "no vale como nombre de repo"],
+		];
+		for (const [args, msg] of cases) {
+			const res = bond(args, hubDir);
+			expect(res.status, args.join(" ")).not.toBe(0);
+			expect(res.stderr, args.join(" ")).toContain(msg);
+			expect(readFileSync(join(hubDir, "hub.toml"), "utf8")).toBe(tomlBefore);
+		}
+	});
+
+	test("repoNameFromUrl: el nombre que nombra una URL; vacio si la URL no llega a nombrar ninguno", () => {
+		expect(repoNameFromUrl("git@github.com:fluzo/front.git")).toBe("front");
+		expect(repoNameFromUrl("https://github.com/fluzo/front")).toBe("front");
+		expect(repoNameFromUrl("file:///tmp/x/back-real")).toBe("back-real");
+		expect(repoNameFromUrl("ssh://git@host/path/repo")).toBe("repo");
+		expect(repoNameFromUrl("file://")).toBe("");
+		expect(repoNameFromUrl("file:///")).toBe("");
+		expect(repoNameFromUrl("https://github.com")).toBe("");
+		expect(repoNameFromUrl("git@github.com:")).toBe("");
+	});
+
+	test("repoKeyError: una clave vacia o con puntos y barras no vale en hub.toml", () => {
+		expect(repoKeyError("front")).toBeUndefined();
+		expect(repoKeyError("mi_api-2")).toBeUndefined();
+		expect(repoKeyError("  ")).toContain("vacío");
+		expect(repoKeyError("mi.repo")).toContain("no vale");
+		expect(repoKeyError("a/b")).toContain("no vale");
+	});
+
+	test("repoSourceError: cada origen dice por que no vale, y un origen bueno no dice nada", () => {
+		expect(repoSourceError(backReal)).toBeUndefined();
+		expect(repoSourceError(`file://${backReal}`)).toBeUndefined();
+		expect(repoSourceError("")).toContain("vacío");
+		expect(repoSourceError("file://")).toContain("no nombra ningún repositorio");
+		expect(repoSourceError(join(tmp, "no-existe"))).toContain("no existe");
 	});
 });
 
