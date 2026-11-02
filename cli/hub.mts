@@ -8,27 +8,9 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { parse } from "smol-toml";
 import { BOND_HOME } from "./runtime.mts";
 import { act, canonical, catchDie, die, dim, HOME, log, run, warn } from "./util.mts";
+import { t } from "./messages.mts";
 
-export const HUB_HELP = `Uso: bond hub [subcomando] [opciones]
-
-Un hub es un repo git compartido que agrupa varios repos (p. ej. frontend y backend)
-declarados en hub.toml, cada uno como submódulo o como enlace (symlink) a un clon local.
-La sesión la forman el hub y sus repos, cada uno con su rama base y su modo de enlace.
-Lo propio de cada máquina va en .bond/hub.local.toml.
-
-Comandos:
-  init [dir]      Crea un hub o lo prepara en un repo que ya existe, e importa repos
-  add <url|ruta>  Añade un repo al hub (como submódulo o como enlace local);
-                  --description describe el repo en hub.toml
-  sync            Deja el disco como dice hub.toml y actualiza el registro global
-  pull            Pone al día la base del hub y de sus repos en fast-forward (--dry-run, --json)
-  check           Revisa cada repo de la sesión: qué falta y cómo arreglarlo (--fix, --json)
-
-Sin subcomando: enseña la sesión del hub (repos, ruta, base, enlace, rama actual y,
-si se declaró en hub.toml, la descripción de cada repo). En el AGENTS.md del hub,
-bond sync mantiene un bloque generado con esa tabla, las reglas del hub y dónde
-viven docs/plans/ y docs/decisions/ (D18).
-`;
+export const hubHelp = (): string => t("hub.help");
 
 const git = (cwd: string, args: string[]) => run("git", ["-C", cwd, ...args]);
 
@@ -119,54 +101,54 @@ export function parseHubToml(text: string, pathForError = "hub.toml"): HubToml {
 	try {
 		raw = parse(text) as Record<string, unknown>;
 	} catch (e) {
-		die(`${pathForError} no es TOML válido: ${(e as Error).message}`);
+		die(t("hub.toml_invalid", { file: pathForError, error: (e as Error).message }));
 	}
 	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-		die(`${pathForError} tiene que ser una tabla: define name, base y [repos]`);
+		die(t("hub.toml_not_table", { file: pathForError }));
 	}
 	if (typeof raw.name !== "string" || !raw.name.trim()) {
-		die(`${pathForError}: falta name (el nombre del hub, p. ej. name = "mi-hub")`);
+		die(t("hub.toml_missing_name", { file: pathForError }));
 	}
 	if (typeof raw.base !== "string" || !raw.base.trim()) {
-		die(`${pathForError}: falta base (la rama base del hub, p. ej. base = "main")`);
+		die(t("hub.toml_missing_base", { file: pathForError }));
 	}
 	const reposRaw = raw.repos;
 	if (reposRaw !== undefined && (typeof reposRaw !== "object" || reposRaw === null || Array.isArray(reposRaw))) {
-		die(`${pathForError}: repos tiene que ser una tabla de repositorios: [repos.<nombre>]`);
+		die(t("hub.toml_repos_not_table", { file: pathForError }));
 	}
 	const repos: Record<string, HubTomlRepo> = {};
 	const seenPaths = new Set<string>();
 	for (const [key, val] of Object.entries((reposRaw ?? {}) as Record<string, unknown>)) {
 		if (typeof val !== "object" || val === null || Array.isArray(val)) {
-			die(`${pathForError}: repos.${key} tiene que ser una tabla: [repos.${key}]`);
+			die(t("hub.toml_repo_not_table", { file: pathForError, key }));
 		}
 		const r = val as Record<string, unknown>;
 		if (typeof r.path !== "string" || !r.path.trim()) {
-			die(`${pathForError}: repos.${key} necesita path (la ruta dentro del hub, con /)`);
+			die(t("hub.toml_repo_needs_path", { file: pathForError, key }));
 		}
 		const path = r.path.trim().replace(/\\/g, "/");
 		if (!insidePath(path)) {
-			die(`${pathForError}: repos.${key}.path tiene que ser una ruta relativa dentro del hub, con / y sin ..`);
+			die(t("hub.toml_repo_path_relative", { file: pathForError, key }));
 		}
 		if (seenPaths.has(path)) {
-			die(`${pathForError}: la ruta "${path}" está repetida en repos`);
+			die(t("hub.toml_repo_path_duplicate", { file: pathForError, path }));
 		}
 		seenPaths.add(path);
 		if (typeof r.base !== "string" || !r.base.trim()) {
-			die(`${pathForError}: repos.${key} necesita base (la rama base del repo)`);
+			die(t("hub.toml_repo_needs_base", { file: pathForError, key }));
 		}
 		const link = r.link;
 		if (link !== "submodule" && link !== "symlink") {
-			die(`${pathForError}: repos.${key}.link tiene que ser "submodule" o "symlink"`);
+			die(t("hub.toml_repo_invalid_link", { file: pathForError, key }));
 		}
 		if (r.url !== undefined && (typeof r.url !== "string" || !r.url.trim())) {
-			die(`${pathForError}: repos.${key}.url tiene que ser una cadena`);
+			die(t("hub.toml_repo_url_string", { file: pathForError, key }));
 		}
 		if (r.agent !== undefined && (typeof r.agent !== "string" || !r.agent.trim())) {
-			die(`${pathForError}: repos.${key}.agent tiene que ser una cadena`);
+			die(t("hub.toml_repo_agent_string", { file: pathForError, key }));
 		}
 		if (r.description !== undefined && (typeof r.description !== "string" || !r.description.trim())) {
-			die(`${pathForError}: repos.${key}.description tiene que ser una cadena`);
+			die(t("hub.toml_repo_desc_string", { file: pathForError, key }));
 		}
 		repos[key] = {
 			path,
@@ -190,23 +172,23 @@ export function parseHubLocalToml(text: string, pathForError = ".bond/hub.local.
 	try {
 		raw = parse(text) as Record<string, unknown>;
 	} catch (e) {
-		die(`${pathForError} no es TOML válido: ${(e as Error).message}`);
+		die(t("hub.toml_invalid", { file: pathForError, error: (e as Error).message }));
 	}
 	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-		die(`${pathForError} tiene que ser una tabla: [repos.<nombre>]`);
+		die(t("hub.local_toml_not_table", { file: pathForError }));
 	}
 	const reposRaw = raw.repos;
 	if (reposRaw !== undefined && (typeof reposRaw !== "object" || reposRaw === null || Array.isArray(reposRaw))) {
-		die(`${pathForError}: repos tiene que ser una tabla: [repos.<nombre>]`);
+		die(t("hub.local_toml_repos_not_table", { file: pathForError }));
 	}
 	const repos: Record<string, { source?: string }> = {};
 	for (const [key, val] of Object.entries((reposRaw ?? {}) as Record<string, unknown>)) {
 		if (typeof val !== "object" || val === null || Array.isArray(val)) {
-			die(`${pathForError}: repos.${key} tiene que ser una tabla`);
+			die(t("hub.local_toml_repo_not_table", { file: pathForError, key }));
 		}
 		const r = val as Record<string, unknown>;
 		if (r.source !== undefined && (typeof r.source !== "string" || !r.source.trim())) {
-			die(`${pathForError}: repos.${key}.source tiene que ser una ruta`);
+			die(t("hub.local_toml_repo_source_path", { file: pathForError, key }));
 		}
 		repos[key] = { source: typeof r.source === "string" ? r.source.trim() : undefined };
 	}
@@ -288,7 +270,7 @@ export function readHubsRegistry(): Record<string, string> {
 		if (repos !== undefined && (typeof repos !== "object" || repos === null || Array.isArray(repos))) {
 			if (!warnedCorruptRegistry) {
 				warnedCorruptRegistry = true;
-				warn(`${p}: repos tiene que ser una tabla: [repos]`);
+				warn(t("hub.registry_repos_not_table", { path: p }));
 			}
 			return {};
 		}
@@ -306,7 +288,7 @@ export function readHubsRegistry(): Record<string, string> {
 	} catch (e) {
 		if (!warnedCorruptRegistry) {
 			warnedCorruptRegistry = true;
-			warn(`${p} no es TOML válido: ${(e as Error).message}`);
+			warn(t("hub.toml_invalid", { file: p, error: (e as Error).message }));
 		}
 		return {};
 	}
@@ -324,7 +306,7 @@ export function writeHubsRegistry(registry: Record<string, string>): void {
 	for (const [r, h] of Object.entries(registry).sort(([a], [b]) => a.localeCompare(b))) {
 		lines.push(`${JSON.stringify(r)} = ${JSON.stringify(h)}`);
 	}
-	act(`escribir registro en ${p}`, () => {
+	act(t("hub.act_write_registry", { path: p }), () => {
 		mkdirSync(dirname(p), { recursive: true });
 		writeFileSync(p, `${lines.join("\n")}\n`);
 	});
@@ -352,7 +334,7 @@ export const hasHub = (root: string): boolean => {
 	if (r.value !== undefined) return true;
 	if (r.error && !warnedInvalidHub.has(root)) {
 		warnedInvalidHub.add(root);
-		warn(`${r.error}: sigo sin el modo hub`);
+		warn(t("hub.warn_invalid_hub", { error: r.error }));
 	}
 	return false;
 };
@@ -401,7 +383,7 @@ export interface Submodule {
 /** Submódulos del repo, también los anidados (git submodule status --recursive). */
 export function submodules(root: string): Submodule[] {
 	const r = git(root, ["submodule", "status", "--recursive"]);
-	if (r.status !== 0) die(`git submodule status falló en ${root}: ${r.stderr.trim()}`);
+	if (r.status !== 0) die(t("hub.submodules_failed", { root, error: r.stderr.trim() }));
 	return r.stdout
 		.split("\n")
 		.map((l) => /^([ +U-])[0-9a-f]+ (.+?)(?: \([^()]*\))?$/.exec(l))
@@ -419,10 +401,20 @@ export function printSession(s: HubSession): void {
 		r.path,
 		r.base,
 		r.path === "." ? "-" : (r.link ?? "submodule"),
-		!r.present ? "(no está)" : (r.branch ?? "(HEAD separado)"),
+		!r.present ? t("hub.session_not_present") : (r.branch ?? t("hub.session_detached_head")),
 		...(hasDesc ? [r.description ?? "-"] : []),
 	]);
-	const all = [["REPO", "RUTA", "BASE", "ENLACE", "RAMA", ...(hasDesc ? ["DESCRIPCIÓN"] : [])], ...rows];
+	const all = [
+		[
+			t("hub.session_col_repo"),
+			t("hub.session_col_path"),
+			t("hub.session_col_base"),
+			t("hub.session_col_link"),
+			t("hub.session_col_branch"),
+			...(hasDesc ? [t("hub.session_col_desc")] : []),
+		],
+		...rows,
+	];
 	const widths = all[0].map((_, i) => Math.max(...all.map((r) => r[i].length)));
 	const fmt = (r: string[]) => `  ${r.map((c, i) => (i === r.length - 1 ? c : c.padEnd(widths[i]))).join("  ")}`;
 	log(`hub ${s.name} ${dim(`(${s.root})`)}`);
@@ -453,11 +445,11 @@ export async function hub(args: string[]): Promise<void> {
 		return p.hubPull(rest);
 	}
 	if (args.includes("-h") || args.includes("--help")) {
-		console.log(HUB_HELP.trimEnd());
+		console.log(hubHelp().trimEnd());
 		return;
 	}
 	if (args.length > 0) {
-		die(`opción desconocida: ${args[0]} (bond hub --help)`);
+		die(t("hub.unknown_opt", { opt: args[0] }));
 	}
 	const cwd = process.cwd();
 	const root = hubRoot(cwd);
@@ -468,9 +460,9 @@ export async function hub(args: string[]): Promise<void> {
 			// Si hub.toml existe en la cadena pero falló la validación, muere con el error exacto
 			hubSession(candidate);
 		}
-		die("no es un hub: falta hub.toml (bond hub --help)");
+		die(t("hub.not_a_hub"));
 	}
 	const s = hubSession(root);
-	if (!s) die(`${basename(root)} no es un hub: falta hub.toml`);
+	if (!s) die(t("hub.dir_not_a_hub", { name: basename(root) }));
 	printSession(s);
 }

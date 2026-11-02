@@ -32,66 +32,11 @@ import {
 	submodules,
 } from "./hub.mts";
 import { agentsMd, init, loadRepoAgents, syncRepo } from "./repo.mts";
+import { t } from "./messages.mts";
 
-export const HUB_INIT_HELP = `Uso: bond hub init [dir] [repos...] [opciones]
-
-Crea un hub o lo prepara en un repo git existente e importa repositorios:
-por URL (submódulo) o desde un clon local (symlink). En un repo con submódulos,
-los importa a hub.toml con su rama base.
-
-Los repos nuevos entran en repos/<nombre> (D16); al importar submódulos
-que ya existían se conserva su ruta. Cada repo puede llevar una descripción
-opcional (el asistente la pregunta; en bond hub add, --description): alimenta
-el bloque que bond genera en el AGENTS.md del hub (D18).
-
-Opciones:
-  --yes, -y       No pregunta: usa valores detectados y añade los repos indicados
-  --dry-run       Muestra qué haría sin escribir en disco ni ejecutar comandos
-  --dir <ruta>    Directorio del hub (por defecto, el directorio actual)
-  --name <nombre> Nombre del hub (por defecto, el nombre de la carpeta)
-  --base <rama>   Rama base del hub (por defecto, la rama actual o main)
-  --repo <origen> Repositorio a importar (URL o ruta local; puede repetirse)
-
-Antes de nada hace bond init en el propio hub si no lo tiene (con terminal, con sus
-preguntas; con --yes, lo de bond setup), con las skills por defecto y plan-team.
-
-Un hub recién creado (sin ningún commit) queda con su config de agente generada y un
-commit inicial de los ficheros del hub, para que 'bond hub check' encuentre la base.
-En un hub preexistente con commits no se commitea: los cambios se dejan para ti.
-
-Los repos de la sesión sin bond reciben un bond init con la config del hub (sus
-agentes y las skills por defecto del catálogo); los que ya lo tienen conservan la
-suya. Su config se commitea en la rama actual del repo si estaba limpio; en un
-submódulo ese commit es local: haz git push en él antes de subir el hub.
-`;
-
-export const HUB_ADD_HELP = `Uso: bond hub add <url|ruta> [opciones]
-
-Añade un repositorio al hub: como submódulo si es una URL o como enlace (symlink)
-si es una ruta a un clon local.
-
-Opciones:
-  --name <nombre>  Identificador del repo en hub.toml (por defecto, derivado del origen)
-  --path <ruta>    Ruta dentro del hub (por defecto, repos/<nombre>; D16)
-  --base <rama>    Rama base del repo (por defecto, la rama actual o main)
-  --link <modo>    Modo de enlace: "submodule" o "symlink"
-  --agent <agente> Agente por defecto para este repo en el hub
-  --description <texto>  Qué es el repo (opcional); alimenta el bloque que bond genera en el AGENTS.md del hub (D18)
-  --yes, -y        No pregunta
-  --dry-run        Muestra qué haría sin escribir en disco
-`;
-
-export const HUB_SYNC_HELP = `Uso: bond hub sync [opciones]
-
-Deja el disco como dice hub.toml: monta submódulos, crea enlaces (symlinks o
-junctions en Windows), pregunta la ruta local que falte u ofrece clonar, y
-actualiza el registro global ~/.bond/hubs.toml. Al hub y a los repos de la
-sesión que no tienen bond les hace bond init (como bond hub init).
-
-Opciones:
-  --yes, -y   Falla si falta alguna ruta local en vez de preguntar
-  --dry-run   Muestra qué haría sin modificar nada
-`;
+export const hubInitHelp = (): string => t("hub.init.help");
+export const hubAddHelp = (): string => t("hub.add.help");
+export const hubSyncHelp = (): string => t("hub.sync.help");
 
 const git = (cwd: string, args: string[]) => run("git", ["-c", "protocol.file.allow=always", "-C", cwd, ...args]);
 
@@ -190,7 +135,7 @@ export function updateGitignore(hubRoot: string, pathsToIgnore: string[]): void 
 
 	if (changed) {
 		const newContent = lines.filter((l, i, arr) => l.trim() !== "" || i < arr.length - 1).join("\n") + "\n";
-		act("actualizar .gitignore", () => {
+		act(t("hub.act_update_gitignore"), () => {
 			writeFileSync(gitignorePath, newContent);
 		});
 	}
@@ -231,7 +176,7 @@ export function linkRepo(
 	const symlink = opts.symlinkFn ?? symlinkSync;
 
 	if (existsSync(dest) && samePath(dest, src)) {
-		log(`ya enlazado: ${dest}`);
+		log(t("hub.already_linked", { path: dest }));
 		return "symlink";
 	}
 
@@ -241,10 +186,10 @@ export function linkRepo(
 		try {
 			if (!isLink(dest)) {
 				if (existsSync(join(dest, ".git"))) {
-					warn(`${dest} ya existe como repositorio real; no se sustituye`);
+					warn(t("hub.dest_is_real_repo", { path: dest }));
 					return "symlink";
 				}
-				warn(`${dest} ya existe; lo guardo como ${basename(dest)}.bak.${STAMP}`);
+				warn(t("hub.dest_exists_backup", { path: dest, bak: `${basename(dest)}.bak.${STAMP}` }));
 				renameSync(dest, `${dest}.bak.${STAMP}`);
 			} else {
 				rmSync(dest, { recursive: true, force: true });
@@ -258,16 +203,16 @@ export function linkRepo(
 
 	try {
 		symlink(src, dest, "dir");
-		log(`enlazado: ${dest} -> ${src}`);
+		log(t("hub.linked", { dest, src }));
 		return "symlink";
 	} catch (e) {
 		if (platform === "win32") {
 			try {
 				symlink(resolve(src), dest, "junction");
-				log(`junction creada: ${dest} -> ${src}`);
+				log(t("hub.junction_created", { dest, src }));
 				return "junction";
 			} catch (je) {
-				die(`no se pudo crear symlink ni junction en ${dest}: ${(je as Error).message}`);
+				die(t("hub.link_failed", { path: dest, error: (je as Error).message }));
 			}
 		}
 		throw e;
@@ -291,10 +236,10 @@ const ask = async <T,>(v: Promise<T | symbol>): Promise<T> => {
 /** Por qué una ruta no vale como clon local (no existe o no es un repo git), o undefined si vale. */
 export function localCloneError(value: string | undefined, hubDir: string): string | undefined {
 	const v = value?.trim();
-	if (!v) return "indica la carpeta del clon local";
+	if (!v) return t("hub.clone_err_specify");
 	const dir = expandSource(v, hubDir);
-	if (!existsSync(dir)) return `no existe: ${dir}`;
-	if (git(dir, ["rev-parse", "--show-toplevel"]).status !== 0) return `no es un repo git: ${dir}`;
+	if (!existsSync(dir)) return t("hub.clone_err_not_found", { dir });
+	if (git(dir, ["rev-parse", "--show-toplevel"]).status !== 0) return t("hub.clone_err_not_git", { dir });
 	return undefined;
 }
 
@@ -308,7 +253,7 @@ async function askLocalClone(p: typeof import("@clack/prompts"), message: string
 	const start = dirname(resolve(hubDir));
 	const chosen = await ask(
 		p.path({
-			message: `${message} ${dim("(↑/↓ elige, Tab completa, / entra en la carpeta)")}`,
+			message: `${message} ${dim(t("hub.ask_clone_hint"))}`,
 			root: start,
 			initialValue: start + sep,
 			directory: true,
@@ -334,7 +279,7 @@ export async function syncHub(
 	if (!hubToml) {
 		const tomlPath = join(root, "hub.toml");
 		if (!existsSync(tomlPath)) {
-			die("no es un hub: falta hub.toml (bond hub --help)");
+			die(t("hub.not_a_hub"));
 		}
 		hubToml = parseHubToml(readFileSync(tomlPath, "utf8"), relative(process.cwd(), tomlPath) || "hub.toml");
 	}
@@ -364,20 +309,20 @@ export async function syncHub(
 			const subs = isGitRepo ? submodules(root) : [];
 			const found = subs.find((s) => s.path === entry.path);
 			if (found && found.initialized && existsSync(join(dest, ".git"))) {
-				log(`submódulo al día: ${entry.path}`);
+				log(t("hub.submodule_up_to_date", { path: entry.path }));
 			} else if (found) {
 				act(`git submodule update --init --recursive -- ${entry.path}`, () => {
 					const r = git(root, ["submodule", "update", "--init", "--recursive", "--", entry.path]);
-					if (r.status !== 0) die(`git submodule update falló para ${entry.path}: ${r.stderr.trim() || r.stdout.trim()}`);
-					log(`submódulo inicializado: ${entry.path}`);
+					if (r.status !== 0) die(t("hub.submodule_update_failed", { path: entry.path, error: r.stderr.trim() || r.stdout.trim() }));
+					log(t("hub.submodule_initialized", { path: entry.path }));
 				});
 			} else {
 				const url = entry.url;
-				if (!url) die(`repos.${key}: falta url para clonar el submódulo`);
+				if (!url) die(t("hub.submodule_missing_url", { key }));
 				act(`git submodule add ${url} ${entry.path}`, () => {
 					const r = git(root, ["submodule", "add", url, entry.path]);
-					if (r.status !== 0) die(`git submodule add falló para ${url}: ${r.stderr.trim() || r.stdout.trim()}`);
-					log(`submódulo añadido: ${entry.path} (${url})`);
+					if (r.status !== 0) die(t("hub.submodule_add_failed", { url, error: r.stderr.trim() || r.stdout.trim() }));
+					log(t("hub.submodule_added", { path: entry.path, url }));
 				});
 			}
 			if (existsSync(dest)) {
@@ -389,21 +334,21 @@ export async function syncHub(
 
 			if (!rawSource) {
 				if (opts.yes || !process.stdin.isTTY) {
-					die(`falta la ruta local para ${entry.path} (${key}): indícala en .bond/hub.local.toml ([repos.${key}].source = "...") o ejecuta bond hub sync de forma interactiva`);
+					die(t("hub.missing_local_path", { path: entry.path, key }));
 				}
 
 				const p = await import("@clack/prompts");
-				p.log.info(`El repo "${key}" (${entry.path}) está configurado como enlace (symlink) pero falta su ruta local.`);
+				p.log.info(t("hub.prompt_repo_is_symlink", { key, path: entry.path }));
 				let chosen: string;
 
 				if (entry.url) {
 					const url = entry.url;
 					const action = await ask(
 						p.select({
-							message: `¿Cómo quieres configurar ${key}?`,
+							message: t("hub.prompt_how_configure", { key }),
 							options: [
-								{ value: "path", label: "Indicar la ruta a un clon local existente" },
-								{ value: "clone", label: `Clonar desde ${url}` },
+								{ value: "path", label: t("hub.opt_existing_clone") },
+								{ value: "clone", label: t("hub.opt_clone_from", { url }) },
 							],
 						}),
 					);
@@ -411,20 +356,20 @@ export async function syncHub(
 						const defaultDir = join(dirname(root), key);
 						const cloneDir = await ask(
 							p.text({
-								message: "¿Dónde clonar el repositorio?",
+								message: t("hub.prompt_where_clone"),
 								initialValue: defaultDir,
 							}),
 						);
 						act(`git clone ${url} ${cloneDir}`, () => {
 							const r = git(root, ["clone", url, cloneDir]);
-							if (r.status !== 0) die(`git clone falló: ${r.stderr.trim()}`);
+							if (r.status !== 0) die(t("hub.git_clone_failed", { error: r.stderr.trim() }));
 						});
 						chosen = cloneDir;
 					} else {
-						chosen = await askLocalClone(p, `Ruta al clon local de ${key}:`, root);
+						chosen = await askLocalClone(p, t("hub.prompt_path_to_clone", { key }), root);
 					}
 				} else {
-					chosen = await askLocalClone(p, `Ruta al clon local de ${key}:`, root);
+					chosen = await askLocalClone(p, t("hub.prompt_path_to_clone", { key }), root);
 				}
 
 				rawSource = chosen;
@@ -434,10 +379,10 @@ export async function syncHub(
 
 			const source = expandSource(rawSource, root);
 			if (!isDryRun() && !existsSync(source)) {
-				die(`la ruta local de ${key} no existe: ${source} (corrígela en .bond/hub.local.toml)`);
+				die(t("hub.local_path_not_found", { key, source }));
 			}
 
-			act(`enlazar ${dest} -> ${source}`, () => {
+			act(t("hub.act_link", { dest, source }), () => {
 				linkRepo(source, dest, { platform: opts.platform, symlinkFn: opts.symlinkFn });
 			});
 			registerHubRepo(source, root);
@@ -446,7 +391,7 @@ export async function syncHub(
 	}
 
 	if (localChanged) {
-		act("guardar .bond/hub.local.toml", () => {
+		act(t("hub.act_save_hub_local"), () => {
 			mkdirSync(join(root, ".bond"), { recursive: true });
 			writeFileSync(localPath, renderHubLocalToml(hubLocalToml));
 		});
@@ -475,16 +420,16 @@ export async function initSessionRepos(root: string, hubToml: HubToml, opts: { i
 	for (const { key, r, dir } of pending) {
 		const agents = [...new Set([...(hub?.agents.length ? hub.agents : []), ...(r.agent ? [r.agent] : [])])];
 		const def = r.agent ?? hub?.default_agent;
-		const desc = agents.length ? `agentes ${agents.join(", ")}` : "los agentes de bond setup";
+		const desc = agents.length ? t("hub.agents_desc", { agents: agents.join(", ") }) : t("hub.agents_from_setup");
 		if (p) {
-			const go = await ask(p.confirm({ message: `${key} no tiene bond: ¿bond init con la config del hub (${desc})?`, initialValue: true }));
+			const go = await ask(p.confirm({ message: t("hub.prompt_init_repo", { key, desc }), initialValue: true }));
 			if (!go) {
-				warn(`${key}: sin bond init, su agente no tendrá las skills ni las instrucciones de bond (bond hub check lo marca)`);
+				warn(t("hub.warn_repo_without_bond", { key }));
 				continue;
 			}
 		}
 		if (isDryRun()) {
-			console.log(`    ${dim("[dry-run]")} bond init en ${r.path} (${desc}) y commit de su config si el repo está limpio`);
+			console.log(`    ${dim("[dry-run]")} ${t("hub.dry_run_init_repo", { path: r.path, desc })}`);
 			continue;
 		}
 		const clean = git(dir, ["status", "--porcelain"]).stdout.trim() === "";
@@ -492,30 +437,30 @@ export async function initSessionRepos(root: string, hubToml: HubToml, opts: { i
 		const prev = process.cwd();
 		try {
 			process.chdir(dir);
-			log(`bond init en ${r.path}`);
+			log(t("hub.log_init_repo", { path: r.path }));
 			await init(args, { quiet: true });
 		} finally {
 			process.chdir(prev);
 		}
 		const branch = currentBranch(dir) ?? "HEAD";
 		if (!clean) {
-			warn(`${key}: tenía cambios sin commitear, así que su config de bond queda sin commitear; commitéala tú (los worktrees de bond team salen de lo commiteado)`);
+			warn(t("hub.warn_repo_dirty_config_uncommitted", { key }));
 			continue;
 		}
 		if (p) {
-			const go = await ask(p.confirm({ message: `¿Commitear la config de bond en ${key} (${branch})?`, initialValue: true }));
+			const go = await ask(p.confirm({ message: t("hub.prompt_commit_config", { key, branch }), initialValue: true }));
 			if (!go) {
-				warn(`${key}: config de bond sin commitear; los worktrees de bond team no la verán hasta que la commitees`);
+				warn(t("hub.warn_repo_config_uncommitted", { key }));
 				continue;
 			}
 		}
 		git(dir, ["add", "-A"]);
 		const c = git(dir, ["commit", "-qm", "chore: add bond config"]);
-		if (c.status !== 0) warn(`${key}: commit de la config de bond: ${c.stderr.trim() || c.stdout.trim()}`);
+		if (c.status !== 0) warn(t("hub.warn_commit_config_failed", { key, error: c.stderr.trim() || c.stdout.trim() }));
 		else {
-			console.log(`${ok("✓")} ${key}: config de bond commiteada en ${branch}`);
+			console.log(`${ok("✓")} ${t("hub.log_config_committed", { key, branch })}`);
 			// En un submódulo, el hub apunta a ese commit: sin push, un clon del hub no lo encuentra.
-			if (r.link === "submodule") warn(`${key}: el commit es local; haz git push en ${r.path} antes de subir el hub, o sus clones no encontrarán ese commit`);
+			if (r.link === "submodule") warn(t("hub.warn_submodule_commit_local", { key, path: r.path }));
 		}
 	}
 }
@@ -528,13 +473,13 @@ export async function initSessionRepos(root: string, hubToml: HubToml, opts: { i
 export async function initHub(root: string, opts: { interactive: boolean }): Promise<void> {
 	if (existsSync(join(root, ".bond", "bond.toml"))) return;
 	if (isDryRun()) {
-		console.log(`    ${dim("[dry-run]")} bond init en el hub (skills por defecto y plan-team)`);
+		console.log(`    ${dim("[dry-run]")} ${t("hub.dry_run_init_hub")}`);
 		return;
 	}
 	const prev = process.cwd();
 	try {
 		process.chdir(root);
-		log("bond init en el hub");
+		log(t("hub.log_init_hub"));
 		await init(opts.interactive ? [] : ["--yes"], { quiet: true, extraSkills: ["plan-team"], fallbackAgents: ["pi"] });
 	} finally {
 		process.chdir(prev);
@@ -544,7 +489,7 @@ export async function initHub(root: string, opts: { interactive: boolean }): Pro
 /** Comando bond hub init */
 export async function hubInit(args: string[]): Promise<void> {
 	if (args.includes("-h") || args.includes("--help")) {
-		console.log(HUB_INIT_HELP.trimEnd());
+		console.log(hubInitHelp().trimEnd());
 		return;
 	}
 
@@ -562,19 +507,19 @@ export async function hubInit(args: string[]): Promise<void> {
 		} else if (a === "--dry-run") {
 			// handled globally by setDryRun in main
 		} else if (a === "--name") {
-			if (args[i + 1] === undefined) die("--name necesita un valor");
+			if (args[i + 1] === undefined) die(t("hub.opt_needs_value", { opt: "--name" }));
 			name = args[++i];
 		} else if (a === "--base") {
-			if (args[i + 1] === undefined) die("--base necesita un valor");
+			if (args[i + 1] === undefined) die(t("hub.opt_needs_value", { opt: "--base" }));
 			base = args[++i];
 		} else if (a === "--dir") {
-			if (args[i + 1] === undefined) die("--dir necesita un valor");
+			if (args[i + 1] === undefined) die(t("hub.opt_needs_value", { opt: "--dir" }));
 			dir = args[++i];
 		} else if (a === "--repo") {
-			if (args[i + 1] === undefined) die("--repo necesita un valor");
+			if (args[i + 1] === undefined) die(t("hub.opt_needs_value", { opt: "--repo" }));
 			flagRepos.push(args[++i]);
 		} else if (a.startsWith("-")) {
-			die(`opción desconocida: ${a} (bond hub init --help)`);
+			die(t("hub.init_unknown_opt", { opt: a }));
 		} else {
 			pos.push(a);
 		}
@@ -616,7 +561,7 @@ export async function hubInit(args: string[]): Promise<void> {
 		act(`git init ${root}`, () => {
 			mkdirSync(root, { recursive: true });
 			const r = git(root, ["init", "-q", "-b", base ?? "main"]);
-			if (r.status !== 0) die(`git init falló: ${r.stderr.trim()}`);
+			if (r.status !== 0) die(t("hub.git_init_failed", { error: r.stderr.trim() }));
 		});
 	}
 
@@ -625,7 +570,7 @@ export async function hubInit(args: string[]): Promise<void> {
 	const hadCommits = git(root, ["rev-parse", "--verify", "--quiet", "HEAD"]).status === 0;
 
 	// Directorio .bond
-	act("crear .bond", () => {
+	act(t("hub.act_create_bond_dir"), () => {
 		mkdirSync(join(root, ".bond"), { recursive: true });
 	});
 
@@ -638,7 +583,7 @@ export async function hubInit(args: string[]): Promise<void> {
 	// AGENTS.md si no existe
 	const agentsPath = join(root, "AGENTS.md");
 	if (!existsSync(agentsPath)) {
-		act("crear AGENTS.md", () => {
+		act(t("hub.act_create_agents_md"), () => {
 			writeFileSync(agentsPath, agentsMd(name ?? basename(root)));
 		});
 	}
@@ -672,13 +617,13 @@ export async function hubInit(args: string[]): Promise<void> {
 
 		hubToml.name = await ask(
 			p.text({
-				message: "Nombre del hub",
+				message: t("hub.prompt_hub_name"),
 				initialValue: hubToml.name,
 			}),
 		);
 		hubToml.base = await ask(
 			p.text({
-				message: "Rama base del hub",
+				message: t("hub.prompt_hub_base"),
 				initialValue: hubToml.base,
 			}),
 		);
@@ -688,11 +633,11 @@ export async function hubInit(args: string[]): Promise<void> {
 		if (existingSubs.length > 0) {
 			const chosenSubs = await ask(
 				p.multiselect({
-					message: "¿Qué submódulos quieres importar a hub.toml?",
+					message: t("hub.prompt_import_submodules"),
 					options: existingSubs.map((s) => ({
 						value: s.path,
 						label: s.path,
-						hint: `base ${detectSubmoduleBase(root, s.path)}`,
+						hint: t("hub.hint_base", { base: detectSubmoduleBase(root, s.path) }),
 					})),
 					initialValues: existingSubs.map((s) => s.path),
 					required: false,
@@ -713,25 +658,25 @@ export async function hubInit(args: string[]): Promise<void> {
 		for (;;) {
 			const choice = await ask(
 				p.select({
-					message: "¿Añadir un repositorio al hub?",
+					message: t("hub.prompt_add_repo_question"),
 					options: [
-						{ value: "submodule", label: "Por URL (submódulo)" },
-						{ value: "symlink", label: "Desde un clon local (symlink)" },
-						{ value: "done", label: "Listo (no añadir más)" },
+						{ value: "submodule", label: t("hub.opt_by_url") },
+						{ value: "symlink", label: t("hub.opt_from_local") },
+						{ value: "done", label: t("hub.opt_done") },
 					],
 				}),
 			);
 			if (choice === "done") break;
 
 			if (choice === "submodule") {
-				const url = await ask(p.text({ message: "URL del repositorio (git@... o https://...):" }));
+				const url = await ask(p.text({ message: t("hub.prompt_repo_url") }));
 				const defaultName = basename(url.replace(/\.git$/, ""));
-				const key = await ask(p.text({ message: "Nombre en hub.toml:", initialValue: defaultName }));
-				const path = await ask(p.text({ message: "Ruta dentro del hub:", initialValue: defaultRepoPath(key) }));
+				const key = await ask(p.text({ message: t("hub.prompt_name_in_toml"), initialValue: defaultName }));
+				const path = await ask(p.text({ message: t("hub.prompt_path_in_hub"), initialValue: defaultRepoPath(key) }));
 				const defaultBase = detectRemoteBranch(url) ?? "main";
-				const repoBase = await ask(p.text({ message: "Rama base:", initialValue: defaultBase }));
-				const agent = await ask(p.text({ message: "Agente por defecto (opcional):", placeholder: "pi, claude, codex..." }));
-				const description = await ask(p.text({ message: "Descripción del repo (opcional):", placeholder: "p. ej. el frontend del producto" }));
+				const repoBase = await ask(p.text({ message: t("hub.prompt_repo_base"), initialValue: defaultBase }));
+				const agent = await ask(p.text({ message: t("hub.prompt_default_agent"), placeholder: "pi, claude, codex..." }));
+				const description = await ask(p.text({ message: t("hub.prompt_repo_desc"), placeholder: t("hub.placeholder_frontend") }));
 				hubToml.repos[key] = {
 					path,
 					base: repoBase,
@@ -741,15 +686,15 @@ export async function hubInit(args: string[]): Promise<void> {
 					...(description.trim() ? { description: description.trim() } : {}),
 				};
 			} else if (choice === "symlink") {
-				const localPath = await askLocalClone(p, "Ruta al clon local:", root);
+				const localPath = await askLocalClone(p, t("hub.prompt_local_clone_path"), root);
 				const resolved = expandSource(localPath, root);
 				const defaultName = basename(localPath);
-				const key = await ask(p.text({ message: "Nombre en hub.toml:", initialValue: defaultName }));
-				const path = await ask(p.text({ message: "Ruta dentro del hub:", initialValue: defaultRepoPath(key) }));
+				const key = await ask(p.text({ message: t("hub.prompt_name_in_toml"), initialValue: defaultName }));
+				const path = await ask(p.text({ message: t("hub.prompt_path_in_hub"), initialValue: defaultRepoPath(key) }));
 				const defaultBase = currentBranch(resolved) ?? "main";
-				const repoBase = await ask(p.text({ message: "Rama base:", initialValue: defaultBase }));
-				const agent = await ask(p.text({ message: "Agente por defecto (opcional):", placeholder: "pi, claude, codex..." }));
-				const description = await ask(p.text({ message: "Descripción del repo (opcional):", placeholder: "p. ej. el backend de la API" }));
+				const repoBase = await ask(p.text({ message: t("hub.prompt_repo_base"), initialValue: defaultBase }));
+				const agent = await ask(p.text({ message: t("hub.prompt_default_agent"), placeholder: "pi, claude, codex..." }));
+				const description = await ask(p.text({ message: t("hub.prompt_repo_desc"), placeholder: t("hub.placeholder_backend") }));
 				const originUrl = git(resolved, ["remote", "get-url", "origin"]).stdout.trim() || undefined;
 				hubToml.repos[key] = {
 					path,
@@ -806,12 +751,12 @@ export async function hubInit(args: string[]): Promise<void> {
 		}
 	}
 
-	act("guardar hub.toml", () => {
+	act(t("hub.act_save_hub_toml"), () => {
 		writeFileSync(hubTomlPath, renderHubToml(hubToml));
 	});
 
 	if (Object.keys(hubLocalToml.repos).length > 0) {
-		act("guardar .bond/hub.local.toml", () => {
+		act(t("hub.act_save_hub_local"), () => {
 			writeFileSync(localTomlPath, renderHubLocalToml(hubLocalToml));
 		});
 	}
@@ -830,7 +775,7 @@ export async function hubInit(args: string[]): Promise<void> {
 	// sus ficheros. En un hub preexistente con commits no commiteamos: los cambios se dejan
 	// para que los revise el usuario. En dry-run solo se describe (el directorio puede no existir).
 	if (!hadCommits) {
-		act("bond sync en el hub y commit inicial de sus ficheros (hub.toml, .gitmodules, .gitignore, AGENTS.md, .bond/ y la config de agente)", () => {
+		act(t("hub.act_initial_sync_and_commit"), () => {
 			const prevCwd = process.cwd();
 			try {
 				process.chdir(root);
@@ -840,7 +785,7 @@ export async function hubInit(args: string[]): Promise<void> {
 			}
 			git(root, ["add", "-A"]);
 			const c = git(root, ["commit", "-qm", "bond hub init"]);
-			if (c.status !== 0) warn(`commit inicial del hub: ${c.stderr.trim() || c.stdout.trim()}`);
+			if (c.status !== 0) warn(t("hub.warn_initial_commit_failed", { error: c.stderr.trim() || c.stdout.trim() }));
 		});
 	} else if (existsSync(root)) {
 		// Hub preexistente: sincronizamos la config generada pero no commiteamos.
@@ -852,13 +797,13 @@ export async function hubInit(args: string[]): Promise<void> {
 			process.chdir(prevCwd);
 		}
 	}
-	log(`hub ${hubToml.name} listo en ${root}`);
+	log(t("hub.hub_ready", { name: hubToml.name, root }));
 }
 
 /** Comando bond hub add */
 export async function hubAdd(args: string[]): Promise<void> {
 	if (args.includes("-h") || args.includes("--help")) {
-		console.log(HUB_ADD_HELP.trimEnd());
+		console.log(hubAddHelp().trimEnd());
 		return;
 	}
 
@@ -878,41 +823,41 @@ export async function hubAdd(args: string[]): Promise<void> {
 		} else if (a === "--dry-run") {
 			// handled globally
 		} else if (a === "--name") {
-			if (args[i + 1] === undefined) die("--name necesita un valor");
+			if (args[i + 1] === undefined) die(t("hub.opt_needs_value", { opt: "--name" }));
 			name = args[++i];
 		} else if (a === "--path") {
-			if (args[i + 1] === undefined) die("--path necesita un valor");
+			if (args[i + 1] === undefined) die(t("hub.opt_needs_value", { opt: "--path" }));
 			path = args[++i];
 		} else if (a === "--base") {
-			if (args[i + 1] === undefined) die("--base necesita un valor");
+			if (args[i + 1] === undefined) die(t("hub.opt_needs_value", { opt: "--base" }));
 			base = args[++i];
 		} else if (a === "--link") {
-			if (args[i + 1] === undefined) die("--link necesita un valor");
+			if (args[i + 1] === undefined) die(t("hub.opt_needs_value", { opt: "--link" }));
 			const val = args[++i];
-			if (val !== "submodule" && val !== "symlink") die(`--link tiene que ser "submodule" o "symlink"`);
+			if (val !== "submodule" && val !== "symlink") die(t("hub.add_link_invalid"));
 			link = val;
 		} else if (a === "--agent") {
-			if (args[i + 1] === undefined) die("--agent necesita un valor");
+			if (args[i + 1] === undefined) die(t("hub.opt_needs_value", { opt: "--agent" }));
 			agent = args[++i];
 		} else if (a === "--description") {
-			if (args[i + 1] === undefined) die("--description necesita un valor");
+			if (args[i + 1] === undefined) die(t("hub.opt_needs_value", { opt: "--description" }));
 			description = args[++i];
 		} else if (a.startsWith("-")) {
-			die(`opción desconocida: ${a} (bond hub add --help)`);
+			die(t("hub.add_unknown_opt", { opt: a }));
 		} else if (!target) {
 			target = a;
 		} else {
-			die(`argumento inesperado: ${a} (bond hub add --help)`);
+			die(t("hub.add_unexpected_arg", { arg: a }));
 		}
 	}
 
 	if (!target) {
-		die("bond hub add necesita una URL o ruta local (bond hub add --help)");
+		die(t("hub.add_needs_target"));
 	}
 
 	const root = hubRoot();
 	if (!root) {
-		die("no es un hub: falta hub.toml (bond hub --help)");
+		die(t("hub.not_a_hub"));
 	}
 
 	const tomlPath = join(root, "hub.toml");
@@ -930,7 +875,7 @@ export async function hubAdd(args: string[]): Promise<void> {
 	const repoPath = path ?? defaultRepoPath(repoName);
 
 	if (!insidePath(repoPath)) {
-		die(`la ruta "${repoPath}" tiene que ser relativa dentro del hub, con / y sin ..`);
+		die(t("hub.add_path_must_be_relative", { path: repoPath }));
 	}
 
 	const existing = hubToml.repos[repoName];
@@ -942,26 +887,26 @@ export async function hubAdd(args: string[]): Promise<void> {
 			(detectedLink === "submodule" && existing.url !== target) ||
 			(detectedLink === "symlink" && hubLocalToml.repos[repoName]?.source !== newSource)
 		) {
-			die(`repos.${repoName} ya existe en hub.toml con otra configuración (usa otro --name o edita hub.toml)`);
+			die(t("hub.add_repo_exists_diff_config", { name: repoName }));
 		}
 		// El mismo repo: solo --description toca algo, y solo la descripcion. Reconstruir la
 		// entrada perderia el agent, recalcularia la base contra la rama actual del clon y,
 		// sin --description, se quedaba ademas sin la descripcion que ya habia.
 		if (description === undefined || description === existing.description) {
-			log(`repos.${repoName} ya existe en hub.toml`);
+			log(t("hub.add_repo_already_exists", { name: repoName }));
 			return;
 		}
 		existing.description = description;
-		act("guardar hub.toml", () => {
+		act(t("hub.act_save_hub_toml"), () => {
 			writeFileSync(tomlPath, renderHubToml(hubToml));
 		});
 		syncHubAgentsBlock(root);
-		log(`actualizada la descripcion de repos.${repoName}`);
+		log(t("hub.add_desc_updated", { name: repoName }));
 		return;
 	}
 	const existingByPath = Object.entries(hubToml.repos).find(([k, r]) => k !== repoName && r.path === repoPath);
 	if (existingByPath) {
-		die(`la ruta "${repoPath}" ya está usada por repos.${existingByPath[0]}`);
+		die(t("hub.add_path_already_used", { path: repoPath, key: existingByPath[0] }));
 	}
 
 	if (detectedLink === "submodule") {
@@ -989,12 +934,12 @@ export async function hubAdd(args: string[]): Promise<void> {
 		hubLocalToml.repos[repoName] = { source: target.startsWith("~") ? target : resolved };
 	}
 
-	act("guardar hub.toml", () => {
+	act(t("hub.act_save_hub_toml"), () => {
 		writeFileSync(tomlPath, renderHubToml(hubToml));
 	});
 
 	if (Object.keys(hubLocalToml.repos).length > 0) {
-		act("guardar .bond/hub.local.toml", () => {
+		act(t("hub.act_save_hub_local"), () => {
 			mkdirSync(join(root, ".bond"), { recursive: true });
 			writeFileSync(localPath, renderHubLocalToml(hubLocalToml));
 		});
@@ -1009,7 +954,7 @@ export async function hubAdd(args: string[]): Promise<void> {
 	await initSessionRepos(root, hubToml, { interactive: !yes && process.stdin.isTTY === true });
 	// D18: el bloque que bond genera en el AGENTS.md del hub se mantiene al día con hub.toml.
 	syncHubAgentsBlock(root);
-	log(`añadido ${repoName} a ${root}`);
+	log(t("hub.add_added_repo", { name: repoName, root }));
 }
 
 /**
@@ -1033,7 +978,7 @@ export function syncHubAgentsBlock(root: string): void {
 /** Comando bond hub sync */
 export async function hubSync(args: string[]): Promise<void> {
 	if (args.includes("-h") || args.includes("--help")) {
-		console.log(HUB_SYNC_HELP.trimEnd());
+		console.log(hubSyncHelp().trimEnd());
 		return;
 	}
 
@@ -1043,13 +988,13 @@ export async function hubSync(args: string[]): Promise<void> {
 		else if (a === "--dry-run") {
 			// handled globally
 		} else {
-			die(`opción desconocida: ${a} (bond hub sync --help)`);
+			die(t("hub.sync_unknown_opt", { opt: a }));
 		}
 	}
 
 	const root = hubRoot();
 	if (!root) {
-		die("no es un hub: falta hub.toml (bond hub --help)");
+		die(t("hub.not_a_hub"));
 	}
 
 	await syncHub(root, { yes });

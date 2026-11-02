@@ -9,21 +9,9 @@
 import { currentBranch, hubRepoLabel, hubRoot, hubSession, type HubRepo, type HubSession } from "./hub.mts";
 import { gitWorktrees } from "./team.mts";
 import { bad, canonical, caution, die, dim, isDryRun, log, ok, run, setDryRun } from "./util.mts";
+import { t } from "./messages.mts";
 
-export const HUB_PULL_HELP = `Uso: bond hub pull [opciones]
-
-Pone al día la rama base del hub y de cada repo de la sesión con git fetch y
-avance en fast-forward (D19). Solo actúa si el repo está en su rama base y sin
-cambios sin commitear, o avanzando directamente la ref si la base no tiene
-checkout en ningún worktree (p. ej. en un submódulo con HEAD separado). Si la
-base tiene cambios en su checkout, está en uso en otro worktree, ha divergido o
-no tiene remoto/upstream, lo salta y explica el motivo.
-Nunca hace merge, rebase ni push.
-
-Opciones:
-  --dry-run   Describe los avances sin hacer fetch ni mover las ramas.
-  --json      Salida en JSON con el resultado por repo.
-`;
+export const hubPullHelp = (): string => t("hub.pull.help");
 
 const git = (cwd: string, args: string[]) => run("git", ["-C", cwd, ...args]);
 const firstLine = (s: string) => s.trim().split("\n")[0] ?? "";
@@ -60,25 +48,29 @@ export function pullRepo(r: HubRepo, s: HubSession, opts: PullOpts = {}): RepoPu
 
 	// 1. Repo en disco
 	if (!r.present) {
-		return { ...res, reason: "no está en disco", detail: "no está en disco" };
+		const reason = t("hub.pull_not_on_disk");
+		return { ...res, reason, detail: reason };
 	}
 
 	// 2. Base declarada existe
 	if (git(r.dir, ["rev-parse", "--verify", "--quiet", `${r.base}^{commit}`]).status !== 0) {
-		return { ...res, reason: `la base "${r.base}" no existe`, detail: `la base "${r.base}" no existe` };
+		const reason = t("hub.pull_base_not_found", { base: r.base });
+		return { ...res, reason, detail: reason };
 	}
 
 	// 3. Tiene remoto configurado
 	const remotes = git(r.dir, ["remote"]).stdout.split("\n").filter(Boolean);
 	if (!remotes.length) {
-		return { ...res, reason: "sin remoto configurado", detail: "sin remoto configurado" };
+		const reason = t("hub.pull_no_remote");
+		return { ...res, reason, detail: reason };
 	}
 
 	// 4. Upstream de la base
 	const remoteConfig = git(r.dir, ["config", `branch.${r.base}.remote`]).stdout.trim();
 	const upInitial = git(r.dir, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", `${r.base}@{upstream}`]);
 	if (!remoteConfig && upInitial.status !== 0) {
-		return { ...res, reason: `la base "${r.base}" no tiene upstream configurado`, detail: `la base "${r.base}" no tiene upstream configurado` };
+		const reason = t("hub.pull_no_upstream", { base: r.base });
+		return { ...res, reason, detail: reason };
 	}
 	const remote = remoteConfig || (upInitial.status === 0 ? upInitial.stdout.trim().split("/")[0] : undefined) || remotes[0];
 
@@ -88,13 +80,13 @@ export function pullRepo(r: HubRepo, s: HubSession, opts: PullOpts = {}): RepoPu
 	const isCheckedOutHere = currentBranch(r.dir) === r.base;
 	const checkedOutElsewhere = isCheckedOutHere ? undefined : gitWorktrees(r.dir).find((w) => w.branch === r.base && w.path !== canonical(r.dir));
 	if (checkedOutElsewhere) {
-		const reason = `la base "${r.base}" tiene checkout en otro worktree (${checkedOutElsewhere.path})`;
+		const reason = t("hub.pull_checked_out_elsewhere", { base: r.base, path: checkedOutElsewhere.path });
 		return { ...res, reason, detail: reason };
 	}
 	if (isCheckedOutHere) {
 		const dirty = git(r.dir, ["status", "--porcelain"]).stdout.split("\n").filter(Boolean).length;
 		if (dirty > 0) {
-			const reason = `${dirty} cambio(s) sin commitear`;
+			const reason = t("hub.pull_dirty_changes", { count: dirty });
 			return { ...res, reason, detail: reason };
 		}
 	}
@@ -103,31 +95,34 @@ export function pullRepo(r: HubRepo, s: HubSession, opts: PullOpts = {}): RepoPu
 	if (!dryRun) {
 		const f = git(r.dir, ["fetch", "--quiet", remote]);
 		if (f.status !== 0) {
-			return { ...res, reason: `git fetch falló: ${firstLine(f.stderr)}`, detail: `git fetch falló: ${firstLine(f.stderr)}` };
+			const reason = t("hub.pull_fetch_failed", { error: firstLine(f.stderr) });
+			return { ...res, reason, detail: reason };
 		}
 	}
 
 	// 7. Resolver upstream tras fetch o en --dry-run
 	const upResolved = git(r.dir, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", `${r.base}@{upstream}`]);
 	if (upResolved.status !== 0 || !upResolved.stdout.trim()) {
-		return { ...res, reason: `la base "${r.base}" no tiene upstream configurado`, detail: `la base "${r.base}" no tiene upstream configurado` };
+		const reason = t("hub.pull_no_upstream", { base: r.base });
+		return { ...res, reason, detail: reason };
 	}
 	const upstream = upResolved.stdout.trim();
 
 	// 8. Comprobar ahead / behind
 	const countRes = git(r.dir, ["rev-list", "--left-right", "--count", `${r.base}...${upstream}`]);
 	if (countRes.status !== 0) {
-		return { ...res, upstream, reason: `no se pudo comparar ${r.base} con ${upstream}`, detail: `no se pudo comparar ${r.base} con ${upstream}` };
+		const reason = t("hub.pull_compare_failed", { base: r.base, upstream });
+		return { ...res, upstream, reason, detail: reason };
 	}
 	const [ahead = 0, behind = 0] = countRes.stdout.trim().split(/\s+/).map(Number);
 
 	// 9. Evaluar estado
 	if (behind === 0) {
-		return { ...res, status: "up_to_date", upstream, commits: 0, detail: "al día" };
+		return { ...res, status: "up_to_date", upstream, commits: 0, detail: t("hub.pull_up_to_date") };
 	}
 
 	if (ahead > 0 && behind > 0) {
-		const reason = `la base ha divergido de ${upstream} (${ahead} por delante, ${behind} por detrás)`;
+		const reason = t("hub.pull_diverged", { upstream, ahead, behind });
 		return { ...res, status: "skipped", upstream, reason, detail: reason };
 	}
 
@@ -138,19 +133,20 @@ export function pullRepo(r: HubRepo, s: HubSession, opts: PullOpts = {}): RepoPu
 			status: "updated",
 			upstream,
 			commits: behind,
-			detail: `avanzaría ${behind} commit(s) a ${upstream} (fast-forward)`,
+			detail: t("hub.pull_would_advance", { count: behind, upstream }),
 		};
 	}
 
 	if (isCheckedOutHere) {
 		const ff = git(r.dir, ["merge", "--ff-only", upstream]);
 		if (ff.status !== 0) {
+			const reason = t("hub.pull_ff_failed", { error: firstLine(ff.stderr) });
 			return {
 				...res,
 				status: "failed",
 				upstream,
-				reason: `fast-forward falló: ${firstLine(ff.stderr)}`,
-				detail: `fast-forward falló: ${firstLine(ff.stderr)}`,
+				reason,
+				detail: reason,
 			};
 		}
 		return {
@@ -158,7 +154,7 @@ export function pullRepo(r: HubRepo, s: HubSession, opts: PullOpts = {}): RepoPu
 			status: "updated",
 			upstream,
 			commits: behind,
-			detail: `avanzado ${behind} commit(s) a ${upstream} (fast-forward)`,
+			detail: t("hub.pull_advanced", { count: behind, upstream }),
 		};
 	}
 
@@ -166,12 +162,13 @@ export function pullRepo(r: HubRepo, s: HubSession, opts: PullOpts = {}): RepoPu
 	// avance directo de la ref con fetch fast-forward (sin '+' para rechazar si no es ff)
 	const ffFetch = git(r.dir, ["fetch", remote, `${r.base}:${r.base}`]);
 	if (ffFetch.status !== 0) {
+		const reason = t("hub.pull_ff_failed", { error: firstLine(ffFetch.stderr) });
 		return {
 			...res,
 			status: "failed",
 			upstream,
-			reason: `fast-forward falló: ${firstLine(ffFetch.stderr)}`,
-			detail: `fast-forward falló: ${firstLine(ffFetch.stderr)}`,
+			reason,
+			detail: reason,
 		};
 	}
 	return {
@@ -179,7 +176,7 @@ export function pullRepo(r: HubRepo, s: HubSession, opts: PullOpts = {}): RepoPu
 		status: "updated",
 		upstream,
 		commits: behind,
-		detail: `avanzado ${behind} commit(s) a ${upstream} (fast-forward)`,
+		detail: t("hub.pull_advanced", { count: behind, upstream }),
 	};
 }
 
@@ -206,11 +203,11 @@ export function printPull(r: HubPullReport): void {
 		if (rp.status === "updated") {
 			console.log(`  ${ok("✓")} ${labelStr}  ${rp.detail}`);
 		} else if (rp.status === "up_to_date") {
-			console.log(`  ${ok("✓")} ${labelStr}  ${dim(rp.detail ?? "al día")}`);
+			console.log(`  ${ok("✓")} ${labelStr}  ${dim(rp.detail ?? t("hub.pull_up_to_date"))}`);
 		} else if (rp.status === "skipped") {
-			console.log(`  ${caution("!")} ${labelStr}  saltado: ${rp.detail ?? rp.reason}`);
+			console.log(`  ${caution("!")} ${labelStr}  ${t("hub.pull_skipped_label", { detail: rp.detail ?? rp.reason ?? "" })}`);
 		} else {
-			console.log(`  ${bad("✗")} ${labelStr}  ${rp.detail ?? "falló"}`);
+			console.log(`  ${bad("✗")} ${labelStr}  ${rp.detail ?? t("hub.pull_failed_fallback")}`);
 		}
 	}
 	const updated = r.repos.filter((rp) => rp.status === "updated").length;
@@ -218,18 +215,18 @@ export function printPull(r: HubPullReport): void {
 	const skipped = r.repos.filter((rp) => rp.status === "skipped").length;
 	const failed = r.repos.filter((rp) => rp.status === "failed").length;
 	const parts: string[] = [];
-	if (updated) parts.push(`${updated} actualizado(s)`);
-	if (upToDate) parts.push(`${upToDate} al día`);
-	if (skipped) parts.push(`${skipped} saltado(s)`);
-	if (failed) parts.push(`${failed} con fallo`);
+	if (updated) parts.push(t("hub.pull_summary_updated", { count: updated }));
+	if (upToDate) parts.push(t("hub.pull_summary_up_to_date", { count: upToDate }));
+	if (skipped) parts.push(t("hub.pull_summary_skipped", { count: skipped }));
+	if (failed) parts.push(t("hub.pull_summary_failed", { count: failed }));
 	const prefix = r.dryRun ? `${dim("[dry-run]")} ` : "";
-	const title = failed > 0 ? bad("bases revisadas") : ok("bases revisadas");
+	const title = failed > 0 ? bad(t("hub.pull_bases_checked")) : ok(t("hub.pull_bases_checked"));
 	console.log(`\n${prefix}${title}${parts.length ? dim(` · ${parts.join(" · ")}`) : ""}`);
 }
 
 export async function hubPull(args: string[]): Promise<void> {
 	if (args.includes("-h") || args.includes("--help")) {
-		console.log(HUB_PULL_HELP.trimEnd());
+		console.log(hubPullHelp().trimEnd());
 		return;
 	}
 	const dryRun = args.includes("--dry-run");
@@ -237,13 +234,13 @@ export async function hubPull(args: string[]): Promise<void> {
 	if (dryRun) setDryRun(true);
 	for (const a of args) {
 		if (!["--json", "--dry-run"].includes(a)) {
-			die(`opción desconocida: ${a} (bond hub pull --help)`);
+			die(t("hub.pull_unknown_opt", { opt: a }));
 		}
 	}
 	const root = hubRoot(process.cwd());
-	if (!root) die("no es un hub: falta hub.toml (bond hub --help)");
+	if (!root) die(t("hub.not_a_hub"));
 	const s = hubSession(root);
-	if (!s) die(`${root} no es un hub: falta hub.toml`);
+	if (!s) die(t("hub.dir_not_a_hub", { name: root }));
 
 	const report = pullHubSession(s, { dryRun });
 	if (json) console.log(hubPullJson(report));
