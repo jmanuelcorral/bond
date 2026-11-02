@@ -1,7 +1,7 @@
 ---
 id: "2026-11-02-bond-hub-init-una-sola-ruta-es-el-hub-y-se-avisa-en-vez-de-cambiarlo"
 title: "bond hub init: una sola ruta es el hub, y se avisa en vez de cambiarlo"
-status: "accepted"
+status: "proposed"
 date: "2026-11-02"
 decided_by: "agent:pi/gru"
 accepted_by: "ok, acepto la decision"
