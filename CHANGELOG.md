@@ -22,10 +22,14 @@
 - La línea de marca de `bond`, `bond team`, `bond setup` y `bond init` pasa a ser
   `»» bond texto ───▪` y ya no se sale del panel cuando es muy estrecho: recorta el texto.
 - `bond setup` pregunta el idioma de la consola (español o inglés) al arrancar y lo guarda en
-  `[ui] lang` de `~/.bond/config.toml`. Toda la CLI responde en ese idioma; `BOND_LANG` manda
-  por encima de lo guardado y `bond setup --lang es|en` lo fija sin preguntar, también con
-  `--yes` y sin terminal. Lo que bond escribe para el agente (sus reglas y las skills) no cambia
-  de idioma: eso se edita en `~/.bond/AGENTS.md`.
+  `[ui] lang` de `~/.bond/config.toml`. Toda la CLI sale ya en ese idioma: la ayuda de `bond` y
+  la de cada comando, los avisos y los mensajes de los nueve comandos (862 claves nuevas con su
+  traducción). Si no hay nada configurado, bond arranca en el idioma del sistema (`LC_ALL`,
+  `LANGUAGE`, `LC_MESSAGES`, `LANG`: español si empieza por `es`, inglés en cualquier otro
+  caso). `BOND_LANG` manda por encima de lo guardado sin escribirlo, y `bond setup --lang es|en`
+  lo fija sin preguntar, también con `--yes` y sin terminal. El flag se aplica antes de imprimir
+  nada, así que `bond --lang en --help` ya sale en inglés. Lo que bond escribe para el agente
+  (sus reglas y las skills) no cambia de idioma: eso se edita en `~/.bond/AGENTS.md`.
 
 ## 1.10.0
 

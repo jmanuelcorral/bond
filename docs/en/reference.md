@@ -609,20 +609,26 @@ is limited by the gateway; with cloud providers, by the quota.
 
 **Questions:**
 
-1. **Herdr.** If it isn't there, it shows how to install it for your system (`curl … | sh`, `brew`,
+1. **Console language.** bond asks whether you prefer the console in Spanish or English
+   (`Idioma / Language`, with the current value preselected). It is stored in `[ui] lang` in
+   `~/.bond/config.toml` and from then on every thing bond prints comes out in that language:
+   the help, the warnings and the messages of every command. The question is shown in both
+   languages so you can change it even if you cannot read the current one. With `--yes` it is
+   not asked: what is configured, or the system locale, is used.
+2. **Herdr.** If it isn't there, it shows how to install it for your system (`curl … | sh`, `brew`,
    PowerShell on Windows) and the link https://herdr.dev/docs/install/. You can continue without it.
-2. **Model endpoints.** It auto-detects only Ollama (`localhost:11434`) and LM Studio
+3. **Model endpoints.** It auto-detects only Ollama (`localhost:11434`) and LM Studio
    (`localhost:1234`). It offers to add OpenAI or any OpenAI-compatible endpoint
    (such as `halo`): URL, key if required, and name. It reads its models (with context and max output
    if the gateway publishes them), lets you choose which ones to register and tests which APIs it serves (chat,
    responses) and whether the model reasons.
-3. **Agents.** It detects the installed ones (pi, Claude Code, Codex, Copilot CLI, opencode, Crush,
+4. **Agents.** It detects the installed ones (pi, Claude Code, Codex, Copilot CLI, opencode, Crush,
    Gemini CLI, Antigravity). None is mandatory, but at least one is needed: if there are none, it shows
    how to install each one and stops. You choose which ones to work with and which is the default.
-4. **Prompt suggestions (pi).** They are proposed enabled if bond's registry has a
+5. **Prompt suggestions (pi).** They are proposed enabled if bond's registry has a
    cheap model for pi; if there is none, they come out disabled with a warning. The proposed model is shown in
    the question and can be set by hand in `[suggestions] model`.
-5. **pi footer icons.** It looks for installed Nerd Fonts (`fc-list` on Linux; on macOS and
+6. **pi footer icons.** It looks for installed Nerd Fonts (`fc-list` on Linux; on macOS and
    Windows, the font folders). If there is one, it asks whether to use its icons in the
    [status footer](#status-footer-extensionsstatus-linets): your terminal has to use that font, or
    you'd see boxes. If there is none, or you say no, the footer uses emojis. It is saved in
@@ -668,12 +674,23 @@ The configuration of bond 0.3–0.7 (`~/.bond/`) is moved automatically to `~/.b
 | Flag | Effect |
 |---|---|
 | `--yes` | No questions: what was detected and what is already configured |
+| `--lang es\|en` | Sets the console language without asking (also applies to `--help`) |
 | `--dry-run` | Asks, but only shows what it would do when applying |
 | `--no-suggestions` | Don't enable pi's prompt suggestions |
 | `--herdr-config` | Applies the Herdr snippet (opt-in: your Herdr `config.toml` is yours) |
 
 From source code, it also installs the CLI's dependencies (`npm ci`) and puts `bond`
 on the PATH. Before applying, it converts a previous installation (`bond migrate`).
+
+**Console language.** The language is resolved in this order: `BOND_LANG` (`es` or `en`) →
+`[ui] lang` in `~/.bond/config.toml` → the system locale (`LC_ALL`, `LANGUAGE`,
+`LC_MESSAGES`, `LANG`: Spanish if it starts with `es`, English otherwise) → Spanish.
+`bond setup --lang es|en` writes `[ui] lang` without asking; `BOND_LANG` overrides what is
+configured and never writes it, so it is handy for trying a language in passing. The `--lang`
+flag is applied before anything is printed, `bond --help` included. What is not covered: the
+text the agents receive (the rules bond injects into their global configuration and the
+`~/.bond/AGENTS.md` template) stays in Spanish; the language each agent talks to you in is a
+matter of your personal instructions, not of bond.
 
 ### pi prompt suggestions
 

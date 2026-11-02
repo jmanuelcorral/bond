@@ -608,20 +608,26 @@ lo limita la pasarela; con proveedores en la nube, la cuota.
 
 **Preguntas:**
 
-1. **Herdr.** Si no está, enseña cómo instalarlo según el sistema (`curl … | sh`, `brew`,
+1. **Idioma de la consola.** bond pregunta si prefiere la consola en español o en inglés
+   (`Idioma / Language`, con el valor actual ya marcado). Se guarda en `[ui] lang` de
+   `~/.bond/config.toml` y de ahí en adelante toda la salida de bond sale en ese idioma: la
+   ayuda, los avisos y los mensajes de todos los comandos. La pregunta se ve en los dos idiomas
+   para poder cambiarla aunque no se entienda el actual. Con `--yes` no se pregunta: se usa lo
+   configurado o lo que marque el locale del sistema.
+2. **Herdr.** Si no está, enseña cómo instalarlo según el sistema (`curl … | sh`, `brew`,
    PowerShell en Windows) y el enlace https://herdr.dev/docs/install/. Se puede seguir sin él.
-2. **Endpoints de modelos.** Detecta solo Ollama (`localhost:11434`) y LM Studio
+3. **Endpoints de modelos.** Detecta solo Ollama (`localhost:11434`) y LM Studio
    (`localhost:1234`). Ofrece añadir OpenAI o cualquier endpoint compatible con OpenAI
    (como `halo`): URL, clave si la pide y nombre. Lee sus modelos (con contexto y salida máxima
    si la pasarela los publica), deja elegir cuáles registrar y prueba qué APIs sirve (chat,
    responses) y si el modelo razona.
-3. **Agentes.** Detecta los instalados (pi, Claude Code, Codex, Copilot CLI, opencode, Crush,
+4. **Agentes.** Detecta los instalados (pi, Claude Code, Codex, Copilot CLI, opencode, Crush,
    Gemini CLI, Antigravity). Ninguno es obligatorio, pero hace falta al menos uno: si no hay ninguno, enseña
    cómo instalar cada uno y para. Eliges con cuáles trabajar y cuál es el de por defecto.
-4. **Sugerencias de prompt (pi).** Se proponen activas si el registro de bond tiene un modelo
+5. **Sugerencias de prompt (pi).** Se proponen activas si el registro de bond tiene un modelo
    barato para pi; si no hay ninguno, salen apagadas con un aviso. El modelo propuesto se ve en
    la pregunta y se puede fijar a mano en `[suggestions] model`.
-5. **Iconos del pie de pi.** Busca Nerd Fonts instaladas (`fc-list` en Linux; en macOS y
+6. **Iconos del pie de pi.** Busca Nerd Fonts instaladas (`fc-list` en Linux; en macOS y
    Windows, las carpetas de fuentes). Si hay alguna, pregunta si usar sus iconos en el
    [pie de estado](#pie-de-estado-extensionsstatus-linets): tu terminal tiene que usar esa fuente,
    o verías cuadrados. Si no hay ninguna, o dices que no, el pie usa emojis. Se guarda en
@@ -667,12 +673,23 @@ La configuración de bond 0.3–0.7 (`~/.bond/`) se mueve sola a `~/.bond/` la p
 | Flag | Efecto |
 |---|---|
 | `--yes` | Sin preguntas: lo detectado y lo ya configurado |
+| `--lang es\|en` | Fija el idioma de la consola sin preguntar (también vale para `--help`) |
 | `--dry-run` | Pregunta, pero solo enseña lo que haría al aplicar |
 | `--no-suggestions` | No activar las sugerencias de prompt de pi |
 | `--herdr-config` | Aplica el snippet de Herdr (opt-in: tu `config.toml` de Herdr es tuyo) |
 
 Desde el código fuente, además, instala las dependencias de la CLI (`npm ci`) y pone `bond`
 en el PATH. Antes de aplicar, convierte una instalación anterior (`bond migrate`).
+
+**Idioma de la consola.** El orden para resolver el idioma es `BOND_LANG` (`es` o `en`) →
+`[ui] lang` de `~/.bond/config.toml` → el locale del sistema (`LC_ALL`, `LANGUAGE`,
+`LC_MESSAGES`, `LANG`: español si empieza por `es`, inglés en cualquier otro caso) → español.
+`bond setup --lang es|en` escribe `[ui] lang` sin preguntar; `BOND_LANG` manda sobre lo
+configurado y no lo modifica, así que sirve para probar un idioma de paso. El flag `--lang` se
+aplica antes de imprimir nada, incluido `bond --help`. Lo que no entra aquí: los textos que
+reciben los agentes (las reglas que bond inyecta en su configuración global y la plantilla de
+`~/.bond/AGENTS.md`) siguen en español; el idioma en que te habla cada agente es cosa de tus
+instrucciones personales, no de bond.
 
 ### Sugerencias de prompt de pi
 

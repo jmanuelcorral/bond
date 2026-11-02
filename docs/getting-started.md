@@ -55,9 +55,13 @@ bond setup
 
 ## 3. `bond setup` (una vez por máquina)
 
-`bond setup` es una conversación corta en la que bond te hace tres preguntas.
+`bond setup` es una conversación corta en la que bond te hace cuatro preguntas.
 
-Primero mira si tienes **Herdr**. Si falta, te dice cómo instalarlo.
+Lo primero es el **idioma de la consola**: español o inglés. Se guarda en `~/.bond/config.toml`
+y de ahí en adelante bond escribe su ayuda, sus avisos y sus mensajes en ese idioma. La pregunta
+sale en los dos idiomas, para que puedas cambiarla aunque no entiendas el actual.
+
+Después mira si tienes **Herdr**. Si falta, te dice cómo instalarlo.
 
 Luego pasa a los **endpoints de modelos**. Detecta por su cuenta Ollama y LM Studio si los tienes en
 marcha, y puedes añadir OpenAI o cualquier endpoint compatible dándole la URL y la clave, si la
@@ -65,8 +69,12 @@ pide. bond comprueba qué modelos sirve cada endpoint y te deja elegir cuáles q
 tienes, por ejemplo, Ollama con un par de modelos descargados, los verás en la lista y marcas
 los que te interesen.
 
-Por último te pregunta por los **agentes**: con cuáles quieres trabajar y cuál será el de por
+Después te pregunta por los **agentes**: con cuáles quieres trabajar y cuál será el de por
 defecto.
+
+Y al final, los **iconos del pie de pi**: si tienes alguna Nerd Font instalada, bond pregunta si
+quieres sus iconos (para eso tu terminal tendría que usar esa fuente, o verías cuadrados); si no
+hay ninguna o dices que no, el pie usa emojis.
 
 Con esas respuestas, bond se pone manos a la obra. Lleva los modelos a cada agente que puede
 usarlos, instala las integraciones de Herdr y los skills de delegación, y copia tus
