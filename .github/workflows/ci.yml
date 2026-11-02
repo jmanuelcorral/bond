@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Pasar la CI de una rama sin abrir un PR: hace falta para tener la señal de Windows, que no
+  # se puede simular en local (`gh workflow run ci.yml --ref <rama>`).
+  workflow_dispatch:
 
 jobs:
   build:
