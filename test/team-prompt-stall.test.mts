@@ -4,7 +4,7 @@
 // un mensaje claro en lugar de solo avisar. Si el panel ya muestra la tarea, se da por
 // entregada y no se reenvía. Se prueba en modo hub, que es donde el fallo solo avisaba.
 
-import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,6 +15,10 @@ process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
 Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
 
 const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
+
+// Como en el resto de pruebas de hub: en Windows el beforeEach (git worktree add) y el propio
+// reintento, que espera los 5 s de stall, pasan de los 5 s por defecto de bun.
+setDefaultTimeout(30_000);
 const HUB_TOML = 'name = "hub"\nbase = "main"\n\n[repos.front]\npath = "front"\nbase = "main"\nlink = "submodule"\n';
 const BOND_TOML = 'agents = ["pi"]\n\n[decisions]\ndir = "docs/decisions"\n';
 
