@@ -4,11 +4,11 @@
 // prompts en un JSON y responde como Herdr. HOME también es temporal (los worktrees van en
 // ~/.herdr/worktrees/<hub>/<sub>/<rama>).
 
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 
 // Montar el hub (git init, submódulos, enlaces) y lanzar bond tarda varios segundos en macOS y Windows.
 setDefaultTimeout(30_000);
@@ -72,8 +72,40 @@ fs.writeFileSync(file, JSON.stringify(st));
 let tmp: string;
 let hub: string;
 let home: string;
-let bin: string;
 let state: string;
+
+// El PATH falso (el herdr simulado y los stubs de agente) es el mismo en todas las pruebas: se
+// monta una vez, fuera del beforeEach.
+const bin = mkdtempSync(join(tmpdir(), "bond-hub-bin-"));
+
+/**
+ * Ejecutable falso en el PATH del test. En POSIX basta con el shebang. En Windows no hay
+ * shebang y CreateProcess no arranca un `.cmd` sin shell, así que el JS del herdr simulado se
+ * compila a un `.exe` real con bun (~150 ms). `pi` y `claude` no los ejecuta nadie: quien
+ * arranca los agentes es Herdr, que también es simulado, y bond solo los busca con which(); un
+ * `.cmd` vacío les basta.
+ */
+const exe = (name: string, text: string) => {
+	if (process.platform !== "win32") {
+		writeFileSync(join(bin, name), text);
+		chmodSync(join(bin, name), 0o755);
+		return;
+	}
+	const body = text.replace(/^#![^\n]*\n/, "");
+	if (!body.trim()) {
+		writeFileSync(join(bin, `${name}.cmd`), "@echo off\r\n");
+		return;
+	}
+	const impl = join(bin, `${name}.js`);
+	writeFileSync(impl, body);
+	const built = spawnSync(process.execPath, ["build", "--compile", impl, "--outfile", join(bin, `${name}.exe`)], { encoding: "utf8" });
+	if (built.status !== 0) throw new Error(`bun build --compile ${name}: ${built.stderr}`);
+};
+exe("herdr", FAKE_HERDR);
+exe("pi", "#!/bin/sh\n");
+exe("claude", "#!/bin/sh\n");
+
+afterAll(() => rmSync(bin, { recursive: true, force: true }));
 
 const g = (cwd: string, ...args: string[]) => {
 	const r = spawnSync("git", ["-c", "protocol.file.allow=always", "-C", cwd, ...args], { encoding: "utf8" });
@@ -92,14 +124,10 @@ const repo = (name: string, files: Record<string, string> = {}) => {
 	g(dir, "commit", "-qm", "init");
 	return dir;
 };
-const exe = (name: string, text: string) => {
-	writeFileSync(join(bin, name), text);
-	chmodSync(join(bin, name), 0o755);
-};
 const bond = (args: string[], cwd = hub) =>
 	spawnSync(process.execPath, [MAIN, ...args], {
 		cwd,
-		env: { ...process.env, HOME: home, USERPROFILE: home, PATH: `${bin}:${process.env.PATH}`, NO_COLOR: "1", BOND_NO_UPDATE: "1", HERDR_ENV: "1", HERDR_PANE_ID: "p0", FAKE_HERDR_STATE: state },
+		env: { ...process.env, HOME: home, USERPROFILE: home, PATH: `${bin}${delimiter}${process.env.PATH}`, NO_COLOR: "1", BOND_NO_UPDATE: "1", HERDR_ENV: "1", HERDR_PANE_ID: "p0", FAKE_HERDR_STATE: state },
 		encoding: "utf8",
 		stdio: ["ignore", "pipe", "pipe"],
 	});
@@ -113,13 +141,8 @@ const branches = (dir: string) => g(dir, "branch", "--format=%(refname:short)").
 beforeEach(() => {
 	tmp = realpathSync(mkdtempSync(join(tmpdir(), "bond-team-hub-")));
 	home = join(tmp, "home");
-	bin = join(tmp, "bin");
 	state = join(tmp, "herdr.json");
 	mkdirSync(home);
-	mkdirSync(bin);
-	exe("herdr", FAKE_HERDR);
-	exe("pi", "#!/bin/sh\n");
-	exe("claude", "#!/bin/sh\n");
 	// front tiene su propio bond.toml, con claude por defecto; back no tiene.
 	repo("front", { ".bond/bond.toml": 'agents = ["claude"]\n' });
 	repo("back");
@@ -131,7 +154,7 @@ beforeEach(() => {
 
 afterEach(() => rmSync(tmp, { recursive: true, force: true }));
 
-describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
+describe("bond team en un hub", () => {
 	test("abre un agente por submódulo, cada uno con el suyo, y crea la rama en el hub sin worktree", () => {
 		const r = bond(["team", "fix/x"]);
 		expect(r.stderr).not.toContain("error");
