@@ -5,9 +5,13 @@ branch: "fix/hub-init-validation"
 base: "main@835be78"
 orchestrator: "pi/gru"
 started_at: "2026-11-02T14:43:39Z"
-finished_at: ""
-status: "sent"
-commits: []
+finished_at: "2026-11-02T15:29:17Z"
+status: "reported"
+commits:
+  - "ed192c8 fix(hub): tell a missing hub.toml apart from one that cannot be read"
+  - "76f190c fix(hub): validate repo sources and names before touching disk"
+  - "a531642 fix(hub): make a single path in hub init mean the hub, loudly"
+  - "f9f5dfc docs: record the hub init single-path decision"
 decisions: []
 ---
 
@@ -48,4 +52,43 @@ INFORME FINAL (ultima respuesta, sin banner)
 
 ## Report
 
+La decisión es la de **#40**, y va de qué significa una sola ruta en `bond hub init`.
 
+## El problema
+
+Fuera de un repo git, `bond hub init ../api` convertía `../api` **en el hub**. Pero eso se lee al revés: "importa `../api`". El usuario escribe la ruta del repo que quiere dentro del hub y bond la usa como contenedor.
+
+## Qué se decidió
+
+**Mantener el significado actual** (una sola ruta = directorio del hub) **y hacerlo ruidoso** en el caso confuso, en vez de cambiarlo.
+
+En `cli/hub-init.mts`, antes de crear nada:
+
+```ts
+const singleRepoPath =
+    !dirFlag && pos.length === 1 && !isRepoUrl(pos[0]) &&
+    isGitRepo && !existsSync(join(root, "hub.toml")) &&
+    git(process.cwd(), ["rev-parse", "--show-toplevel"]).status !== 0;
+```
+
+Se activa solo cuando todo apunta al error: fuera de un repo, una sola ruta, y esa ruta ya es un repo git que no es un hub. Entonces:
+
+- **sin terminal** (CI, scripts): `aviso: una sola ruta: "../api" es el directorio del HUB, no un repo a importar; para importar un repo en el directorio actual, bond hub init . ../api (o bond hub init --repo ../api)` y sigue adelante;
+- **con terminal**: pregunta antes de crear nada, y si se rechaza, muere diciendo la forma correcta.
+
+La ayuda ahora da las dos formas explícitas: `bond hub init . <ruta>` y `bond hub init --repo <ruta>`.
+
+## Alternativas descartadas
+
+- **Obligar `.` como primer argumento** — arregla la ambigüedad pero rompe `bond hub init <dir>`, que es cómo se crea hoy un hub en una ruta dada.
+- **Que la ruta única se importe por defecto** — la ambigüedad inversa: rompe exactamente los mismos usos.
+- **Solo documentar** — no evita el error que motivó el issue; nadie lee la ayuda en el momento del golpe.
+
+## Consecuencias
+
+- Los scripts que ya hacían `bond hub init <ruta>` siguen funcionando igual.
+- En el caso ambiguo sale un aviso por stderr: en CI interesa `--yes` (avisa y sigue) o la forma explícita `--repo`.
+- Tres claves nuevas de mensajes: `hub.init_ambiguous_prompt` / `_warn` / `_declined`, en es y en.
+- La regla queda en la ayuda, no solo en el código: si algún día se cambia el significado, hay que mover las tres cosas.
+
+Está como `proposed` en `docs/decisions/2026-11-02-bond-hub-init-una-sola-ruta-es-el-hub-y-se-avisa-en-vez-de-cambiarlo.md`.
