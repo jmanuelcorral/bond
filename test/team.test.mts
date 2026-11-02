@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { parseFm } from "../cli/decisions.mts";
 import { blockedOnStart, defaultAgentArgs, missingAgentDir, questionIn, startupNoticeIn } from "../cli/herdr.mts";
-import { branchInfo, classify, collectBlocker, collectRun, findBranchAgent, type HerdrPane, lastAssistantText, runDecisions, sessionFile, trimAgentBanner, trimAgyPane, withMemoryNote, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runFileText, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle } from "../cli/team.mts";
+import { branchInfo, classify, collectBlocker, collectRun, findBranchAgent, type HerdrPane, lastAssistantText, runDecisions, sessionFile, trimAgentBanner, trimAgyPane, withMemoryNote, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runFileText, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle, worktreeNamespace } from "../cli/team.mts";
 
 const dirs = (...existing: string[]) => (p: string) => existing.includes(p);
 
@@ -937,5 +937,98 @@ describe("findBranchAgent (enrutado a agentes del equipo)", () => {
 		const running = [reviewerFront, frontAgent, backAgent];
 		expect(findBranchAgent("fix/x", panes, running, "front")?.name).toBe("kevin");
 		expect(findBranchAgent("fix/x", panes, running, "back")?.name).toBe("stuart");
+	});
+
+	describe("espacio de nombres de worktrees (#36)", () => {
+		test("dos repos con la misma carpeta base y rutas distintas tienen directorios de worktree distintos", () => {
+			const tmp = mkdtempSync(join(tmpdir(), "bond-test-ns-"));
+			try {
+				const repoA = join(tmp, "dirA", "myrepo");
+				const repoB = join(tmp, "dirB", "myrepo");
+				mkdirSync(repoA, { recursive: true });
+				mkdirSync(repoB, { recursive: true });
+				const pathA = tabWorktreePath("/home/u", repoA, "feat/x");
+				const pathB = tabWorktreePath("/home/u", repoB, "feat/x");
+				expect(pathA).not.toBe(pathB);
+				expect(worktreeNamespace(repoA)).not.toBe(worktreeNamespace(repoB));
+				expect(worktreeNamespace(repoA)).toMatch(/^myrepo-[0-9a-f]{7}$/);
+				expect(worktreeNamespace(repoB)).toMatch(/^myrepo-[0-9a-f]{7}$/);
+			} finally {
+				rmSync(tmp, { recursive: true, force: true });
+			}
+		});
+
+		test("el mismo repo produce la misma ruta siempre", () => {
+			const path1 = tabWorktreePath("/home/u", repo, "feat/x");
+			const path2 = tabWorktreePath("/home/u", repo, "feat/x");
+			expect(path1).toBe(path2);
+			expect(worktreeNamespace(repo)).toBe(worktreeNamespace(repo));
+		});
+
+		test("bond team clean encuentra y limpia lo que bond team creó con el esquema nuevo", () => {
+			const home = mkdtempSync(join(tmpdir(), "bond-clean-home-"));
+			const prevHome = process.env.HOME;
+			process.env.HOME = home;
+			try {
+				// Crear worktree con el nuevo esquema en ~/.herdr/worktrees/<repo-ns>/feat-clean
+				const wtPath = tabWorktreePath(home, repo, "feat/clean");
+				g("worktree", "add", "-q", "-b", "feat/clean", wtPath);
+				expect(existsSync(wtPath)).toBe(true);
+
+				// Ejecutar bond team clean desde el repo
+				const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
+				const r = spawnSync(process.execPath, [MAIN, "team", "clean", "feat/clean"], {
+					cwd: repo,
+					env: { ...process.env, HOME: home, USERPROFILE: home },
+					encoding: "utf8",
+				});
+				expect(r.status).toBe(0);
+				expect(r.stdout).toContain("feat/clean");
+
+				// Comprobar que git worktree list ya no lo tiene
+				const list = g("worktree", "list", "--porcelain");
+				expect(list).not.toContain(wtPath);
+				// Comprobar que la carpeta del worktree y del namespace se borraron
+				expect(existsSync(wtPath)).toBe(false);
+				const nsDir = join(home, ".herdr", "worktrees", worktreeNamespace(repo));
+				expect(existsSync(nsDir)).toBe(false);
+			} finally {
+				process.env.HOME = prevHome;
+				rmSync(home, { recursive: true, force: true });
+			}
+		});
+
+		test("bond team clean también encuentra y limpia worktrees con el esquema viejo (compatibilidad)", () => {
+			const home = mkdtempSync(join(tmpdir(), "bond-legacy-clean-home-"));
+			const prevHome = process.env.HOME;
+			process.env.HOME = home;
+			try {
+				const repoName = basename(repo);
+				const legacyWtPath = join(home, ".herdr", "worktrees", repoName, "feat-legacy");
+				mkdirSync(join(home, ".herdr", "worktrees", repoName), { recursive: true });
+				g("worktree", "add", "-q", "-b", "feat/legacy", legacyWtPath);
+				expect(existsSync(legacyWtPath)).toBe(true);
+
+				// Ejecutar bond team clean feat/legacy
+				const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
+				const r = spawnSync(process.execPath, [MAIN, "team", "clean", "feat/legacy"], {
+					cwd: repo,
+					env: { ...process.env, HOME: home, USERPROFILE: home },
+					encoding: "utf8",
+				});
+				expect(r.status).toBe(0);
+				expect(r.stdout).toContain("feat/legacy");
+
+				// Comprobar que git worktree list ya no lo tiene
+				const list = g("worktree", "list", "--porcelain");
+				expect(list).not.toContain(legacyWtPath);
+				// Comprobar que la carpeta del worktree y la carpeta base vieja se borraron
+				expect(existsSync(legacyWtPath)).toBe(false);
+				expect(existsSync(join(home, ".herdr", "worktrees", repoName))).toBe(false);
+			} finally {
+				process.env.HOME = prevHome;
+				rmSync(home, { recursive: true, force: true });
+			}
+		});
 	});
 });

@@ -968,8 +968,9 @@ vertical ([puesto.md](puesto.md#una-rama-vertical-en-un-hub)):
 | `bond team collect <rama> [--repo <r>] [--agent <a>]` | El informe del agente de la rama; `--repo` o `--agent` si está en varios repos |
 | `bond team clean [rama...] [--repo <r>] [--delete-branch]` | Quita los worktrees de todos los repos (o del de `--repo`); las ramas se quedan, también la del hub. Con `--delete-branch`, borra las integradas y la del hub si está integrada en su base y no le queda worktree en ningún repo |
 
-- Worktrees en paneles: `~/.herdr/worktrees/<hub>/<repo>/<rama>` (las `/` de una ruta
-  anidada pasan a `-`). Con `--workspaces` o fuera de Herdr, donde los pone `herdr worktree`.
+- Worktrees en paneles: `~/.herdr/worktrees/<hub-hash>/<repo>/<rama>` (fuera de un hub,
+  `~/.herdr/worktrees/<repo-hash>/<rama>`; las `/` de una ruta anidada pasan a `-`). Con
+  `--workspaces` o fuera de Herdr, donde los pone `herdr worktree`.
 - Con una rama vertical abierta (tiene worktree en algún repo y existe en el hub; las bases
   de la sesión no cuentan), `bond team <otra>` falla sin crear nada, dice dónde está su worktree
   y cómo cerrarla.

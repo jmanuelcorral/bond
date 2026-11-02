@@ -15,7 +15,7 @@ setDefaultTimeout(30_000);
 
 process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
 Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
-const { pickRepos, tabWorktreePath, verticalNote } = await import("../cli/team.mts");
+const { pickRepos, tabWorktreePath, verticalNote, worktreeNamespace } = await import("../cli/team.mts");
 const { catchDie } = await import("../cli/util.mts");
 
 const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
@@ -142,12 +142,12 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 		// Un worktree y un agente por submódulo, en ~/.herdr/worktrees/<hub>/<sub>/<rama> (D9).
 		const st = herdrState();
 		expect(st.agents.map((a) => [a.agent, a.cwd]).sort()).toEqual([
-			["claude", tabWorktreePath(home, "hub", "fix/x", "front")],
-			["pi", tabWorktreePath(home, "hub", "fix/x", "back")],
+			["claude", tabWorktreePath(home, hub, "fix/x", "front")],
+			["pi", tabWorktreePath(home, hub, "fix/x", "back")],
 		].sort());
 		for (const sub of ["front", "back"]) {
 			expect(worktrees(join(hub, sub))).toBe(2);
-			expect(g(tabWorktreePath(home, "hub", "fix/x", sub), "branch", "--show-current")).toBe("fix/x");
+			expect(g(tabWorktreePath(home, hub, "fix/x", sub), "branch", "--show-current")).toBe("fix/x");
 		}
 		// Una sola tabla, la del hub.
 		expect(st.panes.filter((p) => p.label?.startsWith("tabla · ")).map((p) => p.label)).toEqual(["tabla · hub"]);
@@ -158,11 +158,11 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 
 	test("--repos abre solo esos; una segunda rama vertical se niega sin crear nada (D10)", () => {
 		expect(bond(["team", "fix/x", "--repos", "back"]).status).toBe(0);
-		expect(herdrState().agents.map((a) => a.cwd)).toEqual([tabWorktreePath(home, "hub", "fix/x", "back")]);
+		expect(herdrState().agents.map((a) => a.cwd)).toEqual([tabWorktreePath(home, hub, "fix/x", "back")]);
 		const before = JSON.stringify(herdrState().agents);
 		const r = bond(["team", "fix/y"]);
 		expect(r.status).toBe(1);
-		expect(r.stderr).toContain(`ya tiene abierta la rama vertical fix/x (worktree en back: ${tabWorktreePath(home, "hub", "fix/x", "back")})`);
+		expect(r.stderr).toContain(`ya tiene abierta la rama vertical fix/x (worktree en back: ${tabWorktreePath(home, hub, "fix/x", "back")})`);
 		expect(r.stderr).toContain("bond team clean fix/x");
 		expect(branches(hub)).toEqual(["fix/x", "main"]);
 		expect(branches(join(hub, "front"))).toEqual(["main"]);
@@ -177,7 +177,7 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 		expect(r.status).toBe(0);
 		const st = herdrState();
 		expect(st.prompts.length).toBe(2);
-		const byCwd = (sub: string) => st.agents.find((a) => a.cwd === tabWorktreePath(home, "hub", "fix/x", sub))!.name;
+		const byCwd = (sub: string) => st.agents.find((a) => a.cwd === tabWorktreePath(home, hub, "fix/x", sub))!.name;
 		const [front, back] = [byCwd("front"), byCwd("back")];
 		const to = (name: string) => st.prompts.find((p) => p.name === name)!.task;
 		expect(to(front)).toStartWith("añade el campo email");
@@ -200,7 +200,7 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 		expect(amb.status).toBe(1);
 		expect(amb.stderr).toContain("--repo");
 		// Un commit en el worktree de back: el run lo cuenta (está en el submódulo, no en el hub).
-		const wt = tabWorktreePath(home, "hub", "fix/x", "back");
+		const wt = tabWorktreePath(home, hub, "fix/x", "back");
 		writeFileSync(join(wt, "b.txt"), "b\n");
 		g(wt, "add", "b.txt");
 		g(wt, "commit", "-qm", "b");
@@ -218,7 +218,7 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 
 	test("dos agentes en el mismo worktree, el encargo va al de la rama", () => {
 		bond(["team", "fix/x"]);
-		const wt = tabWorktreePath(home, "hub", "fix/x", "front");
+		const wt = tabWorktreePath(home, hub, "fix/x", "front");
 		const st = JSON.parse(readFileSync(state, "utf8"));
 		const frontAgent = st.agents.find((a: { cwd: string }) => a.cwd === wt)!.name;
 		// Se abre otro agente dentro del worktree (p. ej. un revisor), situado antes en la lista
@@ -233,7 +233,7 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 
 	test("con emparejamiento obsoleto, prompt falla en vez de elegir a ciegas al otro agente", () => {
 		bond(["team", "fix/x"]);
-		const wt = tabWorktreePath(home, "hub", "fix/x", "front");
+		const wt = tabWorktreePath(home, hub, "fix/x", "front");
 		const st = JSON.parse(readFileSync(state, "utf8"));
 		const frontAgent = st.agents.find((a: { cwd: string }) => a.cwd === wt)!.name;
 		// El agente de la rama termina/muere, queda solo otro agente abierto (revisor)
@@ -252,7 +252,7 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 		for (const dir of [hub, join(hub, "front"), join(hub, "back")]) expect(worktrees(dir)).toBe(1);
 		expect(branches(hub)).toEqual(["fix/x", "main"]);
 		expect(branches(join(hub, "front"))).toEqual(["fix/x", "main"]);
-		expect(existsSync(join(home, ".herdr", "worktrees", "hub"))).toBe(false);
+		expect(existsSync(join(home, ".herdr", "worktrees", worktreeNamespace(hub, "hub")))).toBe(false);
 		expect(herdrState().agents).toEqual([]);
 		// Sin agentes, la tabla se cierra; y ya se puede abrir otra rama vertical.
 		expect(herdrState().panes.some((p) => p.label === "tabla · hub")).toBe(false);
@@ -263,7 +263,7 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 		const r = bond(["team", "feat/a", "-a", "pi"], join(hub, "front"));
 		expect(r.status).toBe(0);
 		expect(branches(hub)).toEqual(["main"]);
-		expect(herdrState().agents.map((a) => a.cwd)).toEqual([tabWorktreePath(home, "front", "feat/a")]);
+		expect(herdrState().agents.map((a) => a.cwd)).toEqual([tabWorktreePath(home, join(hub, "front"), "feat/a")]);
 	});
 
 	test("sin [decisions] en el hub, los runs van a la memoria del submódulo (D5)", () => {
@@ -278,7 +278,7 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 		// front no tiene memoria: ni run ni nota de memoria; back, las dos.
 		expect(existsSync(join(hub, "front", "docs"))).toBe(false);
 		const st = herdrState();
-		const to = (sub: string) => st.prompts.find((p) => p.name === st.agents.find((a) => a.cwd === tabWorktreePath(home, "hub", "fix/x", sub))!.name)!.task;
+		const to = (sub: string) => st.prompts.find((p) => p.name === st.agents.find((a) => a.cwd === tabWorktreePath(home, hub, "fix/x", sub))!.name)!.task;
 		expect(to("back")).toContain("[memoria de decisiones]");
 		expect(to("front")).not.toContain("[memoria de decisiones]");
 		// collect de front: ni el hub ni front tienen memoria.
@@ -289,7 +289,7 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 	test("collect --agent elige la rama sin --repo, y vale aunque su agente ya no esté en marcha", () => {
 		bond(["team", "fix/x"]);
 		bond(["team", "prompt", "fix/x", "tarea"]);
-		const back = herdrState().agents.find((a) => a.cwd === tabWorktreePath(home, "hub", "fix/x", "back"))!.name;
+		const back = herdrState().agents.find((a) => a.cwd === tabWorktreePath(home, hub, "fix/x", "back"))!.name;
 		const r = bond(["team", "collect", "fix/x", "--agent", back]);
 		expect(r.status).toBe(0);
 		expect(r.stdout).toContain(`de ${back}`);
