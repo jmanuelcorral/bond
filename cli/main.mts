@@ -8,41 +8,18 @@ import { DOCTOR_HELP, doctor } from "./doctor.mts";
 import { langFlag, setup, setupHelp } from "./setup.mts";
 import { assetsDir, VERSION } from "./runtime.mts";
 import { die, run, setDryRun } from "./util.mts";
-import { setLang } from "./messages.mts";
+import { setLang, t } from "./messages.mts";
 
 // Ancho de la terminal; si la salida no es una terminal, $COLUMNS o 80.
 const termWidth = () => process.stdout.columns || Number(process.env.COLUMNS) || 80;
 
+export const mainHelp = (): string => t("main.help");
+
+const printHelp = (h: unknown) => console.log(typeof h === "function" ? (h as () => string)() : h);
 
 async function help(): Promise<void> {
 	await animateLogo({ width: Math.min(termWidth(), 72), version: `v${VERSION}` });
-	console.log(`
-Uso: bond [comando] [opciones]   (bond <comando> --help para el detalle)
-
-Máquina
-  setup        Deja la máquina lista: Herdr, endpoints de modelos, agentes, instrucciones
-  doctor       Comprueba la instalación y lo que depende de fuera
-  models       Registro global de modelos y su configuración en cada agente
-  run          Lanza un agente con su entorno de modelos (hoy: copilot)
-  update       Pone bond al día con la última release
-
-Repo
-  init         Prepara el repo para los agentes: .bond/bond.toml, AGENTS.md y su config
-  sync         Regenera la config de cada agente desde .bond/bond.toml
-  decisions  Memoria de decisiones del repo: add, accept, show, runs, check
-  catalog      Catálogo propio de skills, comandos y MCP para el equipo (create, check)
-  hub          Sesión del repo hub (repos, bases y enlaces) declarada en hub.toml; check lo revisa
-
-Trabajo diario (Herdr)
-  (sin comando)  Dentro de un repo: abre su puesto de trabajo con el agente por defecto
-  dev [dir]      Lo mismo para otro directorio (--agent, --worktree…)
-  team           Un agente por rama, cada uno en su worktree (status, prompt, clean)
-  status         Agentes vivos en Herdr
-  sessions       Sesiones de pi y cómo retomarlas
-
-Otros
-  logo         El logo de BOND
-  version      Versión de bond`);
+	console.log(`\n${mainHelp()}`);
 }
 
 /**
@@ -76,7 +53,7 @@ async function main(argv: string[]): Promise<void> {
 		if (!inRepo && cmd === undefined) return help();
 		await prepare({ offer: !argv.includes("-h") && !argv.includes("--help") });
 		const l = await import("./launch.mts");
-		return argv.includes("-h") || argv.includes("--help") ? console.log(l.LAUNCH_HELP) : l.launch(argv, { dev: false });
+		return argv.includes("-h") || argv.includes("--help") ? printHelp(l.LAUNCH_HELP) : l.launch(argv, { dev: false });
 	}
 
 	switch (cmd) {
@@ -95,26 +72,26 @@ async function main(argv: string[]): Promise<void> {
 			return wantsHelp ? console.log(setupHelp()) : setup(rest);
 		}
 		case "doctor":
-			return wantsHelp ? console.log(DOCTOR_HELP) : doctor(rest);
+			return wantsHelp ? printHelp(DOCTOR_HELP) : doctor(rest);
 		// models y run dependen de smol-toml: se cargan solo al usarlos, para que `bond setup`
 		// funcione en un clon recién descargado, antes de instalar dependencias.
 		case "models": {
 			const m = await import("./models.mts");
-			return wantsHelp ? console.log(m.MODELS_HELP) : m.models(rest);
+			return wantsHelp ? printHelp(m.MODELS_HELP) : m.models(rest);
 		}
 		case "run": {
 			const r = await import("./run.mts");
-			return wantsHelp && rest.length <= 1 ? console.log(r.RUN_HELP) : r.runAgent(rest);
+			return wantsHelp && rest.length <= 1 ? printHelp(r.RUN_HELP) : r.runAgent(rest);
 		}
 		case "init":
 		case "sync": {
 			const r = await import("./repo.mts");
-			if (wantsHelp) return console.log(cmd === "init" ? r.INIT_HELP : r.SYNC_HELP);
+			if (wantsHelp) return printHelp(cmd === "init" ? r.INIT_HELP : r.SYNC_HELP);
 			return cmd === "init" ? r.init(rest) : r.sync(rest);
 		}
 		case "decisions": {
 			const d = await import("./decisions.mts");
-			return wantsHelp ? console.log(d.DECISIONS_HELP) : d.decisions(rest);
+			return wantsHelp ? printHelp(d.DECISIONS_HELP) : d.decisions(rest);
 		}
 		case "hub": {
 			const h = await import("./hub.mts");
@@ -122,7 +99,7 @@ async function main(argv: string[]): Promise<void> {
 		}
 		case "catalog": {
 			const c = await import("./catalog.mts");
-			return wantsHelp ? console.log(c.CATALOG_HELP) : c.catalogCommand(rest);
+			return wantsHelp ? printHelp(c.CATALOG_HELP) : c.catalogCommand(rest);
 		}
 		case "dev":
 		case "team":
@@ -130,9 +107,9 @@ async function main(argv: string[]): Promise<void> {
 			const l = await import("./launch.mts");
 			if (cmd === "team") {
 				const t = await import("./team.mts");
-				return wantsHelp ? console.log(t.TEAM_HELP) : t.team(rest);
+				return wantsHelp ? printHelp(t.TEAM_HELP) : t.team(rest);
 			}
-			if (wantsHelp) return console.log(cmd === "status" ? "Uso: bond status [--json]" : l.LAUNCH_HELP);
+			if (wantsHelp) return printHelp(cmd === "status" ? t("main.status_help") : l.LAUNCH_HELP);
 			if (cmd === "dev") return l.launch(rest, { dev: true });
 			return l.status(rest);
 		}
@@ -147,12 +124,12 @@ async function main(argv: string[]): Promise<void> {
 				ensurePersonal(r.legacyInstructions);
 				propagate(["pi"]);
 			}
-			if (!r.actions.length) console.log("nada que migrar");
+			if (!r.actions.length) console.log(t("main.migrate_nothing"));
 			return;
 		}
 		case "update": {
 			const u = await import("./update.mts");
-			return wantsHelp ? console.log(u.UPDATE_HELP) : u.update(rest);
+			return wantsHelp ? printHelp(u.UPDATE_HELP) : u.update(rest);
 		}
 		// Lo lanza bond update con el binario nuevo: extrae sus ficheros y limpia (lo hace prepare).
 		case "_runtime":
@@ -162,7 +139,7 @@ async function main(argv: string[]): Promise<void> {
 		case "logo":
 			return animateLogo({ width: termWidth(), version: `v${VERSION}` });
 	}
-	die(`comando desconocido: ${cmd} (bond help)`, 2);
+	die(t("main.unknown_cmd", { cmd }), 2);
 }
 
 await main(process.argv.slice(2));
