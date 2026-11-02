@@ -1,10 +1,10 @@
 ---
 id: "2026-11-02-bond-hub-init-una-sola-ruta-es-el-hub-y-se-avisa-en-vez-de-cambiarlo"
 title: "bond hub init: una sola ruta es el hub, y se avisa en vez de cambiarlo"
-status: "proposed"
+status: "accepted"
 date: "2026-11-02"
 decided_by: "agent:pi/gru"
-accepted_by: "ok, acepto la decision"
+accepted_by: "Acepto la decision del hub init a una sola ruta; puedes fusionar #53."
 accepted_via: "agent:pi/gru"
 supersedes: ""
 superseded_by: ""
