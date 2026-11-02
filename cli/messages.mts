@@ -9,6 +9,20 @@
 
 import { type Lang, resolveLang } from "../lib/lang.mts";
 
+// Áreas del catálogo. Cada fichero de cli/messages/*.mts lo mantiene una sola rama: así dos
+// ramas del i18n no escriben en el mismo sitio. Aquí solo se listan; no hace falta tocarlos al
+// añadir claves de un área.
+import { es as repoEs, en as repoEn } from "./messages/repo.mts";
+import { es as teamEs, en as teamEn } from "./messages/team.mts";
+import { es as hubEs, en as hubEn } from "./messages/hub.mts";
+import { es as catalogEs, en as catalogEn } from "./messages/catalog.mts";
+import { es as modelsEs, en as modelsEn } from "./messages/models.mts";
+import { es as keysEs, en as keysEn } from "./messages/keys.mts";
+import { es as decisionsEs, en as decisionsEn } from "./messages/decisions.mts";
+import { es as doctorEs, en as doctorEn } from "./messages/doctor.mts";
+import { es as updateEs, en as updateEn } from "./messages/update.mts";
+import { es as mainEs, en as mainEn } from "./messages/main.mts";
+
 const es = {
 	// ---- bond setup: ayuda y opciones ----
 	"setup.help": `Uso: bond setup [opciones]
@@ -163,6 +177,18 @@ Configura bond en esta máquina (una vez; se puede repetir para cambiar algo):
 	"wizard.herdr_continue": "¿Seguir sin Herdr? (lo demás se configura igual)",
 	"wizard.herdr_install_first": "Instala Herdr y vuelve a lanzar bond setup",
 	"wizard.agent_install_first": "Instala un agente y vuelve a lanzar bond setup",
+
+	// ---- áreas (P2/P3): lo que aportan los ficheros de cli/messages/ ----
+	...repoEs,
+	...teamEs,
+	...hubEs,
+	...catalogEs,
+	...modelsEs,
+	...keysEs,
+	...decisionsEs,
+	...doctorEs,
+	...updateEs,
+	...mainEs,
 } as const;
 
 export type MessageKey = keyof typeof es;
@@ -321,6 +347,18 @@ Sets bond up on this machine (once; rerun it to change anything):
 	"wizard.herdr_continue": "Continue without Herdr? (everything else still gets configured)",
 	"wizard.herdr_install_first": "Install Herdr and run bond setup again",
 	"wizard.agent_install_first": "Install an agent and run bond setup again",
+
+	// ---- areas (P2/P3): contributed by the cli/messages/ files ----
+	...repoEn,
+	...teamEn,
+	...hubEn,
+	...catalogEn,
+	...modelsEn,
+	...keysEn,
+	...decisionsEn,
+	...doctorEn,
+	...updateEn,
+	...mainEn,
 };
 
 const CATALOGS: Record<Lang, Record<MessageKey, string>> = { es, en };
