@@ -3,6 +3,7 @@
 // hacen falta (clean). Las ramas no se tocan: nada de merge, push ni borrado sin pedirlo.
 
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
@@ -239,11 +240,34 @@ export function minionName(live: Set<string>): string {
 }
 
 /**
- * Carpeta del worktree de una rama, la misma que usa herdr worktree: ~/.herdr/worktrees/<repo>/<rama>.
- * En un hub, `sub` es la ruta del submódulo (con / cambiadas por -): ~/.herdr/worktrees/<hub>/<sub>/<rama> (D9).
+ * Espacio de nombres estable y legible para los worktrees de un repo o hub: <nombre>-<hash>.
+ * El sufijo corto (7 caracteres hex de SHA-256 de la ruta canónica) evita que dos repos
+ * con el mismo nombre de carpeta colisionen en ~/.herdr/worktrees (#36).
  */
-export const tabWorktreePath = (home: string, repo: string, branch: string, sub?: string) =>
-	join(home, ".herdr", "worktrees", repo, ...(sub ? [sub.replace(/[/\\]+/g, "-")] : []), branch.replace(/[/\\]+/g, "-"));
+export function worktreeNamespace(root: string, name?: string): string {
+	const abs = canonical(root);
+	const base = (name ?? basename(abs)) || "repo";
+	const norm = process.platform === "win32" ? abs.toLowerCase().replace(/\\/g, "/") : abs;
+	const hash = createHash("sha256").update(norm).digest("hex").slice(0, 7);
+	return `${base}-${hash}`;
+}
+
+/**
+ * Carpeta del worktree de una rama, la misma que usa herdr worktree: ~/.herdr/worktrees/<namespace>/<rama>.
+ * En un hub, `sub` es la ruta del submódulo (con / cambiadas por -): ~/.herdr/worktrees/<hub-namespace>/<sub>/<rama> (D9).
+ * Si `target` es una ruta o directorio en disco, calcula su espacio de nombres con sufijo hash;
+ * si es un identificador de espacio de nombres (sin separadores), se usa directamente.
+ */
+export const tabWorktreePath = (home: string, target: string, branch: string, sub?: string): string => {
+	const isPath = target.includes("/") || target.includes("\\") || existsSync(target);
+	let ns = target;
+	if (isPath) {
+		const s = catchDie(() => hubSession(target)).value;
+		const name = s?.name ?? basename(target);
+		ns = worktreeNamespace(target, name);
+	}
+	return join(home, ".herdr", "worktrees", ns, ...(sub ? [sub.replace(/[/\\]+/g, "-")] : []), branch.replace(/[/\\]+/g, "-"));
+};
 
 /**
  * Dónde va cada agente. `tab`: 0 es la pestaña del que llama; 1, 2... las pestañas nuevas.
@@ -335,7 +359,7 @@ function openInTab(root: string, anchor: string, here: CallerTab, room: number, 
 		const at = item.root ?? root;
 		let path = item.path;
 		if (!path) {
-			path = tabWorktreePath(homedir(), basename(root), branch, item.sub);
+			path = tabWorktreePath(homedir(), root, branch, item.sub);
 			const isNew = git(at, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).status !== 0;
 			const args = isNew ? ["worktree", "add", "-b", branch, path, item.base ?? o.base ?? "HEAD"] : ["worktree", "add", path, branch];
 			const g = git(at, args);
@@ -1696,7 +1720,14 @@ function removeWorktrees(root: string, targets: Row[], opts: Record<string, stri
 				}
 				// Herdr deja la carpeta del repo dentro de la suya: se quita si queda vacía.
 				const parent = dirname(r.path);
-				if (r.managed && existsSync(parent) && readdirSync(parent).length === 0) rmdirSync(parent);
+				if (r.managed && existsSync(parent) && readdirSync(parent).length === 0) {
+					rmdirSync(parent);
+					const grandParent = dirname(parent);
+					const wtBase = join(homedir(), ".herdr", "worktrees");
+					if (grandParent !== wtBase && existsSync(grandParent) && readdirSync(grandParent).length === 0) {
+						rmdirSync(grandParent);
+					}
+				}
 			});
 		} catch (e) {
 			warn(`${label}: ${(e as Error).message}`);
@@ -1984,9 +2015,15 @@ function cleanInHub(s: HubSession, branches: string[], opts: Record<string, stri
 		for (const r of removeWorktrees(repo.dir, mine, opts, repo.path)) removed.add(r);
 		if (!isDryRun()) git(repo.dir, ["worktree", "prune"]);
 	}
-	// La carpeta del hub en ~/.herdr/worktrees, si se queda vacía.
-	const hubDir = join(homedir(), ".herdr", "worktrees", s.name);
-	if (!isDryRun() && removed.size && existsSync(hubDir) && readdirSync(hubDir).length === 0) rmdirSync(hubDir);
+	// La carpeta del hub en ~/.herdr/worktrees, si se queda vacía (también la del esquema previo si existía).
+	const hubNs = worktreeNamespace(s.root, s.name);
+	const hubDir = join(homedir(), ".herdr", "worktrees", hubNs);
+	const legacyHubDir = join(homedir(), ".herdr", "worktrees", s.name);
+	if (!isDryRun() && removed.size) {
+		for (const d of [hubDir, legacyHubDir]) {
+			if (existsSync(d) && readdirSync(d).length === 0) rmdirSync(d);
+		}
+	}
 	if (removed.size) cleanHubBranches(s, removed, opts);
 	if (!opts["--keep-table"]) closeIdleTable(s.root, rows.filter((r) => !removed.has(r)));
 }

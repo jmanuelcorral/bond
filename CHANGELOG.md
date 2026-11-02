@@ -1,5 +1,12 @@
 # Cambios
 
+## Sin publicar
+
+- Espacio de nombres único para worktrees de `bond team`: las carpetas en `~/.herdr/worktrees`
+  llevan un sufijo hash corto derivado de la ruta absoluta del repositorio o hub (`<nombre>-<hash>`),
+  evitando colisiones entre repositorios con la misma carpeta base (#36). Los worktrees existentes
+  del esquema anterior se siguen reconociendo y limpiando con `bond team clean`.
+
 ## 1.11.0
 
 Bond se pone la ropa de la web y aprende a hablar en los dos idiomas. La terminal estrena el logo
