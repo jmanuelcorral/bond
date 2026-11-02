@@ -786,7 +786,14 @@ enable it and everything else exits 0 saying the memory is not in use.
 
 Authorship (`decided_by`): inside a Herdr pane it is `agent:<kind>/<name>` —bond looks up the
 pane's agent, so an agent never needs to know its own name—; outside Herdr, or with no agent
-in the pane, `user`. Acceptance belongs to the user alone, but they can do it from the
+in the pane, `user`. It can be pinned by hand, and then it overrides what bond infers:
+`BOND_DECISION_AGENT` (the variable wins) or `[decisions] author` in
+`~/.bond/config.toml`. This lets a delegated pane sign with the identity you talk to —the
+orchestrator— instead of the minion bond started in its worktree (`MINIONS` in
+`cli/team.mts`): a minion name identifies an instance and says little about who decided.
+Valid values are `user` or `agent:<kind>[/<name>]`; `pi/gru` normalizes to
+`agent:pi/gru`, and a value that does not fit dies instead of being written half-baked.
+Acceptance belongs to the user alone, but they can do it from the
 conversation: `accept`, `reject` and `supersede` ask for interactive confirmation with a
 terminal, or take `--confirmed-by "<what the user said>"` without one; in that case
 `accepted_by` keeps the quote and `accepted_via` who executed it (`check` validates its

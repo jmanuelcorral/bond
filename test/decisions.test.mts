@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
-const { addDecision, checkDecisions, decisions, loadDecisions, parseFm, resolveAuthor, slugify } = await import("../cli/decisions.mts");
+const { addDecision, checkDecisions, decisions, loadDecisions, normalizeAuthor, parseFm, resolveAuthor, slugify } = await import("../cli/decisions.mts");
 const { catchDie } = await import("../cli/util.mts");
 
 const origCwd = process.cwd();
@@ -231,6 +231,109 @@ describe("autoría (D12)", () => {
 		expect(resolveAuthor()).toBe("user");
 		delete process.env.HERDR_ENV;
 		delete process.env.HERDR_PANE_ID;
+	});
+});
+
+describe("autoría fijada a mano (override, D12)", () => {
+	const cfgFile = "config.toml";
+	afterEach(() => delete process.env.BOND_DECISION_AGENT);
+
+	const bondWith = (args: string[], env: Record<string, string>) =>
+		spawnSync(process.execPath, [MAIN, ...args], {
+			cwd: repo,
+			env: { ...process.env, NO_COLOR: "1", HERDR_ENV: "", HERDR_PANE_ID: "", ...env },
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+
+	/**
+	 * Config global con [decisions] author en una BOND_HOME propia, y add dentro. En proceso no
+	 * se puede probar: BOND_HOME en cli/runtime.mts queda fijada por el primer fichero de
+	 * pruebas que la importa, no por el que la escribe (lo avisa test/catalog-git.test.mts).
+	 */
+	const addWithGlobalAuthor = (author: string, extra: Record<string, string> = {}) => {
+		const home = mkdtempSync(join(tmpdir(), "bond-home-"));
+		try {
+			writeFileSync(join(home, cfgFile), `agents = ["pi"]\n\n[decisions]\nauthor = "${author}"\n`);
+			enableMemory();
+			const r = bondWith(["decisions", "add", "--title", "Con la config global", "--decision", "d"], {
+				BOND_HOME: home,
+				...extra,
+			});
+			return { r, decided_by: r.status === 0 ? loadDecisions(repo, "docs/decisions")[0].decided_by : undefined };
+		} finally {
+			rmSync(home, { recursive: true, force: true });
+		}
+	};
+
+	test("normalizeAuthor: user y agent:<kind>[/<nombre>] pasan; kind/nombre se normaliza", () => {
+		expect(normalizeAuthor("user")).toBe("user");
+		expect(normalizeAuthor("agent:pi/gru")).toBe("agent:pi/gru");
+		expect(normalizeAuthor("  pi/gru  ")).toBe("agent:pi/gru");
+		expect(normalizeAuthor("agent:claude-code/orq")).toBe("agent:claude-code/orq");
+		expect(normalizeAuthor("agent:pi")).toBe("agent:pi");
+	});
+
+	test("normalizeAuthor: nombre suelto o forma rara mueren con la forma esperada", () => {
+		// "gru" solo no dice si es kind o nombre: se pide explícito en vez de adivinar.
+		expect(catchDie(() => normalizeAuthor("gru"))?.error).toContain('agent:<kind>[/<nombre>]');
+		expect(catchDie(() => normalizeAuthor("agent:Pi/gru"))?.error).toContain('"agent:Pi/gru"');
+		expect(catchDie(() => normalizeAuthor("agent:pi/gru/extra"))?.error).toContain('"agent:pi/gru/extra"');
+	});
+
+	test("BOND_DECISION_AGENT fija la autoría", () => {
+		process.env.BOND_DECISION_AGENT = "pi/gru";
+		expect(resolveAuthor()).toBe("agent:pi/gru");
+	});
+
+	test("[decisions] author de ~/.bond/config.toml se usa sin variable de entorno", () => {
+		const { r, decided_by } = addWithGlobalAuthor("pi/gru");
+		expect(r.stderr).toBe("");
+		expect(decided_by).toBe("agent:pi/gru");
+	});
+
+	test("la variable de entorno gana a la config global", () => {
+		const { decided_by } = addWithGlobalAuthor("agent:pi/de-la-config", {
+			BOND_DECISION_AGENT: "agent:pi/de-la-variable",
+		});
+		expect(decided_by).toBe("agent:pi/de-la-variable");
+	});
+
+	test("un valor que no vale muere en vez de escribirse a medias", () => {
+		process.env.BOND_DECISION_AGENT = "gru";
+		expect(catchDie(() => resolveAuthor())?.error).toContain("no vale como autoría");
+	});
+
+	test("add con el override deja la identidad fijada en decided_by", () => {
+		enableMemory();
+		const r = bondWith(["decisions", "add", "--title", "Firmar como el orquestador", "--decision", "d"], {
+			BOND_DECISION_AGENT: "pi/gru",
+		});
+		expect(r.status).toBe(0);
+		expect(loadDecisions(repo, "docs/decisions")[0].decided_by).toBe("agent:pi/gru");
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+	});
+
+	test("accept con el override deja la identidad fijada en accepted_via", () => {
+		enableMemory();
+		const { id } = add();
+		const r = bondWith(["decisions", "accept", id, "--confirmed-by", "vale, adelante"], {
+			BOND_DECISION_AGENT: "agent:pi/gru",
+		});
+		expect(r.status).toBe(0);
+		const d = loadDecisions(repo, "docs/decisions").find((x) => x.id === id);
+		expect(d?.status).toBe("accepted");
+		expect(d?.accepted_via).toBe("agent:pi/gru");
+	});
+
+	test("por la orden, un override inválido sale con 1 y no toca la decisión", () => {
+		enableMemory();
+		const { id } = add();
+		const before = read(`docs/decisions/${id}.md`);
+		const r = bondWith(["decisions", "accept", id, "--confirmed-by", "vale"], { BOND_DECISION_AGENT: "gru" });
+		expect(r.status).toBe(1);
+		expect(r.stderr).toContain("no vale como autoría");
+		expect(read(`docs/decisions/${id}.md`)).toBe(before);
 	});
 });
 
