@@ -11,58 +11,15 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { join } from "node:path";
+import { t } from "./messages.mts";
 import { agents } from "./herdr.mts";
 import { repoDecisions, repoRoot } from "./repo.mts";
 import { bad, catchDie, die, dim, ok, run } from "./util.mts";
 
 export const STATUSES = ["proposed", "accepted", "rejected", "superseded"];
 
-export const DECISIONS_HELP = `Uso: bond decisions [subcomando] [opciones]
-
-La memoria de decisiones del repo ([decisions] en .bond/bond.toml). Sin subcomando,
-lista las decisiones.
-
-  (lista) [--status <s>] [--agent <a>] [--json]
-            Decisiones del repo, las más recientes primero.
-  add --title <t> [--context <c>] --decision <d> [--alternatives <a>]
-      [--consequences <c>] [--link <ref>]... [--confirmed-by <ref>] [--json]
-            Registra una decisión: bond calcula el id (YYYY-MM-DD-slug), la autoría
-            (desde el panel de Herdr, agent:<kind>/<nombre>; fuera, user) y escribe el
-            fichero. No toca ningún índice: el listado lo da esta orden (así las ramas
-            paralelas no chocan). Entra como "proposed"; con --confirmed-by "<lo que
-            dijo el usuario>" (porque ya la aprobó, por ejemplo con el plan) entra
-            "accepted" con esa cita y accepted_via. El cuerpo queda con los
-            apartados en inglés: Context / Decision / Rejected alternatives / Consequences
-            (este solo si pasas --consequences). Con --stdin, el mismo objeto en JSON
-            por la entrada estándar: {"title","context","decision","alternatives",
-            "consequences","links","confirmed_by"}.
-  accept <id>... [--ref <aceptación>] [--confirmed-by "<lo que dijo el usuario>"] [--all-proposed]
-            La pasa a "accepted". Es solo del usuario, pero puede hacerlo desde la
-            conversación: con --confirmed-by (una referencia a sus palabras) no hace
-            falta terminal y la decisión guarda además accepted_via: quién lo ejecutó
-            (agent:<kind>/<nombre> desde un panel de Herdr, user fuera). Con terminal y
-            sin --confirmed-by, pregunta. Sin una cosa ni otra, se niega. Admite varios
-            ids y --all-proposed; un id desconocido o no "proposed" se informa sin
-            abortar los demás (salida != 0 si alguno falló). --confirmed-by vacío se rechaza.
-  reject <id>... [--ref <motivo>] [--confirmed-by <ref>] [--all-proposed]
-            La pasa a "rejected" (misma confirmación).
-  supersede <id>... --by <nueva> [--confirmed-by <ref>] [--all-proposed]
-            Las sustituye: las viejas quedan "superseded" y la nueva las referencia en
-            "supersedes" (misma confirmación).
-  show <id>                       El fichero entero de una decisión (o de un run, si el
-                                  id es de uno en <dir>/runs/).
-  runs [--agent <a>] [--json]     Los runs (encargos a agentes) de <dir>/runs/, con los
-                                  commits de su rama y las decisiones de ese agente.
-  check                           Audita la memoria: frontmatter, ids, duplicados,
-                                  sustituciones y trailers Decision:. Sale con 1 si hay
-                                  errores. El README no se audita: no hay índice que
-                                  mantener al día.
-
-  --json     Salida JSON estable en lista, add, runs y check.
-  -h, --help Esta ayuda.
-
-Sin la sección [decisions], solo "add" falla (dice cómo activarla); lo demás sale con 0
-explicando que el repo no usa la memoria.`;
+export const decisionsHelp = (): string => t("decisions.help");
+export const DECISIONS_HELP = decisionsHelp();
 
 // --- frontmatter ------------------------------------------------------------------------
 
@@ -209,8 +166,8 @@ function buildBody(in_: AddInput): string {
 export function addDecision(root: string, dirRel: string, in_: AddInput): { id: string; rel: string; decided_by: string; status: string } {
 	const title = in_.title?.trim();
 	const decision = in_.decision?.trim();
-	if (!title) die('add necesita un título (--title "..." o "title" en el JSON)');
-	if (!decision) die('add necesita la decisión (--decision "..." o "decision" en el JSON)');
+	if (!title) die(t("decisions.need_title"));
+	if (!decision) die(t("decisions.need_decision"));
 	const dir = dirAbs(root, dirRel);
 	mkdirSync(dir, { recursive: true });
 	const base = `${utcToday()}-${slugify(title) || "decision"}`;
@@ -220,7 +177,7 @@ export function addDecision(root: string, dirRel: string, in_: AddInput): { id: 
 	// Aceptar al aprobar: si el usuario ya la aprobó (por ejemplo, con el plan), entra
 	// aceptada con su cita; si no, queda proposed para que la revise.
 	const confirmed = in_.confirmed_by === undefined ? undefined : in_.confirmed_by.trim();
-	if (confirmed === "") die("--confirmed-by necesita una referencia no vacía: lo que dijo el usuario (bond decisions --help)");
+	if (confirmed === "") die(t("decisions.confirmed_by_empty"));
 	const d: Decision = {
 		id,
 		title,
@@ -244,7 +201,7 @@ export function addDecision(root: string, dirRel: string, in_: AddInput): { id: 
 
 function findDecisionFile(root: string, dirRel: string, id: string): string {
 	const f = join(dirAbs(root, dirRel), `${id}.md`);
-	if (!existsSync(f)) die(`no existe la decisión ${id} en ${dirRel}/ (bond decisions para ver las que hay)`);
+	if (!existsSync(f)) die(t("decisions.not_found", { id, dir: dirRel }));
 	return f;
 }
 
@@ -261,7 +218,7 @@ const hasTty = () => process.stdin.isTTY === true && process.stdout.isTTY === tr
 function patchDecision(root: string, dirRel: string, id: string, patch: Partial<Pick<Decision, "status" | "accepted_by" | "accepted_via" | "supersedes" | "superseded_by">>): Decision {
 	const f = findDecisionFile(root, dirRel, id);
 	const p = parseFm(readFileSync(f, "utf8"));
-	if (!p) die(`${dirRel}/${id}.md: sin frontmatter válido; arreglalo antes (bond decisions check)`);
+	if (!p) die(t("decisions.invalid_fm", { file: `${dirRel}/${id}.md` }));
 	const d = { ...(decisionFields(p) as Omit<Decision, "rel">), rel: `${dirRel}/${id}.md` };
 	Object.assign(d, patch);
 	writeFileSync(f, decisionFile(d));
@@ -291,12 +248,14 @@ interface ChangeRequest {
 
 /** Aplica el cambio a cada decisión pedida; informa sin abortar y devuelve si alguna falló. */
 async function changeStatus(root: string, dirRel: string, req: ChangeRequest): Promise<boolean> {
+	const verbKey = req.verb === "sustituir" ? "decisions.verb_supersede" : req.verb === "rechazar" ? "decisions.verb_reject" : "decisions.verb_accept";
+	const verb = t(verbKey);
 	const confirmedBy = req.confirmedBy?.trim();
 	if (req.confirmedBy !== undefined && !confirmedBy) {
-		die("--confirmed-by necesita una referencia no vacía: lo que dijo el usuario (bond decisions --help)");
+		die(t("decisions.confirmed_by_empty"));
 	}
 	if (confirmedBy === undefined && !hasTty()) {
-		die(`${req.verb} la hace solo el usuario: con terminal interactiva y confirmación, o desde la conversación con --confirmed-by "<lo que dijo el usuario>". Desde el shell de un agente sin una cosa ni la otra no se puede (bond decisions --help)`);
+		die(t("decisions.user_only_action", { verb }));
 	}
 	let ids = [...new Set(req.ids)];
 	if (req.allProposed) {
@@ -305,41 +264,41 @@ async function changeStatus(root: string, dirRel: string, req: ChangeRequest): P
 	}
 	if (!ids.length) {
 		if (req.allProposed) {
-			console.log(dim(`sin decisiones "proposed" en ${dirRel}/: nada que ${req.verb}.`));
+			console.log(dim(t("decisions.nothing_to_action", { dir: dirRel, verb })));
 			return false;
 		}
-		die(`falta al menos un id (o --all-proposed) (bond decisions ${req.verb === "sustituir" ? "supersede" : req.verb === "rechazar" ? "reject" : "accept"} --help)`);
+		die(t("decisions.missing_id", { sub: req.verb === "sustituir" ? "supersede" : req.verb === "rechazar" ? "reject" : "accept" }));
 	}
-	if (req.by && ids.includes(req.by)) die(`supersede: --by no puede ser una de las decisiones sustituidas (${req.by})`);
+	if (req.by && ids.includes(req.by)) die(t("decisions.supersede_self", { id: req.by }));
 	if (req.by) findDecisionFile(root, dirRel, req.by);
 
 	let failed = false;
 	for (const id of ids) {
 		const f = join(dirAbs(root, dirRel), `${id}.md`);
 		if (!existsSync(f)) {
-			console.error(`${bad("✗")} ${id}: no existe en ${dirRel}/`);
+			console.error(`${bad("✗")} ${t("decisions.err_not_in_dir", { id, dir: dirRel })}`);
 			failed = true;
 			continue;
 		}
 		const p = parseFm(readFileSync(f, "utf8"));
 		if (!p) {
-			console.error(`${bad("✗")} ${dirRel}/${id}.md: sin frontmatter valido; arreglalo antes (bond decisions check)`);
+			console.error(`${bad("✗")} ${t("decisions.err_invalid_fm", { file: `${dirRel}/${id}.md` })}`);
 			failed = true;
 			continue;
 		}
 		const status = p.scalars.status ?? "";
 		if (req.status && status !== "proposed") {
-			console.error(`${bad("✗")} ${id}: no es "proposed" (está en "${status}"), se omite`);
+			console.error(`${bad("✗")} ${t("decisions.err_not_proposed", { id, status })}`);
 			failed = true;
 			continue;
 		}
 		if (req.verb === "sustituir" && status === "superseded") {
-			console.error(`${bad("✗")} ${id}: ya está sustituida por ${p.scalars.superseded_by}, se omite`);
+			console.error(`${bad("✗")} ${t("decisions.err_already_superseded", { id, by: p.scalars.superseded_by })}`);
 			failed = true;
 			continue;
 		}
-		if (!confirmedBy && !(await confirm(`¿${req.verb} la decisión ${id}? [y/N] `))) {
-			console.log(dim(`cancelado: ${id} no cambia.`));
+		if (!confirmedBy && !(await confirm(t("decisions.confirm_prompt", { verb, id })))) {
+			console.log(dim(t("decisions.cancelled", { id })));
 			continue;
 		}
 		const patch: Partial<Pick<Decision, "status" | "accepted_by" | "accepted_via" | "supersedes" | "superseded_by">> = {};
@@ -358,7 +317,7 @@ async function changeStatus(root: string, dirRel: string, req: ChangeRequest): P
 			// La nueva referencia a la vieja en `supersedes`; ella sigue siendo propuesta
 			// hasta que el usuario la acepte por su cuenta.
 			patchDecision(root, dirRel, req.by!, { supersedes: id });
-			console.log(`${ok("~")} ${dirRel}/${id}.md  ${dim(`superseded por ${req.by}`)}`);
+			console.log(`${ok("~")} ${dirRel}/${id}.md  ${dim(t("decisions.superseded_by", { by: req.by! }))}`);
 		} else {
 			patch.status = req.status!;
 			const d = patchDecision(root, dirRel, id, patch);
@@ -402,35 +361,35 @@ export function checkDecisions(root: string, dirRel: string): DecisionsReport {
 		const rel = `${dirRel}/${f}`;
 		const p = parseFm(readFileSync(join(dir, f), "utf8"));
 		if (!p) {
-			errors.push(`${rel}: sin frontmatter YAML (o mal cerrado)`);
+			errors.push(t("decisions.check_no_fm", { file: rel }));
 			continue;
 		}
 		const s = p.scalars;
 		const missing = ["id", "title", "status", "date", "decided_by"].filter((k) => !s[k]);
-		if (missing.length) errors.push(`${rel}: faltan campos: ${missing.join(", ")}`);
-		if (s.status && !STATUSES.includes(s.status)) errors.push(`${rel}: status "${s.status}" no es uno de ${STATUSES.join(", ")}`);
+		if (missing.length) errors.push(t("decisions.check_missing_fields", { file: rel, fields: missing.join(", ") }));
+		if (s.status && !STATUSES.includes(s.status)) errors.push(t("decisions.check_bad_status", { file: rel, status: s.status, allowed: STATUSES.join(", ") }));
 		const wantId = f.slice(0, -3);
-		if (s.id && s.id !== wantId) errors.push(`${rel}: id "${s.id}" no coincide con el nombre del fichero (${wantId})`);
+		if (s.id && s.id !== wantId) errors.push(t("decisions.check_id_mismatch", { file: rel, id: s.id, want: wantId }));
 		if (s.id) {
-			if (byId.has(s.id)) errors.push(`${rel}: id duplicada "${s.id}" (también en ${byId.get(s.id)!.rel})`);
+			if (byId.has(s.id)) errors.push(t("decisions.check_duplicate_id", { file: rel, id: s.id, other: byId.get(s.id)!.rel }));
 			else byId.set(s.id, { rel, p });
 		}
-		counts[s.status || "sin estado"] = (counts[s.status || "sin estado"] ?? 0) + 1;
+		counts[s.status || t("decisions.no_status")] = (counts[s.status || t("decisions.no_status")] ?? 0) + 1;
 	}
 	for (const { rel, p } of byId.values()) {
 		for (const key of ["supersedes", "superseded_by"] as const) {
 			const ref = p.scalars[key];
-			if (ref && !byId.has(ref)) errors.push(`${rel}: ${key} apunta a "${ref}", que no existe en ${dirRel}/`);
+			if (ref && !byId.has(ref)) errors.push(t("decisions.check_broken_ref", { file: rel, key, ref, dir: dirRel }));
 		}
 		// accepted_via es opcional (las decisiones aceptadas en terminal no lo llevan); si
 		// está, tiene que ser una autoría válida: user o agent:<kind>[/<nombre>] (D20).
 		const via = p.scalars.accepted_via;
 		if (via && !/^(user|agent:[a-z0-9._-]+(\/[A-Za-z0-9._-]+)?)$/.test(via)) {
-			errors.push(`${rel}: accepted_via "${via}" no es "user" ni "agent:<kind>[/<nombre>]"`);
+			errors.push(t("decisions.check_bad_accepted_via", { file: rel, via }));
 		}
 	}
-	for (const t of decisionTrailers(root)) {
-		if (!byId.has(t)) errors.push(`trailers Decision: apuntan a "${t}", que no existe en ${dirRel}/`);
+	for (const tTrailer of decisionTrailers(root)) {
+		if (!byId.has(tTrailer)) errors.push(t("decisions.check_broken_trailer", { trailer: tTrailer, dir: dirRel }));
 	}
 	// El README no se audita (D19): no hay índice que mantener al día; los que se crearon
 	// con tabla siguen siendo válidos.
@@ -453,13 +412,13 @@ export interface DecisionsDoctor {
 export function decisionsDoctor(root: string): DecisionsDoctor | undefined {
 	const { value: dec, error } = catchDie(() => repoDecisions(root));
 	if (error !== undefined || !dec) return undefined;
-	if (!existsSync(dirAbs(root, dec.dir))) return { level: "warn", name: "decisiones", detail: `${dec.dir}/ no existe todavía (ejecuta bond sync)`, fix: "bond sync" };
+	if (!existsSync(dirAbs(root, dec.dir))) return { level: "warn", name: "decisiones", detail: t("decisions.doctor_dir_missing", { dir: dec.dir }), fix: "bond sync" };
 	const { value: rep, error: checkError } = catchDie(() => checkDecisions(root, dec.dir));
-	if (checkError !== undefined) return { level: "fail", name: "decisiones", detail: `no se pudo comprobar: ${checkError}`, fix: "bond decisions check" };
-	if (rep!.errors.length) return { level: "fail", name: "decisiones", detail: `${rep!.errors.length} error(es) en ${dec.dir}/: ${rep!.errors[0]}`, fix: "bond decisions check" };
+	if (checkError !== undefined) return { level: "fail", name: "decisiones", detail: t("decisions.doctor_check_failed", { error: checkError }), fix: "bond decisions check" };
+	if (rep!.errors.length) return { level: "fail", name: "decisiones", detail: t("decisions.doctor_errors", { count: rep!.errors.length, dir: dec.dir, first: rep!.errors[0] }), fix: "bond decisions check" };
 	const proposed = rep!.counts.proposed ?? 0;
-	if (proposed) return { level: "warn", name: "decisiones", detail: `${proposed} propuesta(s) esperando aceptación · ${rep!.total} en ${dec.dir}/`, fix: `bond decisions accept <id>` };
-	return { level: "ok", name: "decisiones", detail: `${rep!.total} decisiones, ninguna pendiente en ${dec.dir}/` };
+	if (proposed) return { level: "warn", name: "decisiones", detail: t("decisions.doctor_proposed", { proposed, total: rep!.total, dir: dec.dir }), fix: `bond decisions accept <id>` };
+	return { level: "ok", name: "decisiones", detail: t("decisions.doctor_all_ok", { total: rep!.total, dir: dec.dir }) };
 }
 
 // --- CLI ------------------------------------------------------------------------------------
@@ -482,10 +441,10 @@ function parseArgs(args: string[]): Args {
 		if (a === "--json" || a === "--stdin" || a === "--all-proposed") opts[a] = "";
 		else if (VALUE_OPTS.includes(a)) {
 			const v = args[++i];
-			if (v === undefined) die(`${a} necesita un valor (bond decisions --help)`);
+			if (v === undefined) die(t("decisions.opt_needs_value", { opt: a }));
 			if (a === "--link") links.push(v);
 			else opts[a] = v;
-		} else if (a.startsWith("-")) die(`opción desconocida: ${a} (bond decisions --help)`);
+		} else if (a.startsWith("-")) die(t("decisions.unknown_opt", { opt: a }));
 		else pos.push(a);
 	}
 	return { pos, opts, links, json: opts["--json"] === "" };
@@ -497,7 +456,7 @@ function memory(root: string): { dir: string } | null {
 }
 
 const noMemory = (dir: string) =>
-	console.log(`${dim(dir)}: este repo no usa la memoria de decisiones. Para activarla, añade la sección [decisions] a .bond/bond.toml (o bond init) y ejecuta bond sync.`);
+	console.log(t("decisions.no_memory", { dir: dim(dir) }));
 
 async function readStdin(): Promise<string> {
 	const chunks: Buffer[] = [];
@@ -509,11 +468,11 @@ async function runAdd(root: string, dir: string, a: Args): Promise<void> {
 	let input: AddInput;
 	if (a.opts["--stdin"] === "" || a.pos.includes("--stdin")) {
 		const text = (await readStdin()).trim();
-		if (!text) die("--stdin necesita un objeto JSON por la entrada estándar (bond decisions --help)");
+		if (!text) die(t("decisions.stdin_empty"));
 		try {
 			input = JSON.parse(text) as AddInput;
 		} catch (e) {
-			die(`--stdin no es JSON válido: ${(e as Error).message}`);
+			die(t("decisions.stdin_invalid_json", { error: (e as Error).message }));
 		}
 		input.links = [...(input.links ?? []), ...a.links];
 		if (a.opts["--confirmed-by"] !== undefined) input.confirmed_by = a.opts["--confirmed-by"];
@@ -523,7 +482,7 @@ async function runAdd(root: string, dir: string, a: Args): Promise<void> {
 	const { id, rel, decided_by, status } = addDecision(root, dir, input);
 	if (a.json) console.log(JSON.stringify({ id, path: rel, status, decided_by }));
 	else if (status === "accepted") console.log(`${ok("+")} ${rel}  ${dim(`accepted · ${input.confirmed_by?.trim()} · via ${decided_by}`)}`);
-	else console.log(`${ok("+")} ${rel}  ${dim(`proposed · decidido por ${decided_by} · acepta con: bond decisions accept ${id}`)}`);
+	else console.log(`${ok("+")} ${rel}  ${dim(t("decisions.add_proposed_ack", { author: decided_by, id }))}`);
 }
 
 export async function decisions(args: string[]): Promise<void> {
@@ -534,15 +493,15 @@ export async function decisions(args: string[]): Promise<void> {
 	const a = parseArgs(name ? rest : args);
 	const dec = memory(root);
 	if (!dec) {
-		if (name === "add") die(`este repo no tiene la memoria de decisiones activada: añade la sección [decisions] a .bond/bond.toml (bond init la propone con la skill decision-record) y ejecuta bond sync`);
+		if (name === "add") die(t("decisions.err_no_memory"));
 		return noMemory(root);
 	}
 	if (!name) {
-		if (sub && !sub.startsWith("-")) die(`subcomando desconocido: ${sub} (bond decisions --help)`);
-		if (a.opts["--status"] && !STATUSES.includes(a.opts["--status"])) die(`--status tiene que ser uno de ${STATUSES.join(", ")}`);
+		if (sub && !sub.startsWith("-")) die(t("decisions.unknown_subcommand", { sub }));
+		if (a.opts["--status"] && !STATUSES.includes(a.opts["--status"])) die(t("decisions.bad_status_flag", { statuses: STATUSES.join(", ") }));
 		const ds = loadDecisions(root, dec.dir).filter((d) => (!a.opts["--status"] || d.status === a.opts["--status"]) && (!a.opts["--agent"] || d.decided_by.includes(a.opts["--agent"])));
 		if (a.json) return console.log(JSON.stringify(ds));
-		if (!ds.length) return console.log(dim(`sin decisiones en ${dec.dir}/ (bond decisions add --title ... --decision ...)`));
+		if (!ds.length) return console.log(dim(t("decisions.empty_list", { dir: dec.dir })));
 		const w = Math.max(...ds.map((d) => d.id.length));
 		for (const d of ds) console.log(`${d.id.padEnd(w)}  ${d.status.padEnd(10)}  ${d.decided_by.padEnd(22)}  ${d.title}`);
 		return;
@@ -561,13 +520,13 @@ export async function decisions(args: string[]): Promise<void> {
 			return;
 		}
 		case "supersede": {
-			const by = a.opts["--by"] ?? die("supersede necesita --by <id de la decisión que la sustituye>");
+			const by = a.opts["--by"] ?? die(t("decisions.supersede_needs_by"));
 			const failed = await changeStatus(root, dec.dir, { verb: "sustituir", ids: a.pos, allProposed: a.opts["--all-proposed"] === "", confirmedBy: a.opts["--confirmed-by"], ref: a.opts["--ref"], by });
 			if (failed) process.exitCode = 1;
 			return;
 		}
 		case "show": {
-			const id = a.pos[0] ?? die("uso: bond decisions show <id>");
+			const id = a.pos[0] ?? die(t("decisions.show_usage"));
 			const own = join(dirAbs(root, dec.dir), `${id}.md`);
 			const asRun = join(dirAbs(root, dec.dir), "runs", `${id}.md`);
 			const f = existsSync(own) ? own : existsSync(asRun) ? asRun : findDecisionFile(root, dec.dir, id);
@@ -586,9 +545,9 @@ export async function decisions(args: string[]): Promise<void> {
 			const who = (r: Parsed) => `${r.scalars.agent ?? ""} ${r.scalars.kind ?? ""}`;
 			const filtered = a.opts["--agent"] ? runs.filter((r) => who(r.fm).includes(a.opts["--agent"]!)) : runs;
 			if (a.json) return console.log(JSON.stringify(filtered.map((r) => ({ file: r.file, ...r.fm.scalars, commits: r.fm.lists.commits ?? [], decisions: r.fm.lists.decisions ?? [] }))));
-			if (!filtered.length) return console.log(dim(`sin runs en ${dec.dir}/runs/`));
+			if (!filtered.length) return console.log(dim(t("decisions.empty_runs", { dir: dec.dir })));
 			const n = (xs?: string[]) => xs?.length ?? 0;
-			for (const r of filtered) console.log(`${r.file}  ${dim(`${r.fm.scalars.kind ?? "?"}/${r.fm.scalars.agent ?? "?"} · ${r.fm.scalars.branch ?? "?"} · ${r.fm.scalars.status ?? "?"} · ${n(r.fm.lists.commits)} commit(s) · ${n(r.fm.lists.decisions)} decisión(es)`)}`);
+			for (const r of filtered) console.log(`${r.file}  ${dim(`${r.fm.scalars.kind ?? "?"}/${r.fm.scalars.agent ?? "?"} · ${r.fm.scalars.branch ?? "?"} · ${r.fm.scalars.status ?? "?"} · ${t("decisions.runs_counts", { commits: n(r.fm.lists.commits), decisions: n(r.fm.lists.decisions) })}`)}`);
 			return;
 		}
 		case "check": {
@@ -596,7 +555,7 @@ export async function decisions(args: string[]): Promise<void> {
 			if (a.json) return console.log(JSON.stringify(rep));
 			for (const e of rep.errors) console.log(`${bad("✗")} ${e}`);
 			const parts = STATUSES.filter((s) => rep.counts[s]).map((s) => `${rep.counts[s]} ${s}`);
-			if (!rep.errors.length) console.log(`${ok("✓")} ${dec.dir}/: ${rep.total} decisión(es) sin errores${parts.length ? ` (${parts.join(", ")})` : ""}`);
+			if (!rep.errors.length) console.log(`${ok("✓")} ${t("decisions.check_ok", { dir: dec.dir, total: rep.total, parts: parts.length ? ` (${parts.join(", ")})` : "" })}`);
 			else process.exitCode = 1;
 			return;
 		}

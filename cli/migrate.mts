@@ -5,6 +5,7 @@
 
 import { lstatSync, readFileSync, readlinkSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { t } from "./messages.mts";
 import { act, AGENT_DIR, log, STAMP, warn } from "./util.mts";
 
 const isLink = (p: string) => {
@@ -38,9 +39,9 @@ export function migrateLegacy(): MigrationResult {
 		try {
 			content = readFileSync(realpathSync(p), "utf8");
 		} catch {
-			warn(`${p} apunta a un fichero que ya no existe; se quita el enlace`);
+			warn(t("migrate.broken_link", { path: p }));
 		}
-		act(`${p}: enlace al repo -> fichero propio`, () => {
+		act(t("migrate.act_own_file", { path: p }), () => {
 			if (content !== undefined) writeFileSync(`${p}.bak.${STAMP}`, content);
 			rmSync(p);
 			if (content === undefined) return;
@@ -60,21 +61,21 @@ export function migrateLegacy(): MigrationResult {
 				writeFileSync(p, content);
 			}
 		});
-		actions.push(`${file}: ahora es un fichero propio (copia del repo en ${file}.bak.${STAMP})`);
+		actions.push(t("migrate.action_own_file", { file, bak: `${file}.bak.${STAMP}` }));
 	}
 
 	for (const name of ["bond", "pisetup"]) {
 		const p = join(AGENT_DIR, name);
 		if (!isLink(p)) continue;
 		act(`rm ${p}`, () => rmSync(p));
-		actions.push(`~/.pi/agent/${name}: quitado (las Bond Extensions se cargan por repo con bond init)`);
+		actions.push(t("migrate.action_removed_pkg", { name }));
 	}
 	const prompts = join(AGENT_DIR, "prompts");
 	if (isLink(prompts) && /\/(pi\/agent\/)?prompts$/.test(readlinkSync(prompts))) {
 		act(`rm ${prompts}`, () => rmSync(prompts));
-		actions.push("~/.pi/agent/prompts: enlace antiguo quitado");
+		actions.push(t("migrate.action_removed_prompts"));
 	}
-	for (const a of actions) log(`migración: ${a}`);
+	for (const a of actions) log(t("migrate.log", { action: a }));
 	return { actions, legacyInstructions };
 }
 
