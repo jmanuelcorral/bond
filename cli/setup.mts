@@ -118,7 +118,7 @@ export async function setup(args: string[]): Promise<void> {
   Endpoints:      ${cfg.providers.map((x) => x.id).join(", ") || "ninguno (cada agente usa su proveedor)"}
   Configuración:  ${CONFIG_FILE}
   Sugerencias:    ${suggestionsLine}  (bond setup --no-suggestions para apagarlas)
-  Instrucciones:  ${PERSONAL_FILE}  (edítalas y repite bond setup para propagarlas)
+${agents.includes("pi") ? `  Iconos del pie: ${{ nerd: "Nerd Font", emoji: "emojis", unicode: "Unicode" }[cfg.ui?.icons ?? "emoji"]}  ([ui] icons en la configuración, o BOND_ICONS)\n` : ""}  Instrucciones:  ${PERSONAL_FILE}  (edítalas y repite bond setup para propagarlas)
   Comprobar:      bond doctor
 
   Siguiente: cd <tu-repo> && bond init`);

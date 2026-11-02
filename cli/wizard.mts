@@ -1,4 +1,5 @@
-// Preguntas de `bond setup`: Herdr, endpoints de modelos, agentes y sugerencias de prompt.
+// Preguntas de `bond setup`: Herdr, endpoints de modelos, agentes, sugerencias de prompt e
+// iconos del pie de pi.
 // Devuelve la config global lista para guardar; aplicarla (generar la config de cada agente)
 // lo hace setup.mts.
 // Sin terminal interactiva o con --yes, usa lo detectado sin preguntar.
@@ -7,6 +8,7 @@ import * as p from "@clack/prompts";
 import { herdrInstallHelp, installedAgents, AGENTS } from "./catalog-agents.mts";
 import { type Config, type Provider, loadConfigOrEmpty, loadState, saveState } from "./config.mts";
 import { LOCAL_ENDPOINTS, listModels, probeApis, type EndpointModel } from "./endpoints.mts";
+import { detectNerdFonts } from "./fonts.mts";
 import { saveKey } from "./keys.mts";
 import { pickSuggestionModel } from "./suggestions.mts";
 import { which } from "./util.mts";
@@ -190,6 +192,39 @@ async function suggestionsStep(cfg: Config, interactive: boolean, forcedOff: boo
 	p.log.message(`Sugerencias de prompt: ${enabled ? "activadas" : "desactivadas"} con ${proposed}`);
 }
 
+/** Lista corta de fuentes para un mensaje: las tres primeras y cuántas más hay. */
+const fontList = (fonts: string[]) => fonts.slice(0, 3).join(", ") + (fonts.length > 3 ? ` y ${fonts.length - 3} más` : "");
+
+/**
+ * Iconos del pie de estado de pi. Con una Nerd Font instalada se pregunta si usar sus iconos
+ * (instalada no quiere decir que la terminal la use); sin ella, o si no, emojis. Un
+ * `[ui] icons = "unicode"` puesto a mano se respeta.
+ */
+export async function iconsStep(cfg: Config, interactive: boolean, detect: () => string[] = detectNerdFonts): Promise<void> {
+	if (!cfg.agents.includes("pi")) return;
+	if (cfg.ui?.icons === "unicode") {
+		p.log.message("Iconos del pie de pi: Unicode (lo dice [ui] icons en config.toml)");
+		return;
+	}
+	const fonts = detect();
+	if (!fonts.length) {
+		cfg.ui = { ...cfg.ui, icons: "emoji" };
+		p.log.message("Iconos del pie de pi: emojis (no hay ninguna Nerd Font instalada)");
+		return;
+	}
+	const initial = cfg.ui?.icons ? cfg.ui.icons === "nerd" : true;
+	const nerd = interactive
+		? await ask(
+				p.confirm({
+					message: `Hay Nerd Fonts instaladas (${fontList(fonts)}). ¿Usar sus iconos en el pie de pi? (tu terminal tiene que usar una; si no, verías cuadrados: entonces di que no y saldrán emojis)`,
+					initialValue: initial,
+				}),
+			)
+		: initial;
+	cfg.ui = { ...cfg.ui, icons: nerd ? "nerd" : "emoji" };
+	p.log.message(`Iconos del pie de pi: ${nerd ? "Nerd Font" : "emojis"}`);
+}
+
 export async function runWizard(opts: { interactive: boolean; logo: string; noSuggestions?: boolean }): Promise<WizardResult | undefined> {
 	p.intro(opts.logo);
 	const cfg = loadConfigOrEmpty();
@@ -216,6 +251,9 @@ export async function runWizard(opts: { interactive: boolean; logo: string; noSu
 
 	// 4. Sugerencias de prompt (solo pi)
 	await suggestionsStep(cfg, opts.interactive, opts.noSuggestions === true);
+
+	// 5. Iconos del pie de pi (Nerd Font o emojis)
+	await iconsStep(cfg, opts.interactive);
 
 	return { cfg, herdr };
 }

@@ -621,6 +621,11 @@ lo limita la pasarela; con proveedores en la nube, la cuota.
 4. **Sugerencias de prompt (pi).** Se proponen activas si el registro de bond tiene un modelo
    barato para pi; si no hay ninguno, salen apagadas con un aviso. El modelo propuesto se ve en
    la pregunta y se puede fijar a mano en `[suggestions] model`.
+5. **Iconos del pie de pi.** Busca Nerd Fonts instaladas (`fc-list` en Linux; en macOS y
+   Windows, las carpetas de fuentes). Si hay alguna, pregunta si usar sus iconos en el
+   [pie de estado](#pie-de-estado-extensionsstatus-linets): tu terminal tiene que usar esa fuente,
+   o verías cuadrados. Si no hay ninguna, o dices que no, el pie usa emojis. Se guarda en
+   `[ui] icons` (`"nerd"`, `"emoji"` o, a mano, `"unicode"`).
 
 **Después aplica**, solo para los agentes elegidos:
 
@@ -1026,58 +1031,78 @@ Para usar una clave de Context7 (más cuota), añade a su entrada
 `"headers": { "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}" }` y exporta la variable; no pongas la
 clave en el fichero.
 
-## Cabecera BOND (`extensions/bond-header.ts`)
+## Cabecera de bond (`extensions/bond-header.ts`)
 
-Sustituye la cabecera de pi por el logo de BOND: la palabra en 3 filas de medios bloques
-(`▀ ▄ █`) con degradado de magenta (`#FF3EC9`) a azul oscuro (`#1F2FA8`), una fila de datos
-encima (`007` a la izquierda, versión de pi a la derecha) y un campo de diagonales `╱`. El
-estilo está inspirado en el logo de Crush (charmbracelet); las letras y el código son propios,
-porque el de Crush tiene licencia FSL.
+Sustituye la cabecera de pi por el logo de bond, el mismo de la web: el isotipo (dos chevrones
+que se cruzan y se abren en tres trazas con su punto) en medios bloques (`▀ ▄ █`), con el
+degradado del logo de índigo (`#555AE7`) a teal (`#18E5D1`) pasando por cian en el cruce, y la
+palabra `bond` en minúsculas, en gris claro. Encima, la versión de pi; debajo, el lema y una
+línea con los comandos de bond.
+
+Al arrancar, el logo entra animado (unos 2,4 s): el isotipo aparece de izquierda a derecha, se
+enciende la palabra y, tras una pausa, las ramas se recogen hasta el cruce y queda la forma
+media, con solo los chevrones:
 
 ```
-╱╱╱╱╱╱ 007                        ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
-╱╱╱╱╱╱ █▀▀▄ ▄▀▀▀▄ █▄  █ █▀▀▀▀▀▀▀▄ ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
-╱╱╱╱╱╱ █▀▀▄ █   █ █ ▀▄█ █       █ ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
-╱╱╱╱╱╱ █▄▄▀ ▀▄▄▄▀ █   █ █▄▄▄▄▄▄▄▀ ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
+▄▄▄ ▀██▄             ▄████▄                    pi v0.70.0
+ ▀██▄ ▀██▄ ▄██▀▀▀▀▀▀ ▀████▀   █                         █
+   ▀██▄ ▀████         ▄▄▄▄    █▀▀▀▀▄ ▄▀▀▀▀▄ █▀▀▀▀▄ ▄▀▀▀▀█
+     ███ █████████████████    █    █ █    █ █    █ █    █
+   ▄██▀ ▄████         ▀▀▀▀    ▀▄▄▄▄▀ ▀▄▄▄▄▀ ▀    ▀ ▀▄▄▄▄▀
+ ▄██▀ ▄██▀ ▀██▄▄▄▄▄▄ ▄████▄   licence to code
+▀▀▀ ▄██▀             ▀████▀
 ```
 
-- Se adapta al ancho: con sitio, diagonales a los lados y en escalera a la derecha (con tope
-  de 32); en paneles medianos, diagonales arriba y abajo; en muy estrechos, una línea
-  `007 BOND ╱╱╱`.
-- Como en Crush, una letra (B, O o D) se estira al azar, una vez por sesión.
+```
+ ▀█▄ ▀█▄              pi v0.70.0
+   ▀█▄ ▀█▄  █                 █
+   ▄█▀ ▄█▀  █▀▀▄ ▄▀▀▄ █▀▀▄ ▄▀▀█
+ ▄█▀ ▄█▀    █▄▄▀ ▀▄▄▀ █  █ ▀▄▄█
+```
+
+- Se adapta al ancho: la animación necesita 57 columnas; de 31 a 56 sale directamente la forma
+  media, sin animar, y en paneles más estrechos, una línea `»» bond ───▪`.
 - `/header` vuelve a la cabecera de pi, con sus atajos de teclado.
 
-El logo vive en `lib/bond-logo.mts`, sin dependencias. Lo usan la cabecera, `bin/bond-logo`
-(para la terminal) y `bond`/`bond team`, que imprimen la versión de una línea:
-
-```bash
-bond-logo                       # al ancho de la terminal
-bond-logo --width 40            # forzar un ancho
-bond-logo --small "texto"       # una línea: 007 BOND texto ╱╱╱
-```
+El logo vive en `lib/bond-logo.mts`, sin dependencias. Lo usan la cabecera, `bond logo` y la
+ayuda de `bond`, que también lo animan (si la salida no es una terminal, sale quieto y entero), y `bond`, `bond team`, `bond setup` y
+`bond init`, que imprimen la versión de una línea: `»» bond texto ───▪`, con la traza
+apagándose hacia la derecha.
 
 Es `.mts` para que Node 22+ lo ejecute como módulo ES sin marcar todo el paquete como
 `"type": "module"`.
 
 ## Pie de estado (`extensions/status-line.ts`)
 
-Sustituye el pie de pi por uno pensado para varios agentes en paneles estrechos:
+Sustituye el pie de pi por uno pensado para varios agentes en paneles estrechos. A la izquierda,
+la insignia de bond: los chevrones `>>` en dos filas, con el degradado del logo, y `bond`; a su
+lado, cada dato con su icono (aquí, los Unicode):
 
 ```
-w1-hardening@w6:p5 · fluzo · main [wt] · flash-halogen (medium) → otro-modelo
-████░░░░░░░░ 34% · $0.12 ↑48k ↓3.1k · sess 12:04 api 3:10 · +120/-14 · req ✓31 ✗1
-<estados de otras extensiones, si hay>
+▀█▄ ▀█▄ bond  ◉ w1-hardening@w6:p5  ▤ fluzo  ⎇ main ⑂  ◆ flash-halogen medium → otro-modelo
+▄█▀ ▄█▀       ◧ ━━━━━━━━━━ 34%  $ $0.12 ↑48k ↓3.1k  ◷ 12:04  ↯ 3:10  ± +120 -14  ✓ 31 ✗ 1
+              ▪ <estados de otras extensiones, si hay>
 ```
 
 | Pieza | De dónde sale |
 |---|---|
 | `nombre@panel` | `HERDR_PANE_ID` y `herdr agent list` (se refresca cada 30 s). Fuera de Herdr no aparece. |
-| `[wt]` | El directorio es un worktree de git (`--git-dir` distinto de `--git-common-dir`). |
+| Icono de worktree | El directorio es un worktree de git (`--git-dir` distinto de `--git-common-dir`). |
 | `→ modelo` | El último mensaje lo respondió otro modelo que el seleccionado (modelos virtuales o routers). |
 | Barra | `ctx.getContextUsage()`: verde < 50 %, amarillo < 80 %, rojo a partir de ahí. |
 | Coste | Solo si es mayor que 0; con los modelos locales de `halo` se ven solo los tokens. |
-| `req ✓ ✗` | Peticiones al modelo correctas y fallidas en esta sesión. |
-| Rate limit | Cuenta atrás con la espera que pide el proveedor (cabecera `retry-after` o texto del error). |
+| Tiempos | De la sesión y de espera al modelo. |
+| `✓ ✗` | Peticiones al modelo correctas y fallidas en esta sesión. |
+| Rate limit | Cuenta atrás, a la derecha, con la espera que pide el proveedor (cabecera `retry-after` o texto del error). |
+
+- **Iconos**: los de Nerd Font si lo elegiste en `bond setup` (`[ui] icons = "nerd"`) y, si no,
+  emojis (`🤖 📁 🌿 🧠 📊 💰 …`). `BOND_ICONS` (`nerd`, `emoji` o `unicode`) manda sobre la
+  configuración; `unicode` son símbolos que traen todas las fuentes, para terminales sin emojis
+  (la consola de Linux o algunos servidores por SSH). Si ves cuadrados, tu terminal no usa la
+  Nerd Font: repite `bond setup` y di que no, o exporta `BOND_ICONS=emoji`.
+- **Ancho**: si no cabe todo, se quitan primero los datos menos importantes (el tiempo de API, el
+  de sesión, los contadores, la carpeta...); el modelo y la barra de contexto se quedan siempre.
+  Por debajo de 90 columnas la insignia se queda en los `>>`, y por debajo de 50 desaparece.
 
 La tercera línea pinta los estados que otras extensiones ponen con `ctx.ui.setStatus()`, que
 un pie propio taparía si no. `/statusline` alterna entre este pie y el de pi.

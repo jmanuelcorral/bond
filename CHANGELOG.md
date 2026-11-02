@@ -1,5 +1,27 @@
 # Cambios
 
+## Sin publicar
+
+- Logo nuevo en la terminal, el de la web: el isotipo (dos chevrones que se cruzan y se abren en
+  tres trazas) en medios bloques, con el degradado del logo de índigo a teal, y la palabra `bond`
+  en minúsculas. Sustituye a la palabra BOND con degradado magenta y campo de diagonales al
+  estilo de Crush en la cabecera de pi, `bond logo` y la ayuda.
+- El logo entra animado en la cabecera de pi, `bond logo` y la ayuda de `bond` (unos 2,4 s): el
+  isotipo aparece de izquierda a derecha, se enciende la palabra y las ramas se recogen hasta
+  dejar solo los chevrones `>>` junto a `bond`. Necesita 57 columnas; de 31 a 56 sale esa forma
+  sin animar, y en paneles más estrechos, la línea de marca. Si la salida no es una terminal,
+  el logo sale quieto y entero.
+- Pie de estado de pi rediseñado: a la izquierda, la insignia de bond (`>>` en dos filas con el
+  degradado del logo y `bond`) y cada dato con su icono. La barra de contexto es una línea
+  fina y los separadores `·` desaparecen. En paneles estrechos se quitan primero los datos menos
+  importantes en lugar de cortar la línea, y la insignia se queda en los `>>` (o desaparece por
+  debajo de 50 columnas).
+- `bond setup` busca Nerd Fonts instaladas y, si hay alguna, pregunta si usar sus iconos en el
+  pie de pi; si no hay ninguna o dices que no, el pie usa emojis. Se guarda en `[ui] icons` de
+  `~/.bond/config.toml`, y `BOND_ICONS` (`nerd`, `emoji` o `unicode`) manda sobre él.
+- La línea de marca de `bond`, `bond team`, `bond setup` y `bond init` pasa a ser
+  `»» bond texto ───▪` y ya no se sale del panel cuando es muy estrecho: recorta el texto.
+
 ## 1.10.0
 
 Llega el **modo hub**: un repo de operaciones que agrupa otros repos (como submódulos o como

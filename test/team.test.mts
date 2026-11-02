@@ -770,6 +770,15 @@ describe("recorte del volcado del panel (respaldo D17)", () => {
 		expect(trimAgentBanner(dump)).toBe("Hecho.");
 	});
 
+	test("fuera la cabecera de bond en pi, en todas sus formas", async () => {
+		const { renderLogo } = await import("../lib/bond-logo.mts");
+		const plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
+		for (const width of [100, 45, 30]) {
+			const header = ["", ...renderLogo({ width, version: "pi v0.70.0" }).map((l) => ` ${plain(l)}`), " /delegate /team /review /handoff /commit /header", ""];
+			expect(trimAgentBanner([...header, "Hecho. Commit abc1234 en la rama."].join("\n"))).toBe("Hecho. Commit abc1234 en la rama.");
+		}
+	});
+
 	test("un volcado sin banner se queda tal cual (recortado solo por los bordes)", () => {
 		expect(trimAgentBanner("\ninforme normal\ncon líneas\n\n")).toBe("informe normal\ncon líneas");
 	});

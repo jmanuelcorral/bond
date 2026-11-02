@@ -9,6 +9,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse, stringify } from "smol-toml";
+import { ICON_STYLES, type IconStyle } from "../lib/status-bar.mts";
 import { BOND_HOME } from "./runtime.mts";
 import { die, HOME, log } from "./util.mts";
 
@@ -81,6 +82,8 @@ export interface Config {
 	update?: { auto?: boolean };
 	/** [suggestions] sugerencias de prompt de pi: modelo barato del registro y si van activas. */
 	suggestions?: { enabled?: boolean; model?: string };
+	/** [ui] icons: iconos del pie de pi (lo pregunta `bond setup` si hay una Nerd Font). */
+	ui?: { icons?: IconStyle };
 }
 
 /** Lo que recuerda el aviso de versión nueva al arrancar (ver offerUpdate en update.mts). */
@@ -123,6 +126,7 @@ export function loadConfig(): Config {
 		default_agent: typeof raw.default_agent === "string" ? raw.default_agent : undefined,
 		providers,
 		suggestions: readSuggestions(raw),
+		ui: readUi(raw),
 	};
 }
 
@@ -134,6 +138,14 @@ function readSuggestions(raw: Record<string, unknown>): Config["suggestions"] {
 	if (typeof s.enabled === "boolean") out.enabled = s.enabled;
 	if (typeof s.model === "string") out.model = s.model;
 	return Object.keys(out).length ? out : undefined;
+}
+
+/** [ui] de config.toml; undefined si no hay sección o no dice nada útil. */
+function readUi(raw: Record<string, unknown>): Config["ui"] {
+	if (!raw.ui || typeof raw.ui !== "object" || Array.isArray(raw.ui)) return undefined;
+	const icons = (raw.ui as Record<string, unknown>).icons;
+	if (typeof icons !== "string" || !ICON_STYLES.includes(icons as IconStyle)) return undefined;
+	return { icons: icons as IconStyle };
 }
 
 /** Config vacía (primera vez) o la que haya. */
@@ -155,6 +167,7 @@ export function saveConfig(cfg: Config): void {
 	data.providers = providers;
 	if (cfg.update) data.update = cfg.update;
 	if (cfg.suggestions) data.suggestions = cfg.suggestions;
+	if (cfg.ui) data.ui = cfg.ui;
 	writeFileSync(CONFIG_FILE, `${SAVED_HEADER}\n${stringify(data)}\n`);
 }
 
