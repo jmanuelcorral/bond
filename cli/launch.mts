@@ -6,29 +6,11 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { basename, delimiter, join, resolve } from "node:path";
 import { agents, attach, ensureServer, focusWorkspace, herdr, insideHerdr, missingAgentDir, preparePane, requireHerdr, slugify, startedBlocked, supportedKinds, uniqueAgentName, workspaceByLabel } from "./herdr.mts";
+import { t } from "./messages.mts";
 import { caution, die, dim, log, ok, run, warn, which } from "./util.mts";
 
-export const LAUNCH_HELP = `Uso: bond [opciones] [-- argumentos del agente]
-       bond dev [directorio] [opciones] [-- argumentos del agente]
-
-Dentro de un repo, abre su puesto de trabajo en Herdr: el agente por defecto del repo
-(.bond/bond.toml), llamado gru (gru-2... si ya hay otro), solo en su panel; con --shell, una
-shell al lado. Si el workspace ya existe, lo enfoca; si ya estás en él, abre el agente en
-este mismo panel y, al salir de él, vuelves a la shell.
-Fuera de Herdr arranca su servidor y engancha la interfaz. Si el repo no tiene bond, ofrece
-bond init; si su config está desfasada, la regenera antes.
-
-  -a, --agent <agente>          Otro agente en vez del de por defecto (pi, claude, codex...)
-  -w, --worktree <rama>         En un worktree de git para <rama> (herdr worktree)
-  -b, --base <ref>              Con --worktree: ref de la que sale una rama nueva
-  --shell                       Una shell en otro panel, junto al agente
-  -d, --direction <right|down>  Con --shell: dónde va la shell (defecto: right)
-  -r, --ratio <0.1-0.9>         Con --shell: fracción del panel del agente (defecto: 0.6)
-  -l, --label <texto>           Etiqueta del workspace (defecto: bond:<repo>[/<rama>])
-  --no-agent                    Una shell en vez del agente
-  --no-attach                   No enganchar la interfaz de Herdr al terminar
-  --no-focus                    Abrirlo en segundo plano (sin cambiar de workspace ni enganchar)
-  --trust-repository            Se pasa a herdr worktree (solo en repos revisados)`;
+export const launchHelp = (): string => t("launch.help");
+export const LAUNCH_HELP = Object.assign(() => launchHelp(), { toString: () => launchHelp(), [Symbol.toPrimitive]: () => launchHelp(), [Symbol.for("nodejs.util.inspect.custom")]: () => launchHelp() });
 
 export interface OpenOptions {
 	dir: string;
@@ -67,7 +49,7 @@ export const workspaceLabel = (project: string, worktree?: string, label?: strin
 /** Crea (o reutiliza) el workspace de un repo y lanza el agente en él. */
 export function openWorkspace(o: OpenOptions): Opened {
 	let project = resolve(o.dir);
-	if (o.worktree) project = gitRoot(project) ?? die(`--worktree necesita un repo git: ${project}`);
+	if (o.worktree) project = gitRoot(project) ?? die(t("launch.worktree_needs_git", { path: project }));
 	const name = basename(project);
 	const baseLabel = `bond:${name}`;
 	const label = workspaceLabel(project, o.worktree, o.label);
@@ -109,7 +91,7 @@ export function openWorkspace(o: OpenOptions): Opened {
 	const ws = created.workspace?.workspace_id;
 	const agentPane = created.root_pane?.pane_id;
 	const cwd = created.root_pane?.cwd || project;
-	if (!ws || !agentPane) die("no pude leer los ids de la respuesta de Herdr");
+	if (!ws || !agentPane) die(t("launch.no_herdr_ids"));
 
 	const shellPane = o.shell
 		? herdr<{ pane?: { pane_id: string } }>(["pane", "split", "--pane", agentPane, "--direction", o.direction, "--ratio", o.ratio, "--cwd", cwd, "--no-focus"]).pane?.pane_id
@@ -132,7 +114,7 @@ export function parseLaunch(args: string[], withDir: boolean) {
 	const o = { dir: process.cwd(), dirGiven: false, agent: undefined as string | undefined, worktree: undefined as string | undefined, base: undefined as string | undefined, label: undefined as string | undefined, shell: false, direction: "right", ratio: "0.6", noAgent: false, attach: true, focus: true, trust: false, agentArgs: [] as string[] };
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
-		const val = () => args[++i] ?? die(`${a} necesita un valor`);
+		const val = () => args[++i] ?? die(t("launch.opt_needs_value", { opt: a }));
 		if (a === "-a" || a === "--agent" || a === "-k" || a === "--kind") o.agent = val();
 		else if (a === "-w" || a === "--worktree") o.worktree = val();
 		else if (a === "-b" || a === "--base") o.base = val();
@@ -151,14 +133,14 @@ export function parseLaunch(args: string[], withDir: boolean) {
 		else if (a === "--") {
 			o.agentArgs = args.slice(i + 1);
 			break;
-		} else if (a.startsWith("-")) die(`opción desconocida: ${a} (bond --help)`);
+		} else if (a.startsWith("-")) die(t("launch.unknown_opt", { opt: a }));
 		else if (withDir && !o.dirGiven) {
 			o.dir = resolve(a);
 			o.dirGiven = true;
-		} else die(`argumento inesperado: ${a} (bond --help)`);
+		} else die(t("launch.unexpected_arg", { arg: a }));
 	}
-	if (!["right", "down"].includes(o.direction)) die("--direction debe ser right o down");
-	if (o.base && !o.worktree) die("--base solo tiene sentido con --worktree");
+	if (!["right", "down"].includes(o.direction)) die(t("launch.direction_invalid"));
+	if (o.base && !o.worktree) die(t("launch.base_needs_worktree"));
 	return o;
 }
 
@@ -174,11 +156,11 @@ export async function chooseAgent(asked: string | undefined, repoDefault: string
 		}
 	}
 	agent ??= ["pi", "claude", "codex", "copilot", "opencode", "crush", "gemini"].find((a) => which(a));
-	if (!agent) die("no hay ningún agente instalado (bond setup te dice cómo instalar uno)");
+	if (!agent) die(t("launch.no_agents_installed"));
 	const kinds = supportedKinds();
-	if (kinds.length && !kinds.includes(agent)) die(`Herdr no admite el agente '${agent}'. Válidos: ${kinds.join(", ")}`);
+	if (kinds.length && !kinds.includes(agent)) die(t("launch.agent_not_supported", { agent, kinds: kinds.join(", ") }));
 	// agy fuera del PATH pero en ~/.local/bin vale: preparePane añade su carpeta en el panel.
-	if (!which(agent) && !missingAgentDir(agent)) die(`'${agent}' no está instalado`);
+	if (!which(agent) && !missingAgentDir(agent)) die(t("launch.agent_not_installed", { agent }));
 	return agent;
 }
 
@@ -192,7 +174,7 @@ export async function launch(args: string[], opts: { dev: boolean }): Promise<vo
 	let repoDefault: string | undefined;
 	if (!hasBond && !opts.dev && process.stdin.isTTY) {
 		const p = await import("@clack/prompts");
-		const yes = await p.confirm({ message: `${basename(root)} no tiene bond. ¿Inicializarlo ahora (bond init)?`, initialValue: true });
+		const yes = await p.confirm({ message: t("launch.repo_no_bond", { repo: basename(root) }), initialValue: true });
 		if (p.isCancel(yes)) process.exit(130);
 		if (yes) {
 			process.chdir(root);
@@ -206,7 +188,7 @@ export async function launch(args: string[], opts: { dev: boolean }): Promise<vo
 		// La config del repo al día antes de abrir el agente (bond.toml pudo cambiar).
 		const pending = syncRepo({ check: true, quiet: true }).filter((a) => a.sign !== "!");
 		if (pending.length) {
-			log(`config del repo desfasada (${pending.length} cambio(s)): bond sync`);
+			log(t("launch.config_outdated", { count: pending.length }));
 			syncRepo({ quiet: true });
 		}
 		const { loadRepoDefault } = await import("./repo.mts");
@@ -224,16 +206,16 @@ export async function launch(args: string[], opts: { dev: boolean }): Promise<vo
 
 	const { renderSmall } = await import("../lib/bond-logo.mts");
 	console.log(`\n  ${renderSmall(60, r.reused ? `workspace ${r.label}` : `${agent ?? "shell"} · ${r.label}`)}`);
-	if (r.reused) console.log(dim(`  ya estaba abierto (${r.ws})${o.focus ? "; enfocado" : ""}`));
+	if (r.reused) console.log(dim(t("launch.already_open", { ws: r.ws, focused: o.focus ? t("launch.focused") : "" })));
 	else {
 		console.log(`  workspace ${r.ws}  ${dim(r.cwd)}`);
-		if (r.agentName) console.log(`  agente    ${r.agentName} (${agent}) en ${r.agentPane}${r.blocked ? caution("  · espera una respuesta tuya (p. ej. confiar en la carpeta)") : ""}`);
+		if (r.agentName) console.log(t("launch.agent_row", { name: r.agentName, agent: agent ?? "", pane: r.agentPane ?? "", blocked: r.blocked ? caution(t("launch.agent_blocked")) : "" }));
 		if (r.shellPane) console.log(`  shell     ${r.shellPane}`);
-		if (o.worktree) console.log(dim(`  al terminar con el worktree: herdr worktree remove --workspace ${r.ws}`));
+		if (o.worktree) console.log(dim(t("launch.worktree_done", { ws: r.ws })));
 	}
 	if (!inside && o.attach) attach();
-	if (inside) console.log(ok(o.focus ? "  listo" : "  listo (en segundo plano)"));
-	else console.log(dim("  herdr para engancharte"));
+	if (inside) console.log(ok(o.focus ? t("launch.ready") : t("launch.ready_background")));
+	else console.log(dim(t("launch.herdr_attach")));
 }
 
 /** El agente en primer plano en el panel actual; al salir, se vuelve a la shell. */
@@ -242,7 +224,7 @@ function runHere(agent: string, cwd: string, args: string[]): never {
 	const env = dir ? { ...process.env, PATH: `${dir}${delimiter}${process.env.PATH ?? ""}` } : process.env;
 	// En Windows los agentes suelen ser .cmd: hace falta la shell para lanzarlos.
 	const r = spawnSync(agent, args, { stdio: "inherit", cwd, env, shell: process.platform === "win32" });
-	if (r.error) die(`no pude lanzar ${agent}: ${r.error.message}`);
+	if (r.error) die(t("launch.run_failed", { agent, err: r.error.message }));
 	process.exit(r.status ?? 0);
 }
 
@@ -253,9 +235,9 @@ export function status(args: string[], cwdFilter?: string): void {
 	if (args.includes("--json") || args.includes("-j")) return console.log(JSON.stringify(list, null, 2));
 	const rows = list
 		.filter((a) => !cwdFilter || (a.cwd ?? a.foreground_cwd ?? "").includes(cwdFilter))
-		.map((a) => [a.name ?? "(sin nombre)", a.agent ?? "?", a.agent_status ?? "?", a.cwd ?? a.foreground_cwd ?? "-", a.pane_id]);
-	if (!rows.length) return console.log(cwdFilter ? "Sin agentes de este repo." : "Sin agentes vivos. Abre uno con: bond");
-	const head = ["AGENTE", "KIND", "ESTADO", "CWD", "PANEL"];
+		.map((a) => [a.name ?? t("launch.unnamed"), a.agent ?? "?", a.agent_status ?? "?", a.cwd ?? a.foreground_cwd ?? "-", a.pane_id]);
+	if (!rows.length) return console.log(cwdFilter ? t("launch.no_agents_repo") : t("launch.no_agents_live"));
+	const head = [t("launch.head_agent"), t("launch.head_kind"), t("launch.head_state"), t("launch.head_cwd"), t("launch.head_panel")];
 	const w = head.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
 	for (const r of [head, ...rows]) console.log(r.map((c, i) => (i === r.length - 1 ? c : c.padEnd(w[i]))).join("  "));
 }

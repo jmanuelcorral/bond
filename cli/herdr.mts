@@ -5,6 +5,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname } from "node:path";
 import { agyLocalBin } from "./catalog-agents.mts";
+import { t } from "./messages.mts";
 import { die, run, which } from "./util.mts";
 
 export interface HerdrAgent {
@@ -36,7 +37,7 @@ export function herdr<T = Record<string, unknown>>(args: string[], timeout = 120
 }
 
 export function requireHerdr(): void {
-	if (!which("herdr")) die("Herdr no está instalado: https://herdr.dev/docs/install/ (o bond setup)");
+	if (!which("herdr")) die(t("herdr.not_installed"));
 }
 
 export const insideHerdr = () => process.env.HERDR_ENV === "1";
@@ -53,7 +54,7 @@ export async function ensureServer(): Promise<void> {
 		await new Promise((r) => setTimeout(r, 200));
 		if (serverRunning()) return;
 	}
-	die("el servidor de Herdr no arrancó (prueba `herdr` a mano)");
+	die(t("herdr.server_failed"));
 }
 
 export function workspaces(): Array<{ workspace_id: string; label?: string }> {

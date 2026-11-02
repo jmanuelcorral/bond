@@ -18,6 +18,7 @@ import { parseJsonc } from "./agents.mts";
 import { agentInstalled } from "./catalog-agents.mts";
 import { catalogSlug, count, type McpServer, readCommandNames, readMcps, validateCatalog } from "./catalog.mts";
 import { ensureFetched, gitKey, type Lock, readLock, repoRelative } from "./catalog-git.mts";
+import { t } from "./messages.mts";
 import { assetsPath, ensureBondLink } from "./runtime.mts";
 import { bad, catchingDie, catchDie, caution, die, dim, isDryRun, log, ok, run, STAMP, warn } from "./util.mts";
 import { hubSession, type HubSession } from "./hub.mts";
@@ -26,32 +27,10 @@ export const SUPPORTED_AGENTS = ["pi", "claude", "copilot", "codex", "opencode",
 /** Catálogo: carpeta del repo o extraída del binario. */
 const catalogPath = (...p: string[]) => assetsPath("catalog", ...p);
 
-export const INIT_HELP = `Uso: bond init [opciones]
-
-Prepara el repo actual para tus agentes. Pregunta con cuáles integrarlo (de los instalados,
-partiendo de los elegidos en bond setup), cuál abre \`bond\` por defecto y qué herramientas del
-catálogo usar: el de bond y los de tu equipo declarados con [[catalog]] en bond.toml. Crea
-.bond/bond.toml, un AGENTS.md (si falta) y la config de cada agente; con pi, además las Bond
-Extensions. En un repo ya inicializado, permite cambiar la selección. Propone además la
-memoria de decisiones (sección \`[decisions]\` de bond.toml, carpeta \`docs/decisions\` con
-la skill \`decision-record\`): quita la sección para no usarla.
-
-  --agents <a,b>      Agentes, sin preguntar (${SUPPORTED_AGENTS.join(", ")})
-  --default <a>       Agente por defecto
-  --mcp <a,b>         Servidores MCP del catálogo (defecto: todos)
-  --skills <a,b>      Skills del catálogo (defecto: las marcadas por defecto, sin las opcionales)
-  --commands <a,b>    Comandos del catálogo (defecto: todos)
-  --yes               Sin preguntas: lo elegido en bond setup y el catálogo por defecto
-  --list              Enseña el catálogo (y los del equipo de bond.toml) y sale
-  --dry-run           Enseña lo que haría sin escribir`;
-
-export const SYNC_HELP = `Uso: bond sync [opciones]
-
-Genera la configuración de cada agente del repo a partir de .bond/bond.toml.
-
-  --dry-run   Enseña qué cambiaría sin escribir
-  --check     No escribe; sale con 1 si algo está desfasado (para CI)
-  --force     Sobrescribe ficheros de bond editados a mano (guarda copia .bak)`;
+export const initHelp = (): string => t("repo.init_help", { agents: SUPPORTED_AGENTS.join(", ") });
+export const syncHelp = (): string => t("repo.sync_help");
+export const INIT_HELP = Object.assign(() => initHelp(), { toString: () => initHelp(), [Symbol.toPrimitive]: () => initHelp(), [Symbol.for("nodejs.util.inspect.custom")]: () => initHelp() });
+export const SYNC_HELP = Object.assign(() => syncHelp(), { toString: () => syncHelp(), [Symbol.toPrimitive]: () => syncHelp(), [Symbol.for("nodejs.util.inspect.custom")]: () => syncHelp() });
 
 // --- catálogos ----------------------------------------------------------------------------
 
@@ -111,7 +90,7 @@ function contents(c: Catalog): CatalogContents {
 }
 
 export type Kind = "mcp" | "skills" | "commands";
-const KIND_LABEL: Record<Kind, string> = { mcp: "servidores MCP", skills: "skills", commands: "comandos" };
+const kindLabel = (kind: Kind) => t(kind === "mcp" ? "repo.kind_mcp" : kind === "skills" ? "repo.kind_skills" : "repo.kind_commands");
 
 /** Una herramienta de un catálogo: un servidor MCP, una skill o un comando. */
 export interface Tool {
@@ -155,13 +134,13 @@ export function resolveTools(catalogs: Catalog[], kind: Kind, refs: string[]): T
 		if (!found.length) unknown.push(ref);
 		else if (found.length > 1) {
 			const from = found.map((t) => t.catalog.name);
-			die(`bond.toml: "${ref}" está en los catálogos ${from.join(" y ")}; elige uno: ${from.map((c) => `"${c}:${ref}"`).join(" o ")}`);
+			die(t("repo.ambiguous_tool", { ref, catalogs: from.join(t("repo.and")), options: from.map((c) => `"${c}:${ref}"`).join(t("repo.or")) }));
 		} else out.push(found[0]);
 	}
-	if (unknown.length) die(`bond.toml: ${KIND_LABEL[kind]} desconocidos: ${unknown.join(", ")} (bond init --list)`);
-	for (const t of out) {
-		const twice = out.filter((x) => x.name === t.name);
-		if (twice.length > 1) die(`bond.toml: ${KIND_LABEL[kind]}: "${t.name}" pedido de ${twice.map((x) => x.catalog.name).join(" y ")}; en el repo solo cabe uno`);
+	if (unknown.length) die(t("repo.unknown_tools", { kind: kindLabel(kind), unknown: unknown.join(", ") }));
+	for (const tool of out) {
+		const twice = out.filter((x) => x.name === tool.name);
+		if (twice.length > 1) die(t("repo.duplicate_tool", { kind: kindLabel(kind), name: tool.name, catalogs: twice.map((x) => x.catalog.name).join(t("repo.and")) }));
 	}
 	return out;
 }
@@ -179,7 +158,7 @@ const warnedOutside = new Set<string>();
 function loadCatalogs(root: string, raw: Record<string, unknown>, lock: Lock = readLock(root)): Catalog[] {
 	const decl = raw.catalog;
 	if (decl === undefined) return [bondCatalog()];
-	if (!Array.isArray(decl)) die("bond.toml: catalog tiene que ser una lista de tablas ([[catalog]])");
+	if (!Array.isArray(decl)) die(t("repo.catalog_must_be_array"));
 	const out = [bondCatalog()];
 	const validName = (n: unknown): n is string => typeof n === "string" && /^[a-z0-9][a-z0-9_-]*$/.test(n);
 	for (const [i, entry] of (decl as Array<Record<string, unknown>>).entries()) {
@@ -187,37 +166,41 @@ function loadCatalogs(root: string, raw: Record<string, unknown>, lock: Lock = r
 		const text = (k: string) => (typeof entry?.[k] === "string" && (entry[k] as string).trim() ? (entry[k] as string) : undefined);
 		const path = text("path");
 		const url = text("git");
-		if (path && url) die(`${where}: path o git, no los dos`);
-		if (!path && !url) die(`${where}: falta path (una carpeta, relativa al repo) o git (la URL del repo)`);
+		if (path && url) die(t("repo.catalog_path_and_git", { where }));
+		if (!path && !url) die(t("repo.catalog_missing_path_git", { where }));
 		let c: Catalog;
 		if (url) {
 			const name = entry.name;
-			if (!validName(name)) die(`${where}: un catálogo por git necesita name (minúsculas, dígitos, - o _)`);
+			if (!validName(name)) die(t("repo.catalog_git_needs_name", { where }));
 			const ref = text("ref");
 			const locked = lock.catalogs[name];
-			if (!locked) die(`${where}: ${name} no está fijado en .bond/lock.json: bond catalog update ${name}`);
-			if (gitKey(locked.git) !== gitKey(url) || (locked.ref ?? "") !== (ref ?? "")) die(`${where}: .bond/lock.json fija ${name} para otra URL o ref: bond catalog update ${name}`);
+			if (!locked) die(t("repo.catalog_not_locked", { where, name }));
+			if (gitKey(locked.git) !== gitKey(url) || (locked.ref ?? "") !== (ref ?? "")) die(t("repo.catalog_lock_mismatch", { where, name }));
 			const twin = out.find((o) => o.git && gitKey(o.git) === gitKey(url));
-			if (twin) die(`${where}: ${url} ya está como el catálogo ${twin.name}`);
+			if (twin) die(t("repo.catalog_url_duplicate", { where, url, name: twin.name }));
 			c = { name, dir: ensureFetched(url, locked.sha), git: url, ref, sha: locked.sha };
 		} else {
 			const dir = resolve(root, path!);
-			if (!existsSync(dir) || !statSync(dir).isDirectory()) die(`${where}: no existe la carpeta ${path}`);
+			if (!existsSync(dir) || !statSync(dir).isDirectory()) die(t("repo.catalog_path_not_found", { where, path: path! }));
 			c = { name: "", dir, path };
 		}
 		const report = validateCatalog(c.dir);
 		const name = entry.name ?? report.name ?? catalogSlug(basename(c.dir));
-		if (!validName(name)) die(`${where}: name ${JSON.stringify(name)} no vale (minúsculas, dígitos, - o _)`);
-		if (out.some((o) => o.name === name)) die(`${where}: ya hay un catálogo "${name}"${name === "bond" ? " (es el de bond)" : ""}; ponle otro name`);
+		if (!validName(name)) die(t("repo.catalog_invalid_name", { where, name: JSON.stringify(name) }));
+		if (out.some((o) => o.name === name)) die(t("repo.catalog_name_taken", { where, name, isBond: name === "bond" ? t("repo.catalog_is_bond") : "" }));
 		c.name = name;
 		if (report.errors.length) {
-			if (!catchingDie()) for (const e of report.errors) console.error(`${bad("error:")} catálogo ${name} (${catalogWhere(c)}): ${e}`);
-			die(`el catálogo ${name} tiene ${count(report.errors.length, "error", "errores")}: arréglalo y compruébalo con bond catalog check ${path ?? c.dir}`);
+			if (!catchingDie()) for (const e of report.errors) console.error(`${bad("error:")} ${t("repo.catalog_error_line", { name, where: catalogWhere(c), error: e })}`);
+			die(
+				report.errors.length === 1
+					? t("repo.catalog_has_error_one", { name, cmd: `bond catalog check ${path ?? c.dir}` })
+					: t("repo.catalog_has_error_many", { name, count: report.errors.length, cmd: `bond catalog check ${path ?? c.dir}` }),
+			);
 		}
 		const rel = repoRelative(root, c.dir);
 		if (path && (rel.startsWith("..") || isAbsolute(rel)) && !warnedOutside.has(c.dir)) {
 			warnedOutside.add(c.dir);
-			warn(`el catálogo ${name} (${path}) está fuera del repo: al resto del equipo no le sirve si no tiene esa misma carpeta`);
+			warn(t("repo.catalog_outside_repo", { name, path }));
 		}
 		out.push(c);
 	}
@@ -238,7 +221,7 @@ function repoCatalogs(root: string): Catalog[] {
 	try {
 		return loadCatalogs(root, parse(readFileSync(file, "utf8")) as Record<string, unknown>);
 	} catch (e) {
-		die(`.bond/bond.toml no es TOML válido: ${(e as Error).message}`);
+		die(t("repo.bond_toml_invalid", { error: (e as Error).message }));
 	}
 }
 
@@ -263,17 +246,17 @@ function describe(md: string): string {
 function catalogRows(catalogs: Catalog[], max: number): Record<Kind, Array<{ ref: string; text: string; tool: Tool }>> {
 	const rows = (kind: Kind, text: (t: Tool) => string) => {
 		const all = toolsOf(catalogs, kind);
-		const origin = (t: Tool) => {
-			if (!isBond(t.catalog)) return ` [${t.catalog.name}]`;
-			const over = byName(all, t.name).filter((x) => !sameTool(x, t));
-			return over.length ? ` (la sustituye ${over.map((x) => x.catalog.name).join(" o ")})` : "";
+		const origin = (tool: Tool) => {
+			if (!isBond(tool.catalog)) return ` [${tool.catalog.name}]`;
+			const over = byName(all, tool.name).filter((x) => !sameTool(x, tool));
+			return over.length ? t("repo.replaced_by", { catalogs: over.map((x) => x.catalog.name).join(t("repo.or")) }) : "";
 		};
-		return all.map((t) => ({ ref: refOf(t, all), text: text(t) + origin(t), tool: t }));
+		return all.map((tool) => ({ ref: refOf(tool, all), text: text(tool) + origin(tool), tool }));
 	};
 	return {
-		mcp: rows("mcp", (t) => contents(t.catalog).mcp[t.name].description ?? ""),
-		skills: rows("skills", (t) => skillSummary(t, max) + (isOptional(t) ? " (opcional)" : "")),
-		commands: rows("commands", (t) => describe(commandText(t))),
+		mcp: rows("mcp", (tool) => contents(tool.catalog).mcp[tool.name].description ?? ""),
+		skills: rows("skills", (tool) => skillSummary(tool, max) + (isOptional(tool) ? t("repo.optional") : "")),
+		commands: rows("commands", (tool) => describe(commandText(tool))),
 	};
 }
 
@@ -285,11 +268,11 @@ function printCatalog(): void {
 		const width = Math.max(14, ...list.map((r) => r.ref.length + 1));
 		for (const r of list) console.log(`  ${r.ref.padEnd(width)} ${dim(r.text)}`);
 	};
-	if (catalogs.length > 1) console.log(`Catálogos: ${catalogs.map((c) => (isBond(c) ? "bond" : `${c.name} (${catalogWhere(c)})`)).join(", ")}`);
-	print("Servidores MCP:", rows.mcp);
-	print("Skills:", rows.skills);
-	print("Comandos:", rows.commands);
-	console.log(`Agentes: ${SUPPORTED_AGENTS.join(", ")}`);
+	if (catalogs.length > 1) console.log(t("repo.list_catalogs", { catalogs: catalogs.map((c) => (isBond(c) ? "bond" : `${c.name} (${catalogWhere(c)})`)).join(", ") }));
+	print(t("repo.list_mcp"), rows.mcp);
+	print(t("repo.list_skills"), rows.skills);
+	print(t("repo.list_commands"), rows.commands);
+	console.log(t("repo.list_agents", { agents: SUPPORTED_AGENTS.join(", ") }));
 }
 
 // --- configuración del repo -------------------------------------------------------------
@@ -330,24 +313,24 @@ const bondDir = (root: string) => join(root, ".bond");
  */
 export function loadRepoConfig(root: string, over: { toml?: string; lock?: Lock } = {}): RepoConfig {
 	const file = join(bondDir(root), "bond.toml");
-	if (over.toml === undefined && !existsSync(file)) die(`no hay ${relative(process.cwd(), file) || file}: ejecuta bond init`);
+	if (over.toml === undefined && !existsSync(file)) die(t("repo.no_bond_toml", { file: relative(process.cwd(), file) || file }));
 	let raw: Record<string, unknown>;
 	try {
 		raw = parse(over.toml ?? readFileSync(file, "utf8")) as Record<string, unknown>;
 	} catch (e) {
-		die(`.bond/bond.toml no es TOML válido: ${(e as Error).message}`);
+		die(t("repo.bond_toml_invalid", { error: (e as Error).message }));
 	}
 	const list = (k: string) => (Array.isArray(raw[k]) ? (raw[k] as string[]) : []);
 	// Nombres antiguos del catálogo: "web" chocaba con un espacio de nombres reservado de OpenAI.
 	const ALIASES: Record<string, string> = { web: "duckduckgo" };
 	const mcp = list("mcp").map((n) => {
 		if (!ALIASES[n]) return n;
-		warn(`bond.toml: el servidor MCP "${n}" ahora se llama "${ALIASES[n]}"; cámbialo en .bond/bond.toml`);
+		warn(t("repo.mcp_alias", { old: n, new: ALIASES[n] }));
 		return ALIASES[n];
 	});
 	const agents = list("agents");
 	const unknownAgents = agents.filter((a) => !SUPPORTED_AGENTS.includes(a));
-	if (unknownAgents.length) die(`bond.toml: agentes desconocidos: ${unknownAgents.join(", ")} (bond init --list)`);
+	if (unknownAgents.length) die(t("repo.unknown_agents", { agents: unknownAgents.join(", ") }));
 	const catalogs = loadCatalogs(root, raw, over.lock);
 	const cfg: RepoConfig = {
 		agents,
@@ -360,7 +343,7 @@ export function loadRepoConfig(root: string, over: { toml?: string; lock?: Lock 
 		tools: { mcp: resolveTools(catalogs, "mcp", mcp), skills: resolveTools(catalogs, "skills", list("skills")), commands: resolveTools(catalogs, "commands", list("commands")) },
 	};
 	for (const [name, s] of Object.entries(cfg.mcp_servers)) {
-		if (!s.command && !s.url) die(`bond.toml: mcp_servers.${name} necesita command o url`);
+		if (!s.command && !s.url) die(t("repo.mcp_server_needs_target", { name }));
 	}
 	cfg.decisions = parseDecisions(root, raw.decisions);
 	return cfg;
@@ -378,7 +361,7 @@ export function repoDecisions(root: string): { dir: string } | undefined {
 	try {
 		raw = parse(readFileSync(file, "utf8")) as Record<string, unknown>;
 	} catch (e) {
-		die(`.bond/bond.toml no es TOML válido: ${(e as Error).message}`);
+		die(t("repo.bond_toml_invalid", { error: (e as Error).message }));
 	}
 	return parseDecisions(root, raw.decisions);
 }
@@ -391,14 +374,14 @@ export function repoDecisions(root: string): { dir: string } | undefined {
  */
 function parseDecisions(root: string, v: unknown): { dir: string } | undefined {
 	if (v === undefined) return undefined;
-	if (typeof v !== "object" || v === null || Array.isArray(v)) die('bond.toml: decisions tiene que ser una tabla: [decisions] con dir = "docs/decisions"');
+	if (typeof v !== "object" || v === null || Array.isArray(v)) die(t("repo.decisions_must_be_table"));
 	const d = v as Record<string, unknown>;
 	const dir = typeof d.dir === "string" && d.dir.trim() ? d.dir.trim() : "docs/decisions";
 	// Sin realpath: la carpeta puede no existir aún, y resolver solo la raíz (en macOS /var ->
 	// /private/var; en Windows, rutas cortas) daría una ruta relativa con .. falsa.
 	const rel = relative(resolve(root), resolve(root, dir)).split(sep).join("/") || ".";
 	if (isAbsolute(dir) || isAbsolute(rel) || rel === "." || rel === ".." || rel.startsWith("../")) {
-		die(`bond.toml: decisions.dir ${JSON.stringify(dir)} tiene que ser una carpeta dentro del repo: relativa, sin .. y sin ruta absoluta`);
+		die(t("repo.decisions_dir_invalid", { dir: JSON.stringify(dir) }));
 	}
 	return { dir: dir.split(sep).join("/") };
 }
@@ -410,7 +393,7 @@ export function repoToml(root: string): Record<string, unknown> | undefined {
 	try {
 		return parse(readFileSync(file, "utf8")) as Record<string, unknown>;
 	} catch (e) {
-		die(`.bond/bond.toml no es TOML válido: ${(e as Error).message}`);
+		die(t("repo.bond_toml_invalid", { error: (e as Error).message }));
 	}
 }
 
@@ -674,7 +657,7 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 	if (existsSync(join(root, "hub.toml"))) {
 		const { value: hub, error } = catchDie(() => hubSession(root));
 		if (hub) out.push({ kind: "block", path: "AGENTS.md", body: hubAgentsBlock(hub, cfg.decisions?.dir ?? "docs/decisions"), style: "hub" });
-		else if (error) warn(`${error}: el bloque del hub en AGENTS.md no se actualiza`);
+		else if (error) warn(t("repo.hub_block_skip", { error }));
 	}
 	return out;
 }
@@ -856,7 +839,7 @@ function diffActions(root: string, outputs: Output[], prev: Manifest, force: boo
 		try {
 			obj = cur?.trim() ? parseJsonc(cur) : {};
 		} catch {
-			actions.push({ sign: "!", path: p, why: "no es JSON válido; no lo toco" });
+			actions.push({ sign: "!", path: p, why: t("repo.why_invalid_json") });
 			continue;
 		}
 		const created = cur === undefined;
@@ -870,7 +853,7 @@ function diffActions(root: string, outputs: Output[], prev: Manifest, force: boo
 			const keys = Object.keys(o.entries);
 			if (keys.length) {
 				next.json[p] = [...(next.json[p] ?? []), { parent: o.parent, keys }];
-				touched.push(`${o.parent ?? "raíz"}: ${keys.join(", ")}`);
+				touched.push(`${o.parent ?? t("repo.why_root")}: ${keys.join(", ")}`);
 			}
 		}
 		// opencode.json nuevo: con su $schema, como lo crea opencode.
@@ -879,7 +862,7 @@ function diffActions(root: string, outputs: Output[], prev: Manifest, force: boo
 		const text = empty ? "" : `${JSON.stringify(obj, null, 2)}\n`;
 		if ((cur ?? "") === text) continue;
 		if (empty && cur !== undefined) actions.push({ sign: "-", path: p, apply: () => rmSync(abs(p)) });
-		else if (!empty) actions.push({ sign: created ? "+" : "~", path: p, why: touched.join("; ") || "sin claves de bond", apply: write(p, text) });
+		else if (!empty) actions.push({ sign: created ? "+" : "~", path: p, why: touched.join("; ") || t("repo.why_no_bond_keys"), apply: write(p, text) });
 	}
 
 	for (const o of outputs) {
@@ -894,10 +877,10 @@ function diffActions(root: string, outputs: Output[], prev: Manifest, force: boo
 				actions.push({ sign: cur === undefined ? "+" : "~", path: o.path, apply: write(o.path, o.content, o.mode) });
 				next.files[o.path] = target;
 			} else if (force) {
-				actions.push({ sign: "~", path: o.path, why: "editado a mano; se guarda copia .bak", apply: () => (backup(o.path)(), write(o.path, o.content, o.mode)()) });
+				actions.push({ sign: "~", path: o.path, why: t("repo.why_edited_backup"), apply: () => (backup(o.path)(), write(o.path, o.content, o.mode)()) });
 				next.files[o.path] = target;
 			} else {
-				actions.push({ sign: "!", path: o.path, why: recorded ? "editado a mano desde el último sync (--force para sobrescribir)" : "ya existe y no es de bond (--force para sobrescribir)" });
+				actions.push({ sign: "!", path: o.path, why: recorded ? t("repo.why_edited_force") : t("repo.why_exists_not_bond_force") });
 				if (recorded) next.files[o.path] = recorded;
 			}
 		} else if (o.kind === "link") {
@@ -906,13 +889,13 @@ function diffActions(root: string, outputs: Output[], prev: Manifest, force: boo
 			else if (!existsAny(abs(o.path))) {
 				actions.push({ sign: "+", path: o.path, why: `-> ${o.target}`, apply: () => (mkdirSync(dirname(abs(o.path)), { recursive: true }), symlinkSync(o.target, abs(o.path))) });
 				next.links[o.path] = o.target;
-			} else actions.push({ sign: "!", path: o.path, why: "ya existe y no es el enlace de bond" });
+			} else actions.push({ sign: "!", path: o.path, why: t("repo.why_exists_not_bond_link") });
 		} else {
 			const text = withBlock(cur ?? "", o.body, o.style);
 			if (o.body) next.blocks[o.path] = o.style;
 			if ((cur ?? "") === text) continue;
 			if (!text.trim() && cur !== undefined) actions.push({ sign: "-", path: o.path, apply: () => rmSync(abs(o.path)) });
-			else actions.push({ sign: cur === undefined ? "+" : "~", path: o.path, why: "bloque de bond", apply: write(o.path, text) });
+			else actions.push({ sign: cur === undefined ? "+" : "~", path: o.path, why: t("repo.why_bond_block"), apply: write(o.path, text) });
 		}
 	}
 
@@ -920,11 +903,11 @@ function diffActions(root: string, outputs: Output[], prev: Manifest, force: boo
 	for (const [p, h] of Object.entries(prev.files)) {
 		if (planned.has(p) || !existsAny(abs(p))) continue;
 		if (sha(readText(abs(p)) ?? "") === h) actions.push({ sign: "-", path: p, apply: () => rmSync(abs(p)) });
-		else actions.push({ sign: "!", path: p, why: "ya no lo genera bond, pero se editó a mano: no lo borro" });
+		else actions.push({ sign: "!", path: p, why: t("repo.why_no_longer_generated") });
 	}
-	for (const [p, t] of Object.entries(prev.links)) {
+	for (const [p, t_] of Object.entries(prev.links)) {
 		if (planned.has(p)) continue;
-		if (linkAt(abs(p)) === t) actions.push({ sign: "-", path: p, apply: () => rmSync(abs(p)) });
+		if (linkAt(abs(p)) === t_) actions.push({ sign: "-", path: p, apply: () => rmSync(abs(p)) });
 	}
 	return { actions, next };
 }
@@ -940,7 +923,7 @@ export function syncRepo(opts: { check?: boolean; force?: boolean; quiet?: boole
 	for (const a of actions) say(`${color[a.sign](a.sign)} ${a.path}${a.why ? dim(`  ${a.why}`) : ""}`);
 	const pending = actions.filter((a) => a.apply);
 	if (opts.check || isDryRun()) {
-		if (!actions.length) say(ok("al día"));
+		if (!actions.length) say(ok(t("repo.up_to_date")));
 		return actions;
 	}
 	for (const a of pending) a.apply!();
@@ -961,18 +944,18 @@ export function syncRepo(opts: { check?: boolean; force?: boolean; quiet?: boole
 		if (!existsSync(readme)) {
 			mkdirSync(dirname(readme), { recursive: true });
 			writeFileSync(readme, decisionsReadme());
-			say(`${ok("+")} ${repoPath(cfg.decisions.dir, "README.md")}${dim("  formato de decisiones: a partir de aquí es tuyo (el listado lo da bond decisions)")}`);
+			say(`${ok("+")} ${repoPath(cfg.decisions.dir, "README.md")}${dim(t("repo.decisions_readme_note"))}`);
 			decisionsReadmeCreated = true;
 		}
 	}
-	if (!actions.length && !decisionsReadmeCreated) say(ok("al día"));
+	if (!actions.length && !decisionsReadmeCreated) say(ok(t("repo.up_to_date")));
 	const conflicts = actions.filter((a) => a.sign === "!");
-	if (conflicts.length) warn(`${conflicts.length} conflicto(s): revisa los marcados con ! (o bond sync --force)`);
+	if (conflicts.length) warn(t("repo.conflicts", { count: conflicts.length }));
 	return actions;
 }
 
 export function sync(args: string[]): void {
-	for (const a of args) if (!["--check", "--force", "--dry-run"].includes(a)) die(`opción desconocida: ${a} (bond sync --help)`);
+	for (const a of args) if (!["--check", "--force", "--dry-run"].includes(a)) die(t("repo.sync_unknown_opt", { opt: a }));
 	const actions = syncRepo({ check: args.includes("--check"), force: args.includes("--force") });
 	if (args.includes("--check") && actions.length) process.exitCode = 1;
 }
@@ -1127,14 +1110,14 @@ async function askSelection(current: Selection, installed: string[], catalogs: C
 	const p = await import("@clack/prompts");
 	const cancel = <T,>(v: T | symbol): T => {
 		if (p.isCancel(v)) {
-			p.cancel("cancelado: no se ha cambiado nada");
+			p.cancel(t("repo.ask_cancelled"));
 			process.exit(130);
 		}
 		return v as T;
 	};
 	const agents = cancel(
 		await p.multiselect({
-			message: "¿Con qué agentes integrar este repo?",
+			message: t("repo.ask_agents"),
 			options: installed.map((a) => ({ value: a, label: AGENT_NAMES[a] ?? a })),
 			initialValues: current.agents.filter((a) => installed.includes(a)),
 			required: true,
@@ -1145,7 +1128,7 @@ async function askSelection(current: Selection, installed: string[], catalogs: C
 			? agents[0]
 			: cancel(
 					await p.select({
-						message: "¿Agente por defecto? (el que abre `bond` en este repo)",
+						message: t("repo.ask_default_agent"),
 						options: agents.map((a) => ({ value: a, label: AGENT_NAMES[a] ?? a })),
 						initialValue: current.default_agent && agents.includes(current.default_agent) ? current.default_agent : agents[0],
 					}),
@@ -1156,21 +1139,21 @@ async function askSelection(current: Selection, installed: string[], catalogs: C
 	// catálogos, va como catalogo:nombre (así se escribe en bond.toml).
 	const rows = catalogRows(catalogs, 200);
 	const groups: Array<[string, Array<[string, string]>]> = [
-		["Servidores MCP", rows.mcp.map((r) => [r.ref, r.text])],
-		["Skills", rows.skills.map((r) => [r.ref, r.text])],
-		["Comandos", rows.commands.map((r) => [`/${r.ref}`, r.text])],
+		[t("repo.group_mcp"), rows.mcp.map((r) => [r.ref, r.text])],
+		[t("repo.group_skills"), rows.skills.map((r) => [r.ref, r.text])],
+		[t("repo.group_commands"), rows.commands.map((r) => [`/${r.ref}`, r.text])],
 	];
 	const width = Math.max(...groups.flatMap(([, rows]) => rows.map(([n]) => n.length))) + 2;
 	const room = Math.max(20, (process.stdout.columns || 100) - width - 8);
 	const fit = (t: string) => (t.length > room ? `${t.slice(0, room - 1)}…` : t);
-	p.note(groups.map(([g, rows]) => [g, ...rows.map(([n, t]) => `  ${n.padEnd(width)}${dim(fit(t))}`)].join("\n")).join("\n\n"), "Catálogo");
+	p.note(groups.map(([g, rows]) => [g, ...rows.map(([n, t]) => `  ${n.padEnd(width)}${dim(fit(t))}`)].join("\n")).join("\n\n"), t("repo.ask_catalog_title"));
 	const tools = cancel(
 		await p.groupMultiselect({
-			message: "¿Qué herramientas del catálogo? (espacio para marcar o desmarcar)",
+			message: t("repo.ask_tools"),
 			options: {
-				"Servidores MCP": rows.mcp.map((r) => ({ value: `mcp:${r.ref}`, label: r.ref })),
-				Skills: rows.skills.map((r) => ({ value: `skills:${r.ref}`, label: r.ref })),
-				Comandos: rows.commands.map((r) => ({ value: `commands:${r.ref}`, label: r.ref })),
+				[t("repo.group_mcp")]: rows.mcp.map((r) => ({ value: `mcp:${r.ref}`, label: r.ref })),
+				[t("repo.group_skills")]: rows.skills.map((r) => ({ value: `skills:${r.ref}`, label: r.ref })),
+				[t("repo.group_commands")]: rows.commands.map((r) => ({ value: `commands:${r.ref}`, label: r.ref })),
 			},
 			initialValues: (["mcp", "skills", "commands"] as const).flatMap((k) => {
 				const all = toolsOf(catalogs, k);
@@ -1194,7 +1177,7 @@ export async function init(args: string[], opts: { quiet?: boolean; extraSkills?
 		const i = args.indexOf(name);
 		if (i < 0) return undefined;
 		const v = args[i + 1];
-		if (v === undefined) die(`${name} necesita un valor`);
+		if (v === undefined) die(t("repo.opt_needs_value", { name }));
 		return v;
 	};
 	const list = (name: string) => {
@@ -1204,21 +1187,21 @@ export async function init(args: string[], opts: { quiet?: boolean; extraSkills?
 	const flags = ["--agents", "--default", "--mcp", "--skills", "--commands"];
 	for (let i = 0; i < args.length; i++) {
 		if (flags.includes(args[i])) i++;
-		else if (!["--dry-run", "--yes", "-y"].includes(args[i])) die(`opción desconocida: ${args[i]} (bond init --help)`);
+		else if (!["--dry-run", "--yes", "-y"].includes(args[i])) die(t("repo.init_unknown_opt", { opt: args[i] }));
 	}
 
 	const root = repoRoot();
 	const tomlPath = join(bondDir(root), "bond.toml");
 	const exists = existsSync(tomlPath);
-	if (run("git", ["rev-parse", "--show-toplevel"]).status !== 0) warn(`${root} no es un repo git: los ficheros generados conviene versionarlos`);
+	if (run("git", ["rev-parse", "--show-toplevel"]).status !== 0) warn(t("repo.not_a_git_repo", { root }));
 
 	// Agentes instalados (agy también en ~/.local/bin), y lo elegido en bond setup como punto de partida.
 	const installed = SUPPORTED_AGENTS.filter(agentInstalled);
 	// Con --agents se puede preparar la config de agentes que aquí no están instalados (p. ej.
 	// para el resto del equipo, o en CI); sin él, se parte de los instalados.
 	const askedAgents = list("--agents") ?? (!installed.length ? opts.fallbackAgents : undefined);
-	if (!installed.length && !askedAgents) die("no hay ningún agente instalado (bond setup te dice cómo instalar uno; o usa --agents)");
-	for (const a of askedAgents ?? []) if (!installed.includes(a)) warn(`${a} no está instalado aquí: se genera su config igualmente`);
+	if (!installed.length && !askedAgents) die(t("repo.no_agents_installed"));
+	for (const a of askedAgents ?? []) if (!installed.includes(a)) warn(t("repo.agent_not_installed", { agent: a }));
 	let global: { agents: string[]; default_agent?: string } = { agents: [] };
 	try {
 		const { configExists, loadConfig } = await import("./config.mts");
@@ -1247,21 +1230,21 @@ export async function init(args: string[], opts: { quiet?: boolean; extraSkills?
 		skills: list("--skills") ?? current.skills,
 		commands: list("--commands") ?? current.commands,
 	};
-	if (exists && !interactive && !explicit) die(`${relative(process.cwd(), tomlPath)} ya existe: edítalo y ejecuta bond sync (o bond init para cambiarlo con preguntas)`);
+	if (exists && !interactive && !explicit) die(t("repo.already_initialized", { file: relative(process.cwd(), tomlPath) }));
 	if (interactive) {
 		const p = await import("@clack/prompts");
 		const { renderSmall } = await import("../lib/bond-logo.mts");
 		p.intro(renderSmall(56, `init · ${basename(root)}`));
-		if (exists) p.log.info("Este repo ya tiene .bond/bond.toml: cambia lo que quieras (se conservan tus comentarios y servidores MCP propios)");
+		if (exists) p.log.info(t("repo.init_already_exists_info"));
 		sel = (await askSelection(current, installed, catalogs))!;
 	}
-	if (!sel.agents.length) die("hace falta al menos un agente");
+	if (!sel.agents.length) die(t("repo.at_least_one_agent"));
 	if (!sel.default_agent || !sel.agents.includes(sel.default_agent)) sel.default_agent = sel.agents[0];
 
-	log(`bond init en ${root}`);
-	console.log(dim(`  agentes: ${sel.agents.join(", ")} (por defecto: ${sel.default_agent}) · mcp: ${sel.mcp.join(", ") || "-"} · skills: ${sel.skills.join(", ") || "-"} · comandos: ${sel.commands.join(", ") || "-"}`));
+	log(t("repo.init_in", { root }));
+	console.log(dim(t("repo.init_summary", { agents: sel.agents.join(", "), default: sel.default_agent, mcp: sel.mcp.join(", ") || "-", skills: sel.skills.join(", ") || "-", commands: sel.commands.join(", ") || "-" })));
 	if (isDryRun()) {
-		console.log(dim(`  [dry-run] escribiría .bond/bond.toml${existsSync(join(root, "AGENTS.md")) ? "" : " y AGENTS.md"}`));
+		console.log(dim(t("repo.dry_run_write", { agentsMd: existsSync(join(root, "AGENTS.md")) ? "" : t("repo.dry_run_and_agents_md") })));
 		return;
 	}
 	mkdirSync(bondDir(root), { recursive: true });
@@ -1269,29 +1252,29 @@ export async function init(args: string[], opts: { quiet?: boolean; extraSkills?
 	console.log(`${ok(exists ? "~" : "+")} .bond/bond.toml`);
 	if (!existsSync(join(root, "AGENTS.md"))) {
 		writeFileSync(join(root, "AGENTS.md"), agentsMd(basename(root)));
-		console.log(`${ok("+")} AGENTS.md  ${dim("plantilla: complétala")}`);
+		console.log(`${ok("+")} AGENTS.md  ${dim(t("repo.agents_md_template"))}`);
 	}
 	if (sel.agents.includes("pi")) await ensureBondLink();
 	syncRepo();
 	if (opts.quiet) return;
 	const generated = [...new Set(plan(root, loadRepoConfig(root), loadManifest(root)).map((o) => o.path.split("/")[0]))].sort();
 	const trust: Record<string, string> = {
-		pi: "pi pregunta si confías en el proyecto (sin eso no carga .pi/ ni las Bond Extensions)",
-		claude: "Claude Code pide aprobar los servidores de .mcp.json",
-		copilot: "Copilot pide confiar en la carpeta (sin eso no carga .mcp.json)",
-		codex: "Codex solo carga .codex/config.toml en proyectos de confianza",
-		opencode: "opencode reconoce el proyecto cuando el repo tiene al menos un commit",
-		gemini: "Gemini pide confiar en la carpeta (security.folderTrust)",
+		pi: t("repo.trust_pi"),
+		claude: t("repo.trust_claude"),
+		copilot: t("repo.trust_copilot"),
+		codex: t("repo.trust_codex"),
+		opencode: t("repo.trust_opencode"),
+		gemini: t("repo.trust_gemini"),
 	};
 	// Sin ningún agente que pregunte (p. ej. solo agy), el paso de la confianza no sale.
 	const asks = sel.agents.filter((a) => trust[a]).map((a) => `     - ${trust[a]}`);
 	const steps = [
-		"Completa AGENTS.md (instrucciones del proyecto para todos los agentes).",
-		`Commitea la configuración: git add .bond AGENTS.md ${generated.join(" ")}`,
-		...(asks.length ? [`La primera vez, cada agente pide confiar en el repo; bond no lo concede por ti:\n${asks.join("\n")}`] : []),
-		"Abre el puesto de trabajo: bond",
+		t("repo.step_agents_md"),
+		t("repo.step_commit", { files: generated.join(" ") }),
+		...(asks.length ? [t("repo.step_trust", { asks: asks.join("\n") })] : []),
+		t("repo.step_open"),
 	];
-	console.log(`\nSiguiente:\n${steps.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}`);
+	console.log(t("repo.next_steps", { steps: steps.map((s, i) => `  ${i + 1}. ${s}`).join("\n") }));
 }
 
 /** Agente por defecto del repo (default_agent de bond.toml, si es uno de sus agentes). */

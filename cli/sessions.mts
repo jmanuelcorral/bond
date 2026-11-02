@@ -5,22 +5,11 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { agents } from "./herdr.mts";
+import { t } from "./messages.mts";
 import { AGENT_DIR, die } from "./util.mts";
 
-const USAGE = `Uso: bond sessions [texto] [opciones]
-
-Lista las sesiones de pi, de la más reciente a la más antigua, con el comando para
-retomarlas. Las que están abiertas en un agente de Herdr muestran agente, estado y panel.
-
-  texto            Filtra por nombre de sesión, directorio o id
-  --here           Solo las sesiones del directorio actual
-  --live           Solo las abiertas ahora en Herdr
-  -n, --limit <N>  Cuántas mostrar (defecto: 20; 0 = todas)
-  --json           Salida JSON para scripts
-  -h, --help       Esta ayuda
-
-Retomar: cd <directorio> && pi --session <id>. pi busca el id primero en las sesiones
-del directorio actual; por eso el comando hace cd antes.`;
+export const sessionsHelp = (): string => t("sessions.help");
+const USAGE = Object.assign(() => sessionsHelp(), { toString: () => sessionsHelp(), [Symbol.toPrimitive]: () => sessionsHelp(), [Symbol.for("nodejs.util.inspect.custom")]: () => sessionsHelp() });
 
 interface Session {
 	id: string;
@@ -132,7 +121,7 @@ const shellQuote = (s: string) => (/^[\w@%+=:,./~-]+$/.test(s) ? s : `'${s.repla
 function fmtDate(ms: number): string {
 	const d = new Date(ms);
 	const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-	if (new Date().toDateString() === d.toDateString()) return `hoy ${hm}`;
+	if (new Date().toDateString() === d.toDateString()) return t("sessions.today", { time: hm });
 	return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")} ${hm}`;
 }
 
@@ -144,14 +133,14 @@ export function sessions(args: string[]): void {
 	let query = "";
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
-		if (a === "-h" || a === "--help") return console.log(USAGE);
+		if (a === "-h" || a === "--help") return console.log(sessionsHelp());
 		if (a === "--here") here = true;
 		else if (a === "--live") live = true;
 		else if (a === "--json") json = true;
 		else if (a === "-n" || a === "--limit") {
 			limit = Number(args[++i]);
-			if (!Number.isInteger(limit) || limit < 0) die(`${a} necesita un entero >= 0`);
-		} else if (a.startsWith("-")) die(`opción desconocida: ${a} (--help para ver las opciones)`);
+			if (!Number.isInteger(limit) || limit < 0) die(t("sessions.limit_needs_int", { opt: a }));
+		} else if (a.startsWith("-")) die(t("sessions.unknown_opt", { opt: a }));
 		else query = a.toLowerCase();
 	}
 
@@ -174,7 +163,7 @@ export function sessions(args: string[]): void {
 	if (limit > 0) rows = rows.slice(0, limit);
 
 	if (json) return console.log(JSON.stringify(rows.map(({ shortId, ...r }) => ({ ...r, short_id: shortId })), null, 2));
-	if (rows.length === 0) return console.log(all.length ? "Ninguna sesión coincide con el filtro." : `No hay sesiones en ${tilde(sessionsDir())}.`);
+	if (rows.length === 0) return console.log(all.length ? t("sessions.no_match") : t("sessions.none_in_dir", { dir: tilde(sessionsDir()) }));
 
 	const color = process.stdout.isTTY && !process.env.NO_COLOR;
 	const paint = (code: string, s: string) => (color ? `\x1b[${code}m${s}\x1b[0m` : s);
@@ -182,14 +171,22 @@ export function sessions(args: string[]): void {
 
 	const table = rows.map((r) => [
 		fmtDate(r.mtime),
-		tilde(r.cwd) + (r.exists ? "" : " (no existe)"),
+		tilde(r.cwd) + (r.exists ? "" : t("sessions.not_exists")),
 		r.name || "-",
 		String(r.msgs),
 		r.cost > 0 ? `$${r.cost.toFixed(2)}` : "-",
-		r.agent ? `${r.agent.name || "(sin nombre)"} ${r.agent.status} ${r.agent.pane}` : "",
+		r.agent ? `${r.agent.name || t("sessions.unnamed")} ${r.agent.status} ${r.agent.pane}` : "",
 		r.resume,
 	]);
-	const header = ["MODIFICADA", "DIRECTORIO", "NOMBRE", "MSGS", "COSTE", "EN HERDR", "RETOMAR"];
+	const header = [
+		t("sessions.header_modified"),
+		t("sessions.header_dir"),
+		t("sessions.header_name"),
+		t("sessions.header_msgs"),
+		t("sessions.header_cost"),
+		t("sessions.header_herdr"),
+		t("sessions.header_resume"),
+	];
 	const widths = header.map((h, i) => Math.max(h.length, ...table.map((row) => row[i].length)));
 	const fmtRow = (row: string[]) => row.map((c, i) => (i === row.length - 1 ? c : c.padEnd(widths[i]))).join("  ");
 
@@ -201,5 +198,5 @@ export function sessions(args: string[]): void {
 		if (!r.exists) line = paint("2", line);
 		console.log(line);
 	});
-	if (total > rows.length) console.log(paint("2", `… ${total - rows.length} más (-n 0 para verlas todas)`));
+	if (total > rows.length) console.log(paint("2", t("sessions.more", { count: total - rows.length })));
 }
