@@ -53,16 +53,20 @@ export function isRepoUrl(s: string): boolean {
 /**
  * Nombre del repo que nombra una URL remota. Vacio si la URL no llega a nombrar ninguno
  * (p. ej. `file://` o `https://github.com`), caso que hay que rechazar antes de escribir.
+ *
+ * Separa por `/` y por `\`: en Windows una ruta local se pasa como `file://C:\Users\...\front`
+ * y partir solo por `/` la dejaba en un unico trozo, es decir sin nombre, y la validacion del
+ * issue #35 la rechazaba como origen invalido en todos los tests de hub.
  */
 export function repoNameFromUrl(url: string): string {
 	const s = url.trim().replace(/\.git$/i, "");
 	const scheme = /^[a-z][a-z0-9+.-]*:\/\/(.*)$/i.exec(s);
 	if (scheme) {
-		const parts = scheme[1].replace(/^\/+/, "").split("/").filter(Boolean);
+		const parts = scheme[1].replace(/^[/\\]+/, "").split(/[/\\]/).filter(Boolean);
 		return parts.length > 1 ? parts[parts.length - 1] : "";
 	}
 	const scp = /^[^/\s]+@[^:\s]+:(.*)$/.exec(s);
-	if (scp) return scp[1].split("/").filter(Boolean).pop() ?? "";
+	if (scp) return scp[1].split(/[/\\]/).filter(Boolean).pop() ?? "";
 	return "";
 }
 
