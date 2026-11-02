@@ -5,6 +5,7 @@
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
+import { t } from "./messages.mts";
 import { BOND_HOME } from "./runtime.mts";
 import { die, run } from "./util.mts";
 
@@ -67,7 +68,7 @@ function git(args: string[], cwd?: string) {
 }
 
 function needGit(): void {
-	if (run("git", ["--version"]).status !== 0) die("hace falta git para los catálogos del equipo por URL (instálalo y vuelve a probar)");
+	if (run("git", ["--version"]).status !== 0) die(t("catalog.git_needed"));
 }
 
 /** Lee las refs del remote sin morir: refs (nombre → commit) o el motivo de no haber podido. */
@@ -99,8 +100,8 @@ export function resolveRef(url: string, ref?: string): string {
 	if (ref && SHA.test(ref)) return ref;
 	needGit();
 	const { refs, error } = remoteRefs(url, ref, 120_000);
-	if (!refs) die(`no se puede leer ${url}: ${error}`);
-	return pickRef(refs, ref) ?? die(ref ? `no hay ningún tag ni rama "${ref}" en ${url}` : `${url} no tiene rama por defecto: indica --ref`);
+	if (!refs) die(t("catalog.git_cannot_read", { url, error: error ?? "" }));
+	return pickRef(refs, ref) ?? die(ref ? t("catalog.git_ref_not_found", { ref, url }) : t("catalog.git_no_default_branch", { url }));
 }
 
 /**
@@ -129,11 +130,11 @@ export function ensureFetched(url: string, sha: string): string {
 		// Primero, solo ese commit; si el servidor no deja pedirlo por sha, todo y se busca.
 		if (g(["fetch", "-q", "--depth", "1", url, sha]).status !== 0) {
 			const all = g(["fetch", "-q", "--tags", url, "+refs/heads/*:refs/remotes/origin/*"]);
-			if (all.status !== 0) die(`no se puede descargar ${url}: ${(all.stderr || all.stdout).trim().split("\n").pop()}`);
+			if (all.status !== 0) die(t("catalog.git_cannot_download", { url, error: (all.stderr || all.stdout).trim().split("\n").pop() ?? "" }));
 		}
-		if (g(["cat-file", "-e", `${sha}^{commit}`]).status !== 0) die(`el commit ${sha.slice(0, 12)} no está en ${url} (¿se reescribió la historia? bond catalog update)`);
+		if (g(["cat-file", "-e", `${sha}^{commit}`]).status !== 0) die(t("catalog.git_commit_missing", { sha: sha.slice(0, 12), url }));
 		const co = g(["--work-tree", work, "checkout", "-q", "-f", sha, "--", "."]);
-		if (co.status !== 0) die(`no se puede extraer ${sha.slice(0, 12)} de ${url}: ${co.stderr.trim()}`);
+		if (co.status !== 0) die(t("catalog.git_cannot_extract", { sha: sha.slice(0, 12), url, error: co.stderr.trim() }));
 		mkdirSync(dirname(dest), { recursive: true });
 		// Otro proceso pudo llegar antes: la suya vale igual.
 		if (!existsSync(dest)) renameSync(work, dest);
@@ -168,7 +169,7 @@ export function readLockSafe(root: string): { lock?: Lock; error?: string } {
 /** El lock del repo (vacío si no hay). Muere si no se puede leer: mejor que adivinar commits. */
 export function readLock(root: string): Lock {
 	const { lock, error } = readLockSafe(root);
-	if (error) die(`.bond/lock.json no se puede leer (${error}): recupéralo de git o ejecuta bond catalog update`);
+	if (error) die(t("catalog.lock_cannot_read", { error }));
 	return lock!;
 }
 

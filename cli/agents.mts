@@ -9,6 +9,7 @@ import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import type { Api, Model, Provider, State } from "./config.mts";
 import { keyPath } from "./keys.mts";
+import { t } from "./messages.mts";
 import { AGENT_DIR, HOME, which } from "./util.mts";
 
 export interface Rendered {
@@ -124,7 +125,9 @@ const opencode: Target = {
 	},
 	installed: () => !!which("opencode"),
 	verify: "opencode models | grep <proveedor>",
-	note: "formato de opencode v2: providers.<id>.settings.baseURL",
+	get note() {
+		return t("models.note_opencode");
+	},
 	render(current, providers, state) {
 		const generated: Record<string, unknown> = {};
 		for (const p of providers) {
@@ -183,7 +186,9 @@ const crush: Target = {
 	file: () => join(xdg(), "crush", "crushrc"),
 	installed: () => !!which("crush"),
 	verify: "crush models | grep <proveedor>",
-	note: "crushrc es un script de bash; si defines a mano un proveedor con el mismo id, bond no lo duplica",
+	get note() {
+		return t("models.note_crush");
+	},
 	render(current, providers) {
 		const rest = withoutBlock(current ?? "");
 		// Proveedores definidos a mano fuera del bloque: no se duplican; manda lo tuyo.
@@ -193,7 +198,7 @@ const crush: Target = {
 		const managed: string[] = [];
 		for (const p of providers) {
 			if (manual.has(p.id)) {
-				skipped.push({ id: p.id, why: "ya definido a mano en crushrc (fuera del bloque de bond)" });
+				skipped.push({ id: p.id, why: t("models.crush_skipped_manual") });
 				continue;
 			}
 			managed.push(p.id);
@@ -216,7 +221,9 @@ const codex: Target = {
 	file: () => join(process.env.CODEX_HOME || join(HOME, ".codex"), "config.toml"),
 	installed: () => !!which("codex"),
 	verify: "codex -p <proveedor>-<modelo>",
-	note: "Codex solo habla la API Responses; sin verificar con un Codex instalado",
+	get note() {
+		return t("models.note_codex");
+	},
 	render(current, providers) {
 		let body = "";
 		for (const p of providers) {
