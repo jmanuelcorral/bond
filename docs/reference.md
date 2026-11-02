@@ -885,7 +885,7 @@ source = "~/gitrepos/fluzo-backend"
 - `bond hub sync`: deja el disco como dice `hub.toml`: monta submódulos, crea symlinks (o junctions en Windows si el symlink falla) y actualiza el registro global; al hub y a los repos sin bond les hace `bond init`, como `bond hub init`. Si falta la ruta de un symlink en `.bond/hub.local.toml`, con `--yes` falla indicando cómo configurarla y de forma interactiva la pregunta. Con `--dry-run` muestra qué haría sin tocar el disco.
 - `.bond/hub.local.toml` guarda las rutas a los clones locales de la máquina (`source`), admitiendo `~` para expandir la carpeta de usuario.
 - `~/.bond/hubs.toml` es el registro global donde `bond` anota los repos asociados a cada hub. Permite que `hubRoot` encuentre el hub desde dentro de un repo enlazado por symlink.
-- Un `hub.toml` inválido se explica con un mensaje que dice qué corregir; `bond team` avisa y continúa como en un repo normal.
+- Un `hub.toml` inválido se explica con un mensaje que dice qué corregir; `bond team` avisa y continúa como en un repo normal. Los comandos de `bond hub` distinguen el fichero que **falta** del que **existe y no se puede leer**: si `hub.toml` está delante pero no parsea o no define la sesión, el error dice «existe hub.toml pero no se puede leer» y lleva el error de parseo (#39).
 - Sin `hub.toml`, los comandos funcionan como siempre en un repo normal.
 
 ### `bond hub check`

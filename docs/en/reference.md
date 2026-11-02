@@ -912,7 +912,10 @@ source = "~/gitrepos/fluzo-backend"
 - `~/.bond/hubs.toml` is the global registry where bond notes the repos associated with each hub.
   It lets `hubRoot` find the hub from inside a symlink-linked repo.
 - An invalid `hub.toml` is explained with a message saying what to fix; `bond team` warns and
-  continues as in a plain repo.
+  continues as in a plain repo. The `bond hub` commands tell a file that is **missing** apart
+  from one that **exists but cannot be read**: when `hub.toml` is there but does not parse or
+  does not define the session, the error says "hub.toml exists but cannot be read" and carries
+  the parse error (#39).
 - Without `hub.toml`, the commands work as always in a plain repo.
 
 ### `bond hub check`

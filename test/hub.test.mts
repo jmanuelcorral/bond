@@ -322,6 +322,47 @@ describe("no regresión: un repo sin hub se comporta como siempre", () => {
 	});
 });
 
+describe("un hub.toml que existe y no se puede leer (issue #39)", () => {
+	const broken = "esto no es TOML =\n";
+
+	test("bond hub sync dice que hub.toml existe pero no se puede leer, con el error de parseo", () => {
+		writeFileSync(join(hub, "hub.toml"), broken);
+		const r = bond(["hub", "sync", "--yes"]);
+		expect(r.status).not.toBe(0);
+		expect(r.stderr).toContain("existe hub.toml pero no se puede leer");
+		expect(r.stderr).toContain("no es TOML válido");
+		expect(r.stderr).not.toContain("falta hub.toml");
+	});
+
+	test("bond hub, hub check y hub pull distinguen «existe y no se lee» igual que sync", () => {
+		writeFileSync(join(hub, "hub.toml"), broken);
+		for (const cmd of [["hub"], ["hub", "check"], ["hub", "pull"]]) {
+			const r = bond(cmd);
+			const out = r.stderr + r.stdout;
+			expect(r.status, cmd.join(" ")).not.toBe(0);
+			expect(out, cmd.join(" ")).toContain("existe hub.toml pero no se puede leer");
+			expect(out, cmd.join(" ")).not.toContain("falta hub.toml");
+		}
+	});
+
+	test("un hub.toml que parsea pero no define la sesión se explica con su error (falta name)", () => {
+		writeFileSync(join(hub, "hub.toml"), 'base = "main"\n');
+		const r = bond(["hub", "sync", "--yes"]);
+		expect(r.status).not.toBe(0);
+		expect(r.stderr).toContain("existe hub.toml pero no se puede leer");
+		expect(r.stderr).toContain("falta name");
+	});
+
+	test("fuera de un hub si de verdad falta hub.toml, se dice que falta", () => {
+		const plain = join(tmp, "sin-hub");
+		mkdirSync(plain);
+		const r = bond(["hub", "sync", "--yes"], plain);
+		expect(r.status).not.toBe(0);
+		expect(r.stderr).toContain("falta hub.toml");
+		expect(r.stderr).not.toContain("no se puede leer");
+	});
+});
+
 describe("ayuda y submodules", () => {
 	test("bond hub --help enseña la ayuda", () => {
 		const r = bond(["hub", "--help"]);
