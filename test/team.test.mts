@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseFm } from "../cli/decisions.mts";
 import { blockedOnStart, defaultAgentArgs, missingAgentDir, questionIn, startupNoticeIn } from "../cli/herdr.mts";
-import { branchInfo, classify, collectBlocker, collectRun, lastAssistantText, runDecisions, sessionFile, trimAgentBanner, trimAgyPane, withMemoryNote, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runFileText, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle } from "../cli/team.mts";
+import { branchInfo, classify, collectBlocker, collectRun, findBranchAgent, type HerdrPane, lastAssistantText, runDecisions, sessionFile, trimAgentBanner, trimAgyPane, withMemoryNote, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runFileText, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle } from "../cli/team.mts";
 
 const dirs = (...existing: string[]) => (p: string) => existing.includes(p);
 
@@ -867,5 +867,54 @@ describe("arranque de agy en bond team", () => {
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("findBranchAgent (enrutado a agentes del equipo)", () => {
+	const kevin = { name: "kevin", agent: "pi", agent_status: "idle", cwd: "/wt/feat-a", pane_id: "p1" };
+	const reviewer = { name: "reviewer", agent: "pi", agent_status: "idle", cwd: "/wt/feat-a", pane_id: "p2" };
+
+	test("con dos agentes en el mismo worktree, devuelve el de la rama según el panel renombrado", () => {
+		const panes: HerdrPane[] = [
+			{ pane_id: "p1", label: "kevin · feat/a" },
+			{ pane_id: "p2", label: "reviewer" },
+		];
+		// reviewer aparece antes en running
+		const running = [reviewer, kevin];
+		const found = findBranchAgent("feat/a", panes, running);
+		expect(found).toBeDefined();
+		expect(found?.name).toBe("kevin");
+		expect(found?.pane_id).toBe("p1");
+	});
+
+	test("si el emparejamiento no existe (ningún panel coincide con la rama), devuelve undefined y no elige por cwd", () => {
+		const panes: HerdrPane[] = [
+			{ pane_id: "p2", label: "reviewer" },
+		];
+		const running = [reviewer];
+		expect(findBranchAgent("feat/a", panes, running)).toBeUndefined();
+	});
+
+	test("si el emparejamiento está obsoleto (el panel existe pero el agente ya no está en marcha), devuelve undefined", () => {
+		const panes: HerdrPane[] = [
+			{ pane_id: "p1", label: "kevin · feat/a" },
+			{ pane_id: "p2", label: "reviewer" },
+		];
+		// kevin ya no está en running
+		const running = [reviewer];
+		expect(findBranchAgent("feat/a", panes, running)).toBeUndefined();
+	});
+
+	test("en modo hub con submódulo, empareja <nombre> · <rama> · <submódulo>", () => {
+		const panes: HerdrPane[] = [
+			{ pane_id: "p1", label: "kevin · fix/x · front" },
+			{ pane_id: "p3", label: "stuart · fix/x · back" },
+		];
+		const frontAgent = { name: "kevin", agent: "pi", pane_id: "p1", cwd: "/wt/front" };
+		const backAgent = { name: "stuart", agent: "pi", pane_id: "p3", cwd: "/wt/back" };
+		const reviewerFront = { name: "rev-front", agent: "pi", pane_id: "p9", cwd: "/wt/front" };
+		const running = [reviewerFront, frontAgent, backAgent];
+		expect(findBranchAgent("fix/x", panes, running, "front")?.name).toBe("kevin");
+		expect(findBranchAgent("fix/x", panes, running, "back")?.name).toBe("stuart");
 	});
 });
