@@ -138,6 +138,9 @@ function openWorkspaces(root: string, plan: PlanItem[], o: TeamArgs): void {
 		const { branch, agent } = item;
 		try {
 			const r = openWorkspace({ dir: item.root ?? root, agent, worktree: branch, base: item.base ?? o.base, shell: false, direction: "right", ratio: "0.6", focus: false, trust: o.trust, agentArgs: defaultAgentArgs(agent, o.agentArgs) });
+			if (r.agentPane && r.agentName && !r.reused) {
+				run("herdr", ["pane", "rename", r.agentPane, `${r.agentName} · ${itemLabel(item)}`]);
+			}
 			const detail = r.reused
 				? dim(t("team.ws_already_open", { ws: r.ws }))
 				: `${t("team.agent_in_pane", { name: r.agentName ?? "", agent, pane: r.agentPane ?? "" })}${r.blocked ? caution(t("team.awaits_reply")) : ""}`;
@@ -490,18 +493,59 @@ export function defaultBase(root: string): string {
 /** Bases de repos de la sesión ya avisadas por no existir (una vez por ejecución). */
 export const warnedMissingBases = new Set<string>();
 
+export interface HerdrPane {
+	pane_id: string;
+	tab_id?: string;
+	workspace_id?: string;
+	label?: string;
+	focused?: boolean;
+}
+
+/**
+ * Resuelve el agente de una rama según el panel que bond team renombró al crearla:
+ * `<nombre> · <rama>` (o en un hub: `<nombre> · <rama> · <submódulo>`).
+ * Enruta al agente emparejado por pane_id o nombre; si no existe o está obsoleto,
+ * devuelve undefined para que quien llame falle en lugar de elegir a ciegas por cwd.
+ */
+export function findBranchAgent(
+	branch: string,
+	panes: HerdrPane[],
+	running: HerdrAgent[],
+	sub?: string,
+	workspaceId?: string,
+): HerdrAgent | undefined {
+	const label = itemLabel({ branch, sub: sub && sub !== "." ? sub : undefined });
+	const suffix = ` · ${label}`;
+	const pane = panes.find((p) => p.label && p.label.endsWith(suffix) && p.label.length > suffix.length);
+	if (pane) {
+		const name = pane.label!.slice(0, -suffix.length);
+		return running.find((x) => x.agent && (x.pane_id === pane.pane_id || x.name === name));
+	}
+	if (workspaceId) {
+		const inWs = running.filter((x) => x.agent && x.workspace_id === workspaceId);
+		if (inWs.length === 1) return inWs[0];
+	}
+	return undefined;
+}
+
 /** Una fila por worktree enlazado del repo, con lo que sepa Herdr si está en marcha. */
 export function teamRows(root: string, base = defaultBase(root)): Row[] {
 	if (git(root, ["rev-parse", "--verify", "--quiet", `${base}^{commit}`]).status !== 0) die(t("team.err_base_not_found", { base }));
 	const live = serverRunning();
 	const open = new Map<string, string>();
 	let running: HerdrAgent[] = [];
+	let panes: HerdrPane[] = [];
 	if (live) {
 		try {
 			const list = herdr<{ worktrees?: Array<{ path: string; open_workspace_id?: string | null }> }>(["worktree", "list", "--cwd", root]).worktrees ?? [];
 			for (const w of list) if (w.open_workspace_id) open.set(canonical(w.path), w.open_workspace_id);
 		} catch {
 			// Repo que Herdr no conoce: sin workspaces.
+		}
+		try {
+			panes = herdr<{ panes?: HerdrPane[] }>(["pane", "list"]).panes ?? [];
+		} catch {
+			// Repo que Herdr no conoce: sin paneles.
 		}
 		running = agents(5000);
 	}
@@ -512,7 +556,7 @@ export function teamRows(root: string, base = defaultBase(root)): Row[] {
 			const branch = w.branch as string;
 			const info = branchInfo(root, base, branch, w.path);
 			const workspace = open.get(w.path);
-			const a = running.find((x) => x.agent && ((workspace && x.workspace_id === workspace) || within(canonical(x.cwd ?? x.foreground_cwd ?? "/"), w.path)));
+			const a = findBranchAgent(branch, panes, running, undefined, workspace);
 			// Herdr da por idle a un agente con una pregunta en pantalla (pi: confiar en la carpeta)
 			// y puede dar por blocked el aviso de arranque de agy, que no es una pregunta.
 			const screen = a?.name && a.agent_status !== "working" ? visibleScreen(a.name) : "";
@@ -544,6 +588,7 @@ export function sessionRows(root: string, base?: string): Row[] {
 	const live = serverRunning();
 	const open = new Map<string, string>();
 	let running: HerdrAgent[] = [];
+	let panes: HerdrPane[] = [];
 	const herdrDir = `${sep}.herdr${sep}worktrees${sep}`;
 
 	if (live) {
@@ -555,6 +600,11 @@ export function sessionRows(root: string, base?: string): Row[] {
 			} catch {
 				// Repo que Herdr no conoce: sin workspaces.
 			}
+		}
+		try {
+			panes = herdr<{ panes?: HerdrPane[] }>(["pane", "list"]).panes ?? [];
+		} catch {
+			// Sin respuesta de Herdr.
 		}
 		running = agents(5000);
 	}
@@ -574,7 +624,7 @@ export function sessionRows(root: string, base?: string): Row[] {
 			const branch = w.branch as string;
 			const info = branchInfo(hr.dir, hr.base, branch, w.path);
 			const workspace = open.get(w.path);
-			const a = running.find((x) => x.agent && ((workspace && x.workspace_id === workspace) || within(canonical(x.cwd ?? x.foreground_cwd ?? "/"), w.path)));
+			const a = findBranchAgent(branch, panes, running, hr.path, workspace);
 			const screen = a?.name && a.agent_status !== "working" ? visibleScreen(a.name) : "";
 			const question = a?.agent_status !== "blocked" ? questionIn(screen) : undefined;
 			const notice = a?.agent_status === "blocked" && startupNoticeIn(screen);
@@ -932,14 +982,6 @@ export function watchCommand(root: string, base?: string, self = selfCommand()):
 	const hub = hubRoot(root);
 	const targetRoot = hub ?? root;
 	return [...self, "team", "status", targetRoot, "--watch", ...(base && !hub ? ["--base", base] : [])].map(shellQuote).join(" ");
-}
-
-interface HerdrPane {
-	pane_id: string;
-	tab_id?: string;
-	workspace_id?: string;
-	label?: string;
-	focused?: boolean;
 }
 
 /** El panel de la tabla de ese repo en la pestaña, si ya está. */

@@ -216,6 +216,35 @@ describe.skipIf(process.platform === "win32")("bond team en un hub", () => {
 		expect(text).toMatch(/commits:\n {2}- "[0-9a-f]+ b"/);
 	});
 
+	test("dos agentes en el mismo worktree, el encargo va al de la rama", () => {
+		bond(["team", "fix/x"]);
+		const wt = tabWorktreePath(home, "hub", "fix/x", "front");
+		const st = JSON.parse(readFileSync(state, "utf8"));
+		const frontAgent = st.agents.find((a: { cwd: string }) => a.cwd === wt)!.name;
+		// Se abre otro agente dentro del worktree (p. ej. un revisor), situado antes en la lista
+		st.agents.unshift({ name: "revisore", agent: "pi", agent_status: "idle", cwd: wt, pane_id: "p99", workspace_id: "w1" });
+		writeFileSync(state, JSON.stringify(st));
+		const r = bond(["team", "prompt", "fix/x", "haz el cambio", "--repo", "front"]);
+		expect(r.status).toBe(0);
+		const prompts = readFileSync(state + ".prompts", "utf8").trim().split("\n").map((l: string) => JSON.parse(l));
+		const lastPrompt = prompts[prompts.length - 1];
+		expect(lastPrompt.name).toBe(frontAgent);
+	});
+
+	test("con emparejamiento obsoleto, prompt falla en vez de elegir a ciegas al otro agente", () => {
+		bond(["team", "fix/x"]);
+		const wt = tabWorktreePath(home, "hub", "fix/x", "front");
+		const st = JSON.parse(readFileSync(state, "utf8"));
+		const frontAgent = st.agents.find((a: { cwd: string }) => a.cwd === wt)!.name;
+		// El agente de la rama termina/muere, queda solo otro agente abierto (revisor)
+		st.agents = st.agents.filter((a: { name: string }) => a.name !== frontAgent);
+		st.agents.unshift({ name: "revisore", agent: "pi", agent_status: "idle", cwd: wt, pane_id: "p99", workspace_id: "w1" });
+		writeFileSync(state, JSON.stringify(st));
+		const r = bond(["team", "prompt", "fix/x", "haz el cambio", "--repo", "front"]);
+		expect(r.status).toBe(1);
+		expect(r.stderr).toContain("no tiene ningún agente en marcha");
+	});
+
 	test("clean fix/x deja el hub y los submódulos como estaban, con las ramas", () => {
 		bond(["team", "fix/x"]);
 		const r = bond(["team", "clean", "fix/x"]);
