@@ -1,11 +1,11 @@
 ---
 id: "2026-11-02-p1-del-i18n-incluye-las-cadenas-de-consola-de-util-suggestions-instructions"
 title: "P1 del i18n incluye las cadenas de consola de util/suggestions/instructions"
-status: "proposed"
+status: "accepted"
 date: "2026-11-02"
 decided_by: "agent:pi/gru"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "venga, confirmamos! (aceptar la decision proposed del P1)"
+accepted_via: "agent:pi/gru"
 supersedes: ""
 superseded_by: ""
 links:
