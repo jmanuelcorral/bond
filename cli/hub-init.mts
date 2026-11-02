@@ -333,13 +333,13 @@ export async function syncHub(
 	if (!hubToml) {
 		const tomlPath = join(root, "hub.toml");
 		if (!existsSync(tomlPath)) dieNotAHub(root);
-		hubToml = parseHubToml(readFileSync(tomlPath, "utf8"), relative(process.cwd(), tomlPath) || "hub.toml");
+		hubToml = parseHubToml(readFileSync(tomlPath, "utf8"), relative(canonical(process.cwd()), canonical(tomlPath)) || "hub.toml");
 	}
 
 	const localPath = join(root, ".bond", "hub.local.toml");
 	let hubLocalToml: HubLocalToml = opts.hubLocalToml ?? { repos: {} };
 	if (!opts.hubLocalToml && existsSync(localPath)) {
-		hubLocalToml = parseHubLocalToml(readFileSync(localPath, "utf8"), relative(process.cwd(), localPath) || ".bond/hub.local.toml");
+		hubLocalToml = parseHubLocalToml(readFileSync(localPath, "utf8"), relative(canonical(process.cwd()), canonical(localPath)) || ".bond/hub.local.toml");
 	}
 
 	const symlinkPaths: string[] = [];

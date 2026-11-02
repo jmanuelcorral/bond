@@ -209,13 +209,13 @@ export function hubSession(root: string): HubSession | undefined {
 	const tomlPath = join(root, "hub.toml");
 	if (!existsSync(tomlPath)) return undefined;
 	const text = readFileSync(tomlPath, "utf8");
-	const hubToml = parseHubToml(text, relative(process.cwd(), tomlPath) || "hub.toml");
+	const hubToml = parseHubToml(text, relative(canonical(process.cwd()), canonical(tomlPath)) || "hub.toml");
 
 	const localPath = join(root, ".bond", "hub.local.toml");
 	let localToml: HubLocalToml | undefined;
 	if (existsSync(localPath)) {
 		const localText = readFileSync(localPath, "utf8");
-		localToml = parseHubLocalToml(localText, relative(process.cwd(), localPath) || ".bond/hub.local.toml");
+		localToml = parseHubLocalToml(localText, relative(canonical(process.cwd()), canonical(localPath)) || ".bond/hub.local.toml");
 	}
 
 	const hubSelf: HubRepo = {
@@ -351,7 +351,10 @@ const withoutFile = (file: string, error: string) =>
 export function hubUnusableReason(dir: string = process.cwd()): string | undefined {
 	const candidate = repoChain(dir).slice().reverse().find((d) => existsSync(join(d, "hub.toml")));
 	if (!candidate) return undefined;
-	const file = relative(process.cwd(), join(candidate, "hub.toml")) || "hub.toml";
+	// canonical() en los dos lados: en Windows `process.cwd()` puede venir con nombre 8.3
+	// (RUNNER~1) y la cadena de repos con la ruta larga (runneradmin); sin resolver, relative()
+	// devuelve una escalada `..\..\..` en vez de `hub.toml` y el mensaje sale ilegible.
+	const file = relative(canonical(process.cwd()), canonical(join(candidate, "hub.toml"))) || "hub.toml";
 	const toml = catchDie(() => parseHubToml(readFileSync(join(candidate, "hub.toml"), "utf8"), file));
 	if (toml.error) return t("hub.hub_toml_unreadable", { file, error: withoutFile(file, toml.error) });
 	const session = catchDie(() => hubSession(candidate));
