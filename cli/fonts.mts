@@ -4,7 +4,7 @@
 import { execFileSync } from "node:child_process";
 import { readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, extname, join } from "node:path";
+import { basename, extname, join, posix, win32 } from "node:path";
 import { which } from "./util.mts";
 
 const FONT_EXT = new Set([".ttf", ".otf", ".ttc", ".otc"]);
@@ -36,15 +36,18 @@ export function nerdFontFamilies(names: string[]): string[] {
 	return [...out].sort();
 }
 
-/** Carpetas de fuentes de cada sistema (para cuando no hay fc-list). */
+/**
+ * Carpetas de fuentes de cada sistema (para cuando no hay fc-list). Cada uno con su separador,
+ * no con el del sistema en el que se ejecuta.
+ */
 export function fontDirs(platform = process.platform, env = process.env, home = homedir()): string[] {
-	if (platform === "darwin") return [join(home, "Library", "Fonts"), "/Library/Fonts", "/System/Library/Fonts"];
+	if (platform === "darwin") return [posix.join(home, "Library", "Fonts"), "/Library/Fonts", "/System/Library/Fonts"];
 	if (platform === "win32") {
-		const dirs = [join(env.WINDIR ?? "C:\\Windows", "Fonts")];
-		if (env.LOCALAPPDATA) dirs.unshift(join(env.LOCALAPPDATA, "Microsoft", "Windows", "Fonts"));
+		const dirs = [win32.join(env.WINDIR ?? "C:\\Windows", "Fonts")];
+		if (env.LOCALAPPDATA) dirs.unshift(win32.join(env.LOCALAPPDATA, "Microsoft", "Windows", "Fonts"));
 		return dirs;
 	}
-	return [join(home, ".local", "share", "fonts"), join(home, ".fonts"), "/usr/local/share/fonts", "/usr/share/fonts"];
+	return [posix.join(home, ".local", "share", "fonts"), posix.join(home, ".fonts"), "/usr/local/share/fonts", "/usr/share/fonts"];
 }
 
 /** Nombres de fichero de fuentes bajo `dir`, hasta `depth` niveles (las carpetas de Linux anidan). */
