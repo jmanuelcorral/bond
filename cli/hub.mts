@@ -339,6 +339,33 @@ export const hasHub = (root: string): boolean => {
 	return false;
 };
 
+/** Los mensajes de parseo empiezan por el fichero: se quita para no nombrarlo dos veces. */
+const withoutFile = (file: string, error: string) =>
+	error.startsWith(file) ? error.slice(file.length).replace(/^[\s:]+/, "") : error;
+
+/**
+ * Por qué `dir` no da una sesión de hub, o undefined si sí la da (issue #39). Distingue «no
+ * hay hub.toml» de «hay hub.toml y no se puede leer»: en el segundo caso el motivo lleva el
+ * error de parseo, para no decir nunca «falta» lo que está delante.
+ */
+export function hubUnusableReason(dir: string = process.cwd()): string | undefined {
+	const candidate = repoChain(dir).slice().reverse().find((d) => existsSync(join(d, "hub.toml")));
+	if (!candidate) return undefined;
+	const file = relative(process.cwd(), join(candidate, "hub.toml")) || "hub.toml";
+	const toml = catchDie(() => parseHubToml(readFileSync(join(candidate, "hub.toml"), "utf8"), file));
+	if (toml.error) return t("hub.hub_toml_unreadable", { file, error: withoutFile(file, toml.error) });
+	const session = catchDie(() => hubSession(candidate));
+	return session.error;
+}
+
+/**
+ * Muere explicando por qué `dir` no es un hub usable (issue #39): si no hay hub.toml en la
+ * cadena de repos, que falta; si lo hay y no se lee, que existe y no se puede leer, con el error.
+ */
+export function dieNotAHub(dir: string = process.cwd()): never {
+	die(hubUnusableReason(dir) ?? t("hub.not_a_hub"));
+}
+
 /**
  * El hub de `dir`: subiendo por los superproyectos, el de más arriba con hub.toml válido.
  * Si git no encuentra ninguno (p. ej. un repo enlazado por symlink), consulta ~/.bond/hubs.toml.
@@ -453,15 +480,7 @@ export async function hub(args: string[]): Promise<void> {
 	}
 	const cwd = process.cwd();
 	const root = hubRoot(cwd);
-	if (!root) {
-		const chain = repoChain(cwd);
-		const candidate = chain.slice().reverse().find((d) => existsSync(join(d, "hub.toml")));
-		if (candidate) {
-			// Si hub.toml existe en la cadena pero falló la validación, muere con el error exacto
-			hubSession(candidate);
-		}
-		die(t("hub.not_a_hub"));
-	}
+	if (!root) dieNotAHub(cwd);
 	const s = hubSession(root);
 	if (!s) die(t("hub.dir_not_a_hub", { name: basename(root) }));
 	printSession(s);

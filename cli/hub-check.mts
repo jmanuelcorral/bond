@@ -7,7 +7,7 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { hubRepoLabel, hubRoot, hubSession, registerHubRepo, submodules, type HubRepo, type HubSession } from "./hub.mts";
+import { dieNotAHub, hubRepoLabel, hubRoot, hubSession, registerHubRepo, submodules, type HubRepo, type HubSession } from "./hub.mts";
 import { linkRepo } from "./hub-init.mts";
 import { agentInstalled } from "./catalog-agents.mts";
 import { gitWorktrees } from "./team.mts";
@@ -285,7 +285,7 @@ export async function hubCheck(args: string[]): Promise<void> {
 	const yes = args.includes("--yes") || args.includes("-y");
 	for (const a of args) if (!["--fix", "--json", "--dry-run", "--yes", "-y"].includes(a)) die(t("hub.check_unknown_opt", { opt: a }));
 	const root = hubRoot(process.cwd());
-	if (!root) die(t("hub.not_a_hub"));
+	if (!root) dieNotAHub();
 	const s = hubSession(root);
 	if (!s) die(t("hub.dir_not_a_hub", { name: root }));
 	let report = checkHubSession(s);

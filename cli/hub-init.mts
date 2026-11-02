@@ -21,6 +21,7 @@ import {
 import {
 	currentBranch,
 	expandSource,
+	dieNotAHub,
 	hubRoot,
 	type HubLocalToml,
 	type HubToml,
@@ -278,9 +279,7 @@ export async function syncHub(
 	let hubToml = opts.hubToml;
 	if (!hubToml) {
 		const tomlPath = join(root, "hub.toml");
-		if (!existsSync(tomlPath)) {
-			die(t("hub.not_a_hub"));
-		}
+		if (!existsSync(tomlPath)) dieNotAHub(root);
 		hubToml = parseHubToml(readFileSync(tomlPath, "utf8"), relative(process.cwd(), tomlPath) || "hub.toml");
 	}
 
@@ -856,9 +855,7 @@ export async function hubAdd(args: string[]): Promise<void> {
 	}
 
 	const root = hubRoot();
-	if (!root) {
-		die(t("hub.not_a_hub"));
-	}
+	if (!root) dieNotAHub();
 
 	const tomlPath = join(root, "hub.toml");
 	const hubToml = parseHubToml(readFileSync(tomlPath, "utf8"), "hub.toml");
@@ -993,9 +990,7 @@ export async function hubSync(args: string[]): Promise<void> {
 	}
 
 	const root = hubRoot();
-	if (!root) {
-		die(t("hub.not_a_hub"));
-	}
+	if (!root) dieNotAHub();
 
 	await syncHub(root, { yes });
 	await initHub(root, { interactive: !yes && process.stdin.isTTY === true });

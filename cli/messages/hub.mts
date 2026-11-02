@@ -155,7 +155,8 @@ Opciones:
 	"hub.session_detached_head": "(HEAD separado)",
 	"hub.unknown_opt": "opción desconocida: {opt} (bond hub --help)",
 	"hub.not_a_hub": "no es un hub: falta hub.toml (bond hub --help)",
-	"hub.dir_not_a_hub": "{name} no es un hub: falta hub.toml",
+	"hub.hub_toml_unreadable": "existe {file} pero no se puede leer: {error}",
+	"hub.dir_not_a_hub": "el directorio {name} no es un hub: su hub.toml no define una sesión de hub",
 
 	// ---- hub-init.mts ----
 	"hub.act_update_gitignore": "actualizar .gitignore",
@@ -478,7 +479,8 @@ Options:
 	"hub.session_detached_head": "(detached HEAD)",
 	"hub.unknown_opt": "unknown option: {opt} (bond hub --help)",
 	"hub.not_a_hub": "not a hub: missing hub.toml (bond hub --help)",
-	"hub.dir_not_a_hub": "{name} is not a hub: missing hub.toml",
+	"hub.hub_toml_unreadable": "hub file {file} exists but cannot be read: {error}",
+	"hub.dir_not_a_hub": "directory {name} is not a hub: its hub.toml defines no hub session",
 
 	// ---- hub-init.mts ----
 	"hub.act_update_gitignore": "update .gitignore",

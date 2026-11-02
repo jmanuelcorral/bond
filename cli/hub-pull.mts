@@ -6,7 +6,7 @@
 // explica el motivo. Nunca hace merge, rebase ni push.
 // Con --dry-run y --json.
 
-import { currentBranch, hubRepoLabel, hubRoot, hubSession, type HubRepo, type HubSession } from "./hub.mts";
+import { currentBranch, dieNotAHub, hubRepoLabel, hubRoot, hubSession, type HubRepo, type HubSession } from "./hub.mts";
 import { gitWorktrees } from "./team.mts";
 import { bad, canonical, caution, die, dim, isDryRun, log, ok, run, setDryRun } from "./util.mts";
 import { t } from "./messages.mts";
@@ -238,7 +238,7 @@ export async function hubPull(args: string[]): Promise<void> {
 		}
 	}
 	const root = hubRoot(process.cwd());
-	if (!root) die(t("hub.not_a_hub"));
+	if (!root) dieNotAHub();
 	const s = hubSession(root);
 	if (!s) die(t("hub.dir_not_a_hub", { name: root }));
 
