@@ -6,7 +6,7 @@
 
 import { afterAll, afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 
@@ -16,7 +16,7 @@ setDefaultTimeout(30_000);
 process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
 Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
 const { pickRepos, tabWorktreePath, verticalNote, worktreeNamespace } = await import("../cli/team.mts");
-const { catchDie } = await import("../cli/util.mts");
+const { canonical, catchDie } = await import("../cli/util.mts");
 
 const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
 const HUB_TOML = 'name = "hub"\nbase = "main"\n\n[repos.back]\npath = "back"\nbase = "main"\nlink = "submodule"\n\n[repos.front]\npath = "front"\nbase = "main"\nlink = "submodule"\n';
@@ -139,7 +139,10 @@ const worktrees = (dir: string) => g(dir, "worktree", "list", "--porcelain").spl
 const branches = (dir: string) => g(dir, "branch", "--format=%(refname:short)").split("\n").sort();
 
 beforeEach(() => {
-	tmp = realpathSync(mkdtempSync(join(tmpdir(), "bond-team-hub-")));
+	// canonical(), no realpathSync: en Windows el TEMP viene con nombre corto (RUNNER~1) y solo
+	// la variante nativa lo resuelve; si no, las rutas que arma el test no coinciden con las que
+	// canoniciza bond al compararlas.
+	tmp = canonical(mkdtempSync(join(tmpdir(), "bond-team-hub-")));
 	home = join(tmp, "home");
 	state = join(tmp, "herdr.json");
 	mkdirSync(home);
