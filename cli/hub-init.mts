@@ -573,6 +573,10 @@ export async function hubInit(args: string[]): Promise<void> {
 		}
 	}
 
+	// Issue #40: con una sola ruta, esa ruta es el directorio del HUB, no un repo a importar;
+	// la excepcion es que el directorio actual ya sea un repo y la ruta sea otro repo, caso en
+	// el que la ruta se importa. Explicito: `bond hub init . <ruta>` o `bond hub init --repo <ruta>`.
+	const dirFlag = dir;
 	const reposToImport: string[] = [...flagRepos];
 	if (!dir) {
 		if (pos.length === 0) {
@@ -604,6 +608,7 @@ export async function hubInit(args: string[]): Promise<void> {
 
 	const root = resolve(dir);
 	const isGitRepo = git(root, ["rev-parse", "--show-toplevel"]).status === 0;
+	const interactive = !yes && process.stdin.isTTY === true;
 
 	// Issue #35: origen, nombre y rama se validan antes de crear nada en disco. Un origen vacio
 	// (`file://`, `--repo ""`) acababa escribiendo una clave vacia en hub.toml y el hub quedaba
@@ -613,6 +618,26 @@ export async function hubInit(args: string[]): Promise<void> {
 	for (const target of reposToImport) {
 		const err = repoSourceError(target, root);
 		if (err) die(err);
+	}
+
+	// Issue #40: con una sola ruta, esa ruta es el HUB, no un repo a importar. Fuera de un
+	// repo, si ademas esa ruta ya es un repo git que todavia no es un hub, se parece mas a lo
+	// que se quiere importar: se avisa antes de crear nada, y con terminal se pregunta.
+	const singleRepoPath =
+		!dirFlag &&
+		pos.length === 1 &&
+		!isRepoUrl(pos[0]) &&
+		isGitRepo &&
+		!existsSync(join(root, "hub.toml")) &&
+		git(process.cwd(), ["rev-parse", "--show-toplevel"]).status !== 0;
+	if (singleRepoPath) {
+		if (interactive) {
+			const p = await import("@clack/prompts");
+			const go = await ask(p.confirm({ message: t("hub.init_ambiguous_prompt", { path: pos[0] }), initialValue: true }));
+			if (!go) die(t("hub.init_ambiguous_declined", { path: pos[0] }));
+		} else {
+			warn(t("hub.init_ambiguous_warn", { path: pos[0] }));
+		}
 	}
 
 	if (!isGitRepo) {
@@ -631,8 +656,6 @@ export async function hubInit(args: string[]): Promise<void> {
 	act(t("hub.act_create_bond_dir"), () => {
 		mkdirSync(join(root, ".bond"), { recursive: true });
 	});
-
-	const interactive = !yes && process.stdin.isTTY === true;
 
 	// bond init en el propio hub antes que nada: sin él, el orquestador no tiene las skills del
 	// catálogo (plan-team, decision-record con la memoria de decisiones del hub, D5...).

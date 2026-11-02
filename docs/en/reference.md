@@ -849,6 +849,7 @@ outside the hub), `hubRoot` finds it thanks to the global registry `~/.bond/hubs
 ```bash
 bond hub                 # shows the hub's session: repos, path, base, link mode, branch and description (if any)
 bond hub init [dir]      # creates a hub or prepares it in an existing repo and imports repos
+                       # with a single path, that path is the hub: to import, `bond hub init . <path>` or `--repo <path>`
 bond hub add <url|path>  # adds a repo to the hub (as a submodule or a local link)
 bond hub sync            # mounts submodules, creates links and updates the global registry
 bond hub pull            # updates the hub's and each repo's base in fast-forward (--dry-run, --json)
@@ -888,7 +889,11 @@ source = "~/gitrepos/fluzo-backend"
   it. Submodules that already existed in the repo keep their path; hubs with repos at the root keep
   working as before (`bond hub check` only warns).
 - `bond hub init [dir]`: an assistant that creates the hub (`git init`, `.bond/`, `AGENTS.md`,
-  `hub.toml`, `.gitignore` and `hub.local.toml`) or prepares it in an existing repo. It imports
+  `hub.toml`, `.gitignore` and `hub.local.toml`) or prepares it in an existing repo.
+  **With a single path, that path is the hub, not a repo to import** (#40): to import a repo
+  into the hub of the current directory, write `bond hub init . <path>` or
+  `bond hub init --repo <path>`. Outside a repo, if that single path is already a git repo that
+  is not a hub, `bond` warns before creating anything (and asks when there is a terminal). It imports
   existing submodules with their base and adds repos by URL (submodule) or local path (symlink).
   The local clone is picked by browsing the disk from the folder that holds the hub (arrows to
   choose, Tab completes, `/` enters the folder) and only a git repo is accepted. First of all it runs `bond init` in the hub itself if it lacks it
