@@ -13,89 +13,13 @@ import { agents, defaultAgentArgs, ensureServer, firstFreeName, herdr, type Herd
 import { repoDecisions } from "./repo.mts";
 import { inheritTrust, TRUST_KINDS, trusts } from "./trust.mts";
 import { act, canonical, caution, catchDie, die, dim, isDryRun, ok, run, warn } from "./util.mts";
+import { t } from "./messages.mts";
 
-export const TEAM_HELP = `Uso: bond team [repo] <rama[:agente]>... [opciones] [-- argumentos de los agentes]
-       bond team status [repo] [--base <ref>] [--json | --watch [--keep-open]]
-       bond team prompt <rama> <tarea> [--repo <repo>] [--wait] [--timeout <ms>] [--no-record]
-       bond team collect <rama> [--repo <repo>] [--lines <n>] [--agent <nombre>] [--request <encargo>]
-       bond team clean [repo] [rama...] [--repo <repo>] [--base <ref>] [--force] [--delete-branch] [--keep-table] [--dry-run]
-
-Abre un worktree y un agente por rama. Sin [repo], el repo del directorio actual. El agente de
-cada rama: el de rama:agente, si no --agent, si no el agente por defecto del repo
-(.bond/bond.toml), si no el de bond setup. Los worktrees salen de lo commiteado.
-
-Dentro de Herdr, cada agente va en un panel de tu pestaña, debajo del tuyo (en fila, con el
-mismo ancho), con nombre de minion (kevin, stuart, bob...). Tu pestaña admite 6 paneles: el
-tuyo, la tabla y 4 minions; los que no caben van a pestañas nuevas "equipo · <repo>", 4 por
-pestaña. Si no caben, bond team pregunta antes de crear nada: 1) pestañas nuevas (por
-defecto), 2) todo en tu pestaña (filas de 4, aunque se apriete) o 3) un workspace por rama.
---tabs, --same-tab y --workspaces eligen sin preguntar; sin terminal o con --yes, la 1. Fuera
-de Herdr, un workspace por rama. Dentro, además, un panel estrecho a la derecha del tuyo con la
-tabla en vivo de todas las ramas (bond team status --watch), o el que ya haya.
-
-En paneles, si el orquestador (pi, Claude Code o agy en el panel desde el que lanzas el equipo)
-confía en el checkout principal, todos los agentes del equipo confían en su worktree; si no, cada
-uno hereda la confianza que él mismo tenga en el checkout. bond la escribe en trust.json de pi,
-~/.claude.json o trustedWorkspaces de agy, y el agente arranca sin preguntar; sin ninguna, o con
-otros agentes, pregunta como siempre.
-
-agy arranca con --dangerously-skip-permissions (sin él pide permiso por cada comando); tus
-argumentos tras -- lo sustituyen. Si no está en el PATH pero sí en ~/.local/bin, bond añade esa
-carpeta al PATH de la shell del panel antes de lanzarlo.
-
-  -a, --agent <agente>   Agente para las ramas sin :agente
-  -b, --base <ref>       Ref de la que salen las ramas nuevas
-  --tabs                 Si no caben en tu pestaña, el resto en pestañas nuevas (por defecto)
-  --same-tab             Todos en tu pestaña, en filas de 4, aunque no quepan
-  --workspaces           Un workspace por rama (herdr worktree) en vez de paneles
-  -y, --yes              Sin preguntar: si no caben, pestañas nuevas
-  --no-trust             En paneles: no heredar la confianza del checkout principal
-  --trust-repository     Con --workspaces: se pasa a herdr worktree (solo en repos revisados)
-  --repos <a,b>          En un hub: solo esos repos de la sesión (ruta o nombre)
-
-En un hub (un repo con hub.toml), bond team <rama> abre
-una rama vertical: la crea en el hub, sin worktree ni agente, y abre un worktree y un agente
-en cada repo de la sesión (o en los de --repos), cada uno desde su base de hub.toml y con
-el agente por defecto de su bond.toml (o el de rama:agente o --agent). En paneles, los
-worktrees van en ~/.herdr/worktrees/<hub>/<submódulo>/<rama>. Una sola rama vertical por
-sesión: con una abierta, bond team se niega a abrir otra hasta bond team clean. Desde el hub,
-prompt manda la tarea a todos los agentes de la rama, con una nota que les dice quiénes son
-los otros y en qué repo está cada uno (--repo, solo a uno); collect y clean buscan la rama en
-todos los repos (--repo si hace falta elegir); los runs van a la memoria del hub (si no la
-tiene, a la del repo). Dentro de un repo de la sesión, bond team trabaja solo en ese repo.
-
-status   Cada worktree del repo: estado, agente, commits por delante de la base y ficheros.
-         Estados: trabajando, bloqueado, sin commitear, lista (commits por revisar),
-         integrada (ya está en la base: por merge, fast-forward, rebase o squash), sin commits.
-         La base, por defecto, es la rama del checkout principal.
-         --watch: tabla en vivo (cada 2 s) agrupada por estado, en este orden: ⛔ necesita tu
-         respuesta (con la pregunta debajo), 🔄 trabajando, ✏️ sin commitear, 📦 por revisar
-         y ✅ integradas / sin empezar; los grupos vacíos no salen. El icono del estado va en
-         el título del grupo; cada fila: minion, rama, commits y ficheros. Sale con q o Ctrl+C. En el
-         panel de la tabla, si ninguna rama tiene trabajo pendiente (trabajando, bloqueado,
-         sin commitear, lista, o un agente abierto sin commits aún), avisa y se cierra sola;
-         no si es el panel enfocado ni con --keep-open. En un hub (declarado en hub.toml),
-         status y --watch enseñan los worktrees de toda la sesión en un panel tabla · <hub> con
-         columna REPO.
-prompt   Manda una tarea al agente de esa rama (herdr agent prompt); --wait espera a que acabe.
-         Con la memoria de decisiones activa ([decisions] en bond.toml), guarda el encargo
-         exacto en <dir>/runs/ (--no-record para no guardarlo); si la escritura falla,
-         avisa y manda el prompt igual. Con memoria, el encargo lleva además una nota: lo
-         que el agente registre en <dir>/ se commitea en su rama (viaja con el código).
-collect  Recoge el informe del agente: toma solo su última respuesta del fichero de sesión
-         que Herdr da en agent_session (en pi, un .jsonl; en agy, con su integración de
-         Herdr, el transcript.jsonl de la conversación) y, si no puede leerlo, del panel
-         recortado (sin banner de arranque ni avisos). Lo guarda en el run de esa rama de la
-         memoria de decisiones, con el estado, los commits de la rama y las decisiones
-         registradas por ese agente. Repetirlo reemplaza el informe y recalcula listas: no
-         duplica nada. Sin run creado por prompt, lo crea con --request como encargo (para
-         delegaciones sin equipo, como bond-delegate); --agent recoge por nombre de agente.
-         Se niega mientras el agente trabaja o espera una respuesta.
-clean    Quita worktrees (carpeta, workspace y agente); las ramas se quedan. Sin ramas, solo
-         los integrados que abrió Herdr. Nunca uno con el agente trabajando o con cambios sin
-         commitear, salvo con --force. --delete-branch borra además las ramas integradas.
-         Si al acabar no queda ningún agente del equipo, cierra también el panel de la tabla
-         en vivo; --keep-table lo deja abierto.`;
+export const teamHelp = (): string => t("team.help");
+export const TEAM_HELP = Object.assign(() => teamHelp(), {
+	toString: () => teamHelp(),
+	[Symbol.for("nodejs.util.inspect.custom")]: () => teamHelp(),
+});
 
 // --- crear el equipo ----------------------------------------------------------------------
 
@@ -123,13 +47,13 @@ export interface TeamArgs {
 export function parseTeam(args: string[], isDir: (p: string) => boolean = existsSync): TeamArgs {
 	const o: TeamArgs = { trust: false, yes: false, inheritTrust: true, specs: [], agentArgs: [] };
 	const pick = (flag: string, layout: Layout) => {
-		if (o.layout && o.layout !== layout) die(`${flag} no va con --${o.layout} (bond team --help)`);
+		if (o.layout && o.layout !== layout) die(t("team.err_flag_conflict", { flag, layout: o.layout }));
 		o.layout = layout;
 	};
 	const positional: string[] = [];
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
-		const val = () => args[++i] ?? die(`${a} necesita un valor (bond team --help)`);
+		const val = () => args[++i] ?? die(t("team.err_needs_value", { flag: a }));
 		if (a === "-k" || a === "--kind" || a === "-a" || a === "--agent") o.agent = val();
 		else if (a === "-b" || a === "--base") o.base = val();
 		else if (a === "--trust-repository") o.trust = true;
@@ -142,23 +66,23 @@ export function parseTeam(args: string[], isDir: (p: string) => boolean = exists
 		else if (a === "--") {
 			o.agentArgs = args.slice(i + 1);
 			break;
-		} else if (a.startsWith("-")) die(`opción desconocida: ${a} (bond team --help)`);
+		} else if (a.startsWith("-")) die(t("team.err_unknown_opt", { opt: a }));
 		else positional.push(a);
 	}
 	if (positional.length && isDir(positional[0])) o.dir = positional.shift();
 	const seen = new Set<string>();
 	for (const spec of positional) {
 		const [branch, agent, ...extra] = spec.split(":");
-		if (!branch || extra.length || agent === "") die(`rama mal escrita: ${spec} (rama o rama:agente)`);
-		if (seen.has(branch)) die(`rama repetida: ${branch}`);
+		if (!branch || extra.length || agent === "") die(t("team.err_malformed_spec", { spec }));
+		if (seen.has(branch)) die(t("team.err_duplicate_branch", { branch }));
 		seen.add(branch);
 		o.specs.push({ branch, agent });
 	}
-	if (!o.specs.length) die("faltan las ramas: bond team [repo] <rama[:agente]>... (bond team --help)", 2);
+	if (!o.specs.length) die(t("team.err_missing_branches"), 2);
 	return o;
 }
 
-const repoOf = (dir?: string) => gitRoot(resolve(dir ?? ".")) ?? die(`no es un repo git: ${resolve(dir ?? ".")}`);
+const repoOf = (dir?: string) => gitRoot(resolve(dir ?? ".")) ?? die(t("team.err_not_git_repo", { path: resolve(dir ?? ".") }));
 
 async function create(args: string[]): Promise<void> {
 	requireHerdr();
@@ -166,10 +90,10 @@ async function create(args: string[]): Promise<void> {
 	const root = repoOf(o.dir);
 	const session = hubOf(root);
 	if (session) return createInHub(session, o);
-	if (o.repos) die("--repos solo va en un hub (bond hub --help)");
+	if (o.repos) die(t("team.err_repos_only_hub"));
 	// Antes de tocar Herdr: un nombre de rama inválido dejaría un workspace a medias.
 	const invalid = o.specs.filter((s) => run("git", ["-C", root, "check-ref-format", "--branch", s.branch]).status !== 0).map((s) => s.branch);
-	if (invalid.length) die(`nombre de rama no válido para git: ${invalid.map((b) => JSON.stringify(b)).join(", ")}`);
+	if (invalid.length) die(t("team.err_invalid_branch_name", { branches: invalid.map((b) => JSON.stringify(b)).join(", ") }));
 
 	// Agentes del repo (bond.toml): el de por defecto, y para avisar de los que no tienen config.
 	let repoAgents: string[] | undefined;
@@ -183,8 +107,8 @@ async function create(args: string[]): Promise<void> {
 	const plan: Array<{ branch: string; agent: string }> = [];
 	for (const s of o.specs) plan.push({ branch: s.branch, agent: s.agent ? await chooseAgent(s.agent, undefined) : defaultAgent });
 	const foreign = [...new Set(plan.map((p) => p.agent))].filter((a) => repoAgents && !repoAgents.includes(a));
-	if (foreign.length) warn(`${foreign.join(", ")} no está entre los agentes del repo: sin su config (MCP, skills...). Añádelo con bond init`);
-	if (run("git", ["-C", root, "status", "--porcelain"]).stdout.trim()) warn("hay cambios sin commitear: los worktrees salen de lo commiteado y no los verán");
+	if (foreign.length) warn(t("team.warn_foreign_agent", { agents: foreign.join(", ") }));
+	if (run("git", ["-C", root, "status", "--porcelain"]).stdout.trim()) warn(t("team.warn_uncommitted_changes"));
 
 	if (!insideHerdr()) await ensureServer();
 	const anchor = insideHerdr() ? process.env.HERDR_PANE_ID : undefined;
@@ -203,9 +127,9 @@ async function create(args: string[]): Promise<void> {
 	const { renderSmall } = await import("../lib/bond-logo.mts");
 	const hub = hubRoot(root);
 	const repo = hub ? basename(hub) : basename(root);
-	console.log(`\n  ${renderSmall(60, `equipo en ${repo}`)}\n`);
+	console.log(`\n  ${renderSmall(60, t("team.logo_team_in", { repo }))}\n`);
 	printStatus(teamRows(root, o.base));
-	console.log(dim(`\n  Repartir trabajo: bond team prompt <rama> "la tarea"\n  Cómo va: bond team status · Al acabar: bond team clean`));
+	console.log(dim(t("team.footer_hints")));
 }
 
 /** Un workspace por rama con herdr worktree (fuera de Herdr, o con --workspaces). */
@@ -214,7 +138,10 @@ function openWorkspaces(root: string, plan: PlanItem[], o: TeamArgs): void {
 		const { branch, agent } = item;
 		try {
 			const r = openWorkspace({ dir: item.root ?? root, agent, worktree: branch, base: item.base ?? o.base, shell: false, direction: "right", ratio: "0.6", focus: false, trust: o.trust, agentArgs: defaultAgentArgs(agent, o.agentArgs) });
-			console.log(`${ok("✓")} ${itemLabel(item)}  ${r.reused ? dim(`ya abierto (${r.ws})`) : `${r.agentName} (${agent}) en ${r.agentPane}${r.blocked ? caution(" · espera una respuesta tuya") : ""}`}`);
+			const detail = r.reused
+				? dim(t("team.ws_already_open", { ws: r.ws }))
+				: `${t("team.agent_in_pane", { name: r.agentName ?? "", agent, pane: r.agentPane ?? "" })}${r.blocked ? caution(t("team.awaits_reply")) : ""}`;
+			console.log(`${ok("✓")} ${itemLabel(item)}  ${detail}`);
 		} catch (e) {
 			warn(`${itemLabel(item)}: ${(e as Error).message}`);
 		}
@@ -233,7 +160,7 @@ export const TAB_CAP = 6;
 export const tabRoom = (panes: number, hasWatch: boolean, cap = TAB_CAP) => Math.max(0, cap - panes - (hasWatch ? 0 : 1));
 
 /** Título de la n-ésima pestaña nueva del equipo (desde 1). */
-export const teamTabLabel = (repo: string, n: number) => `equipo · ${repo}${n > 1 ? ` · ${n}` : ""}`;
+export const teamTabLabel = (repo: string, n: number) => (n > 1 ? t("team.tab_label_n", { repo, n }) : t("team.tab_label", { repo }));
 
 interface CallerTab {
 	workspace?: string;
@@ -255,9 +182,15 @@ export function callerTab(root: string, anchor: string): CallerTab {
 }
 
 const LAYOUT_CHOICES: Array<{ layout: Layout; text: (room: number, repo: string) => string }> = [
-	{ layout: "tabs", text: (room, repo) => `Pestañas nuevas (por defecto): ${room ? `${room} en la tuya y el resto` : "todos"} en "${teamTabLabel(repo, 1)}", 4 por pestaña` },
-	{ layout: "same-tab", text: () => "Todo en mi pestaña: en filas de 4, aunque se apriete" },
-	{ layout: "workspaces", text: () => "Workspaces aparte: un workspace por rama (--workspaces)" },
+	{
+		layout: "tabs",
+		text: (room, repo) =>
+			room
+				? t("team.layout_tabs_split", { room, tab: teamTabLabel(repo, 1) })
+				: t("team.layout_tabs_all", { tab: teamTabLabel(repo, 1) }),
+	},
+	{ layout: "same-tab", text: () => t("team.layout_same_tab") },
+	{ layout: "workspaces", text: () => t("team.layout_workspaces") },
 ];
 
 /** Pregunta dónde van los agentes que no caben; Intro elige la 1. */
@@ -267,22 +200,26 @@ async function askLayout(n: number, room: number, repo: string): Promise<Layout>
 	let answered = false;
 	const cancel = () => {
 		if (answered) return;
-		console.log(dim("\n  Cancelado: no he creado nada."));
+		console.log(dim(t("team.layout_cancelled")));
 		process.exit(130);
 	};
 	rl.on("SIGINT", cancel);
 	rl.on("close", cancel);
-	console.log(`\n${n} agentes y en tu pestaña ${room === 1 ? "cabe 1" : `caben ${room}`} (${TAB_CAP} paneles como mucho: el tuyo, la tabla y 4 minions). ¿Dónde van?`);
+	console.log(
+		room === 1
+			? t("team.ask_layout_title_one", { n, cap: TAB_CAP })
+			: t("team.ask_layout_title_many", { n, room, cap: TAB_CAP }),
+	);
 	LAYOUT_CHOICES.forEach((c, i) => console.log(`  ${i + 1}) ${c.text(room, repo)}`));
 	try {
 		for (;;) {
-			const a = (await rl.question("Elige [1]: ")).trim() || "1";
+			const a = (await rl.question(t("team.ask_layout_prompt"))).trim() || "1";
 			const choice = /^[1-9]$/.test(a) ? LAYOUT_CHOICES[Number(a) - 1] : undefined;
 			if (choice) {
 				answered = true;
 				return choice.layout;
 			}
-			console.log(`  ${LAYOUT_CHOICES.map((_, i) => i + 1).join(", ")} o Intro`);
+			console.log(t("team.ask_layout_hint", { choices: LAYOUT_CHOICES.map((_, i) => i + 1).join(", ") }));
 		}
 	} finally {
 		answered = true;
@@ -388,7 +325,7 @@ function trustingOrchestrator(root: string, anchor: string): string | undefined 
 function openInTab(root: string, anchor: string, here: CallerTab, room: number, pending: Pending, o: TeamArgs): void {
 	const { live } = pending;
 	const orchestrator = o.inheritTrust ? trustingOrchestrator(canonical(root), anchor) : undefined;
-	for (const s of pending.skipped) console.log(`${ok("✓")} ${itemLabel(s)}  ${dim(`ya tiene agente (${s.path})`)}`);
+	for (const s of pending.skipped) console.log(`${ok("✓")} ${itemLabel(s)}  ${dim(t("team.already_has_agent", { path: s.path }))}`);
 	const todo: Array<PlanItem & { path: string }> = [];
 	for (const item of pending.todo) {
 		const { branch } = item;
@@ -421,7 +358,7 @@ function openInTab(root: string, anchor: string, here: CallerTab, room: number, 
 				pane = herdr<{ root_pane?: { pane_id: string } }>(["tab", "create", ...(here.workspace ? ["--workspace", here.workspace] : []), "--cwd", path, "--label", teamTabLabel(repo, split.tab), "--no-focus"]).root_pane?.pane_id;
 				roots[split.tab] = pane;
 			} else if ("direction" in split) pane = herdr<{ pane?: { pane_id: string } }>(["pane", "split", "--pane", from, "--direction", split.direction, "--ratio", String(split.ratio), "--cwd", path, "--no-focus"]).pane?.pane_id;
-			if (!pane) throw new Error("no pude leer el panel nuevo de la respuesta de Herdr");
+			if (!pane) throw new Error(t("team.err_herdr_pane_read"));
 			panes.push(pane);
 			const name = minionName(live);
 			live.add(name);
@@ -431,7 +368,7 @@ function openInTab(root: string, anchor: string, here: CallerTab, room: number, 
 				try {
 					trusted = inheritTrust(agent, canonical(todo[i].root ?? root), canonical(path), undefined, !!orchestrator) === "heredada";
 				} catch (e) {
-					warn(`${label}: no pude heredar la confianza (${(e as Error).message}); ${agent} preguntará`);
+					warn(t("team.warn_trust_inherit_failed", { label, error: (e as Error).message, agent }));
 				}
 			}
 			let blocked = false;
@@ -444,7 +381,11 @@ function openInTab(root: string, anchor: string, here: CallerTab, room: number, 
 				// Suele ser una pregunta del agente (confiar en la carpeta...): no se contesta por ti.
 				blocked = startedBlocked(name, true);
 			}
-			console.log(`${ok("✓")} ${label}  ${name} (${agent}) en ${pane}${split.tab ? dim(` · ${teamTabLabel(repo, split.tab)}`) : ""}${trusted ? dim(" · confianza heredada") : ""}${blocked ? caution(" · espera una respuesta tuya") : ""}`);
+			const paneText = t("team.agent_in_pane", { name, agent, pane });
+			const tabText = split.tab ? dim(` · ${teamTabLabel(repo, split.tab)}`) : "";
+			const trustText = trusted ? dim(t("team.trust_inherited")) : "";
+			const blockedText = blocked ? caution(t("team.awaits_reply")) : "";
+			console.log(`${ok("✓")} ${label}  ${paneText}${tabText}${trustText}${blockedText}`);
 		} catch (e) {
 			// El panel de este no se creó: los que cuelgan de él salen del panel del que llama, o
 			// del primero de su pestaña nueva (si tampoco está, se crea la pestaña con el siguiente).
@@ -543,7 +484,7 @@ export interface Row extends BranchInfo {
 /** Rama del checkout principal: la base por defecto. */
 export function defaultBase(root: string): string {
 	const main = gitWorktrees(root).find((w) => w.main);
-	return main?.branch ?? die("el checkout principal no está en una rama: indica la base con --base <ref>");
+	return main?.branch ?? die(t("team.err_main_not_on_branch"));
 }
 
 /** Bases de repos de la sesión ya avisadas por no existir (una vez por ejecución). */
@@ -551,7 +492,7 @@ export const warnedMissingBases = new Set<string>();
 
 /** Una fila por worktree enlazado del repo, con lo que sepa Herdr si está en marcha. */
 export function teamRows(root: string, base = defaultBase(root)): Row[] {
-	if (git(root, ["rev-parse", "--verify", "--quiet", `${base}^{commit}`]).status !== 0) die(`la base no existe: ${base}`);
+	if (git(root, ["rev-parse", "--verify", "--quiet", `${base}^{commit}`]).status !== 0) die(t("team.err_base_not_found", { base }));
 	const live = serverRunning();
 	const open = new Map<string, string>();
 	let running: HerdrAgent[] = [];
@@ -624,7 +565,7 @@ export function sessionRows(root: string, base?: string): Row[] {
 		if (git(hr.dir, ["rev-parse", "--verify", "--quiet", `${hr.base}^{commit}`]).status !== 0) {
 			if (!warnedMissingBases.has(hr.dir)) {
 				warnedMissingBases.add(hr.dir);
-				warn(`la base no existe en ${hr.path}: ${hr.base}`);
+				warn(t("team.warn_base_not_found_in", { path: hr.path, base: hr.base }));
 			}
 			continue;
 		}
@@ -668,12 +609,36 @@ const useColor = () => !!process.stdout.isTTY && !process.env.NO_COLOR;
 export const paintState = (state: State, s: string, color = useColor()) => (color ? `\x1b[${STATE_CODE[state]}m${s}\x1b[0m` : s);
 const visible = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "").length;
 
+const STATE_DISPLAY: Record<State, "team.state_working" | "team.state_blocked" | "team.state_uncommitted" | "team.state_ready" | "team.state_integrated" | "team.state_no_commits"> = {
+	trabajando: "team.state_working",
+	bloqueado: "team.state_blocked",
+	"sin commitear": "team.state_uncommitted",
+	lista: "team.state_ready",
+	integrada: "team.state_integrated",
+	"sin commits": "team.state_no_commits",
+};
+
 function printStatus(rows: Row[]): void {
-	if (!rows.length) return console.log("Sin worktrees en este repo. Crea un equipo con: bond team <rama>...");
+	if (!rows.length) return console.log(t("team.status_no_worktrees"));
 	const isHub = rows.some((r) => r.repo !== undefined);
 	const head = isHub
-		? ["REPO", "RAMA", "ESTADO", "AGENTE", "COMMITS", "FICHEROS", "DÓNDE"]
-		: ["RAMA", "ESTADO", "AGENTE", "COMMITS", "FICHEROS", "DÓNDE"];
+		? [
+				t("team.status_th_repo"),
+				t("team.status_th_branch"),
+				t("team.status_th_state"),
+				t("team.status_th_agent"),
+				t("team.status_th_commits"),
+				t("team.status_th_files"),
+				t("team.status_th_where"),
+			]
+		: [
+				t("team.status_th_branch"),
+				t("team.status_th_state"),
+				t("team.status_th_agent"),
+				t("team.status_th_commits"),
+				t("team.status_th_files"),
+				t("team.status_th_where"),
+			];
 	const repoLabel = (r: Row) => {
 		if (r.repo !== ".") return r.repo ?? "-";
 		const h = hubRoot(r.path);
@@ -681,13 +646,17 @@ function printStatus(rows: Row[]): void {
 		return s?.name ?? (h ? basename(h) : ".");
 	};
 	const table = rows.map((r) => {
+		const stateDisplay = t(STATE_DISPLAY[r.state]);
+		const questionDisplay = r.agent?.question ? `: ${r.agent.question}` : "";
+		const dirtyDisplay = r.dirty && r.state !== "sin commitear" ? t("team.status_dirty_extra", { dirty: r.dirty }) : "";
+		const whereDisplay = r.workspace ?? (r.agent?.pane ? t("team.status_panel", { pane: r.agent.pane }) : dim(t("team.status_closed")));
 		const cols = [
 			r.branch,
-			r.state + (r.agent?.question ? `: ${r.agent.question}` : "") + (r.dirty && r.state !== "sin commitear" ? ` (+${r.dirty} sin commitear)` : ""),
+			stateDisplay + questionDisplay + dirtyDisplay,
 			r.agent ? `${r.agent.name ?? "?"} (${r.agent.kind})` : "-",
 			r.ahead ? `+${r.ahead}` : "-",
 			r.files.length ? String(r.files.length) : "-",
-			r.workspace ?? (r.agent?.pane ? `panel ${r.agent.pane}` : dim("cerrado")),
+			whereDisplay,
 		];
 		if (isHub) cols.unshift(repoLabel(r));
 		return cols;
@@ -702,8 +671,8 @@ function printStatus(rows: Row[]): void {
 		console.log(fmt(t));
 	});
 	if (rows.some((r) => r.agent?.question)) {
-		console.log(caution("\n  Contesta tú en su panel: bond no responde por ti."));
-		console.log(dim('  En pi, "Trust parent folder" una vez basta para todos los worktrees de este repo.'));
+		console.log(caution(t("team.status_answer_hint")));
+		console.log(dim(t("team.status_pi_trust_hint")));
 	}
 }
 
@@ -712,9 +681,9 @@ function parseCommon(args: string[], flags: string[], valued: string[]): { posit
 	const opts: Record<string, string | true> = {};
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
-		if (valued.includes(a)) opts[a] = args[++i] ?? die(`${a} necesita un valor (bond team --help)`);
+		if (valued.includes(a)) opts[a] = args[++i] ?? die(t("team.err_needs_value", { flag: a }));
 		else if (flags.includes(a)) opts[a] = true;
-		else if (a.startsWith("-")) die(`opción desconocida: ${a} (bond team --help)`);
+		else if (a.startsWith("-")) die(t("team.err_unknown_opt", { opt: a }));
 		else positional.push(a);
 	}
 	return { positional, opts };
@@ -722,18 +691,18 @@ function parseCommon(args: string[], flags: string[], valued: string[]): { posit
 
 function status(args: string[]): void | Promise<void> {
 	const { positional, opts } = parseCommon(args, ["--json", "-j", "--watch", "-w", "--keep-open"], ["--base", "-b"]);
-	if (positional.length > 1) die("uso: bond team status [repo] [--base <ref>] [--json | --watch [--keep-open]]");
+	if (positional.length > 1) die(t("team.err_status_usage"));
 	const root = repoOf(positional[0]);
 	const base = (opts["--base"] ?? opts["-b"]) as string | undefined;
 	const hub = hubRoot(root);
-	if (hub && base) die("en un hub cada repo usa su base de hub.toml; quita --base");
+	if (hub && base) die(t("team.err_hub_base_override"));
 	if (opts["--watch"] || opts["-w"]) {
-		if (opts["--json"] || opts["-j"]) die("--watch y --json no van juntos");
+		if (opts["--json"] || opts["-j"]) die(t("team.err_watch_json_conflict"));
 		const targetRoot = hub ?? root;
 		const targetBase = hub ? "" : (base ?? defaultBase(root));
 		return watch(targetRoot, targetBase, !!opts["--keep-open"]);
 	}
-	if (opts["--keep-open"]) die("--keep-open va con --watch");
+	if (opts["--keep-open"]) die(t("team.err_keep_open_needs_watch"));
 	const rows = sessionRows(root, base);
 	if (opts["--json"] || opts["-j"]) return console.log(JSON.stringify(rows, null, 2));
 	printStatus(rows);
@@ -775,11 +744,11 @@ const pad = (s: string, n: number) => s + " ".repeat(Math.max(0, n - textWidth(s
 
 /** Grupos de la tabla en vivo, en el orden en que salen: primero lo que te espera. */
 export const WATCH_GROUPS: Array<{ icon: string; title: string; states: State[] }> = [
-	{ icon: "⛔", title: "Necesita tu respuesta", states: ["bloqueado"] },
-	{ icon: "🔄", title: "Trabajando", states: ["trabajando"] },
-	{ icon: "✏️", title: "Sin commitear", states: ["sin commitear"] },
-	{ icon: "📦", title: "Por revisar", states: ["lista"] },
-	{ icon: "✅", title: "Integradas / sin empezar", states: ["integrada", "sin commits"] },
+	{ icon: "⛔", get title() { return t("team.watch_group_blocked"); }, states: ["bloqueado"] },
+	{ icon: "🔄", get title() { return t("team.watch_group_working"); }, states: ["trabajando"] },
+	{ icon: "✏️", get title() { return t("team.watch_group_uncommitted"); }, states: ["sin commitear"] },
+	{ icon: "📦", get title() { return t("team.watch_group_ready"); }, states: ["lista"] },
+	{ icon: "✅", get title() { return t("team.watch_group_integrated"); }, states: ["integrada", "sin commits"] },
 ];
 
 /**
@@ -794,7 +763,7 @@ export function renderWatch(rows: Row[], o: { width: number; color: boolean; rep
 	const branch = o.branch ?? (branches.size > 0 ? [...branches].join(", ") : undefined);
 	const title = isHub ? (branch ? `bond team · ${o.repo} · ${branch}` : `bond team · ${o.repo}`) : `bond team · ${o.repo} · base ${o.base}`;
 	const out = [pad(clip(title, o.width - o.time.length - 1), o.width - o.time.length) + o.time];
-	if (!rows.length) out.push("", clip("Sin worktrees en este repo.", o.width));
+	if (!rows.length) out.push("", clip(t("team.watch_no_worktrees"), o.width));
 	else {
 		const cells = rows.map((r) => [
 			r.agent?.name ?? "-",
@@ -805,9 +774,16 @@ export function renderWatch(rows: Row[], o: { width: number; color: boolean; rep
 		const widths = (h: string[]) => h.map((x, i) => Math.max(textWidth(x), ...cells.map((c) => textWidth(c[i]))));
 		const room = (w: number[]) => w.reduce((a, b) => a + b + 2, 0);
 		// En un panel estrecho, cabeceras cortas y, si aun así no cabe, la rama recortada.
-		let head = isHub ? ["MINION", "REPO", "COMMITS", "FICHEROS"] : ["MINION", "RAMA", "COMMITS", "FICHEROS"];
+		let head = isHub
+			? [t("team.watch_th_minion"), t("team.watch_th_repo"), t("team.watch_th_commits"), t("team.watch_th_files")]
+			: [t("team.watch_th_minion"), t("team.watch_th_branch"), t("team.watch_th_commits"), t("team.watch_th_files")];
 		let w = widths(head);
-		if (room(w) > o.width) w = widths((head = isHub ? ["MINION", "REPO", "COM", "FICH"] : ["MINION", "RAMA", "COM", "FICH"]));
+		if (room(w) > o.width)
+			w = widths(
+				(head = isHub
+					? [t("team.watch_th_minion"), t("team.watch_th_repo"), t("team.watch_th_com"), t("team.watch_th_fich")]
+					: [t("team.watch_th_minion"), t("team.watch_th_branch"), t("team.watch_th_com"), t("team.watch_th_fich")]),
+			);
 		w[1] = Math.max(4, w[1] - Math.max(0, room(w) - o.width));
 		const fmt = (c: string[]) => c.map((x, i) => pad(clip(x, w[i]), w[i])).join("  ").trimEnd();
 		out.push("", clip(fmt(head), o.width));
@@ -817,12 +793,12 @@ export function renderWatch(rows: Row[], o: { width: number; color: boolean; rep
 			out.push("", paintState(group[0][0].state, clip(`${g.icon} ${g.title}`, o.width), o.color));
 			for (const [r, c] of group) {
 				out.push(paintState(r.state, clip(fmt(c), o.width), o.color));
-				if (r.agent?.question) out.push(clip(`   └ pregunta: ${r.agent.question}`, o.width));
+				if (r.agent?.question) out.push(clip(t("team.watch_question", { question: r.agent.question }), o.width));
 			}
 		}
 	}
 	if (o.notice) out.push("", ...o.notice.split("\n").map((l) => clip(l, o.width)));
-	out.push("", dimmed(clip("q o Ctrl+C para salir · se actualiza cada 2 s", o.width)));
+	out.push("", dimmed(clip(t("team.watch_footer"), o.width)));
 	return out;
 }
 
@@ -856,7 +832,7 @@ const CLOSE_TICKS = 3;
 async function watch(root: string, base: string, keepOpen = false): Promise<void> {
 	const out = process.stdout;
 	const stdin = process.stdin;
-	if (!out.isTTY) die("--watch necesita una terminal (sin ella: bond team status --json)");
+	if (!out.isTTY) die(t("team.err_watch_needs_tty"));
 	const hub = hubRoot(root);
 	const session = hub ? hubSession(hub) : undefined;
 	const targetRoot = hub ?? root;
@@ -899,12 +875,12 @@ async function watch(root: string, base: string, keepOpen = false): Promise<void
 				const next = watchIdle(rows, pane, repo, keepOpen, worked);
 				idleTicks = next === "close" ? idleTicks + 1 : 0;
 				closing = idleTicks >= CLOSE_TICKS;
-				notice = next === "busy" ? undefined : next === "close" ? `sin trabajo pendiente\nel panel se cierra en ${(CLOSE_TICKS - idleTicks) * 2} s` : "sin trabajo pendiente";
+				notice = next === "busy" ? undefined : next === "close" ? t("team.watch_closing_in", { seconds: (CLOSE_TICKS - idleTicks) * 2 }) : t("team.watch_no_pending_work");
 			}
 			// Sin la última columna: escribir en ella y borrar el resto de la línea se come esa letra.
 			lines = renderWatch(rows, { width: (out.columns || 80) - 1, color, repo, base, time: new Date().toTimeString().slice(0, 8), notice, hub: !!session });
 		} catch (e) {
-			lines = [`bond team · ${repo}`, "", clip(`error: ${(e as Error).message}`, out.columns || 80)];
+			lines = [`bond team · ${repo}`, "", clip(t("team.watch_error", { error: (e as Error).message }), out.columns || 80)];
 		}
 		if (stopped) return;
 		out.write(`\x1b[H${lines.slice(0, out.rows || lines.length).map((l) => `${l}\x1b[K`).join("\r\n")}\x1b[J`);
@@ -942,7 +918,7 @@ async function watch(root: string, base: string, keepOpen = false): Promise<void
 }
 
 /** Título del panel de la tabla en vivo de un repo. */
-export const watchLabel = (repo: string) => `tabla · ${repo}`;
+export const watchLabel = (repo: string) => t("team.watch_pane_label", { repo });
 
 /** Cómo volver a lanzar este bond: el binario, o node/bun con su script (desde el código o npm). */
 export function selfCommand(execPath = process.execPath, script = process.argv[1]): string[] {
@@ -988,16 +964,16 @@ export function openWatch(root: string, anchor: string, base?: string): void {
 		const me = herdr<{ pane?: HerdrPane }>(["pane", "get", anchor]).pane;
 		const panes = herdr<{ panes?: HerdrPane[] }>(["pane", "list", ...(me?.workspace_id ? ["--workspace", me.workspace_id] : [])]).panes ?? [];
 		let pane = findWatchPane(panes, me?.tab_id, repo);
-		if (pane && watching(pane)) return console.log(`${ok("✓")} tabla en vivo  ${dim(`ya abierta en ${pane}`)}`);
+		if (pane && watching(pane)) return console.log(`${ok("✓")} ${t("team.live_table")}  ${dim(t("team.table_already_open", { pane }))}`);
 		if (!pane) {
 			pane = herdr<{ pane?: { pane_id: string } }>(["pane", "split", "--pane", anchor, "--direction", "right", "--ratio", "0.6", "--cwd", targetRoot, "--no-focus"]).pane?.pane_id;
-			if (!pane) throw new Error("no pude leer el panel nuevo de la respuesta de Herdr");
+			if (!pane) throw new Error(t("team.err_herdr_pane_read"));
 			run("herdr", ["pane", "rename", pane, watchLabel(repo)]);
 		}
 		herdr(["pane", "run", pane, watchCommand(targetRoot, base)]);
-		console.log(`${ok("✓")} tabla en vivo  en ${pane}`);
+		console.log(`${ok("✓")} ${t("team.live_table")}  ${t("team.table_in_pane", { pane })}`);
 	} catch (e) {
-		warn(`tabla en vivo: ${(e as Error).message} (ábrela a mano: bond team status --watch)`);
+		warn(t("team.warn_table_failed", { error: (e as Error).message }));
 	}
 }
 
@@ -1007,17 +983,22 @@ async function prompt(args: string[]): Promise<void> {
 	requireHerdr();
 	const { positional, opts } = parseCommon(args, ["--wait", "--no-record"], ["--timeout", "--repo"]);
 	const [branch, ...words] = positional;
-	if (!branch || !words.length) die('uso: bond team prompt <rama> "la tarea" [--repo <repo>] [--wait] [--timeout <ms>] [--no-record]');
+	if (!branch || !words.length) die(t("team.err_prompt_usage"));
 	const root = repoOf();
 	const extra = [...(opts["--wait"] ? ["--wait"] : []), ...(opts["--timeout"] ? ["--timeout", opts["--timeout"] as string] : [])];
 	const session = hubOf(root);
 	if (session) return promptInHub(session, branch, words.join(" "), opts, extra);
-	if (opts["--repo"]) die("--repo solo va en un hub (bond hub --help)");
+	if (opts["--repo"]) die(t("team.err_repo_only_hub"));
 	const rows = teamRows(root);
-	const row = rows.find((r) => r.branch === branch) ?? die(`no hay worktree para ${branch} (bond team status)`);
-	const name = row.agent?.name ?? die(`${branch} no tiene un agente en marcha (bond team ${branch} para abrirlo)`);
+	const row = rows.find((r) => r.branch === branch) ?? die(t("team.err_no_worktree_for_branch", { branch }));
+	const name = row.agent?.name ?? die(t("team.err_no_agent_running", { branch }));
 	// Con una pregunta en pantalla, el Enter del prompt la contestaría por ti y la tarea se perdería.
-	if (row.state === "bloqueado") die(`${name} espera una respuesta tuya${row.agent?.question ? ` (${row.agent.question})` : ""}: contéstale en su panel (herdr workspace focus ${row.workspace}) y repite`);
+	if (row.state === "bloqueado") {
+		const msg = row.agent?.question
+			? t("team.err_agent_blocked_with_q", { name, question: row.agent.question, workspace: row.workspace ?? "" })
+			: t("team.err_agent_blocked", { name, workspace: row.workspace ?? "" });
+		die(msg);
+	}
 	// La memoria de decisiones: el encargo queda en el run antes de mandar, y si escribir
 	// falla no puede cortar el envío (D9). Con memoria activa, el texto enviado lleva
 	// además la nota de D18: las decisiones viajan con la rama.
@@ -1028,14 +1009,14 @@ async function prompt(args: string[]): Promise<void> {
 		try {
 			runRel = recordRequest(ctx, task);
 		} catch (e) {
-			warn(`run: ${(e as Error).message} (mando el prompt igual)`);
+			warn(t("team.warn_run_record_failed", { error: (e as Error).message }));
 		}
 	}
 	// Herdr rechaza el prompt de un agente blocked: el aviso de arranque de agy se cierra con Esc.
 	if (row.agent?.notice) run("herdr", ["agent", "send-keys", name, "esc"], { timeout: 5000 });
 	const r = await promptAgent(name, task, extra);
 	if (r.error !== undefined) die(`${name}: ${r.error}`);
-	console.log(`${ok("✓")} ${branch} → ${name}${runRel ? `  ${dim(`run: ${runRel}`)}` : ""}${opts["--wait"] ? `  ${dim(r.status ?? "")}` : ""}`);
+	console.log(`${ok("✓")} ${branch} → ${name}${runRel ? `  ${dim(t("team.run_label", { rel: runRel }))}` : ""}${opts["--wait"] ? `  ${dim(r.status ?? "")}` : ""}`);
 }
 
 /** Espera `ms` milisegundos. */
@@ -1115,7 +1096,7 @@ async function promptAgent(name: string, task: string, extra: string[]): Promise
 	if (paneShowsPrompt(name, task)) return { status: second.status ?? "idle" };
 	return {
 		stalled: true,
-		error: `el prompt no llegó a ${name}: Herdr no observó actividad y el panel no muestra la tarea tras reintentar una vez. Revisa el panel antes de volver a mandarlo.`,
+		error: t("team.err_prompt_stalled_pane", { name }),
 	};
 }
 
@@ -1403,7 +1384,7 @@ export function recordRequest(ctx: RunCtx, task: string, ts = utcNow()): string 
 	const dir = runsDirAbs(ctx.mainRoot, ctx.dir);
 	mkdirSync(dir, { recursive: true });
 	const text = task.trim();
-	if (!text) die("el encargo está vacío (bond team prompt <rama> \"la tarea\")");
+	if (!text) die(t("team.err_empty_task"));
 	const open = loadRuns(ctx.mainRoot, ctx.dir).find((r) => r.fm.scalars.branch === ctx.branch && r.fm.scalars.agent === ctx.agent && r.fm.scalars.status === "sent");
 	if (open) {
 		const request = `${open.request}\n\n---\n\n**${ts}**\n\n${text}`;
@@ -1523,24 +1504,24 @@ function runCtx(root: string, row: Row): RunCtx | undefined {
 
 /** Por qué no se puede recoger aún el informe de un agente con ese estado; undefined si se puede. */
 export const collectBlocker = (status?: string) =>
-	status === "working" ? "está trabajando" : status === "blocked" ? "espera una respuesta tuya" : undefined;
+	status === "working" ? t("team.blocker_working") : status === "blocked" ? t("team.blocker_blocked") : undefined;
 
 function collect(args: string[]): void {
 	requireHerdr();
 	const { positional, opts } = parseCommon(args, [], ["--lines", "--agent", "--request", "--repo"]);
-	const usage = "uso: bond team collect <rama> [--repo <repo>] [--lines <n>] [--agent <nombre>] [--request <encargo>]";
+	const usage = t("team.err_collect_usage");
 	const branch = positional[0] ?? die(usage);
 	if (positional.length > 1) die(usage);
 	const root = repoOf();
 	const session = hubOf(root);
 	if (session) return collectInHub(session, branch, opts);
-	if (opts["--repo"]) die("--repo solo va en un hub (bond hub --help)");
+	if (opts["--repo"]) die(t("team.err_repo_only_hub"));
 	const main = gitWorktrees(root).find((w) => w.main)?.path ?? root;
 	const { value: dec, error } = catchDie(() => repoDecisions(main));
-	if (error !== undefined) die(`no pude leer [decisions] de ${main}: ${error}`);
-	if (!dec) die("este repo no usa la memoria de decisiones: añade la sección [decisions] a .bond/bond.toml (bond init la propone) y ejecuta bond sync");
+	if (error !== undefined) die(t("team.err_read_decisions_failed", { path: main, error }));
+	if (!dec) die(t("team.err_no_decision_memory"));
 	const row = teamRows(root).find((r) => r.branch === branch);
-	const agent = (opts["--agent"] as string | undefined) || row?.agent?.name || die(`no hay agente en la rama ${branch} y no diste --agent (bond team status)`);
+	const agent = (opts["--agent"] as string | undefined) || row?.agent?.name || die(t("team.err_no_agent_for_collect", { branch }));
 	const live = row?.agent ? undefined : agents(5000).find((a) => a.name === agent);
 	const kind = row?.agent?.kind ?? live?.agent ?? "";
 	const ctx: RunCtx = { mainRoot: main, worktree: row?.path ?? main, dir: dec.dir, branch, base: baseLink(main), agent, kind, orchestrator: resolveAuthor().replace(/^agent:/, "") };
@@ -1552,16 +1533,27 @@ function collectInto(ctx: RunCtx, status: string | undefined, opts: Record<strin
 	const { agent, branch } = ctx;
 	// Recoger a medias guardaría el panel sin terminar como informe y daría el run por acabado.
 	const busy = collectBlocker(status);
-	if (busy) die(`${agent} ${busy}: espera a que termine (herdr agent wait ${agent}) y repite`);
+	if (busy) {
+		if (status === "working") die(t("team.err_agent_is_working", { agent }));
+		else die(t("team.err_agent_is_blocked", { agent }));
+	}
 	const lines = String(opts["--lines"] ?? "200");
 	// D17: el informe sale del fichero de sesión del agente; el panel recortado es el respaldo.
 	const { report, source } = agentReport(agent, () => {
 		const rd = run("herdr", ["agent", "read", agent, "--source", "recent-unwrapped", "--lines", lines], { timeout: 20_000 });
-		if (rd.status !== 0) die(`no pude leer el panel de ${agent}: ${(rd.stderr || rd.stdout).trim()}`);
+		if (rd.status !== 0) die(t("team.err_read_pane_failed", { agent, error: (rd.stderr || rd.stdout).trim() }));
 		return rd.stdout;
 	}, ctx.kind);
 	const out = collectRun(ctx, report, { request: opts["--request"] as string | undefined });
-	console.log(`${ok("~")} ${out.rel}  ${dim(`reported · informe desde la ${source} · ${out.commits.length} commit(s) de ${branch} · ${out.decisions.length} decisión(es) de ${agent}`)}`);
+	const sourceText = source === "sesión" ? t("team.collect_source_session") : t("team.collect_source_pane");
+	const reportedText = t("team.collect_reported", {
+		source: sourceText,
+		commits: out.commits.length,
+		branch,
+		decisions: out.decisions.length,
+		agent,
+	});
+	console.log(`${ok("~")} ${out.rel}  ${dim(reportedText)}`);
 }
 
 // --- quitar worktrees -----------------------------------------------------------------------
@@ -1572,21 +1564,21 @@ function clean(args: string[]): void {
 	const root = repoOf(dir);
 	const session = hubOf(root);
 	if (session) return cleanInHub(session, positional, opts);
-	if (opts["--repo"]) die("--repo solo va en un hub (bond hub --help)");
+	if (opts["--repo"]) die(t("team.err_repo_only_hub"));
 	const rows = teamRows(root, (opts["--base"] ?? opts["-b"]) as string | undefined);
 	const unknown = positional.filter((b) => !rows.some((r) => r.branch === b));
-	if (unknown.length) die(`sin worktree: ${unknown.join(", ")} (bond team status)`);
+	if (unknown.length) die(t("team.err_clean_no_worktree", { branches: unknown.join(", ") }));
 
 	const targets = positional.length ? rows.filter((r) => positional.includes(r.branch)) : rows.filter((r) => r.state === "integrada" && r.managed);
 	if (!positional.length) {
 		const outside = rows.filter((r) => r.state === "integrada" && !r.managed);
-		for (const r of outside) console.log(dim(`  ${r.branch}: integrada, pero no la abrió Herdr (${r.path}); nómbrala para quitarla`));
+		for (const r of outside) console.log(dim(t("team.clean_outside_herdr", { branch: r.branch, path: r.path })));
 	}
 	const removed = new Set<Row>();
 	// Al acabar, sin agentes del equipo, la tabla en vivo sobra.
 	const tableLeft = () => (opts["--keep-table"] ? undefined : closeIdleTable(root, rows.filter((r) => !removed.has(r))));
 	if (!targets.length) {
-		console.log(positional.length ? "Nada que quitar." : "Ninguna rama integrada que quitar (bond team status).");
+		console.log(positional.length ? t("team.clean_nothing_to_remove") : t("team.clean_no_integrated_to_remove"));
 		return tableLeft();
 	}
 
@@ -1600,7 +1592,7 @@ function clean(args: string[]): void {
 	if (serverRunning() && !rows.some((r) => r.workspace && !targets.includes(r))) {
 		const name = basename(root);
 		const ws = workspaces().find((w) => w.label === `bond:${name}` || w.label === `pi:${name}`);
-		if (ws) console.log(dim(`  El workspace del repo (${ws.label}) sigue abierto; si ya no lo usas: herdr workspace close ${ws.workspace_id}`));
+		if (ws) console.log(dim(t("team.clean_repo_ws_open", { label: ws.label ?? "", id: ws.workspace_id })));
 	}
 }
 
@@ -1616,11 +1608,23 @@ function removeWorktrees(root: string, targets: Row[], opts: Record<string, stri
 	const cwd = canonical(process.cwd());
 	for (const r of targets) {
 		const label = itemLabel({ branch: r.branch, sub });
-		const why =
-			r.state === "trabajando" ? "el agente está trabajando" : r.state === "sin commitear" || r.dirty ? `${r.dirty} cambio(s) sin commitear` : within(cwd, r.path) ? "estás dentro" : r.state === "bloqueado" ? "el agente espera una respuesta" : undefined;
-		if (why && !force) {
-			warn(`${label}: no lo quito, ${why} (--force para quitarlo igualmente)`);
-			continue;
+		if (!force) {
+			if (r.state === "trabajando") {
+				warn(t("team.warn_clean_working", { label }));
+				continue;
+			}
+			if (r.state === "sin commitear" || r.dirty) {
+				warn(t("team.warn_clean_dirty", { label, dirty: r.dirty }));
+				continue;
+			}
+			if (within(cwd, r.path)) {
+				warn(t("team.warn_clean_inside", { label }));
+				continue;
+			}
+			if (r.state === "bloqueado") {
+				warn(t("team.warn_clean_blocked", { label }));
+				continue;
+			}
 		}
 		// En modo pestaña el agente vive en un panel suelto: se cierra con él.
 		const pane = !r.workspace && r.managed ? r.agent?.pane : undefined;
@@ -1642,15 +1646,15 @@ function removeWorktrees(root: string, targets: Row[], opts: Record<string, stri
 			continue;
 		}
 		removed.add(r);
-		let branchNote = "rama conservada";
+		let branchNote = t("team.clean_branch_kept");
 		if (opts["--delete-branch"]) {
 			if (r.integrated || force) {
 				act(`git branch -D ${r.branch}`, () => {
 					const g = git(root, ["branch", "-D", r.branch]);
 					if (g.status !== 0) throw new Error(g.stderr.trim());
 				});
-				branchNote = "rama borrada";
-			} else branchNote = "rama conservada: no está integrada (--force para borrarla)";
+				branchNote = t("team.clean_branch_deleted");
+			} else branchNote = t("team.clean_branch_not_integrated");
 		}
 		console.log(`${ok("-")} ${label}  ${dim(`${r.path} · ${branchNote}`)}`);
 	}
@@ -1682,9 +1686,9 @@ function closeIdleTable(root: string, left: Row[]): void {
 	for (const pane of idleTables(remaining, panes, repo, insideHerdr() ? process.env.HERDR_PANE_ID : undefined)) {
 		try {
 			act(`herdr pane close ${pane}`, () => herdr(["pane", "close", pane]));
-			console.log(`${ok("-")} tabla en vivo  ${dim(`${pane} · no queda ningún agente del equipo (--keep-table para dejarla)`)}`);
+			console.log(`${ok("-")} ${t("team.live_table")}  ${dim(t("team.clean_table_closed", { pane }))}`);
 		} catch (e) {
-			warn(`tabla en vivo: ${(e as Error).message}`);
+			warn(t("team.warn_table_failed_short", { error: (e as Error).message }));
 		}
 	}
 }
@@ -1706,7 +1710,7 @@ function hubOf(root: string): HubSession | undefined {
 	const r = catchDie(() => hubSession(root));
 	if (r.error !== undefined && !warnedInvalidHub.has(root)) {
 		warnedInvalidHub.add(root);
-		warn(`${r.error}: sigo sin el modo hub`);
+		warn(t("team.warn_hub_fallback", { error: r.error }));
 	}
 	return r.value;
 }
@@ -1722,8 +1726,8 @@ export function pickRepos(repos: HubRepo[], names: string[] | undefined, flag: s
 		const key = n.replace(/\\/g, "/").replace(/\/+$/, "");
 		const exact = repos.filter((r) => r.path === key);
 		const hits = exact.length ? exact : repos.filter((r) => basename(r.path) === key);
-		if (!hits.length) die(`${flag} ${n}: no es un repo de la sesión (${repos.map((r) => r.path).join(", ")})`);
-		if (hits.length > 1) die(`${flag} ${n}: hay varios (${hits.map((r) => r.path).join(", ")}); usa la ruta`);
+		if (!hits.length) die(t("team.err_pick_not_in_session", { flag, name: n, repos: repos.map((r) => r.path).join(", ") }));
+		if (hits.length > 1) die(t("team.err_pick_multiple_hits", { flag, name: n, hits: hits.map((r) => r.path).join(", ") }));
 		if (!out.includes(hits[0])) out.push(hits[0]);
 	}
 	return out;
@@ -1752,17 +1756,20 @@ const subRows = (s: HubSession, repos: HubRepo[]) => sessionRows(s.root).filter(
 const repoOfRow = (s: HubSession, row: Row) => subRepos(s).find((r) => r.path === row.repo) as HubRepo;
 
 async function createInHub(s: HubSession, o: TeamArgs): Promise<void> {
-	if (o.specs.length > 1) die(`en un hub, una sola rama vertical por sesión (D2): bond team <rama>[:agente] [--repos a,b], no ${o.specs.map((x) => x.branch).join(" ")}`);
-	if (o.base) die("en un hub, cada repo sale de su base de hub.toml: sin --base");
+	if (o.specs.length > 1) die(t("team.err_hub_single_branch", { branches: o.specs.map((x) => x.branch).join(" ") }));
+	if (o.base) die(t("team.err_hub_no_base"));
 	const { branch, agent: asked } = o.specs[0];
-	if (git(s.root, ["check-ref-format", "--branch", branch]).status !== 0) die(`nombre de rama no válido para git: ${JSON.stringify(branch)}`);
+	if (git(s.root, ["check-ref-format", "--branch", branch]).status !== 0) die(t("team.err_invalid_branch_name", { branches: JSON.stringify(branch) }));
 	const subs = subRepos(s);
-	if (!subs.length) die(`${s.name} no tiene repos en su sesión: añade repos a hub.toml`);
+	if (!subs.length) die(t("team.err_hub_no_repos", { name: s.name }));
 	const targets = pickRepos(subs, o.repos, "--repos");
 	const open = openVerticals(s).filter((v) => v.branch !== branch);
-	if (open.length) die(`${s.name} ya tiene abierta la rama vertical ${open.map((v) => `${v.branch} (worktree en ${v.repo}: ${v.path})`).join(", ")} y solo cabe una por sesión: ciérrala antes con bond team clean ${open[0].branch} (las ramas se quedan)`);
+	if (open.length) {
+		const openStr = open.map((v) => t("team.hub_open_vertical_item", { branch: v.branch, repo: v.repo, path: v.path })).join(", ");
+		die(t("team.err_hub_already_open", { name: s.name, open: openStr, branch: open[0].branch }));
+	}
 	const noBase = [s.repos[0], ...targets].filter((r) => git(r.dir, ["rev-parse", "--verify", "--quiet", `${r.base}^{commit}`]).status !== 0);
-	if (noBase.length) die(`la base no existe en ${noBase.map((r) => `${r.path === "." ? s.name : r.path} (${r.base})`).join(", ")}: cámbiala en hub.toml (base o [repos.<x>].base)`);
+	if (noBase.length) die(t("team.err_hub_base_missing", { repos: noBase.map((r) => `${r.path === "." ? s.name : r.path} (${r.base})`).join(", ") }));
 
 	// El agente de cada repo: el de rama:agente, si no --agent, si no el de su bond.toml.
 	const plan: PlanItem[] = [];
@@ -1770,17 +1777,17 @@ async function createInHub(s: HubSession, o: TeamArgs): Promise<void> {
 	for (const r of targets) {
 		const own = existsSync(join(r.dir, ".bond", "bond.toml")) ? catchDie(() => loadRepoAgents(r.dir)).value : undefined;
 		const agent = await chooseAgent(asked ?? o.agent, own?.default_agent);
-		if (own && !own.agents.includes(agent)) warn(`${r.path}: ${agent} no está entre los agentes del repo: sin su config (MCP, skills...). Añádelo con bond init`);
-		if (git(r.dir, ["status", "--porcelain"]).stdout.trim()) warn(`${r.path}: hay cambios sin commitear: el worktree sale de lo commiteado y no los verá`);
+		if (own && !own.agents.includes(agent)) warn(t("team.warn_hub_foreign_agent", { path: r.path, agent }));
+		if (git(r.dir, ["status", "--porcelain"]).stdout.trim()) warn(t("team.warn_hub_uncommitted", { path: r.path }));
 		plan.push({ branch, agent, root: r.dir, sub: r.path, base: r.base });
 	}
 
 	// En el hub, la rama vertical es solo una rama: sin worktree ni agente (D7).
-	if (git(s.root, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).status === 0) console.log(`${ok("✓")} ${branch} · ${s.name}  ${dim("la rama ya está en el hub")}`);
+	if (git(s.root, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).status === 0) console.log(`${ok("✓")} ${branch} · ${s.name}  ${dim(t("team.hub_branch_exists"))}`);
 	else {
 		const g = git(s.root, ["branch", branch, s.repos[0].base]);
-		if (g.status !== 0) die(`${s.name}: git branch ${branch} ${s.repos[0].base}: ${g.stderr.trim()}`);
-		console.log(`${ok("✓")} ${branch} · ${s.name}  ${dim(`rama del hub desde ${s.repos[0].base}, sin worktree ni agente`)}`);
+		if (g.status !== 0) die(t("team.err_hub_git_branch", { name: s.name, branch, base: s.repos[0].base, error: g.stderr.trim() }));
+		console.log(`${ok("✓")} ${branch} · ${s.name}  ${dim(t("team.hub_branch_created", { base: s.repos[0].base }))}`);
 	}
 
 	if (!insideHerdr()) await ensureServer();
@@ -1795,9 +1802,9 @@ async function createInHub(s: HubSession, o: TeamArgs): Promise<void> {
 		openWatch(s.root, anchor);
 	} else openWorkspaces(s.root, plan, o);
 	const { renderSmall } = await import("../lib/bond-logo.mts");
-	console.log(`\n  ${renderSmall(60, `${branch} en ${s.name}`)}\n`);
+	console.log(`\n  ${renderSmall(60, t("team.logo_branch_in_hub", { branch, name: s.name }))}\n`);
 	printStatus(subRows(s, targets).filter((r) => r.branch === branch));
-	console.log(dim(`\n  Repartir trabajo: bond team prompt ${branch} "la tarea" (a todos; --repo <repo> a uno)\n  Recoger: bond team collect ${branch} --repo <repo> · Al acabar: bond team clean ${branch}`));
+	console.log(dim(t("team.hub_footer_hints", { branch })));
 }
 
 /**
@@ -1838,16 +1845,19 @@ function hubRunCtx(s: HubSession, repo: HubRepo, row: Row, agent = row.agent?.na
 /** bond team prompt en un hub: la tarea a todos los agentes de la rama (o al de --repo), con la nota de D8. */
 async function promptInHub(s: HubSession, branch: string, words: string, opts: Record<string, string | true>, extra: string[]): Promise<void> {
 	const all = subRows(s, subRepos(s)).filter((r) => r.branch === branch);
-	if (!all.length) die(`no hay worktree para ${branch} en ningún repo de ${s.name} (bond team status)`);
+	if (!all.length) die(t("team.err_hub_no_worktree", { branch, name: s.name }));
 	const only = opts["--repo"] ? pickRepos(subRepos(s), [opts["--repo"] as string], "--repo")[0] : undefined;
 	const targets = only ? all.filter((r) => r.repo === only.path) : all;
-	if (!targets.length) die(`${branch} no tiene worktree en ${only?.path} (bond team status)`);
-	for (const r of targets) if (!r.agent?.name) warn(`${r.repo}: ${branch} no tiene un agente en marcha (bond team ${branch} para abrirlo)`);
+	if (!targets.length) die(t("team.err_hub_no_worktree_in_repo", { branch, path: only?.path ?? "" }));
+	for (const r of targets) if (!r.agent?.name) warn(t("team.warn_hub_no_agent", { repo: r.repo ?? "", branch }));
 	const live = targets.filter((r) => r.agent?.name);
-	if (!live.length) die(`${branch} no tiene ningún agente en marcha${only ? ` en ${only.path}` : ""} (bond team ${branch} para abrirlo)`);
+	if (!live.length) {
+		if (only) die(t("team.err_hub_no_live_agent_in", { branch, path: only.path }));
+		else die(t("team.err_hub_no_live_agent", { branch }));
+	}
 	// Con una pregunta en pantalla, el Enter del prompt la contestaría por ti: no se manda a nadie.
 	const blocked = live.filter((r) => r.state === "bloqueado");
-	if (blocked.length) die(`${blocked.map((r) => `${r.agent?.name} (${r.repo})${r.agent?.question ? `: ${r.agent.question}` : ""}`).join(", ")} espera una respuesta tuya: contéstale en su panel y repite (no he mandado nada)`);
+	if (blocked.length) die(t("team.err_hub_blocked_reply", { agents: blocked.map((r) => `${r.agent?.name} (${r.repo})${r.agent?.question ? `: ${r.agent.question}` : ""}`).join(", ") }));
 	const team = all.filter((r) => r.agent?.name).map((r) => ({ name: r.agent?.name as string, repo: r.repo as string, path: r.path }));
 	const sent = await Promise.all(
 		live.map(async (row) => {
@@ -1860,7 +1870,7 @@ async function promptInHub(s: HubSession, branch: string, words: string, opts: R
 				try {
 					runRel = recordRequest(ctx, task);
 				} catch (e) {
-					warn(`${row.repo}: run: ${(e as Error).message} (mando el prompt igual)`);
+					warn(t("team.warn_hub_run_failed", { repo: row.repo ?? "", error: (e as Error).message }));
 				}
 			}
 			if (row.agent?.notice) run("herdr", ["agent", "send-keys", name, "esc"], { timeout: 5000 });
@@ -1872,10 +1882,10 @@ async function promptInHub(s: HubSession, branch: string, words: string, opts: R
 		if (r.error !== undefined) {
 			warn(`${row.repo}: ${name}: ${r.error}`);
 			process.exitCode = 1;
-		} else console.log(`${ok("✓")} ${branch} · ${row.repo} → ${name}${runRel ? `  ${dim(`run: ${runRel}`)}` : ""}${opts["--wait"] ? `  ${dim(r.status ?? "")}` : ""}`);
+		} else console.log(`${ok("✓")} ${branch} · ${row.repo} → ${name}${runRel ? `  ${dim(t("team.run_label", { rel: runRel }))}` : ""}${opts["--wait"] ? `  ${dim(r.status ?? "")}` : ""}`);
 	}
 	const stalls = sent.filter((x) => x.r.stalled);
-	if (stalls.length) die(`el prompt no llegó a ${stalls.map((x) => `${x.name} (${x.row.repo})`).join(", ")}: revisa sus paneles antes de volver a mandar`);
+	if (stalls.length) die(t("team.err_hub_prompt_stalls", { targets: stalls.map((x) => `${x.name} (${x.row.repo})`).join(", ") }));
 }
 
 /** bond team collect en un hub: el informe del agente de la rama en su repo (--repo si hay varios). */
@@ -1885,27 +1895,32 @@ function collectInHub(s: HubSession, branch: string, opts: Record<string, string
 	let found = subRows(s, repos).filter((r) => r.branch === branch);
 	// --agent: el de ese nombre en la rama o, como fuera de un hub, el worktree sin agente en marcha.
 	if (asked) found = found.some((r) => r.agent?.name === asked) ? found.filter((r) => r.agent?.name === asked) : found.filter((r) => !r.agent);
-	if (!found.length) die(`no hay worktree para ${branch}${asked ? ` con ${asked}` : ""} en ${opts["--repo"] ? repos[0].path : `ningún repo de ${s.name}`} (bond team status)`);
-	if (found.length > 1) die(`${branch} está en ${found.length} repos (${found.map((r) => r.repo).join(", ")}): recoge uno a uno con --repo <repo>`);
+	if (!found.length) {
+		if (asked && opts["--repo"]) die(t("team.err_hub_no_wt_asked_repo", { branch, agent: asked, path: repos[0].path }));
+		else if (asked) die(t("team.err_hub_no_wt_asked_all", { branch, agent: asked, name: s.name }));
+		else if (opts["--repo"]) die(t("team.err_hub_no_wt_repo", { branch, path: repos[0].path }));
+		else die(t("team.err_hub_no_wt_all", { branch, name: s.name }));
+	}
+	if (found.length > 1) die(t("team.err_hub_collect_multiple", { branch, count: found.length, repos: found.map((r) => r.repo).join(", ") }));
 	const [row] = found;
 	const repo = repoOfRow(s, row);
-	const agent = asked || row.agent?.name || die(`no hay agente en la rama ${branch} de ${repo.path} y no diste --agent (bond team status)`);
+	const agent = asked || row.agent?.name || die(t("team.err_hub_no_agent_for_collect", { branch, path: repo.path }));
 	const live = row.agent ? undefined : agents(5000).find((a) => a.name === agent);
-	const ctx = hubRunCtx(s, repo, row, agent, row.agent?.kind ?? live?.agent ?? "") ?? die(`ni ${s.name} ni ${repo.path} usan la memoria de decisiones: añade la sección [decisions] a .bond/bond.toml del hub (bond init la propone) y ejecuta bond sync`);
+	const ctx = hubRunCtx(s, repo, row, agent, row.agent?.kind ?? live?.agent ?? "") ?? die(t("team.err_hub_no_decision_memory", { hub: s.name, repo: repo.path }));
 	collectInto(ctx, row.agent?.status ?? live?.agent_status, opts);
 }
 
 /** bond team clean en un hub: los worktrees de la rama en todos los repos de la sesión (o en el de --repo). */
 function cleanInHub(s: HubSession, branches: string[], opts: Record<string, string | true>): void {
-	if (opts["--base"] ?? opts["-b"]) die("en un hub, cada repo se compara con su base de hub.toml: sin --base");
+	if (opts["--base"] ?? opts["-b"]) die(t("team.err_hub_clean_no_base"));
 	const repos = opts["--repo"] ? pickRepos(subRepos(s), [opts["--repo"] as string], "--repo") : subRepos(s);
 	const rows = subRows(s, repos);
 	const unknown = branches.filter((b) => !rows.some((r) => r.branch === b));
-	if (unknown.length) die(`sin worktree en ${opts["--repo"] ? repos[0].path : s.name}: ${unknown.join(", ")} (bond team status)`);
+	if (unknown.length) die(t("team.err_hub_clean_no_worktree", { target: opts["--repo"] ? repos[0].path : s.name, branches: unknown.join(", ") }));
 	const targets = branches.length ? rows.filter((r) => branches.includes(r.branch)) : rows.filter((r) => r.state === "integrada" && r.managed);
-	if (!branches.length) for (const r of rows.filter((y) => y.state === "integrada" && !y.managed)) console.log(dim(`  ${itemLabel({ branch: r.branch, sub: r.repo })}: integrada, pero no la abrió Herdr (${r.path}); nómbrala para quitarla`));
+	if (!branches.length) for (const r of rows.filter((y) => y.state === "integrada" && !y.managed)) console.log(dim(t("team.clean_outside_herdr", { branch: itemLabel({ branch: r.branch, sub: r.repo }), path: r.path })));
 	const removed = new Set<Row>();
-	if (!targets.length) console.log(branches.length ? "Nada que quitar." : "Ninguna rama integrada que quitar (bond team status).");
+	if (!targets.length) console.log(branches.length ? t("team.clean_nothing_to_remove") : t("team.clean_no_integrated_to_remove"));
 	for (const repo of repos) {
 		const mine = targets.filter((r) => r.repo === repo.path);
 		if (!mine.length) continue;
@@ -1925,7 +1940,7 @@ function cleanInHub(s: HubSession, branches: string[], opts: Record<string, stri
  * le queda worktree en ningún repo.
  */
 function cleanHubBranches(s: HubSession, removed: Set<Row>, opts: Record<string, string | true>): void {
-	if (!opts["--delete-branch"]) return console.log(dim(`  Las ramas se quedan, en ${s.name} y en cada repo`));
+	if (!opts["--delete-branch"]) return console.log(dim(t("team.hub_clean_branches_kept", { name: s.name })));
 	const hubBase = s.repos[0].base;
 	for (const branch of [...new Set([...removed].map((r) => r.branch))]) {
 		if (git(s.root, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).status !== 0) continue;
@@ -1933,11 +1948,11 @@ function cleanHubBranches(s: HubSession, removed: Set<Row>, opts: Record<string,
 		// En todos los repos de la sesión, no solo en el de --repo.
 		const gone = new Set([...removed].map((r) => r.path));
 		if (subRepos(s).some((r) => gitWorktrees(r.dir).some((w) => !w.main && w.branch === branch && !gone.has(w.path)))) {
-			console.log(`${ok("-")} ${label}  ${dim("rama conservada: le queda algún worktree en otro repo")}`);
+			console.log(`${ok("-")} ${label}  ${dim(t("team.hub_clean_branch_kept_sub_wt"))}`);
 			continue;
 		}
 		if (!branchInfo(s.root, hubBase, branch).integrated && !opts["--force"]) {
-			console.log(`${ok("-")} ${label}  ${dim(`rama conservada: no está integrada en ${hubBase} (--force para borrarla)`)}`);
+			console.log(`${ok("-")} ${label}  ${dim(t("team.hub_clean_branch_not_integrated", { base: hubBase }))}`);
 			continue;
 		}
 		try {
@@ -1945,7 +1960,7 @@ function cleanHubBranches(s: HubSession, removed: Set<Row>, opts: Record<string,
 				const g = git(s.root, ["branch", "-D", branch]);
 				if (g.status !== 0) throw new Error(g.stderr.trim());
 			});
-			console.log(`${ok("-")} ${label}  ${dim("rama borrada")}`);
+			console.log(`${ok("-")} ${label}  ${dim(t("team.clean_branch_deleted"))}`);
 		} catch (e) {
 			warn(`${label}: ${(e as Error).message}`);
 		}
