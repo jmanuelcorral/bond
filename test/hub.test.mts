@@ -62,10 +62,9 @@ beforeEach(() => {
 	g(hub, "submodule", "add", "-q", "../front", "front");
 	g(hub, "commit", "-qm", "add front submodule");
 
-	// back entra como symlink
-	if (process.platform !== "win32") {
-		symlinkSync(backReal, join(hub, "back"));
-	}
+	// back entra como symlink. En Windows, junction: un symlink real pide privilegios que el
+	// runner no tiene (es lo que ya hacen hub-check y hub-pull).
+	symlinkSync(backReal, join(hub, "back"), process.platform === "win32" ? "junction" : "dir");
 
 	mkdirSync(join(hub, ".bond"), { recursive: true });
 	writeFileSync(join(hub, ".bond", "bond.toml"), 'agents = ["pi"]\n');
@@ -108,7 +107,7 @@ describe("hub.toml y .bond/hub.local.toml como fuente de la sesión", () => {
 		expect(s?.name).toBe("hub");
 		expect(s?.repos.map((r) => [r.path, r.base, r.link, r.present])).toEqual([
 			[".", "main", undefined, true],
-			["back", "main", "symlink", process.platform !== "win32"],
+			["back", "main", "symlink", true],
 			["front", "main", "submodule", true],
 		]);
 
@@ -132,9 +131,7 @@ describe("hub.toml y .bond/hub.local.toml como fuente de la sesión", () => {
 		expect(show.stdout).toContain("front");
 		expect(show.stdout).toContain("submodule");
 		expect(show.stdout).toContain("back");
-		if (process.platform !== "win32") {
-			expect(show.stdout).toContain("symlink");
-		}
+		expect(show.stdout).toContain("symlink");
 	});
 
 	test("bond hub enseña la descripcion de cada repo si la hay, y si no, la columna no aparece (D18)", () => {
@@ -206,7 +203,7 @@ describe("registro global ~/.bond/hubs.toml y hubRoot", () => {
 	});
 });
 
-describe.skipIf(process.platform === "win32")("bond team status en un hub con submódulo y symlink", () => {
+describe("bond team status en un hub con submódulo y symlink", () => {
 	test("enseña una sola tabla con los repos; la fila del hub lleva repo '.' y enseña el nombre del hub", () => {
 		registerHubRepo(backReal, hub);
 		g(hub, "worktree", "add", "-q", "-b", "fix/x", join(tmp, "wt-hub-x"));

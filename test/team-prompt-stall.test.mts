@@ -4,11 +4,11 @@
 // un mensaje claro en lugar de solo avisar. Si el panel ya muestra la tarea, se da por
 // entregada y no se reenvía. Se prueba en modo hub, que es donde el fallo solo avisaba.
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 
 process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
 Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
@@ -68,8 +68,39 @@ fs.writeFileSync(file, JSON.stringify(st));
 let tmp: string;
 let hub: string;
 let home: string;
-let bin: string;
 let state: string;
+
+// El PATH falso (el herdr simulado y el stub de agente) es el mismo en todas las pruebas: se
+// monta una vez, fuera del beforeEach.
+const bin = mkdtempSync(join(tmpdir(), "bond-stall-bin-"));
+
+/**
+ * Ejecutable falso en el PATH del test. En POSIX basta con el shebang. En Windows no hay
+ * shebang y CreateProcess no arranca un `.cmd` sin shell, así que el JS del herdr simulado se
+ * compila a un `.exe` real con bun (~150 ms). `pi` no lo ejecuta nadie: quien arranca los
+ * agentes es Herdr, que también es simulado, y bond solo lo busca con which(); un `.cmd` vacío
+ * le basta.
+ */
+const exe = (name: string, text: string) => {
+	if (process.platform !== "win32") {
+		writeFileSync(join(bin, name), text);
+		chmodSync(join(bin, name), 0o755);
+		return;
+	}
+	const body = text.replace(/^#![^\n]*\n/, "");
+	if (!body.trim()) {
+		writeFileSync(join(bin, `${name}.cmd`), "@echo off\r\n");
+		return;
+	}
+	const impl = join(bin, `${name}.js`);
+	writeFileSync(impl, body);
+	const built = spawnSync(process.execPath, ["build", "--compile", impl, "--outfile", join(bin, `${name}.exe`)], { encoding: "utf8" });
+	if (built.status !== 0) throw new Error(`bun build --compile ${name}: ${built.stderr}`);
+};
+exe("herdr", FAKE_HERDR);
+exe("pi", "#!/bin/sh\n");
+
+afterAll(() => rmSync(bin, { recursive: true, force: true }));
 
 const g = (cwd: string, ...args: string[]) => {
 	const r = spawnSync("git", ["-c", "protocol.file.allow=always", "-C", cwd, ...args], { encoding: "utf8" });
@@ -88,14 +119,10 @@ const repo = (name: string, files: Record<string, string> = {}) => {
 	g(dir, "commit", "-qm", "init");
 	return dir;
 };
-const exe = (name: string, text: string) => {
-	writeFileSync(join(bin, name), text);
-	chmodSync(join(bin, name), 0o755);
-};
 const bond = (args: string[], extraEnv: Record<string, string> = {}) =>
 	spawnSync(process.execPath, [MAIN, ...args], {
 		cwd: hub,
-		env: { ...process.env, HOME: home, USERPROFILE: home, PATH: `${bin}:${process.env.PATH}`, NO_COLOR: "1", BOND_NO_UPDATE: "1", HERDR_ENV: "1", HERDR_PANE_ID: "p0", FAKE_HERDR_STATE: state, ...extraEnv },
+		env: { ...process.env, HOME: home, USERPROFILE: home, PATH: `${bin}${delimiter}${process.env.PATH}`, NO_COLOR: "1", BOND_NO_UPDATE: "1", HERDR_ENV: "1", HERDR_PANE_ID: "p0", FAKE_HERDR_STATE: state, ...extraEnv },
 		encoding: "utf8",
 		stdio: ["ignore", "pipe", "pipe"],
 	});
@@ -104,12 +131,8 @@ const promptCount = () => (existsSync(state + ".prompts") ? readFileSync(state +
 beforeEach(() => {
 	tmp = realpathSync(mkdtempSync(join(tmpdir(), "bond-stall-")));
 	home = join(tmp, "home");
-	bin = join(tmp, "bin");
 	state = join(tmp, "herdr.json");
 	mkdirSync(home);
-	mkdirSync(bin);
-	exe("herdr", FAKE_HERDR);
-	exe("pi", "#!/bin/sh\n");
 	repo("front");
 	hub = repo("hub", { "hub.toml": HUB_TOML, ".bond/bond.toml": BOND_TOML });
 	g(hub, "submodule", "add", "-q", "../front", "front");
@@ -119,7 +142,7 @@ beforeEach(() => {
 
 afterEach(() => rmSync(tmp, { recursive: true, force: true }));
 
-describe.skipIf(process.platform === "win32")("H4: reintento de prompt estancado en un hub", () => {
+describe("H4: reintento de prompt estancado en un hub", () => {
 	test("un stall y reintento: el prompt llega a la segunda", () => {
 		const r = bond(["team", "prompt", "fix/x", "añade el campo email", "--repo", "front"], { FAKE_STALL_TIMES: "1" });
 		expect(r.status).toBe(0);
