@@ -616,6 +616,17 @@ describe("runs de la memoria de decisiones", () => {
 		expect(rel).toBe(`docs/decisions/runs/${today}-kevin-misma-tarea-2.md`);
 	});
 
+	test("collect escribe en el run del último encargo y no en uno anterior", () => {
+		recordRequest(ctx(), "tarea zeta", "2026-10-28T10:00:00Z");
+		collectRun(ctx(), "primer informe", { ts: "2026-10-28T10:15:00Z" });
+		const relLatest = recordRequest(ctx(), "tarea alfa", "2026-10-28T11:00:00Z");
+		const out = collectRun(ctx(), "segundo informe", { ts: "2026-10-28T11:30:00Z" });
+		expect(out.rel).toBe(relLatest);
+		const latestText = readFileSync(runPath(relLatest), "utf8");
+		expect(latestText).toContain("segundo informe");
+		expect(parseFm(latestText)!.scalars.status).toBe("reported");
+	});
+
 	test("runFileText y parseFm round-trip con las listas de commits y decisiones", () => {
 		const fm = { agent: "kevin", kind: "pi", branch: "feat/a", base: "main@abc", orchestrator: "user", started_at: "s", finished_at: "f", status: "reported", commits: ["aaa un commit | con barra"], decisions: ["2026-10-28-x"] };
 		const p = parseFm(runFileText(fm, "encargo", "informe"))!;
@@ -725,6 +736,16 @@ describe("informe desde el fichero de sesión del agente (D17)", () => {
 		expect(text).not.toContain("pienso");
 		expect(text).not.toContain("toolCall");
 		expect(text).not.toContain("╱");
+	});
+
+	test("sin truncar cuando el agente terminó: el informe completo sale de transcript_full", () => {
+		const f = join(dir, "transcript.jsonl");
+		const fFull = join(dir, "transcript_full.jsonl");
+		const truncatedMsg = "Inicio del informe\n<truncated 500 bytes>\nFin del informe";
+		const fullMsg = "Inicio del informe\nContenido completo intermedio sin ningún recorte\nFin del informe";
+		writeFileSync(f, JSON.stringify({ type: "PLANNER_RESPONSE", source: "MODEL", content: truncatedMsg }) + "\n");
+		writeFileSync(fFull, JSON.stringify({ type: "PLANNER_RESPONSE", source: "MODEL", content: fullMsg }) + "\n");
+		expect(lastAssistantText(f)).toBe(fullMsg);
 	});
 });
 
