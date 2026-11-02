@@ -916,6 +916,10 @@ source = "~/gitrepos/fluzo-backend"
   from one that **exists but cannot be read**: when `hub.toml` is there but does not parse or
   does not define the session, the error says "hub.toml exists but cannot be read" and carries
   the parse error (#39).
+- The sources given to `bond hub init` and `bond hub add` are validated before touching disk
+  (#35): an empty source (`file://`, `--repo ""`), a path that does not exist or is not a git
+  repo, an empty repo name or a key with dots or slashes fail with a clear message and write no
+  `hub.toml` and create no repo.
 - Without `hub.toml`, the commands work as always in a plain repo.
 
 ### `bond hub check`

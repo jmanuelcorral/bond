@@ -886,6 +886,7 @@ source = "~/gitrepos/fluzo-backend"
 - `.bond/hub.local.toml` guarda las rutas a los clones locales de la máquina (`source`), admitiendo `~` para expandir la carpeta de usuario.
 - `~/.bond/hubs.toml` es el registro global donde `bond` anota los repos asociados a cada hub. Permite que `hubRoot` encuentre el hub desde dentro de un repo enlazado por symlink.
 - Un `hub.toml` inválido se explica con un mensaje que dice qué corregir; `bond team` avisa y continúa como en un repo normal. Los comandos de `bond hub` distinguen el fichero que **falta** del que **existe y no se puede leer**: si `hub.toml` está delante pero no parsea o no define la sesión, el error dice «existe hub.toml pero no se puede leer» y lleva el error de parseo (#39).
+- Los orígenes que se dan a `bond hub init` y `bond hub add` se validan antes de tocar disco (#35): un origen vacío (`file://`, `--repo ""`), una ruta que no existe o no es un repo git, un nombre de repo vacío o una clave con puntos o barras fallan con un mensaje claro y no escriben `hub.toml` ni crean el repo.
 - Sin `hub.toml`, los comandos funcionan como siempre en un repo normal.
 
 ### `bond hub check`

@@ -6,6 +6,10 @@
   llevan un sufijo hash corto derivado de la ruta absoluta del repositorio o hub (`<nombre>-<hash>`),
   evitando colisiones entre repositorios con la misma carpeta base (#36). Los worktrees existentes
   del esquema anterior se siguen reconociendo y limpiando con `bond team clean`.
+- `bond hub init` y `bond hub add` validan los orígenes antes de tocar disco (#35): un origen
+  vacío (`file://`, `--repo ""`), una ruta que no existe o no es un repo git, un `--name` vacío
+  o una clave de repo con puntos o barras fallan con un mensaje claro y ya no dejan un `hub.toml`
+  inválido.
 - `bond hub`, `bond hub sync`, `bond hub check` y `bond hub pull` distinguen «falta hub.toml» de
   «existe hub.toml pero no se puede leer» (#39): con un `hub.toml` que no parsea o no define la
   sesión, el error final dice que el fichero está ahí y lleva el error de parseo.

@@ -50,6 +50,55 @@ export function isRepoUrl(s: string): boolean {
 	);
 }
 
+/**
+ * Nombre del repo que nombra una URL remota. Vacio si la URL no llega a nombrar ninguno
+ * (p. ej. `file://` o `https://github.com`), caso que hay que rechazar antes de escribir.
+ */
+export function repoNameFromUrl(url: string): string {
+	const s = url.trim().replace(/\.git$/i, "");
+	const scheme = /^[a-z][a-z0-9+.-]*:\/\/(.*)$/i.exec(s);
+	if (scheme) {
+		const parts = scheme[1].replace(/^\/+/, "").split("/").filter(Boolean);
+		return parts.length > 1 ? parts[parts.length - 1] : "";
+	}
+	const scp = /^[^/\s]+@[^:\s]+:(.*)$/.exec(s);
+	if (scp) return scp[1].split("/").filter(Boolean).pop() ?? "";
+	return "";
+}
+
+/**
+ * Por que una clave de repo no vale en hub.toml, o undefined si vale. Una clave con puntos se
+ * renderiza como tabla anidada ([repos.mi.repo]) y el hub resultante deja de parsearse.
+ */
+export function repoKeyError(key: string): string | undefined {
+	const k = key.trim();
+	if (!k) return t("hub.import_err_empty_name");
+	if (!/^[A-Za-z0-9_-]+$/.test(k)) return t("hub.import_err_bad_name", { key: k });
+	return undefined;
+}
+
+/** Por que una URL del asistente o de un argumento no vale para importar, o undefined si vale. */
+export function repoUrlError(value: string): string | undefined {
+	const s = value.trim();
+	if (!s) return t("hub.import_err_empty_source");
+	if (!isRepoUrl(s)) return t("hub.import_err_not_url", { url: s });
+	const name = repoNameFromUrl(s);
+	if (!name) return t("hub.import_err_url_no_repo", { url: s });
+	return repoKeyError(name);
+}
+
+/**
+ * Por que un origen de `bond hub init`/`bond hub add` (URL o ruta a un clon local) no se
+ * puede importar, o undefined si vale (issue #35). Se comprueba antes de tocar disco: un
+ * origen vacio escribia `[repos.]` en hub.toml y dejaba el hub inservible.
+ */
+export function repoSourceError(target: string, hubDir: string = process.cwd()): string | undefined {
+	const s = target.trim();
+	if (!s) return t("hub.import_err_empty_source");
+	if (isRepoUrl(s)) return repoUrlError(s);
+	return localCloneError(s, hubDir) ?? repoKeyError(basename(s));
+}
+
 /** Detecta la rama por defecto de un repo remoto mediante ls-remote. */
 export function detectRemoteBranch(url: string): string | undefined {
 	const r = run("git", ["-c", "protocol.file.allow=always", "ls-remote", "--symref", url, "HEAD"]);
@@ -556,6 +605,16 @@ export async function hubInit(args: string[]): Promise<void> {
 	const root = resolve(dir);
 	const isGitRepo = git(root, ["rev-parse", "--show-toplevel"]).status === 0;
 
+	// Issue #35: origen, nombre y rama se validan antes de crear nada en disco. Un origen vacio
+	// (`file://`, `--repo ""`) acababa escribiendo una clave vacia en hub.toml y el hub quedaba
+	// inservible desde el primer commit.
+	if (name !== undefined && !name.trim()) die(t("hub.hub_name_empty"));
+	if (base !== undefined && !base.trim()) die(t("hub.hub_base_empty"));
+	for (const target of reposToImport) {
+		const err = repoSourceError(target, root);
+		if (err) die(err);
+	}
+
 	if (!isGitRepo) {
 		act(`git init ${root}`, () => {
 			mkdirSync(root, { recursive: true });
@@ -668,9 +727,9 @@ export async function hubInit(args: string[]): Promise<void> {
 			if (choice === "done") break;
 
 			if (choice === "submodule") {
-				const url = await ask(p.text({ message: t("hub.prompt_repo_url") }));
-				const defaultName = basename(url.replace(/\.git$/, ""));
-				const key = await ask(p.text({ message: t("hub.prompt_name_in_toml"), initialValue: defaultName }));
+				const url = await ask(p.text({ message: t("hub.prompt_repo_url"), validate: (v) => repoUrlError(v ?? "") }));
+				const defaultName = repoNameFromUrl(url);
+				const key = await ask(p.text({ message: t("hub.prompt_name_in_toml"), initialValue: defaultName, validate: (v) => repoKeyError(v ?? "") }));
 				const path = await ask(p.text({ message: t("hub.prompt_path_in_hub"), initialValue: defaultRepoPath(key) }));
 				const defaultBase = detectRemoteBranch(url) ?? "main";
 				const repoBase = await ask(p.text({ message: t("hub.prompt_repo_base"), initialValue: defaultBase }));
@@ -688,7 +747,7 @@ export async function hubInit(args: string[]): Promise<void> {
 				const localPath = await askLocalClone(p, t("hub.prompt_local_clone_path"), root);
 				const resolved = expandSource(localPath, root);
 				const defaultName = basename(localPath);
-				const key = await ask(p.text({ message: t("hub.prompt_name_in_toml"), initialValue: defaultName }));
+				const key = await ask(p.text({ message: t("hub.prompt_name_in_toml"), initialValue: defaultName, validate: (v) => repoKeyError(v ?? "") }));
 				const path = await ask(p.text({ message: t("hub.prompt_path_in_hub"), initialValue: defaultRepoPath(key) }));
 				const defaultBase = currentBranch(resolved) ?? "main";
 				const repoBase = await ask(p.text({ message: t("hub.prompt_repo_base"), initialValue: defaultBase }));
@@ -724,7 +783,7 @@ export async function hubInit(args: string[]): Promise<void> {
 		// Importar repos indicados por argumento
 		for (const target of reposToImport) {
 			if (isRepoUrl(target)) {
-				const key = basename(target.replace(/\.git$/, ""));
+				const key = repoNameFromUrl(target);
 				if (!hubToml.repos[key]) {
 					hubToml.repos[key] = {
 						path: defaultRepoPath(key),
@@ -857,6 +916,14 @@ export async function hubAdd(args: string[]): Promise<void> {
 	const root = hubRoot();
 	if (!root) dieNotAHub();
 
+	// Issue #35: el origen y el nombre se validan antes de tocar hub.toml.
+	if (name !== undefined) {
+		const err = repoKeyError(name);
+		if (err) die(err);
+	}
+	const sourceError = repoSourceError(target, root);
+	if (sourceError) die(sourceError);
+
 	const tomlPath = join(root, "hub.toml");
 	const hubToml = parseHubToml(readFileSync(tomlPath, "utf8"), "hub.toml");
 
@@ -867,7 +934,7 @@ export async function hubAdd(args: string[]): Promise<void> {
 	}
 
 	const detectedLink: "submodule" | "symlink" = link ?? (isRepoUrl(target) ? "submodule" : "symlink");
-	const repoName = name ?? (detectedLink === "submodule" ? basename(target.replace(/\.git$/, "")) : basename(target));
+	const repoName = name ?? (detectedLink === "submodule" ? repoNameFromUrl(target) : basename(target));
 	// D16: por defecto los repos van en repos/<nombre>; --path manda sobre el defecto.
 	const repoPath = path ?? defaultRepoPath(repoName);
 
