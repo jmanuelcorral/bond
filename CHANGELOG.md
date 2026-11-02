@@ -1,6 +1,11 @@
 # Cambios
 
-## Sin publicar
+## 1.11.0
+
+Bond se pone la ropa de la web y aprende a hablar en los dos idiomas. La terminal estrena el logo
+del proyecto (el isotipo de los dos chevrones y la palabra `bond`, con su degradado índigo a
+teal) y un pie de estado rediseñado con iconos, y toda la CLI sale en español o en inglés según
+lo que elijas en `bond setup`.
 
 - Logo nuevo en la terminal, el de la web: el isotipo (dos chevrones que se cruzan y se abren en
   tres trazas) en medios bloques, con el degradado del logo de índigo a teal, y la palabra `bond`
