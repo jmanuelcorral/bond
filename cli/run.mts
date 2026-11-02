@@ -4,31 +4,25 @@
 import { spawnSync } from "node:child_process";
 import { activeProviders, loadConfig, loadState, providerApis } from "./config.mts";
 import { readKey } from "./keys.mts";
+import { t } from "./messages.mts";
 import { die, which } from "./util.mts";
 
-export const RUN_HELP = `Uso: bond run copilot [--model <proveedor>/<modelo>] [argumentos de copilot...]
-
-Lanza Copilot CLI contra un modelo del registro global (modo BYOK de Copilot), poniendo
-COPILOT_PROVIDER_BASE_URL, COPILOT_MODEL, límites de tokens y la API (completions o
-responses). Sin --model, usa el primer modelo activo. No hace falta cuenta de GitHub.
-
-Ejemplos:
-  bond run copilot
-  bond run copilot --model halo/flash-halogen -p "explica este repo"`;
+export const runHelp = (): string => t("run.help");
+export const RUN_HELP = Object.assign(() => runHelp(), { toString: () => runHelp(), [Symbol.toPrimitive]: () => runHelp(), [Symbol.for("nodejs.util.inspect.custom")]: () => runHelp() });
 
 export function runAgent(args: string[]): void {
 	const [agent, ...rest] = args;
 	if (!agent) {
-		console.log(RUN_HELP);
+		console.log(runHelp());
 		process.exit(2);
 	}
-	if (agent !== "copilot") die(`bond run solo admite copilot por ahora (pidió: ${agent})`, 2);
-	if (!which("copilot")) die("copilot no está en el PATH");
+	if (agent !== "copilot") die(t("run.only_copilot", { agent }), 2);
+	if (!which("copilot")) die(t("run.not_in_path"));
 
 	let wanted: string | undefined;
 	const pass: string[] = [];
 	for (let i = 0; i < rest.length; i++) {
-		if (rest[i] === "--model") wanted = rest[++i] ?? die("--model necesita proveedor/modelo");
+		if (rest[i] === "--model") wanted = rest[++i] ?? die(t("run.model_needs_arg"));
 		else pass.push(rest[i]);
 	}
 
@@ -39,7 +33,7 @@ export function runAgent(args: string[]): void {
 	});
 	const pairs = providers.flatMap((p) => p.models.filter((m) => !m.agents || m.agents.includes("copilot")).map((m) => ({ p, m })));
 	const pick = wanted ? pairs.find(({ p, m }) => `${p.id}/${m.id}` === wanted) : pairs[0];
-	if (!pick) die(wanted ? `no hay modelo ${wanted} usable por Copilot (bond models list)` : "no hay modelos usables por Copilot (bond models list)");
+	if (!pick) die(wanted ? t("run.no_model_named", { model: wanted }) : t("run.no_models"));
 
 	const { p, m } = pick;
 	const apis = providerApis(p, state);
