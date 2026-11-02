@@ -6,9 +6,10 @@
 
 import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
+import { canonical } from "../cli/util.mts";
 
 process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
 Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
@@ -129,7 +130,9 @@ const bond = (args: string[], extraEnv: Record<string, string> = {}) =>
 const promptCount = () => (existsSync(state + ".prompts") ? readFileSync(state + ".prompts", "utf8").trim().split("\n").filter(Boolean).length : 0);
 
 beforeEach(() => {
-	tmp = realpathSync(mkdtempSync(join(tmpdir(), "bond-stall-")));
+	// canonical(), no realpathSync: en Windows el TEMP viene con nombre corto (RUNNER~1) y solo
+	// la variante nativa lo resuelve.
+	tmp = canonical(mkdtempSync(join(tmpdir(), "bond-stall-")));
 	home = join(tmp, "home");
 	state = join(tmp, "herdr.json");
 	mkdirSync(home);
