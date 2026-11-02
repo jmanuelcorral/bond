@@ -14,30 +14,12 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { accessSync, chmodSync, constants, existsSync, readdirSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { t } from "./messages.mts";
 import { BOND_HOME, ensureBondLink, FROM_SOURCE, VERSION } from "./runtime.mts";
 import { caution, COPY_MARK, copyPath, die, dim, isCopyOf, isDryRun, linkTarget, log, ok, REPO_DIR, run, samePath, warn } from "./util.mts";
 
-export const UPDATE_HELP = `Uso: bond update [opciones]
-
-Pone bond al día con la última release de GitHub. Si lo instalaste con install.sh o
-install.ps1, descarga el binario, comprueba su SHA-256 y sustituye el actual; con Homebrew
-te dice el comando. El paquete aún no está publicado en npm: con npm te remite al .tgz de la
-release. La versión nueva quita los ficheros de las anteriores (~/.bond/runtime) tras
-reenlazar lo que los usaba.
-
-  --check              Solo dice si hay una versión nueva
-  --version <vX.Y.Z>   Instala esa versión (también para volver a una anterior)
-  --force              Reinstala aunque ya tengas esa versión
-  --dry-run            Dice qué haría sin descargar nada
-  --skip <vX.Y.Z>      No avisar de esa versión al arrancar (hasta que salga otra)
-  --skip-reset         Vuelve a avisar de la versión omitida
-
-Al abrir el puesto de trabajo (bond, bond dev, bond team), bond mira una vez al día si hay
-release nueva (como mucho ~2 s; sin red, sigue sin más) y pregunta: 1) actualizar ahora,
-2) omitir esa versión hasta que salga otra, 3) no volver a preguntar ([update] auto = false
-en ~/.bond/config.toml). Con «1» y Homebrew corre brew update && brew upgrade
-jmanuelcorral/tap/bond a la vista (brew update refresca todos tus taps); si brew falla, sigues
-con la versión que tenías. Sin terminal solo avisa. BOND_NO_UPDATE=1 lo desactiva.`;
+export const updateHelp = (): string => t("update.help");
+export const UPDATE_HELP = updateHelp();
 
 /** Releases de bond; BOND_RELEASES_URL las cambia (pruebas, espejos). */
 const releases = () => (process.env.BOND_RELEASES_URL || "https://github.com/jmanuelcorral/bond/releases").replace(/\/+$/, "");
@@ -54,7 +36,7 @@ export function compareVersions(a: string, b: string): number {
 export async function latestTag(base = releases(), signal?: AbortSignal): Promise<string> {
 	const r = await fetch(`${base}/latest`, { redirect: "manual", signal });
 	const tag = /\/tag\/(v[^/?#]+)/.exec(r.headers.get("location") ?? "")?.[1];
-	if (!tag) throw new Error(`no encuentro la última release en ${base} (HTTP ${r.status})`);
+	if (!tag) throw new Error(t("update.err_not_found", { base, status: r.status }));
 	return tag;
 }
 
@@ -63,13 +45,13 @@ export function assetName(platform: NodeJS.Platform = process.platform, arch: st
 	// Windows en ARM ejecuta el de x64 emulado: es el único que se publica.
 	if (platform === "win32" && (arch === "x64" || arch === "arm64")) return "bond-windows-x64.exe";
 	const os = ({ linux: "linux", darwin: "darwin" } as Record<string, string>)[platform];
-	if (!os || !["x64", "arm64"].includes(arch)) throw new Error(`no hay binario de bond para ${platform}-${arch}`);
+	if (!os || !["x64", "arm64"].includes(arch)) throw new Error(t("update.err_no_binary", { platform, arch }));
 	return `bond-${os}-${arch}`;
 }
 
 async function download(url: string): Promise<Buffer> {
 	const r = await fetch(url);
-	if (!r.ok) throw new Error(`no pude descargar ${url} (HTTP ${r.status})`);
+	if (!r.ok) throw new Error(t("update.err_download_failed", { url, status: r.status }));
 	return Buffer.from(await r.arrayBuffer());
 }
 
@@ -80,10 +62,10 @@ export async function downloadVerified(tag: string, asset: string, base = releas
 		.split("\n")
 		.map((l) => l.trim().split(/\s+/))
 		.find(([, name]) => name?.replace(/^\*/, "") === asset)?.[0];
-	if (!expected) throw new Error(`${asset} no aparece en SHA256SUMS de ${tag}`);
+	if (!expected) throw new Error(t("update.err_missing_sha", { asset, tag }));
 	const bin = await download(`${base}/download/${tag}/${asset}`);
 	if (createHash("sha256").update(bin).digest("hex") !== expected.toLowerCase()) {
-		throw new Error("la suma SHA-256 no coincide: descarga corrupta o alterada");
+		throw new Error(t("update.err_sha_mismatch"));
 	}
 	return bin;
 }
@@ -177,17 +159,17 @@ const BREW_FORMULA = "jmanuelcorral/tap/bond";
 
 /** Comando para actualizar a mano con un método que bond no aplica solo. */
 function manualCommand(method: Exclude<Method, "binary">, version: string, base = releases()): string {
-	if (method === "source") return `Desde el código: git -C ${REPO_DIR} pull && npm ci --ignore-scripts`;
-	if (method === "brew") return `Con Homebrew: brew update && brew upgrade ${BREW_FORMULA}`;
+	if (method === "source") return t("update.manual_source", { dir: REPO_DIR });
+	if (method === "brew") return t("update.manual_brew", { formula: BREW_FORMULA });
 	// @jmanuelcorral/bond aún no está en npm (npm i -g daría 404): el paquete va en la release.
-	return `Con npm: @jmanuelcorral/bond aún no está publicado en npm. Instala el paquete de la release: npm i -g ${base}/download/v${version}/jmanuelcorral-bond-${version}.tgz`;
+	return t("update.manual_npm", { url: `${base}/download/v${version}/jmanuelcorral-bond-${version}.tgz` });
 }
 
 function assertWritable(exe: string): void {
 	try {
 		accessSync(dirname(exe), constants.W_OK);
 	} catch {
-		throw new Error(`no puedo escribir en ${dirname(exe)}: actualiza con el mismo método con el que instalaste bond`);
+		throw new Error(t("update.err_not_writable", { dir: dirname(exe) }));
 	}
 }
 
@@ -199,7 +181,7 @@ export async function installBinary(want: string, exe = process.execPath, base =
 	const version = want.slice(1);
 	assertWritable(exe);
 	const asset = assetName();
-	log(`Descargando ${asset} (${want})`);
+	log(t("update.downloading", { asset, tag: want }));
 	const bin = await downloadVerified(want, asset, base);
 	const fresh = join(dirname(exe), `.bond-${version}-${process.pid}${process.platform === "win32" ? ".exe" : ""}`);
 	writeFileSync(fresh, bin, { mode: 0o755 });
@@ -207,18 +189,18 @@ export async function installBinary(want: string, exe = process.execPath, base =
 	const v = run(fresh, ["--version"]);
 	if (v.status !== 0 || v.stdout.trim() !== version) {
 		rmSync(fresh, { force: true });
-		throw new Error(`el binario descargado no arranca bien: ${(v.stderr || v.stdout).trim() || `status ${v.status}`}`);
+		throw new Error(t("update.err_binary_start", { detail: (v.stderr || v.stdout).trim() || `status ${v.status}` }));
 	}
 	try {
 		replaceBinary(fresh, exe);
 	} catch (e) {
 		rmSync(fresh, { force: true });
-		throw new Error(`no pude sustituir ${exe}: ${(e as Error).message}`);
+		throw new Error(t("update.err_replace", { exe, error: (e as Error).message }));
 	}
-	log(`bond ${version} instalado en ${exe}`);
+	log(t("update.installed_binary", { version, exe }));
 	// La versión nueva extrae sus ficheros y limpia los de las anteriores (bond < 1.1 no sabe:
 	// lo hará la siguiente que sí).
-	if (run(exe, ["_runtime"]).status !== 0) warn(`bond ${version} no limpia ~/.bond/runtime: no pasa nada, ocupan sitio`);
+	if (run(exe, ["_runtime"]).status !== 0) warn(t("update.warn_no_cleanup", { version }));
 }
 
 /**
@@ -226,17 +208,17 @@ export async function installBinary(want: string, exe = process.execPath, base =
  * red, tap caído) o no trae esa versión, lanza el error y bond sigue como estaba.
  */
 export function installBrew(version: string): void {
-	log("brew update refresca el índice de todos los taps de esta máquina, no solo el de bond (bond no puede deshacerlo)");
+	log(t("update.brew_note"));
 	for (const args of [["update"], ["upgrade", BREW_FORMULA]]) {
 		console.log(dim(`  $ brew ${args.join(" ")}`));
 		const r = spawnSync("brew", args, { stdio: "inherit" });
-		if (r.status !== 0) throw new Error(`falló brew ${args.join(" ")}${r.error ? `: ${r.error.message}` : ` (status ${r.status ?? r.signal})`}`);
+		if (r.status !== 0) throw new Error(t("update.err_brew_failed", { cmd: `brew ${args.join(" ")}`, detail: r.error ? `: ${r.error.message}` : ` (status ${r.status ?? r.signal})` }));
 	}
 	const exe = join(run("brew", ["--prefix", "bond"]).stdout.trim(), "bin", "bond");
 	const v = run(exe, ["--version"]).stdout.trim();
-	if (v !== version) throw new Error(`Homebrew no trae la ${version} (${exe} da ${v || "nada"}): el tap puede ir por detrás de la release`);
-	log(`bond ${version} instalado con Homebrew en ${exe}`);
-	if (run(exe, ["_runtime"]).status !== 0) warn(`bond ${version} no limpia ~/.bond/runtime: no pasa nada, ocupan sitio`);
+	if (v !== version) throw new Error(t("update.err_brew_stale", { version, exe, got: v || t("update.nothing") }));
+	log(t("update.installed_brew", { version, exe }));
+	if (run(exe, ["_runtime"]).status !== 0) warn(t("update.warn_no_cleanup", { version }));
 }
 
 export async function update(args: string[]): Promise<void> {
@@ -249,14 +231,14 @@ export async function update(args: string[]): Promise<void> {
 		const a = args[i];
 		if (a === "--check") check = true;
 		else if (a === "--force") force = true;
-		else if (a === "--version") asked = args[++i] ?? die("--version necesita un valor (p. ej. v1.0.2)");
-		else if (a === "--skip") skip = args[++i] ?? die("--skip necesita una versión (p. ej. v1.4.0)");
+		else if (a === "--version") asked = args[++i] ?? die(t("update.opt_version_val"));
+		else if (a === "--skip") skip = args[++i] ?? die(t("update.opt_skip_val"));
 		else if (a === "--skip-reset") skipReset = true;
-		else if (a !== "--dry-run") die(`opción desconocida: ${a} (bond update --help)`);
+		else if (a !== "--dry-run") die(t("update.unknown_opt", { opt: a }));
 	}
 	if (skip !== undefined || skipReset) {
-		if (skip !== undefined && skipReset) die("--skip y --skip-reset no van juntas");
-		if (check || force || asked) die(`${skipReset ? "--skip-reset" : "--skip"} no va con --check, --version ni --force`);
+		if (skip !== undefined && skipReset) die(t("update.err_skip_conflict"));
+		if (check || force || asked) die(t("update.err_skip_with_other", { flag: skipReset ? "--skip-reset" : "--skip" }));
 		return skipVersion(skip);
 	}
 
@@ -267,8 +249,8 @@ export async function update(args: string[]): Promise<void> {
 		die((e as Error).message);
 	}
 	const diff = compareVersions(want, VERSION);
-	if (diff === 0 && !force) return console.log(ok(`bond ${VERSION} ya es ${asked ? "esa versión" : "la última"}`));
-	if (diff < 0 && !asked) return console.log(ok(`bond ${VERSION} es más nuevo que la última release (${want})`));
+	if (diff === 0 && !force) return console.log(ok(t(asked ? "update.already_that" : "update.already_latest", { version: VERSION })));
+	if (diff < 0 && !asked) return console.log(ok(t("update.newer_than_latest", { version: VERSION, tag: want })));
 	console.log(`bond ${VERSION} → ${want.slice(1)}`);
 	if (check) return;
 
@@ -278,12 +260,12 @@ export async function update(args: string[]): Promise<void> {
 	const exe = process.execPath;
 	try {
 		assertWritable(exe);
-		if (isDryRun()) return console.log(dim(`  [dry-run] descargaría ${assetName()} de ${want}, comprobaría su SHA-256 y sustituiría ${exe}`));
+		if (isDryRun()) return console.log(dim(t("update.dry_run_binary", { asset: assetName(), tag: want, exe })));
 		await installBinary(want, exe);
 	} catch (e) {
 		die((e as Error).message);
 	}
-	console.log(ok("listo"));
+	console.log(ok(t("update.ready")));
 }
 
 /**
@@ -295,20 +277,20 @@ async function skipVersion(version?: string): Promise<void> {
 	const state = loadState();
 	const previous = state.update?.skipped;
 	if (version === undefined) {
-		if (!previous) return console.log(ok("no había ninguna versión omitida"));
+		if (!previous) return console.log(ok(t("update.no_skipped")));
 		const { skipped: _, ...rest } = state.update ?? {};
 		state.update = rest;
-		if (isDryRun()) return console.log(dim(`  [dry-run] quitaría la omisión de la ${previous.slice(1)}`));
+		if (isDryRun()) return console.log(dim(t("update.dry_run_skip_reset", { version: previous.slice(1) })));
 		saveState(state);
-		return console.log(ok(`vuelvo a avisar de la ${previous.slice(1)}`));
+		return console.log(ok(t("update.skip_reset_done", { version: previous.slice(1) })));
 	}
-	if (!/^v?\d+\.\d+\.\d+$/.test(version)) die(`--skip espera una versión vX.Y.Z (no ${version})`);
+	if (!/^v?\d+\.\d+\.\d+$/.test(version)) die(t("update.err_skip_format", { version }));
 	const tag = `v${version.replace(/^v/, "")}`;
 	state.update = { ...state.update, skipped: tag };
-	if (isDryRun()) return console.log(dim(`  [dry-run] omitiría la ${tag.slice(1)} en ${join(BOND_HOME, "state.json")}`));
+	if (isDryRun()) return console.log(dim(t("update.dry_run_skip", { version: tag.slice(1), file: join(BOND_HOME, "state.json") })));
 	saveState(state);
-	console.log(ok(`no avisaré de la ${tag.slice(1)} al arrancar; sí de la siguiente (bond update --skip-reset lo quita)`));
-	if (compareVersions(tag, VERSION) <= 0) console.log(dim(`  Ya tienes ${VERSION}: esa versión no se ofrecería de todos modos.`));
+	console.log(ok(t("update.skip_set", { version: tag.slice(1) })));
+	if (compareVersions(tag, VERSION) <= 0) console.log(dim(t("update.already_have", { version: VERSION })));
 }
 
 const DAY_MS = 24 * 3_600_000;
@@ -377,23 +359,23 @@ export async function offerUpdate(o: OfferOptions = {}): Promise<Offer> {
 	const version = latest.slice(1);
 	const interactive = o.interactive ?? (process.stdin.isTTY === true && process.stdout.isTTY === true);
 	if (!interactive) {
-		console.error(`${caution("bond")} ${version} disponible (tienes ${VERSION}): bond update`);
+		console.error(`${caution("bond")} ${t("update.offer_available", { latest: version, current: VERSION })}`);
 		return "informed";
 	}
-	console.log(`\nHay una versión nueva de bond: ${VERSION} → ${version}`);
-	console.log("  1) Actualizar ahora");
-	console.log(`  2) Omitir la ${version} (avisaré de la siguiente)`);
-	console.log("  3) No volver a preguntar");
-	const answer = (await (o.ask ?? askLine)("Elige [Intro: ahora no]: ")).trim();
+	console.log(`\n${t("update.offer_prompt_header", { current: VERSION, latest: version })}`);
+	console.log(t("update.offer_opt_1"));
+	console.log(t("update.offer_opt_2", { version }));
+	console.log(t("update.offer_opt_3"));
+	const answer = (await (o.ask ?? askLine)(t("update.offer_ask"))).trim();
 	if (answer === "2") {
 		record.skipped = latest;
 		saveState(state);
-		console.log(dim(`  No volveré a nombrar la ${version}.`));
+		console.log(dim(t("update.offer_skip_ack", { version })));
 		return "skip";
 	}
 	if (answer === "3") {
 		setUpdateAuto(false);
-		console.log(dim("  No volveré a preguntar ([update] auto = false en ~/.bond/config.toml). bond update sigue a mano."));
+		console.log(dim(t("update.offer_never_ack")));
 		return "never";
 	}
 	if (answer !== "1") return "later";
@@ -408,7 +390,7 @@ export async function offerUpdate(o: OfferOptions = {}): Promise<Offer> {
 		else await installBinary(latest, o.exe ?? process.execPath, o.base ?? releases());
 		return "updated";
 	} catch (e) {
-		warn(`no he actualizado: ${(e as Error).message}. Sigues con bond ${VERSION}.`);
+		warn(t("update.warn_not_updated", { error: (e as Error).message, version: VERSION }));
 		return "failed";
 	}
 }
