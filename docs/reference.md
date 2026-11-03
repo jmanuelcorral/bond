@@ -861,6 +861,7 @@ bond hub add <url|ruta>  # añade un repo al hub (como submódulo o enlace local
 bond hub sync            # monta submódulos, crea enlaces y actualiza el registro global
 bond hub pull            # pone al día la base del hub y de cada repo en fast-forward (--dry-run, --json)
 bond hub bump            # lleva los punteros de los submódulos a su base y lo commitea en el hub, sin push (--dry-run, --json)
+bond hub exec -- <cmd>   # ejecuta un comando en el hub y en cada repo de la sesión, en orden (--dry-run, --yes, --shell, --json)
 bond hub check           # revisa cada repo de la sesión y dice qué falta y cómo arreglarlo (--fix, --json)
 ```
 
@@ -990,6 +991,42 @@ Por repo:
 - `--json`: salida estructurada por repo (`moved`, `up_to_date`, `skipped`, `not_applicable`,
   `failed`) con el `from`/`to` cortos y el SHA del commit creado. Sale con 1 si algún repo termina en `failed`.
 - El comando aborta si el hub tiene cambios ya `staged`, para no commitear nada ajeno.
+
+### `bond hub exec`
+
+`cli/hub-exec.mts`. Ejecuta un comando en el hub y en cada repo de la sesión, en ese orden y de
+forma secuencial (uno tras otro, con cabecera por repo para que la salida no se entrelaza).
+**Puede ser destructivo**: antes de ejecutar muestra el comando exacto y los repos afectados y pide
+confirmación una sola vez (`--yes`/`-y` la salta; sin terminal, no ejecuta nada y dice cómo repetir).
+
+La forma exige `--` antes del comando: `bond hub exec [opciones] -- <comando> [args...]`. Todo lo
+que va después del `--` es el comando y sus argumentos; bond no lo interpreta (por eso el comando
+arbitrario no choca con la lista blanca de opciones de bond). Sin `--`, falla sin ejecutar nada.
+
+```bash
+bond hub exec --yes -- npm test              # prueba en el hub y en cada repo de la sesión
+bond hub exec --dry-run -- git status -sb    # ver dónde y qué se correría, sin ejecutar
+bond hub exec --yes --shell -- "make lint | tee /tmp/lint.log"   # con shell, si hace falta
+```
+
+- **argv por defecto, `--shell` opt-in.** Sin shell el comando se ejecuta tal cual, sin pipes, `&&`
+  ni globs. `--shell` lo pasa por el shell del sistema (`cmd.exe` en Windows, `/bin/sh` en el
+  resto; el comando debe ir entrecomillado como un solo argumento). Es la única excepción con shell
+  en todo bond: en Windows el shell es `cmd.exe`, con semántica distinta, y propagar shell por
+  defecto a N repos es un riesgo.
+- **No se corta ante un fallo**: si un repo falla se sigue con el resto y el exit code final es el
+  peor (el máximo) de los devueltos, para que `bond hub exec -- npm test` sirva en scripts.
+  Un comando que no existe se reporta con 127.
+- **stdin cerrado**: el comando se ejecuta con stdin apuntando a `/dev/null` (`NUL` en Windows);
+  si intenta leer, recibe EOF al instante y termina — nunca puede quedar colgado bajo un agente
+  sin TTY. Si necesitas darle datos por stdin, ejecútalo repo a repo.
+- Repos `not present`: se omiten y se dicen. Symlink y submodulo reciben el comando por igual
+  (es su working tree).
+- `--dry-run`: muestra qué comando se correrá en qué repo sin ejecutar nada (y no pregunta).
+- `--json`: salida estructurada por repo (`executed` / `skipped_not_present`) con `command`, `cwd`,
+  `exitCode`, `stdout`, `stderr`, más `confirmed` y `exitCode` globales. La confirmación, si toca,
+  va a stderr para no ensuciar el informe.
+- Cancelada la confirmación: no se ejecuta nada y se sale con 130.
 
 ### `bond team` en un hub
 
