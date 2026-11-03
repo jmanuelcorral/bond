@@ -28,8 +28,10 @@ let backReal: string; // clon local enlazado por symlink, clonado de backOrigin
 let frontWorker: string; // clone extra para commitear al origen de front sin tocar la sesión
 let backWorker: string;
 
+// init.defaultBranch=main explicito: sin el, la rama inicial la decide la config del
+// entorno (en los runners de CI no es main) y el fixture no es determinista.
 const g = (cwd: string, ...args: string[]) => {
-	const r = spawnSync("git", ["-c", "protocol.file.allow=always", "-C", cwd, ...args], { encoding: "utf8" });
+	const r = spawnSync("git", ["-c", "protocol.file.allow=always", "-c", "init.defaultBranch=main", "-C", cwd, ...args], { encoding: "utf8" });
 	if (r.status !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
 	return r.stdout.trim();
 };
