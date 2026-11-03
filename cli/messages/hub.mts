@@ -21,6 +21,8 @@ Comandos:
                   --description describe el repo en hub.toml
   sync            Deja el disco como dice hub.toml y actualiza el registro global
   pull            Pone al día la base del hub y de sus repos en fast-forward (--dry-run, --json)
+  bump            Lleva los punteros de los submódulos a su base y lo commitea en el hub,
+                  sin push (--dry-run, --json)
   check           Revisa cada repo de la sesión: qué falta y cómo arreglarlo (--fix, --json)
 
 Sin subcomando: enseña la sesión del hub (repos, ruta, base, enlace, rama actual y,
@@ -348,6 +350,53 @@ Opciones:
 	"hub.pull_summary_failed": "{count} con fallo",
 	"hub.pull_bases_checked": "bases revisadas",
 	"hub.pull_unknown_opt": "opción desconocida: {opt} (bond hub pull --help)",
+
+	// ---- hub-bump.mts ----
+	"hub.bump.help": `Uso: bond hub bump [opciones]
+
+Lleva el puntero (gitlink) que el hub guarda de cada repo de la sesión enlazado como
+submódulo al commit actual de su rama base y lo commitea en la rama actual del hub.
+Nunca hace push: el commit queda local para que lo revises y lo empujes tú.
+
+Usa el estado local de las bases: si quieres el último commit del remoto, pasa antes
+\`bond hub pull\` (que avanza las bases en fast-forward) y después \`bond hub bump\`.
+
+Por repo: si el puntero ya apunta a la base, está al día y no se commitea nada; si el
+submódulo no está en disco, no figura como submódulo en el índice del hub, su base no
+se resuelve, está sucio, o su HEAD no coincide ni con el puntero del hub ni con su
+base (desincronizado), no se toca y se explica el motivo. Tras el commit, un submódulo
+limpio en HEAD separado se actualiza al nuevo puntero para dejar el hub limpio. Los
+repos enlazados por symlink se listan como «no aplica»: no hay gitlink que mover.
+
+El comando aborta si el hub tiene cambios ya staged, para no commitear nada ajeno.
+
+Opciones:
+  --dry-run   Muestra de qué commit a cuál movería cada puntero sin tocar nada.
+  --json      Salida en JSON con el resultado por repo.`,
+	"hub.bump_not_on_disk": "no está en disco",
+	"hub.bump_not_in_index": "no figura como submódulo en el índice del hub",
+	"hub.bump_base_not_found": "no se puede resolver la base \"{base}\" en el submódulo",
+	"hub.bump_dirty": "{count} cambio(s) sin commitear en el submódulo",
+	"hub.bump_no_head": "el submódulo no tiene HEAD (sin inicializar o sin commits)",
+	"hub.bump_desync": "desincronizado: su HEAD ({head}) no coincide ni con el puntero del hub ({pointer}) ni con su base ({base})",
+	"hub.bump_up_to_date": "al día",
+	"hub.bump_would_move": "movería {from} → {to} (base {base})",
+	"hub.bump_moved": "movido {from} → {to} (base {base})",
+	"hub.bump_symlink_na": "no aplica: enlazado por symlink, no hay gitlink que mover",
+	"hub.bump_skipped_label": "saltado: {detail}",
+	"hub.bump_hub_staged": "el hub tiene cambios ya staged; commitealos o haz git reset antes de bond hub bump",
+	"hub.bump_update_index_failed": "git update-index falló: {error}",
+	"hub.bump_commit_failed": "commit en el hub: {error}",
+	"hub.bump_committed": "commit {sha} creado en el hub; sin push, revísalo y empújalo tú",
+	"hub.bump_checkout_failed": "{name}: no se pudo actualizar el checkout del submódulo a {sha}: {error}",
+	"hub.bump_failed_fallback": "falló",
+	"hub.bump_summary_moved": "{count} movido(s)",
+	"hub.bump_summary_up_to_date": "{count} al día",
+	"hub.bump_summary_skipped": "{count} saltado(s)",
+	"hub.bump_summary_na": "{count} no aplica",
+	"hub.bump_summary_failed": "{count} con fallo",
+	"hub.bump_pointers_checked": "punteros del hub revisados",
+	"hub.bump_unknown_opt": "opción desconocida: {opt} (bond hub bump --help)",
 } as const;
 
 export const en: Record<keyof typeof es, string> = {
@@ -365,6 +414,8 @@ Commands:
                   --description describes the repo in hub.toml
   sync            Set disk state as defined in hub.toml and update global registry
   pull            Update the base of the hub and its repos with fast-forward (--dry-run, --json)
+  bump            Move submodule pointers to their base and commit it in the hub,
+                  no push (--dry-run, --json)
   check           Check each session repo: what is missing and how to fix it (--fix, --json)
 
 Without subcommand: shows hub session (repos, path, base, link, current branch and,
@@ -691,4 +742,53 @@ Options:
 	"hub.pull_summary_failed": "{count} failed",
 	"hub.pull_bases_checked": "bases checked",
 	"hub.pull_unknown_opt": "unknown option: {opt} (bond hub pull --help)",
+
+	// ---- hub-bump.mts ----
+	"hub.bump.help": `Usage: bond hub bump [options]
+
+Moves the pointer (gitlink) that the hub keeps for each session repo linked as a
+submodule to the current commit of its base branch, and commits it on the hub's
+current branch. It never pushes: the commit stays local for you to review and push.
+
+It uses the local state of the bases: if you want the latest remote commit, run
+\`bond hub pull\` first (it advances the bases in fast-forward) and then
+\`bond hub bump\`.
+
+Per repo: if the pointer already points at the base, it is up to date and nothing is
+committed; if the submodule is missing from disk, is not registered as a submodule in
+the hub's index, its base cannot be resolved, it is dirty, or its HEAD matches neither
+the hub's pointer nor its base (out of sync), it is left untouched with an explanation.
+After the commit, a clean submodule in detached HEAD is updated to the new pointer so
+the hub is left clean. Repos linked by symlink are listed as "not applicable": there
+is no gitlink to move.
+
+The command aborts if the hub already has staged changes, to avoid committing anything else.
+
+Options:
+  --dry-run   Show from which commit to which each pointer would move, touching nothing.
+  --json      JSON output with the result per repo.`,
+	"hub.bump_not_on_disk": "not on disk",
+	"hub.bump_not_in_index": "not registered as a submodule in the hub's index",
+	"hub.bump_base_not_found": "base \"{base}\" cannot be resolved in the submodule",
+	"hub.bump_dirty": "{count} uncommitted change(s) in the submodule",
+	"hub.bump_no_head": "the submodule has no HEAD (uninitialized or without commits)",
+	"hub.bump_desync": "out of sync: its HEAD ({head}) matches neither the hub's pointer ({pointer}) nor its base ({base})",
+	"hub.bump_up_to_date": "up to date",
+	"hub.bump_would_move": "would move {from} → {to} (base {base})",
+	"hub.bump_moved": "moved {from} → {to} (base {base})",
+	"hub.bump_symlink_na": "not applicable: linked by symlink, there is no gitlink to move",
+	"hub.bump_skipped_label": "skipped: {detail}",
+	"hub.bump_hub_staged": "the hub has staged changes already; commit them or run git reset before bond hub bump",
+	"hub.bump_update_index_failed": "git update-index failed: {error}",
+	"hub.bump_commit_failed": "commit in the hub: {error}",
+	"hub.bump_committed": "commit {sha} created in the hub; not pushed, review and push it yourself",
+	"hub.bump_checkout_failed": "{name}: could not update the submodule checkout to {sha}: {error}",
+	"hub.bump_failed_fallback": "failed",
+	"hub.bump_summary_moved": "{count} moved",
+	"hub.bump_summary_up_to_date": "{count} up to date",
+	"hub.bump_summary_skipped": "{count} skipped",
+	"hub.bump_summary_na": "{count} not applicable",
+	"hub.bump_summary_failed": "{count} failed",
+	"hub.bump_pointers_checked": "hub pointers checked",
+	"hub.bump_unknown_opt": "unknown option: {opt} (bond hub bump --help)",
 };

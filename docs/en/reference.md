@@ -860,6 +860,7 @@ bond hub init [dir]      # creates a hub or prepares it in an existing repo and 
 bond hub add <url|path>  # adds a repo to the hub (as a submodule or a local link)
 bond hub sync            # mounts submodules, creates links and updates the global registry
 bond hub pull            # updates the hub's and each repo's base in fast-forward (--dry-run, --json)
+bond hub bump            # moves the submodule pointers to their base and commits it in the hub, no push (--dry-run, --json)
 bond hub check           # reviews each repo of the session: what's missing and how to fix it (--fix, --json)
 ```
 
@@ -1002,6 +1003,29 @@ or push.
 - `--dry-run`: describes the advances without fetching or moving branches.
 - `--json`: JSON output with the structured per-repo result (`updated`, `up_to_date`, `skipped`,
   `failed`), upstream and advanced commits. If any repo ends in `failed`, the command exits with 1.
+
+### `bond hub bump`
+
+`cli/hub-bump.mts`. Moves the pointer (gitlink) that the hub keeps for each session repo linked as a
+submodule to the current commit of its base branch, and commits it on the hub's current branch. It
+leans on `bond hub pull`, which is what advances the base refs from the remote: bump consumes the
+local state of those refs, so the flow after integrating a repo into its base is `bond hub pull`
+and then `bond hub bump`. **It never pushes**: the commit stays local in the hub for you to review
+and push.
+
+Per repo:
+
+| State | When | What it does |
+|---|---|---|
+| `moved` | the pointer does not point at the base | moves the gitlink (`git update-index --cacheinfo 160000`) and commits it in the hub; if the submodule was clean in detached HEAD, after the commit its checkout is updated to the new pointer so the hub is left clean |
+| `up_to_date` | the pointer already points at the base | nothing; no empty commit |
+| `not_applicable` | the repo is linked by symlink | it is explicitly said not to apply: there is no gitlink to move |
+| `skipped` | the submodule is missing from disk, is not registered as a submodule in the hub's index, its base cannot be resolved, it is dirty, or its HEAD matches neither the hub's pointer nor its base (out of sync) | leaves it untouched and explains why |
+
+- `--dry-run`: shows from which commit to which each pointer would move, touching nothing.
+- `--json`: structured per-repo output (`moved`, `up_to_date`, `skipped`, `not_applicable`,
+  `failed`) with the short `from`/`to` and the SHA of the created commit. Exits with 1 if any repo ends in `failed`.
+- The command aborts if the hub already has `staged` changes, to avoid committing anything else.
 
 ### `bond team` in a hub
 

@@ -858,6 +858,7 @@ bond hub init [dir]      # crea un hub o lo prepara en un repo existente e impor
 bond hub add <url|ruta>  # añade un repo al hub (como submódulo o enlace local)
 bond hub sync            # monta submódulos, crea enlaces y actualiza el registro global
 bond hub pull            # pone al día la base del hub y de cada repo en fast-forward (--dry-run, --json)
+bond hub bump            # lleva los punteros de los submódulos a su base y lo commitea en el hub, sin push (--dry-run, --json)
 bond hub check           # revisa cada repo de la sesión y dice qué falta y cómo arreglarlo (--fix, --json)
 ```
 
@@ -964,6 +965,28 @@ no tiene remoto/upstream, lo salta y explica el motivo. Nunca hace merge, rebase
 - `--dry-run`: describe los avances sin hacer fetch ni mover las ramas.
 - `--json`: salida estructurada en JSON con el resultado por repo (`updated`, `up_to_date`, `skipped`,
   `failed`), upstream y commits avanzados. Si algún repo termina en `failed`, el comando sale con 1.
+
+### `bond hub bump`
+
+`cli/hub-bump.mts`. Lleva el puntero (gitlink) que el hub guarda de cada repo de la sesión enlazado
+como submódulo al commit actual de su rama base y lo commitea en la rama actual del hub. Se apoya en
+`bond hub pull`, que es quien avanza las refs de base desde el remoto: bump consume el estado local de
+esas refs, así que el flujo tras integrar un repo en su base es `bond hub pull` y después
+`bond hub bump`. **Nunca hace push**: el commit queda local en el hub para que lo revises y lo empujes tú.
+
+Por repo:
+
+| Estado | Cuándo | Qué hace |
+|---|---|---|
+| `moved` | el puntero no apunta a la base | mueve el gitlink (`git update-index --cacheinfo 160000`) y lo commitea en el hub; si el submódulo estaba limpio en HEAD separado, tras el commit se le actualiza el checkout al nuevo puntero para dejar el hub limpio |
+| `up_to_date` | el puntero ya apunta a la base | nada; no se commitea nada vacío |
+| `not_applicable` | el repo está enlazado por symlink | se dice explicitamente que no aplica: no hay gitlink que mover |
+| `skipped` | el submódulo no está en disco, no figura como submódulo en el índice del hub, su base no se resuelve, está sucio, o su HEAD no coincide ni con el puntero del hub ni con su base (desincronizado) | no lo toca y explica el motivo |
+
+- `--dry-run`: muestra de qué commit a cuál movería cada puntero sin tocar nada.
+- `--json`: salida estructurada por repo (`moved`, `up_to_date`, `skipped`, `not_applicable`,
+  `failed`) con el `from`/`to` cortos y el SHA del commit creado. Sale con 1 si algún repo termina en `failed`.
+- El comando aborta si el hub tiene cambios ya `staged`, para no commitear nada ajeno.
 
 ### `bond team` en un hub
 

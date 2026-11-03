@@ -2,6 +2,15 @@
 
 ## Sin publicar
 
+- `bond hub bump`: mueve el puntero (gitlink) que el hub guarda de cada repo de la sesión enlazado
+  como submódulo al commit actual de su rama base y lo commitea en la rama actual del hub, sin push
+  nunca: el commit queda local para revisarlo y empujarlo uno mismo (#43). Se apoya en `bond hub pull`
+  (que avanza las refs de base desde el remoto): el flujo es `pull` y después `bump`. Por repo: al día
+  si el puntero ya apunta a la base (nada commiteado); `no aplica` explícito en los enlazados por
+  symlink (no hay gitlink que mover); saltado y explicado si el submódulo no está en disco, no figura
+  en el índice del hub, su base no se resuelve, está sucio o su HEAD no coincide ni con el puntero del
+  hub ni con su base (desincronizado). `--dry-run` muestra el de-a sin tocar nada y `--json` el
+  resultado por repo. Aborta si el hub tiene cambios ya `staged`, para no commitear nada ajeno.
 - La autoría de las decisiones (`decided_by`, `accepted_via`) se puede fijar a mano con
   `BOND_DECISION_AGENT` o con `[decisions] author` en `~/.bond/config.toml`, y manda sobre lo
   que bond deduce del panel. En un worktree delegado bond firma como el minion que arrancó ahí
