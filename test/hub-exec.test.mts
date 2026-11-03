@@ -16,6 +16,7 @@ if (!process.env.BOND_HOME) {
 Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
 const { BOND_HOME } = await import("../cli/runtime.mts");
 const { hubsPath, hubSession } = await import("../cli/hub.mts");
+const { canonical } = await import("../cli/util.mts");
 const { hubExecRun } = await import("../cli/hub-exec.mts");
 
 const MAIN = join(import.meta.dir, "..", "cli", "main.mts");
@@ -88,6 +89,11 @@ link = "symlink"
 	);
 	writeFileSync(join(hub, ".gitignore"), ".bond/hub.local.toml\n/repos/alpha\n");
 	writeFileSync(join(hub, ".bond", "hub.local.toml"), `[repos.alpha]\nsource = ${JSON.stringify(alphaReal)}\n`);
+	// Helpers para (h): sin argumentos imprimen «hola»; con ellos, los devuelven como JSON.
+	// Se pasan por fichero para que el comando no lleve comillas dentro: mismo comportamiento
+	// en cmd.exe y en sh (lo que no reproduce en local es lo que rompe Windows).
+	writeFileSync(join(tmp, "gen.js"), "const a = process.argv.slice(2);\nconsole.log(a.length ? 'argv:' + JSON.stringify(a) : 'hola');\n");
+	writeFileSync(join(tmp, "consum.js"), "let s = '';\nprocess.stdin.on('data', (d) => { s += d; });\nprocess.stdin.on('end', () => console.log('recibido:' + s.trim()));\n");
 	expect(bond(["sync"], hub).status).toBe(0);
 	g(hub, "add", "-A");
 	g(hub, "commit", "-qm", "hub setup");
@@ -111,13 +117,15 @@ describe("bond hub exec", () => {
 	});
 
 	test("(a) el comando corre en el hub y en cada repo presente, en orden, con cabecera por repo", () => {
-		const r = bond(["hub", "exec", "--yes", "--", "node", "-e", "console.log('salida-en-' + require('fs').realpathSync('.'))"]);
+		// realpathSync.native en el hijo: en Windows la variante no-native no expande los
+		// nombres cortos 8.3 (RUNNER~1) y la salida no cuadraria con la cabecera canonicizada.
+		const r = bond(["hub", "exec", "--yes", "--", "node", "-e", "console.log('salida-en-' + require('fs').realpathSync.native('.'))"]);
 		expect(r.status).toBe(0);
-		const hubDir = realpathSync(hub);
-		const alphaDir = realpathSync(alphaReal);
-		const betaDir = realpathSync(beta);
-		// Cabeceras por repo y su salida, en el orden de la sesion: hub, alpha, beta.
-		// La cabecera muestra la ruta de trabajo (el symlink tal como vive en el hub), no el realpath.
+		// La cabecera muestra la ruta de trabajo canonica de bond (el symlink tal como vive en
+		// el hub), no el realpath del destino: el lado del test se compara con canonical().
+		const hubDir = canonical(hub);
+		const alphaDir = canonical(alphaReal);
+		const betaDir = canonical(beta);
 		const iHub = r.stdout.indexOf(`── hub (${hubDir}) ──`);
 		const iHubOut = r.stdout.indexOf(`salida-en-${hubDir}`);
 		const iAlpha = r.stdout.indexOf(`── alpha (${join(hubDir, "repos", "alpha")}) ──`);
@@ -213,14 +221,19 @@ describe("bond hub exec", () => {
 	});
 
 	test("(h) --shell interpreta un pipe; en modo argv el pipe es un argumento literal", () => {
-		const pipeCmd = `node -e "console.log('hola')" | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>console.log('recibido:'+s.trim()))"`;
-		const withShell = bond(["hub", "exec", "--yes", "--shell", "--", pipeCmd]);
+		// Pipe portable (cmd.exe y sh): dos scripts por fichero, sin comillas anidadas en el
+		// comando. Con --shell el shell interpreta el `|` y consum.js ve «hola»; en modo argv
+		// el `|` y lo que le sigue son argumentos literales de gen.js, que los imprime y no
+		// hay pipe.
+		const gen = join(tmp, "gen.js");
+		const consum = join(tmp, "consum.js");
+		const withShell = bond(["hub", "exec", "--yes", "--shell", "--", `node "${gen}" | node "${consum}"`]);
 		expect(withShell.status).toBe(0);
 		expect(withShell.stdout).toContain("recibido:hola");
 
-		// Sin --shell el `|` y lo que le sigue son argumentos literales del primer comando.
-		const argv = bond(["hub", "exec", "--yes", "--", "node", "-e", "console.log(JSON.stringify(process.argv.slice(1)))", "|", "node", "-e", "0"]);
-		expect(argv.stdout).toContain('["|","node","-e","0"]');
+		// Sin --shell: literal. gen.js imprime sus argumentos como JSON: la barra aparece ahí.
+		const argv = bond(["hub", "exec", "--yes", "--", "node", gen, "|", "node", consum]);
+		expect(argv.stdout).toContain(`argv:["|","node","${JSON.stringify(consum).slice(1, -1)}"]`);
 		expect(argv.stdout).not.toContain("recibido:");
 	});
 
@@ -234,7 +247,7 @@ describe("bond hub exec", () => {
 		expect(data.command).toEqual(["node", "-e", "console.log('marca')"]);
 		expect(data.exitCode).toBe(0);
 		const alpha = data.repos.find((x: { repo: string }) => x.repo === "alpha");
-		expect(alpha.cwd).toBe(join(realpathSync(hub), "repos", "alpha"));
+		expect(alpha.cwd).toBe(join(canonical(hub), "repos", "alpha"));
 		expect(alpha.status).toBe("executed");
 		expect(alpha.exitCode).toBe(0);
 		expect(alpha.stdout).toContain("marca");
