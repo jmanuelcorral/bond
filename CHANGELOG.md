@@ -2,6 +2,38 @@
 
 ## Sin publicar
 
+- La tabla de `bond team` se dibuja con un único renderizador y se lee de otra manera (#33).
+  Antes `status` y `--watch` tenian dos renderizadores distintos y en el hub la tabla agrupaba por
+  estado, de modo que una vertical (`plan/pagos-p1` con front, back y docs) salia partida en tres
+  grupos y no se veia como lo que es. Ahora: una sola funcion pinta ambas vistas; en el hub se
+  agrupa por rama vertical y fuera por estado; el estado va como icono pegado al minion, no en una
+  columna aparte; el pie lleva los totales derivados de lo que se ensena (nada guardado, nada que
+  se desincronice) y, si no cabe, se caen primero los conteos y lo ultimo el `q o Ctrl+C para
+  salir`. Al faltar ancho se sueltan columnas desde el final (`DÓNDE`, `FICHEROS`, `COMMITS`...) y
+  se avisa debajo de la cabecera qué se ha caido; `MINION` y `RAMA` no se caen nunca. La tabla
+  lleva rejilla dibujada con trazos Unicode (`U+2500..U+257F`, están en cualquier fuente): cabecera
+  separada, una banda de título por grupo a todo el ancho y cierre inferior, para que se lea como la
+  tabla que es y no como columnas de texto sueltas. La rejilla cuesta columnas (unas 16 con las cinco
+  de siempre), así que el minimo pasó de 20 a 24: a 60, que es el ancho por el que se diseno, caben
+  las cinco. Por debajo del minimo no se deforma nada: se dice que no cabe.
+  Los iconos de estado salen del estilo que ya eligió `bond setup` en `[ui] icons` (o `BOND_ICONS`),
+  igual que el pie de pi: con `nerd`, glifos propios de Nerd Font; con `unicode`, siqueros de una
+  columna que trae cualquier fuente; con `emoji`, los de siempre. Antes la tabla hardcodeaba emojis
+  aunque la configuracion dijera otra cosa. Las pruebas fijan el estilo a `emoji` en un preload
+  (`test/icons-pinned.mts`) para no depender de si la máquina de quien las pasa tiene Nerd Font. `bond team status <rama>` da esa fila entera,
+  sin truncar, para cuando la tabla no llega. `clip()` es ahora consciente de ANSI y de clusters: no
+  deja una secuencia de color a medias ni despega un selector de variante (`✏️` partido). El color va
+  solo en el icono y el estado, asi que sin color el contenido es identico. La tabla pinta el
+  estado y nada mas: se ha quitado la linea `└ pregunta:` que llevabamos debajo de la fila bloqueada.
+  Bond no lee las preguntas de los agentes: lo unico que sabe reconocer en un panel es el aviso de
+  confianza de la carpeta del proyecto (`questionIn`) y eso devuelve una cadena fija, no lo que el
+  agente ha escrito. Dejar esa linea era simular una capacidad que no tenemos. El icono ⛔ ya dice
+  que el agente espera algo tuyo, el aviso de como responder se sigue imprimiendo bajo la tabla, y
+  en `bond team status <rama>` sale la linea `espera:` con lo que se pudo detectar. De paso se ha
+  corregido un fallo real: `teamRows`/`hubRows` hacian `agent_status !== "blocked" ? questionIn(...) :
+  undefined`, de modo que cuando Herdr si marcaba el agente como blocked se descartaba el aviso de
+  confianza, justo el caso en que importa. Se lee siempre: `questionIn` no casa el aviso de arranque
+  de agy (eso lo aparta `startupNoticeIn`), asi que el filtro no protegia de nada.
 - El bloque de fase de la plantilla de plan tiene campo `- Repos: front, back` (#44). Hasta ahora
   `plan-team` decía «los repos que la fase toca, según el plan» y `bond team --repos` existía, pero
   no había dónde escribirlo: cada agente lo ponía donde le parecía y quien leía adivinaba. El campo

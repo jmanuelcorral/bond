@@ -12,6 +12,7 @@ import { type HubRepo, type HubSession, hubRoot, hubSession, warnedInvalidHub } 
 import { chooseAgent, gitRoot, openWorkspace } from "./launch.mts";
 import { agents, defaultAgentArgs, ensureServer, firstFreeName, herdr, type HerdrAgent, insideHerdr, preparePane, questionIn, requireHerdr, serverRunning, startedBlocked, startupNoticeIn, visibleScreen, workspaces } from "./herdr.mts";
 import { repoDecisions } from "./repo.mts";
+import { iconStyle, type IconStyle } from "../lib/status-bar.mts";
 import { inheritTrust, TRUST_KINDS, trusts } from "./trust.mts";
 import { act, canonical, caution, catchDie, die, dim, isDryRun, ok, run, warn } from "./util.mts";
 import { t } from "./messages.mts";
@@ -129,7 +130,7 @@ async function create(args: string[]): Promise<void> {
 	const hub = hubRoot(root);
 	const repo = hub ? basename(hub) : basename(root);
 	console.log(`\n  ${renderSmall(60, t("team.logo_team_in", { repo }))}\n`);
-	printStatus(teamRows(root, o.base));
+	printStatus(teamRows(root, o.base), tableRepoName(root));
 	console.log(dim(t("team.footer_hints")));
 }
 
@@ -584,7 +585,10 @@ export function teamRows(root: string, base = defaultBase(root)): Row[] {
 			// Herdr da por idle a un agente con una pregunta en pantalla (pi: confiar en la carpeta)
 			// y puede dar por blocked el aviso de arranque de agy, que no es una pregunta.
 			const screen = a?.name && a.agent_status !== "working" ? visibleScreen(a.name) : "";
-			const question = a?.agent_status !== "blocked" ? questionIn(screen) : undefined;
+			// Se lee siempre, tambien con el agente en blocked: questionIn solo casa el aviso de
+			// confianza y no se deja enganar por el aviso de arranque de agy (eso lo aparta
+			// startupNoticeIn), asi que el filtro por blocked solo hacia perder la pregunta.
+			const question = questionIn(screen);
 			const notice = a?.agent_status === "blocked" && startupNoticeIn(screen);
 			const status = notice ? "idle" : a?.agent_status;
 			return {
@@ -650,7 +654,10 @@ export function sessionRows(root: string, base?: string): Row[] {
 			const workspace = open.get(w.path);
 			const a = findBranchAgent(branch, panes, running, hr.path, workspace);
 			const screen = a?.name && a.agent_status !== "working" ? visibleScreen(a.name) : "";
-			const question = a?.agent_status !== "blocked" ? questionIn(screen) : undefined;
+			// Se lee siempre, tambien con el agente en blocked: questionIn solo casa el aviso de
+			// confianza y no se deja enganar por el aviso de arranque de agy (eso lo aparta
+			// startupNoticeIn), asi que el filtro por blocked solo hacia perder la pregunta.
+			const question = questionIn(screen);
 			const notice = a?.agent_status === "blocked" && startupNoticeIn(screen);
 			const status = notice ? "idle" : a?.agent_status;
 			rows.push({
@@ -692,58 +699,32 @@ const STATE_DISPLAY: Record<State, "team.state_working" | "team.state_blocked" |
 	"sin commits": "team.state_no_commits",
 };
 
-function printStatus(rows: Row[]): void {
+/** Ancho util de la terminal: el que reporte; 80 si no lo dice. */
+const termWidth = () => Math.max(1, process.stdout.columns ?? 80);
+
+/** Nombre que se le ensena al repo de la tabla: el de la sesion si es hub, si no el del repo. */
+export function tableRepoName(root: string): string {
+	const hub = hubRoot(root);
+	if (!hub) return basename(root);
+	const s = catchDie(() => hubSession(hub)).value;
+	return s?.name ?? basename(hub);
+}
+
+/** Pie: totales derivados (D5) y aviso de las columnas que se han caido (D3). */
+export function tableFooter(rows: Row[], extra = "", width = Number.POSITIVE_INFINITY): string {
+	const join = (...parts: string[]) => parts.filter(Boolean).join(" · ");
+	const full = join(footerTotals(rows), extra);
+	// Si no cabe, se caen primero los conteos por estado: el total y como salir de aqui son lo ultimo.
+	if (textWidth(full) <= width) return full;
+	return join(totalLabel(rows), extra);
+}
+
+function printStatus(rows: Row[], hubName: string): void {
 	if (!rows.length) return console.log(t("team.status_no_worktrees"));
-	const isHub = rows.some((r) => r.repo !== undefined);
-	const head = isHub
-		? [
-				t("team.status_th_repo"),
-				t("team.status_th_branch"),
-				t("team.status_th_state"),
-				t("team.status_th_agent"),
-				t("team.status_th_commits"),
-				t("team.status_th_files"),
-				t("team.status_th_where"),
-			]
-		: [
-				t("team.status_th_branch"),
-				t("team.status_th_state"),
-				t("team.status_th_agent"),
-				t("team.status_th_commits"),
-				t("team.status_th_files"),
-				t("team.status_th_where"),
-			];
-	const repoLabel = (r: Row) => {
-		if (r.repo !== ".") return r.repo ?? "-";
-		const h = hubRoot(r.path);
-		const s = h ? catchDie(() => hubSession(h)).value : undefined;
-		return s?.name ?? (h ? basename(h) : ".");
-	};
-	const table = rows.map((r) => {
-		const stateDisplay = t(STATE_DISPLAY[r.state]);
-		const questionDisplay = r.agent?.question ? `: ${r.agent.question}` : "";
-		const dirtyDisplay = r.dirty && r.state !== "sin commitear" ? t("team.status_dirty_extra", { dirty: r.dirty }) : "";
-		const whereDisplay = r.workspace ?? (r.agent?.pane ? t("team.status_panel", { pane: r.agent.pane }) : dim(t("team.status_closed")));
-		const cols = [
-			r.branch,
-			stateDisplay + questionDisplay + dirtyDisplay,
-			r.agent ? `${r.agent.name ?? "?"} (${r.agent.kind})` : "-",
-			r.ahead ? `+${r.ahead}` : "-",
-			r.files.length ? String(r.files.length) : "-",
-			whereDisplay,
-		];
-		if (isHub) cols.unshift(repoLabel(r));
-		return cols;
-	});
-	const w = head.map((h, i) => Math.max(h.length, ...table.map((t) => visible(t[i]))));
-	const fmt = (t: string[]) => t.map((c, i) => (i === t.length - 1 ? c : c + " ".repeat(Math.max(0, w[i] - visible(c))))).join("  ");
-	console.log(fmt(head));
-	rows.forEach((r, i) => {
-		const t = [...table[i]];
-		const stateCol = isHub ? 2 : 1;
-		t[stateCol] = paintState(r.state, t[stateCol]);
-		console.log(fmt(t));
-	});
+	const width = termWidth();
+	if (width < MIN_TABLE_WIDTH) return console.log(t("team.table_too_narrow", { width }));
+	const { lines, dropped } = tableLines(rows, { width, color: useColor(), isHub: rows.some((r) => r.repo !== undefined), hubName });
+	console.log([...lines, dim(tableFooter(rows, "", width))].join("\n"));
 	if (rows.some((r) => r.agent?.question)) {
 		console.log(caution(t("team.status_answer_hint")));
 		console.log(dim(t("team.status_pi_trust_hint")));
@@ -765,8 +746,16 @@ function parseCommon(args: string[], flags: string[], valued: string[]): { posit
 
 function status(args: string[]): void | Promise<void> {
 	const { positional, opts } = parseCommon(args, ["--json", "-j", "--watch", "-w", "--keep-open"], ["--base", "-b"]);
-	if (positional.length > 1) die(t("team.err_status_usage"));
-	const root = repoOf(positional[0]);
+	if (positional.length > 2) die(t("team.err_status_usage"));
+	// Un solo posicional: si es un directorio, es el repo; si no, es la rama que se quiere suelta (D4).
+	let repoArg: string | undefined;
+	let branchArg: string | undefined;
+	if (positional.length === 2) [repoArg, branchArg] = positional;
+	else if (positional.length === 1) {
+		if (existsSync(resolve(positional[0]))) repoArg = positional[0];
+		else branchArg = positional[0];
+	}
+	const root = repoOf(repoArg);
 	const base = (opts["--base"] ?? opts["-b"]) as string | undefined;
 	const hub = hubRoot(root);
 	if (hub && base) die(t("team.err_hub_base_override"));
@@ -779,7 +768,12 @@ function status(args: string[]): void | Promise<void> {
 	if (opts["--keep-open"]) die(t("team.err_keep_open_needs_watch"));
 	const rows = sessionRows(root, base);
 	if (opts["--json"] || opts["-j"]) return console.log(JSON.stringify(rows, null, 2));
-	printStatus(rows);
+	if (branchArg) {
+		const match = rows.filter((r) => r.branch === branchArg);
+		if (!match.length) die(t("team.err_branch_not_in_team", { branch: branchArg }));
+		return console.log(detailLines(match, { color: useColor(), hubName: tableRepoName(root) }).join("\n"));
+	}
+	printStatus(rows, tableRepoName(root));
 }
 
 // --- tabla en vivo -------------------------------------------------------------------------
@@ -803,18 +797,343 @@ export function textWidth(s: string): number {
 }
 const WIDE = /\p{Emoji_Presentation}|[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/u;
 
-/** `s` recortado a `n` columnas, con … si no cabe. */
-function clip(s: string, n: number): string {
+/**
+ * Unidades de presentacion de `s`: cada secuencia ANSI (ancho 0) y cada cluster de caracteres
+ * (una base con los selectores de variante, ZWJ o acentos combinantes que van pegados a ella).
+ * Un cluster se corta o se deja entero: partirlo deja un glifo suelto o un emoji a medias.
+ */
+export function clusters(s: string): Array<{ text: string; w: number }> {
+	const ATTACHED = /[\ufe0e\ufe0f\u200d]|\p{M}/u;
+	const parts: Array<{ text: string; ansi: boolean }> = [];
+	for (const m of s.matchAll(/(\x1b\[[0-9;]*m)|([\s\S])/gu)) {
+		if (m[1]) {
+			parts.push({ text: m[1], ansi: true });
+			continue;
+		}
+		const ch = m[2];
+		const last = parts[parts.length - 1];
+		if (last && !last.ansi && ATTACHED.test(ch)) {
+			last.text += ch;
+			continue;
+		}
+		parts.push({ text: ch, ansi: false });
+	}
+	// El ancho se mide del cluster entero, no suma de partes: un selector de variante pesa
+	// distinto segun lleve o no la base delante.
+	return parts.map((p) => ({ text: p.text, w: p.ansi ? 0 : textWidth(p.text) }));
+}
+
+/**
+ * `s` recortado a `n` columnas, con … si no cabe. Consciente de ANSI y de clusters: no corta
+ * una secuencia de color por la mitad (cierra el color abierto antes del …) ni despega lo que
+ * se combina con el anterior. Si un cluster no cabe, se deja fuera entero.
+ */
+export function clip(s: string, n: number): string {
 	if (n <= 0) return "";
 	if (textWidth(s) <= n) return s;
 	let out = "";
-	for (const ch of s) {
-		if (textWidth(`${out}${ch}`) > n - 1) break;
-		out += ch;
+	let used = 0;
+	let colored = false;
+	for (const c of clusters(s)) {
+		if (c.w === 0) {
+			out += c.text;
+			colored = c.text !== "\x1b[0m";
+			continue;
+		}
+		if (used + c.w > n - 1) break;
+		out += c.text;
+		used += c.w;
 	}
-	return `${out}…`;
+	return `${colored ? "\x1b[0m" : ""}${out}\u2026`;
 }
 const pad = (s: string, n: number) => s + " ".repeat(Math.max(0, n - textWidth(s)));
+
+/**
+ * Iconos de estado por estilo de fuente. `bond setup` deja elegido uno en `[ui] icons` (o
+ * `BOND_ICONS`) segun haya o no una Nerd Font en la maquina; la tabla usa ese y no otro, que es
+ * lo que hace que con `nerd` se vean glifos propios y con `unicode` siqueros de una columna que
+ * trae cualquier fuente. El icono es la redundancia no cromatica del estado (D6).
+ */
+export const STATE_ICONS: Record<IconStyle, Record<State, string>> = {
+	nerd: {
+		bloqueado: "\u{f071}", // nf-fa-exclamation_triangle
+		trabajando: "\u{f110}", // nf-fa-spinner
+		"sin commitear": "\u{f040}", // nf-fa-pencil
+		lista: "\u{f466}", // nf-fa-box
+		integrada: "\u{f058}", // nf-fa-check_circle
+		// Comparten icono con integrada, como en los otros dos juegos: el grupo se ensena junto
+		// («Integradas / sin empezar») y el pie los suma como una sola cosa (D5).
+		"sin commits": "\u{f058}", // nf-fa-check_circle
+	},
+	emoji: {
+		bloqueado: "\u26d4",
+		trabajando: "\ud83d\udd04",
+		"sin commitear": "\u270f\ufe0f",
+		lista: "\ud83d\udce6",
+		integrada: "\u2705",
+		"sin commits": "\u2705",
+	},
+	unicode: {
+		bloqueado: "\u2298", // circulo tachado
+		trabajando: "\u25d0", // medio lleno
+		"sin commitear": "\u270e",
+		lista: "\u25a3",
+		integrada: "\u2713",
+		"sin commits": "\u2713",
+	},
+};
+
+let iconStyleCache: IconStyle | undefined;
+
+/** Estilo de iconos en vigor: `[ui] icons` / `BOND_ICONS`, resuelto una vez por proceso. */
+export function tableIconStyle(): IconStyle {
+	iconStyleCache ??= iconStyle();
+	return iconStyleCache;
+}
+
+/** Icono del estado en el estilo en vigor (o en el que se pida, para poder probarlos los tres). */
+export const stateIcon = (s: State, style: IconStyle = tableIconStyle()): string => STATE_ICONS[style][s];
+
+/** Urgencia: el orden en que se ensenan los estados, primero lo que te espera. */
+export const STATE_ORDER: State[] = ["bloqueado", "trabajando", "sin commitear", "lista", "integrada", "sin commits"];
+
+/** Ancho por debajo del cual la tabla no tiene nada util que ensenar; se dice, no se deforma. */
+export const MIN_TABLE_WIDTH = 24;
+
+/**
+ * Columnas de la tabla, en orden de importancia: al faltar ancho se caen desde el final y la
+ * primera (minion) no se toca nunca (D3). En un hub la segunda columna es el repo, porque la
+ * rama es comun a toda la vertical y va en la cabecera del grupo.
+ */
+export const tableColumns = (isHub: boolean): Array<{ key: string; header: string }> => [
+	{ key: "minion", header: t("team.th_minion") },
+	isHub ? { key: "repo", header: t("team.th_repo") } : { key: "branch", header: t("team.th_branch") },
+	{ key: "commits", header: t("team.th_commits") },
+	{ key: "files", header: t("team.th_files") },
+	{ key: "where", header: t("team.th_where") },
+];
+
+/** Nombre del repo de la fila en modo hub (el `.` es el repo donde estas). */
+function repoLabel(r: Row, hubName: string): string {
+	if (r.repo !== ".") return r.repo ?? "-";
+	return hubName;
+}
+
+/** Valor de una celda. */
+function cellValue(r: Row, key: string, hubName: string): string {
+	switch (key) {
+		case "minion":
+			return r.agent?.name ?? "-";
+		case "repo":
+			return repoLabel(r, hubName);
+		case "branch":
+			return r.branch || "-";
+		case "commits":
+			return r.ahead ? `+${r.ahead}` : "-";
+		case "files":
+			return r.files.length ? String(r.files.length) : "-";
+		case "where":
+			return r.workspace ?? (r.agent?.pane ? t("team.status_panel", { pane: r.agent.pane }) : dim(t("team.status_closed")));
+	}
+	return "-";
+}
+
+/** Orden por urgencia, estable entre refrescos: el mismo estado sale siempre en el mismo sitio. */
+const byUrgency = (a: Row, b: Row) => STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state);
+
+/**
+ * Cuerpo compartido de la tabla: `bond team status` y la vista en vivo dibujan exactamente lo
+ * mismo (D1). Las columnas que no caben se caen desde el final y se avisa cuales (D3); si aun
+ * asi no cabe, se estrecha la columna larga y se recorta. Devuelve la cabecera y un formateador
+ * de filas con los anchos ya fijados, para que el que agrupe pinte sus cabeceras intercaladas.
+ */
+/** Aviso de las columnas que se han caido por falta de ancho. */
+export function droppedNotice(dropped: string[]): string {
+	return dropped.length ? t("team.footer_dropped", { cols: dropped.join(", ") }) : "";
+}
+
+/**
+ * Trazado de la rejilla. Unicode plano (U+2500..U+257F): esta en cualquier fuente, Nerd o no,
+ * asi que la tabla se ve como una tabla tambien donde no hay glifos propios.
+ */
+const BOX = { tl: "\u250c", tr: "\u2510", bl: "\u2514", br: "\u2518", h: "\u2500", v: "\u2502", down: "\u252c", up: "\u2534", left: "\u251c", right: "\u2524" };
+
+/** Ancho de la tabla entera: celdas + un espacio por lado + la rejilla entre columnas. */
+const gridWidth = (w: number[]) => w.reduce((a, b) => a + b, 0) + 3 * w.length + 1;
+
+/**
+ * Linea horizontal. `band` y `bottom` cierran las columnas (┴); `top` y `data` las abren (┬).
+ * Se alternan: la banda de un grupo va entre dos lineas que cierran, la rejilla de datos entre
+ * dos que abren.
+ */
+function rule(w: number[], kind: "top" | "band" | "data" | "bottom"): string {
+	const [l, m, r] =
+		kind === "top"
+			? [BOX.tl, BOX.down, BOX.tr]
+			: kind === "data"
+				? [BOX.left, BOX.down, BOX.right]
+				: kind === "band"
+					? [BOX.left, BOX.up, BOX.right]
+					: [BOX.bl, BOX.up, BOX.br];
+	return l + w.map((c) => BOX.h.repeat(c + 2)).join(m) + r;
+}
+
+/** Fila de datos: cada celda con un espacio por lado y la rejilla en medio. */
+function rowLine(cells: string[], w: number[]): string {
+	return `${BOX.v} ${cells.map((c, i) => pad(c, w[i])).join(` ${BOX.v} `)} ${BOX.v}`;
+}
+
+/** Fila ancha de titulo: ocupa la tabla entera, sin columnas. */
+function bandLine(text: string, w: number[]): string {
+	const inner = gridWidth(w) - 4;
+	return `${BOX.v} ${pad(clip(text, inner), inner)} ${BOX.v}`;
+}
+
+/**
+ * Cuerpo compartido de la tabla: `bond team status` y la vista en vivo dibujan exactamente lo
+ * mismo (D1). Las columnas que no caben se caen desde el final y se avisa cuales (D3); si aun
+ * asi no cabe, se estrecha la columna larga y se recorta. Devuelve la cabecera, un formateador
+ * de filas y los trazos de la rejilla ya con los anchos fijados, para quien pinte los grupos.
+ */
+export function tableBody(
+	rows: Row[],
+	o: { width: number; color: boolean; isHub: boolean; hubName: string },
+): {
+	header: string;
+	format: (r: Row) => string;
+	dropped: string[];
+	widths: number[];
+	rule: (k: "top" | "band" | "data" | "bottom") => string;
+	band: (s: string) => string;
+} {
+	let cols = tableColumns(o.isHub);
+	const style = tableIconStyle();
+	const cellsOf = (cs: typeof cols) =>
+		rows.map((r) =>
+			cs.map((c) => (c.key === "minion" ? `${paintState(r.state, stateIcon(r.state, style), o.color)} ${cellValue(r, c.key, o.hubName)}` : cellValue(r, c.key, o.hubName))),
+		);
+	const widthsOf = (cs: typeof cols, cells: string[][]) => cs.map((c, i) => Math.max(textWidth(c.header), ...cells.map((x) => textWidth(x[i] ?? ""))));
+	let cells = cellsOf(cols);
+	let w = widthsOf(cols, cells);
+	while (cols.length > 2 && gridWidth(w) > o.width) {
+		cols = cols.slice(0, -1);
+		cells = cellsOf(cols);
+		w = widthsOf(cols, cells);
+	}
+	const dropped = tableColumns(o.isHub).slice(cols.length).map((c) => c.header);
+	if (gridWidth(w) > o.width) w[1] = Math.max(4, w[1] - (gridWidth(w) - o.width));
+	const index = new Map(rows.map((r, i) => [r, i] as const));
+	const clipped = (c: string[]) => c.map((x, i) => clip(x, w[i] ?? 4));
+	return {
+		header: rowLine(clipped(cols.map((c) => c.header)), w),
+		format: (r: Row) => rowLine(clipped(cells[index.get(r) ?? 0] ?? []), w),
+		dropped,
+		widths: w,
+		rule: (k) => rule(w, k),
+		band: (s: string) => bandLine(s, w),
+	};
+}
+
+/**
+ * Tabla completa con sus grupos (D2): en un hub se agrupa por vertical, que es lo que si no se
+ * pierde; fuera de el, por estado. Cada cabecera ocupa UNA linea y no hay lineas en blanco dentro
+ * de un grupo. En un hub con una sola vertical no hace falta cabecera: no distingue nada.
+ */
+export function tableLines(
+	rows: Row[],
+	o: { width: number; color: boolean; isHub: boolean; hubName: string },
+): { lines: string[]; dropped: string[] } {
+	const body = tableBody(rows, o);
+	const sorted = [...rows].sort(byUrgency);
+	const groups: Array<{ title: string | null; state: State; rows: Row[] }> = [];
+	// Se iteran los grupos, no los estados: un grupo puede cubrir dos estados (integrada y sin
+	// commits) y cada uno debe salir UNA sola vez bajo su titulo.
+	if (!o.isHub) {
+		for (const g of WATCH_GROUPS) {
+			const grp = sorted.filter((r) => g.states.includes(r.state));
+			if (grp.length) groups.push({ title: `${stateIcon(grp[0].state)} ${g.title}`, state: grp[0].state, rows: grp });
+		}
+	} else {
+		const verticals = new Map<string, Row[]>();
+		for (const r of sorted) {
+			const arr = verticals.get(r.branch) ?? [];
+			arr.push(r);
+			verticals.set(r.branch, arr);
+		}
+		const many = verticals.size > 1;
+		for (const [branch, grp] of verticals) groups.push({ title: many ? `\u2500\u2500 ${branch}` : null, state: grp[0].state, rows: grp });
+	}
+	const lines: string[] = [body.rule("top"), body.header];
+	const notice = droppedNotice(body.dropped);
+	// El aviso de columnas va aqui, pegado a la cabecera: en el pie competiria con las
+	// instrucciones de salida, que son lo ultimo que se debe perder.
+	if (notice) lines.push(body.rule("band"), body.band(notice));
+	for (const g of groups) {
+		if (g.title) lines.push(body.rule("band"), body.band(paintState(g.state, g.title, o.color)));
+		lines.push(body.rule("data"));
+		// La tabla pinta el estado y nada mas. No pinta la pregunta del agente porque no la
+		// tiene: lo unico que bond sabe reconocer en un panel es el aviso de confianza de la
+		// carpeta (questionIn), y eso devuelve una cadena fija, no lo que el agente ha escrito.
+		// Poner ahi una linea de "pregunta:" seria simular algo que no podemos leer. Lo que si
+		// sabemos, y el icono ⛔ ya dice, es que espera algo tuyo; la respuesta se da en su
+		// panel y el detalle de que espera sale en `bond team status <rama>` (D4).
+		for (const r of g.rows) lines.push(body.format(r));
+	}
+	lines.push(body.rule("bottom"));
+	return { lines, dropped: body.dropped };
+}
+
+/**
+ * Pie con totales (D5). Se calculan aqui, sobre las filas que se van a enseiar: no hay ningun
+ * contador guardado en ninguna parte, que seria un segundo ledger solo para la UI.
+ */
+/** Total de ramas del pie. */
+export function totalLabel(rows: Row[]): string {
+	if (!rows.length) return "";
+	return rows.length === 1 ? t("team.footer_total_one") : t("team.footer_total_many", { n: rows.length });
+}
+
+export function footerTotals(rows: Row[]): string {
+	if (!rows.length) return "";
+	const total = totalLabel(rows);
+	// Conteos con el icono del estado, no con su palabra: es lo que cabe en un pie y se sigue
+	// leyendo sin color, porque el icono es el que lleva el significado (D6).
+	// Conteos con el icono del estado, no con su palabra: es lo que cabe en un pie y se sigue
+	// leyendo sin color, porque el icono es el que lleva el significado (D6). Los estados que
+	// comparten icono (integrada y sin commits) se suman juntos, que es como se ensenan.
+	const byIcon = new Map<string, number>();
+	for (const st of STATE_ORDER) {
+		const n = rows.filter((r) => r.state === st).length;
+		if (n) byIcon.set(stateIcon(st), (byIcon.get(stateIcon(st)) ?? 0) + n);
+	}
+	if (!byIcon.size) return total;
+	return `${total} · ${[...byIcon.entries()].map(([icon, n]) => `${icon}${n}`).join(" ")}`;
+}
+
+/**
+ * Una fila desplegada, sin truncar (D4): la ruta al valor completo cuando la tabla no cabe.
+ * Las etiquetas van alineadas; los valores salen enteros, incluidas rutas largas.
+ */
+export function detailLines(rows: Row[], o: { color: boolean; hubName: string }): string[] {
+	const out: string[] = [];
+	for (const r of rows) {
+		const pairs: Array<[string, string]> = [
+			[t("team.detail_state"), `${paintState(r.state, stateIcon(r.state), o.color)} ${t(STATE_DISPLAY[r.state])}`],
+			[t("team.detail_agent"), r.agent ? `${r.agent.name ?? "?"}${r.agent.kind ? ` (${r.agent.kind})` : ""}` : "-"],
+		];
+		if (r.repo !== undefined) pairs.push([t("team.detail_repo"), repoLabel(r, o.hubName)]);
+		if (r.base) pairs.push([t("team.detail_base"), r.base]);
+		pairs.push([t("team.detail_commits"), r.ahead ? `+${r.ahead}` : "-"]);
+		pairs.push([t("team.detail_files"), r.files.length ? String(r.files.length) : "-"]);
+		if (r.dirty) pairs.push([t("team.detail_dirty"), String(r.dirty)]);
+		pairs.push([t("team.detail_where"), r.workspace ?? (r.agent?.pane ? t("team.status_panel", { pane: r.agent.pane }) : t("team.status_closed"))]);
+		if (r.agent?.question) pairs.push([t("team.detail_question"), r.agent.question]);
+		const padTo = Math.max(...pairs.map((p) => textWidth(p[0])));
+		out.push(paintState(r.state, r.branch, o.color));
+		for (const [k, v] of pairs) out.push(`  ${pad(k, padTo)}  ${v}`);
+	}
+	return out;
+}
 
 /** Grupos de la tabla en vivo, en el orden en que salen: primero lo que te espera. */
 export const WATCH_GROUPS: Array<{ icon: string; title: string; states: State[] }> = [
@@ -835,44 +1154,20 @@ export function renderWatch(rows: Row[], o: { width: number; color: boolean; rep
 	const isHub = !!o.hub || rows.some((r) => r.repo !== undefined);
 	const branches = new Set(rows.map((r) => r.branch).filter(Boolean));
 	const branch = o.branch ?? (branches.size > 0 ? [...branches].join(", ") : undefined);
-	const title = isHub ? (branch ? `bond team · ${o.repo} · ${branch}` : `bond team · ${o.repo}`) : `bond team · ${o.repo} · base ${o.base}`;
-	const out = [pad(clip(title, o.width - o.time.length - 1), o.width - o.time.length) + o.time];
+	const title = isHub ? (branch ? `bond team \u00b7 ${o.repo} \u00b7 ${branch}` : `bond team \u00b7 ${o.repo}`) : `bond team \u00b7 ${o.repo} \u00b7 base ${o.base}`;
+	const out = [clip(pad(clip(title, o.width - o.time.length - 1), Math.max(0, o.width - o.time.length)) + o.time, o.width)];
+	// El pie es lo ultimo que se pinta: el aviso va encima, porque es lo que ha cambiado y el
+	// usuario aun no ha leido.
+	let footer = "";
 	if (!rows.length) out.push("", clip(t("team.watch_no_worktrees"), o.width));
+	else if (o.width < MIN_TABLE_WIDTH) out.push("", clip(t("team.table_too_narrow", { width: o.width }), o.width));
 	else {
-		const cells = rows.map((r) => [
-			r.agent?.name ?? "-",
-			(isHub ? (r.repo === "." ? o.repo : r.repo) : r.branch) ?? "-",
-			r.ahead ? `+${r.ahead}` : "-",
-			r.files.length ? String(r.files.length) : "-",
-		]);
-		const widths = (h: string[]) => h.map((x, i) => Math.max(textWidth(x), ...cells.map((c) => textWidth(c[i]))));
-		const room = (w: number[]) => w.reduce((a, b) => a + b + 2, 0);
-		// En un panel estrecho, cabeceras cortas y, si aun así no cabe, la rama recortada.
-		let head = isHub
-			? [t("team.watch_th_minion"), t("team.watch_th_repo"), t("team.watch_th_commits"), t("team.watch_th_files")]
-			: [t("team.watch_th_minion"), t("team.watch_th_branch"), t("team.watch_th_commits"), t("team.watch_th_files")];
-		let w = widths(head);
-		if (room(w) > o.width)
-			w = widths(
-				(head = isHub
-					? [t("team.watch_th_minion"), t("team.watch_th_repo"), t("team.watch_th_com"), t("team.watch_th_fich")]
-					: [t("team.watch_th_minion"), t("team.watch_th_branch"), t("team.watch_th_com"), t("team.watch_th_fich")]),
-			);
-		w[1] = Math.max(4, w[1] - Math.max(0, room(w) - o.width));
-		const fmt = (c: string[]) => c.map((x, i) => pad(clip(x, w[i]), w[i])).join("  ").trimEnd();
-		out.push("", clip(fmt(head), o.width));
-		for (const g of WATCH_GROUPS) {
-			const group = rows.flatMap((r, i) => (g.states.includes(r.state) ? [[r, cells[i]] as const] : []));
-			if (!group.length) continue;
-			out.push("", paintState(group[0][0].state, clip(`${g.icon} ${g.title}`, o.width), o.color));
-			for (const [r, c] of group) {
-				out.push(paintState(r.state, clip(fmt(c), o.width), o.color));
-				if (r.agent?.question) out.push(clip(t("team.watch_question", { question: r.agent.question }), o.width));
-			}
-		}
+		const { lines, dropped } = tableLines(rows, { width: o.width, color: o.color, isHub, hubName: o.repo });
+		out.push(...lines);
+		footer = tableFooter(rows, t("team.watch_footer"), o.width);
 	}
 	if (o.notice) out.push("", ...o.notice.split("\n").map((l) => clip(l, o.width)));
-	out.push("", dimmed(clip(t("team.watch_footer"), o.width)));
+	if (footer) out.push("", dimmed(clip(footer, o.width)));
 	return out;
 }
 
@@ -1891,7 +2186,7 @@ async function createInHub(s: HubSession, o: TeamArgs): Promise<void> {
 	} else openWorkspaces(s.root, plan, o);
 	const { renderSmall } = await import("../lib/bond-logo.mts");
 	console.log(`\n  ${renderSmall(60, t("team.logo_branch_in_hub", { branch, name: s.name }))}\n`);
-	printStatus(subRows(s, targets).filter((r) => r.branch === branch));
+	printStatus(subRows(s, targets).filter((r) => r.branch === branch), tableRepoName(s.root));
 	console.log(dim(t("team.hub_footer_hints", { branch })));
 }
 

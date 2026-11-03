@@ -1,5 +1,9 @@
 # Las pruebas se ejecutan siempre en español: si no, el idioma del que las lanza (LANG=en_US
 # en una macOS, C en un runner) cambiaría las cadenas que comprueban. Los tests de inglés
 # fijan BOND_LANG a su aire, caso por caso.
+#
+# Y siempre con emojis: si no, una maquina con [ui] icons = "nerd" en ~/.bond/config.toml
+# cambiaría los iconos de las tablas que se comprueban. Cada preload deja ganar a lo que ya
+# venga puesto fuera.
 [test]
-preload = ["./test/lang-pinned.mts"]
+preload = ["./test/lang-pinned.mts", "./test/icons-pinned.mts"]
