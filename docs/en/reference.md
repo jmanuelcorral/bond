@@ -89,6 +89,19 @@ to use (defaults are checked; optional skills appear unchecked). In an already i
 the `agents`, `default_agent`, `mcp`, `skills` and `commands` lines of `bond.toml`, so your
 comments and your `[mcp_servers]` are kept, and `sync` removes what is no longer requested.
 
+**Language of what bond generates.** The language you chose in `bond setup` (`[ui] lang` in
+`~/.bond/config.toml`, or `BOND_LANG` for a single run) also decides the text bond writes into
+files for the agents: the global rules in each agent's instructions file, the `bond:hub` block in
+`AGENTS.md` and the coordination note carried by each vertical-branch request. Paths
+(`docs/plans/`, `docs/decisions/`, `hub.toml`, `repos/`) and commands are never translated: they
+are literals you need to be able to copy verbatim. Switching language rewrites those blocks, and it
+says so: `bond sync` reports how many it rewrites and into which language, and `bond sync --check`
+distinguishes it from a plain out-of-date block (`block in es, current language en: AGENTS.md`).
+The manifest stores the language each block was written in, so the notice only appears when the
+language really changed. `~/.bond/AGENTS.md` is not migrated: after the first `bond setup` it is
+yours, and switching language later leaves it alone. Runs and requests already sent keep the
+language they were written in.
+
 **Bond Extensions (pi).** If the repo uses pi, `.pi/settings.json` declares
 `"packages": ["~/.bond/pi"]`: the status footer, the BOND header, the `repo_map` tool,
 `/delegate`, `/team` and the catalog commands. `~/.bond/pi` is a stable link to the installed

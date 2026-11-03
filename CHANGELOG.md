@@ -2,6 +2,24 @@
 
 ## Sin publicar
 
+- Lo que bond escribe en ficheros para los agentes sigue el idioma elegido en `bond setup` (#49).
+  Hasta ahora el idioma (1.11.0) llegaba a la consola y nada más: las reglas globales que van al
+  fichero de instrucciones de cada agente, el bloque `bond:hub` del `AGENTS.md` y la nota de
+  coordinación que viaja en cada encargo de una rama vertical estaban en español fijo, aunque
+  tuvieras `lang = "en"`. Esas ~25 cadenas viven ahora en un área nueva de mensajes
+  (`cli/messages/gen.mts`, claves `gen.*`) y se resuelven en el idioma en vigor al generar. Son
+  área aparte y no se han mezclado con las de consola porque son otra categoría: se generan en otro
+  momento y lo lee el agente, no tú por una terminal. Dos cosas no se traducen nunca: los caminos
+  (`docs/plans/`, `docs/decisions/`, `hub.toml`, `repos/`) y los comandos de bond y de Herdr, que
+  tienen que poder copiarse tal cual. Sí se traducen las cabeceras de la tabla del hub
+  (`RUTA`→`PATH`, `ENLACE`→`LINK`, `AGENTE`→`AGENT`…). Cambiar de idioma reescribe los bloques, y
+  se dice: `bond sync` avisa de cuántos bloques reescribe y a qué idioma, y `bond sync --check` lo
+  distingue de un bloque desactualizado genérico (`block in es, current language en: AGENTS.md`).
+  Para eso el manifiesto guarda el idioma con que se escribió (`manifest.lang`); los manifiestos de
+  bond ≤ 1.11 no lo tienen y no se dispara el aviso en vez de inventárselo. `~/.bond/AGENTS.md` no
+  se migra: tras sembrarlo es tuyo, y cambiar de idioma después no lo toca — un aviso de cambio de
+  idioma no es una orden de reescribir instrucciones personales. El español no cambia una coma: las
+  cadenas `es` se copiaron tal cual de lo que ya se escribía, y hay pruebas que lo fijan.
 - La tabla de `bond team` se dibuja con un único renderizador y se lee de otra manera (#33).
   Antes `status` y `--watch` tenian dos renderizadores distintos y en el hub la tabla agrupaba por
   estado, de modo que una vertical (`plan/pagos-p1` con front, back y docs) salia partida en tres

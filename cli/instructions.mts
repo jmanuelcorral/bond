@@ -13,27 +13,15 @@ import { act } from "./util.mts";
 
 export const PERSONAL_FILE = join(BOND_HOME, "AGENTS.md");
 
-/** Reglas de bond, iguales para todos los agentes. */
-const BOND_RULES = `## Bond: Herdr y otros agentes
+/**
+ * Reglas de bond, iguales para todos los agentes. Función, no constante: el idioma puede cambiar
+ * en mitad del proceso (el asistente de `bond setup` llama a `setLang` tras preguntar) y una
+ * constante de módulo se quedaría con el idioma anterior a la pregunta.
+ */
+const bondRules = () => t("gen.rules");
 
-- Puedes estar dentro de un panel de Herdr (\`HERDR_ENV=1\`). Usa Herdr (paneles, otros agentes,
-  workspaces, worktrees) solo cuando el usuario lo pida o lo pida un comando como /delegate o
-  /team; no por iniciativa propia porque algo tarde o se pueda paralelizar. El skill \`herdr\`
-  explica cómo; la sintaxis la manda \`herdr <grupo>\`.
-- Para delegar en otro agente o repartir trabajo en worktrees, usa los skills
-  \`bond-delegate\` y \`bond-team\`.
-- No cierres workspaces, paneles, agentes ni sesiones que no hayas creado tú. No ejecutes
-  \`herdr\` sin subcomando.
-- No mandes código ni datos privados a búsquedas web: busca el mensaje de error, no el fichero.
-- Si el repo tiene una sección \`[decisions]\` en \`.bond/bond.toml\` (memoria de decisiones),
-  registra las decisiones no triviales con el skill \`decision-record\` y pon los trailers
-  \`Agent:\` y \`Decision:\` en los commits.`;
-
-const PERSONAL_TEMPLATE = `# Mis instrucciones para todos los agentes
-
-<!-- bond las lleva al fichero de instrucciones global de cada agente (bond setup).
-     Idioma, estilo, cómo trabajas, reglas de git... -->
-`;
+/** Semilla de ~/.bond/AGENTS.md cuando no existe. */
+const personalTemplate = () => t("gen.personal_template");
 
 /**
  * Primera vez: las instrucciones que tenías (el AGENTS.md personal de una instalación anterior,
@@ -41,7 +29,7 @@ const PERSONAL_TEMPLATE = `# Mis instrucciones para todos los agentes
  * agente); si no hay, una plantilla.
  */
 function seedPersonal(legacy?: string): string {
-	if (!legacy?.trim()) return PERSONAL_TEMPLATE;
+	if (!legacy?.trim()) return personalTemplate();
 	const keep = legacy.split(/^(?=## )/m).filter((s) => !/^## (Entorno Herdr|Contexto)\b/.test(s));
 	return `${keep.join("").trimEnd()}\n`;
 }
@@ -56,16 +44,16 @@ export function ensurePersonal(legacy?: string): void {
 
 function blockBody(): string {
 	const personal = existsSync(PERSONAL_FILE) ? readFileSync(PERSONAL_FILE, "utf8").trim() : "";
-	return `${personal ? `${personal}\n\n` : ""}${BOND_RULES}`;
+	return `${personal ? `${personal}\n\n` : ""}${bondRules()}`;
 }
 
-const BLOCK_NOTE = "generado por bond setup; no editar: cambia ~/.bond/AGENTS.md";
+const blockNote = () => t("gen.block_note");
 
 /** El fichero tiene el bloque de bond y está al día con ~/.bond/AGENTS.md y las reglas. */
 export function blockCurrent(file: string): boolean {
 	if (!existsSync(file)) return false;
 	const current = readFileSync(file, "utf8");
-	return withBlock(current, blockBody(), "md", BLOCK_NOTE) === current;
+	return withBlock(current, blockBody(), "md", blockNote()) === current;
 }
 
 /**
@@ -94,7 +82,7 @@ export function propagate(agents: string[]): Array<{ agent: string; file: string
 			continue;
 		}
 		const current = existsSync(file) ? readFileSync(file, "utf8") : "";
-		const next = withBlock(current, body, "md", BLOCK_NOTE);
+		const next = withBlock(current, body, "md", blockNote());
 		if (next === current) {
 			out.push({ agent: id, file, result: "current" as const });
 			continue;

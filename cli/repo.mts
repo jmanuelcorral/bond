@@ -18,7 +18,8 @@ import { parseJsonc } from "./agents.mts";
 import { agentInstalled } from "./catalog-agents.mts";
 import { catalogSlug, count, type McpServer, readCommandNames, readMcps, validateCatalog } from "./catalog.mts";
 import { ensureFetched, gitKey, type Lock, readLock, repoRelative } from "./catalog-git.mts";
-import { t } from "./messages.mts";
+import { lang, t } from "./messages.mts";
+import { type Lang } from "../lib/lang.mts";
 import { assetsPath, ensureBondLink } from "./runtime.mts";
 import { bad, catchingDie, catchDie, caution, die, dim, isDryRun, log, ok, run, STAMP, warn } from "./util.mts";
 import { hubSession, type HubSession } from "./hub.mts";
@@ -414,6 +415,9 @@ interface Manifest {
 	links: Record<string, string>;
 	json: Record<string, Array<{ parent: string | null; keys: string[] }>>;
 	blocks: Record<string, BlockStyle>;
+	/** Idioma con que se escribieron los bloques gestionados. Ausente en manifiestos viejos: se
+	 *  trata como «desconocido» y no se dispara el aviso de cambio de idioma (G2). */
+	lang?: Lang;
 }
 
 const sha = (s: string | Buffer) => createHash("sha256").update(s).digest("hex");
@@ -671,43 +675,41 @@ export function hubAgentsBlock(hub: HubSession, decisionsDir: string): string {
 	const row = (cells: string[]) => `| ${cells.join(" | ")} |`;
 	const repos = hub.repos.map((r) =>
 		row([
-			r.path === "." ? `${hub.name} *(el hub)*` : basename(r.path),
+			r.path === "." ? `${hub.name} ${t("gen.hub_is_hub")}` : basename(r.path),
 			`\`${r.path}\``,
 			r.base,
-			r.path === "." ? "-" : (r.link ?? "submodule"),
+			r.path === "." ? "-" : (r.link ?? t("gen.hub_link_submodule")),
 			r.agent ?? "-",
 			r.description ?? "-",
 		]),
 	);
+	// Los caminos (docs/plans/, el de decisiones, hub.toml) y los comandos de bond van en el
+	// texto de cada idioma tal cual: son literales que hay que poder copiar (G4).
 	return [
-		"## El hub: sesión y reglas",
+		t("gen.hub_title"),
 		"",
-		"Este repo es un hub de bond: agrupa la sesión declarada en `hub.toml` —el hub y sus repos",
-		"enlazados— y sirve de puesto desde el que coordinarlos. Este bloque lo generan `bond sync`,",
-		"`bond hub init` y `bond hub add` a partir de `hub.toml`: no lo edites aquí; si cambia la",
-		"sesión, cambia `hub.toml` y pasa `bond sync`.",
+		t("gen.hub_intro"),
 		"",
-		"### Repos de la sesión",
+		t("gen.hub_repos_title"),
 		"",
-		row(["REPO", "RUTA", "BASE", "ENLACE", "AGENTE", "DESCRIPCIÓN"]),
+		row([t("gen.hub_col_repo"), t("gen.hub_col_path"), t("gen.hub_col_base"), t("gen.hub_col_link"), t("gen.hub_col_agent"), t("gen.hub_col_description")]),
 		row(["---", "---", "---", "---", "---", "---"]),
 		...repos,
 		"",
-		"### Reglas del hub",
+		t("gen.hub_rules_title"),
 		"",
-		"- No edites los repos enlazados (`repos/`) desde el hub: cada repo tiene sus propias reglas",
-		"  y su agente. El trabajo en un repo va por `bond team <rama>` —una rama vertical, un agente",
-		"  por repo—, en el worktree de ese repo.",
-		`- En el hub se coordina la sesión: los planes viven en \`docs/plans/\` y las decisiones en`,
-		`\`${decisionsDir}/\`; desde aquí se lanza el trabajo sobre los repos y se revisa lo que vuelve.`,
-		"- `bond hub check` revisa el estado de cada repo de la sesión y `bond hub sync` deja el disco",
-		"  como dice `hub.toml`.",
+		t("gen.hub_rule_no_edit"),
+		t("gen.hub_rule_coordinate", { decisionsDir }),
+		t("gen.hub_rule_check"),
 	].join("\n");
 }
 
 // --- aplicar ------------------------------------------------------------------------------
 
-const DEFAULT_NOTE = "generado por `bond sync`; no editar";
+// Funcion, no constante: el idioma puede cambiar despues del import (el asistente de `bond setup`
+// llama a `setLang` tras preguntar). El parametro por defecto se evalua en cada llamada, asi que
+// con la funcion el bloque sale siempre en el idioma en vigor.
+const defaultNote = () => t("gen.default_note");
 const MARKER_TEXT: Record<BlockStyle, { open: string; begin: (note: string) => string; end: string }> = {
 	md: { open: "<!-- >>> bond >>>", begin: (n) => `<!-- >>> bond >>> ${n} -->`, end: "<!-- <<< bond <<< -->" },
 	hash: { open: "# >>> bond >>>", begin: (n) => `# >>> bond >>> ${n}`, end: "# <<< bond <<<" },
@@ -720,7 +722,7 @@ const MARKER_TEXT: Record<BlockStyle, { open: string; begin: (note: string) => s
  * El bloque de bond va al final; en TOML, unas tablas al final no cambian el resto. El bloque
  * existente se reconoce por el principio de la marca, sea cual sea su nota.
  */
-export function withBlock(current: string, body: string, style: BlockStyle, note = DEFAULT_NOTE): string {
+export function withBlock(current: string, body: string, style: BlockStyle, note = defaultNote()): string {
 	const { open, begin, end } = MARKER_TEXT[style];
 	const start = current.indexOf(open);
 	let rest = current;
@@ -798,14 +800,18 @@ function loadManifest(root: string): Manifest {
 		const blocks = Array.isArray(m.blocks) ? Object.fromEntries((m.blocks as string[]).map((p) => [p, "md"])) : (m.blocks ?? {});
 		// Registro de bond <= 1.0.1 escrito en Windows: rutas con \.
 		const slashes = <T,>(o: Record<string, T>) => Object.fromEntries(Object.entries(o).map(([p, v]) => [p.replaceAll("\\", "/"), v])) as Record<string, T>;
-		return { files: slashes(m.files ?? {}), links: slashes(m.links ?? {}), json: slashes(json), blocks: slashes(blocks) };
+		// Manifiestos de bond <= 1.11 no guardan idioma: se queda undefined y el aviso de cambio
+		// de idioma no se dispara, que es lo que toca en vez de inventarselo.
+		const prevLang: Lang | undefined = m.lang === "es" || m.lang === "en" ? m.lang : undefined;
+		return { files: slashes(m.files ?? {}), links: slashes(m.links ?? {}), json: slashes(json), blocks: slashes(blocks), lang: prevLang };
 	} catch {
 		return { files: {}, links: {}, json: {}, blocks: {} };
 	}
 }
 
-function diffActions(root: string, outputs: Output[], prev: Manifest, force: boolean): { actions: Action[]; next: Manifest } {
+function diffActions(root: string, outputs: Output[], prev: Manifest, force: boolean): { actions: Action[]; next: Manifest; langRewritten: number } {
 	const actions: Action[] = [];
+	let langRewritten = 0;
 	const next: Manifest = { files: {}, links: {}, json: {}, blocks: {} };
 	const abs = (p: string) => join(root, p);
 	const write = (p: string, content: string, mode?: number) => () => {
@@ -894,6 +900,10 @@ function diffActions(root: string, outputs: Output[], prev: Manifest, force: boo
 			const text = withBlock(cur ?? "", o.body, o.style);
 			if (o.body) next.blocks[o.path] = o.style;
 			if ((cur ?? "") === text) continue;
+			// G2: un bloque que ya existia y cambia porque el idioma ya no es el con que se escribio
+			// se cuenta aparte: sin esto el usuario ve una lluvia de bloques modificados sin saber por
+			// que. Solo se cuenta cuando el manifiesto sabe el idioma de origen.
+			if (cur !== undefined && o.body && prev.lang && prev.lang !== lang()) langRewritten++;
 			if (!text.trim() && cur !== undefined) actions.push({ sign: "-", path: o.path, apply: () => rmSync(abs(o.path)) });
 			else actions.push({ sign: cur === undefined ? "+" : "~", path: o.path, why: t("repo.why_bond_block"), apply: write(o.path, text) });
 		}
@@ -909,7 +919,9 @@ function diffActions(root: string, outputs: Output[], prev: Manifest, force: boo
 		if (planned.has(p)) continue;
 		if (linkAt(abs(p)) === t_) actions.push({ sign: "-", path: p, apply: () => rmSync(abs(p)) });
 	}
-	return { actions, next };
+	// El idioma al que responden los bloques que acabamos de planificar.
+	next.lang = lang();
+	return { actions, next, langRewritten };
 }
 
 /** Sincroniza el repo; devuelve las acciones pendientes (para --check y doctor). */
@@ -917,8 +929,12 @@ export function syncRepo(opts: { check?: boolean; force?: boolean; quiet?: boole
 	const root = repoRoot();
 	const cfg = loadRepoConfig(root);
 	const prev = loadManifest(root);
-	const { actions, next } = diffActions(root, plan(root, cfg, prev), prev, !!opts.force);
+	const { actions, next, langRewritten } = diffActions(root, plan(root, cfg, prev), prev, !!opts.force);
 	const say = (s: string) => !opts.quiet && console.log(s);
+	// G2: el cambio de idioma se dice antes de la lista, no diluido en ella.
+	if (langRewritten) say(dim(t("gen.lang_rewritten", { lang: lang(), count: langRewritten })));
+	if (opts.check && langRewritten)
+		for (const a of actions) if (a.sign === "~") say(`  ${t("gen.lang_check", { from: prev.lang ?? "?", to: lang(), path: a.path })}`);
 	const color = { "+": ok, "~": caution, "-": bad, "!": bad };
 	for (const a of actions) say(`${color[a.sign](a.sign)} ${a.path}${a.why ? dim(`  ${a.why}`) : ""}`);
 	const pending = actions.filter((a) => a.apply);
