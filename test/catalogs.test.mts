@@ -159,7 +159,10 @@ describe("nombres en varios catálogos", () => {
 		bondToml({ agents: ["claude"], skills: ["plataforma:revisar"], catalogs: both });
 		syncRepo({ quiet: true });
 		expect(existsSync(at(".agents/skills/revisar/SKILL.md"))).toBe(true);
-	});
+		// Timeout a 10 s: en windows-latest este test iba justo al limite de los 5 s por defecto
+		// (6441 ms en la PR #61) y reventaba la CI sin regresion alguna. No es que el codigo sea
+		// lento aqui: es el margen que falta en el runner.
+	}, 10_000);
 
 	test("pedir el mismo nombre de dos sitios es error", () => {
 		teamCatalog("catalogo", "equipo", "code-context");
