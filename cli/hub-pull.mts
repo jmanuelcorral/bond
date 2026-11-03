@@ -9,6 +9,7 @@
 import { currentBranch, dieNotAHub, hubRepoLabel, hubRoot, hubSession, type HubRepo, type HubSession } from "./hub.mts";
 import { gitWorktrees } from "./team.mts";
 import { bad, canonical, caution, die, dim, isDryRun, log, ok, run, setDryRun } from "./util.mts";
+import { aheadBehind, dirtyCount, upstreamOf } from "./hub-status.mts";
 import { t } from "./messages.mts";
 
 export const hubPullHelp = (): string => t("hub.pull.help");
@@ -67,12 +68,12 @@ export function pullRepo(r: HubRepo, s: HubSession, opts: PullOpts = {}): RepoPu
 
 	// 4. Upstream de la base
 	const remoteConfig = git(r.dir, ["config", `branch.${r.base}.remote`]).stdout.trim();
-	const upInitial = git(r.dir, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", `${r.base}@{upstream}`]);
-	if (!remoteConfig && upInitial.status !== 0) {
+	const upInitial = upstreamOf(r.dir, r.base);
+	if (!remoteConfig && !upInitial) {
 		const reason = t("hub.pull_no_upstream", { base: r.base });
 		return { ...res, reason, detail: reason };
 	}
-	const remote = remoteConfig || (upInitial.status === 0 ? upInitial.stdout.trim().split("/")[0] : undefined) || remotes[0];
+	const remote = remoteConfig || upInitial?.split("/")[0] || remotes[0];
 
 	// 5. Comprobar dónde tiene checkout la base. Si es la rama actual de este repo no puede estar
 	// en otro worktree (git no lo permite); así no depende de la ruta que dé git worktree list,
@@ -84,7 +85,7 @@ export function pullRepo(r: HubRepo, s: HubSession, opts: PullOpts = {}): RepoPu
 		return { ...res, reason, detail: reason };
 	}
 	if (isCheckedOutHere) {
-		const dirty = git(r.dir, ["status", "--porcelain"]).stdout.split("\n").filter(Boolean).length;
+		const dirty = dirtyCount(r.dir);
 		if (dirty > 0) {
 			const reason = t("hub.pull_dirty_changes", { count: dirty });
 			return { ...res, reason, detail: reason };
@@ -101,20 +102,19 @@ export function pullRepo(r: HubRepo, s: HubSession, opts: PullOpts = {}): RepoPu
 	}
 
 	// 7. Resolver upstream tras fetch o en --dry-run
-	const upResolved = git(r.dir, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", `${r.base}@{upstream}`]);
-	if (upResolved.status !== 0 || !upResolved.stdout.trim()) {
+	const upstream = upstreamOf(r.dir, r.base);
+	if (!upstream) {
 		const reason = t("hub.pull_no_upstream", { base: r.base });
 		return { ...res, reason, detail: reason };
 	}
-	const upstream = upResolved.stdout.trim();
 
 	// 8. Comprobar ahead / behind
-	const countRes = git(r.dir, ["rev-list", "--left-right", "--count", `${r.base}...${upstream}`]);
-	if (countRes.status !== 0) {
+	const ab = aheadBehind(r.dir, r.base, upstream);
+	if (!ab) {
 		const reason = t("hub.pull_compare_failed", { base: r.base, upstream });
 		return { ...res, upstream, reason, detail: reason };
 	}
-	const [ahead = 0, behind = 0] = countRes.stdout.trim().split(/\s+/).map(Number);
+	const { ahead, behind } = ab;
 
 	// 9. Evaluar estado
 	if (behind === 0) {

@@ -13,6 +13,7 @@ import { agentInstalled } from "./catalog-agents.mts";
 import { gitWorktrees } from "./team.mts";
 import { loadRepoAgents, syncRepo } from "./repo.mts";
 import { act, bad, brokenLink, canonical, catchDie, caution, die, dim, isDryRun, linkTarget, log, ok, run, setDryRun, warn } from "./util.mts";
+import { aheadBehind, upstreamOf } from "./hub-status.mts";
 import { t } from "./messages.mts";
 
 export const hubCheckHelp = (): string => t("hub.check.help");
@@ -60,13 +61,11 @@ export interface CheckOpts {
 
 /** Aviso (D17/D19): la base va por detrás de su remoto según el último fetch. */
 function baseBehindCheck(r: HubRepo): HubCheck[] {
-	const up = git(r.dir, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", `${r.base}@{upstream}`]);
-	if (up.status !== 0 || !up.stdout.trim()) return [];
-	const upstream = up.stdout.trim();
-	const count = git(r.dir, ["rev-list", "--left-right", "--count", `${r.base}...${upstream}`]);
-	if (count.status !== 0) return [];
-	const [, behind = 0] = count.stdout.trim().split(/\s+/).map(Number);
-	if (behind <= 0) return [];
+	const upstream = upstreamOf(r.dir, r.base);
+	if (!upstream) return [];
+	const ab = aheadBehind(r.dir, r.base, upstream);
+	if (!ab || ab.behind <= 0) return [];
+	const behind = ab.behind;
 	return [{
 		check: t("hub.check_base_behind"),
 		level: "warn",
