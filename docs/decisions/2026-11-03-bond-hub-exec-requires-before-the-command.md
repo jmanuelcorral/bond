@@ -1,11 +1,11 @@
 ---
 id: "2026-11-03-bond-hub-exec-requires-before-the-command"
 title: "bond hub exec requires `--` before the command"
-status: "proposed"
+status: "accepted"
 date: "2026-11-03"
 decided_by: "agent:pi/kevin"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "Apruebo ambas decisiones propuestas: bond-hub-exec-requires-before-the-command y bond-hub-exec-direct-argv-by-default-shell-opt-in-first-shell-use-in-bond"
+accepted_via: "agent:pi/gru"
 supersedes: ""
 superseded_by: ""
 links:
