@@ -18,7 +18,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 | `bond status` | Agentes vivos en Herdr |
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
 | `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
-| `bond hub` | En un hub: enseña la sesión de trabajo declarada en `hub.toml` (repos, ruta, base, modo de enlace y rama) ([abajo](#bond-hub)) |
+| `bond hub` | En un hub: enseña la sesión de trabajo declarada en `hub.toml` (repos, ruta, base, modo de enlace, rama) y el estado en vivo de cada repo (cambios sin commitear, delante/detrás de su remoto) ([abajo](#bond-hub)) |
 | `bond decisions` | Memoria de decisiones del repo: lista, `add`, `accept`, `show`, `runs`, `check` ([abajo](#bond-decisions)) |
 | `bond catalog create\|check` | Prepara un repo como catálogo propio de skills, comandos y MCP, y lo comprueba ([abajo](#catálogo-propio-bond-catalog)) |
 | `bond catalog add\|list\|update\|remove\|clean` | Usa en el repo el catálogo de tu equipo, por git (con el commit fijado) o por carpeta ([abajo](#catálogos-por-git-bond-catalog-add)) |
@@ -852,7 +852,9 @@ Desde un repo enlazado por symlink (que vive fuera del hub), `hubRoot` lo encuen
 `~/.bond/hubs.toml`.
 
 ```bash
-bond hub                 # enseña la sesión del hub: repos, ruta, base, enlace, rama y descripción (si la hay)
+bond hub                 # enseña la sesión del hub: repos, ruta, base, enlace, rama, estado por repo y descripción (si la hay)
+bond hub --fetch         # hace git fetch en cada repo antes de calcular el estado (datos frescos)
+bond hub --json          # sesión y estado en JSON (dirty, ahead, behind, upstream, fetched)
 bond hub init [dir]      # crea un hub o lo prepara en un repo existente e importa repos
                        # con una sola ruta, esa ruta es el hub: para importar, `bond hub init . <ruta>` o `--repo <ruta>`
 bond hub add <url|ruta>  # añade un repo al hub (como submódulo o enlace local)
@@ -887,6 +889,7 @@ source = "~/gitrepos/fluzo-backend"
 ```
 
 - `hub.toml` es la única fuente de la sesión: declara el nombre del hub, su rama base y la lista de repos con su ruta relativa, rama base y modo de enlace (`submodule` o `symlink`). Cada repo puede declarar además `agent` (agente por defecto) y `description` (qué es el repo, opcional; alimenta el bloque generado en `AGENTS.md`).
+- Sin subcomando, la columna ESTADO de `bond hub` muestra por repo los cambios sin commitear (`·N`), los commits por delante de su remoto (`N↑`) y los por detrás (`N↓`), con color (verde lo propio, ámbar lo que espera). Es información en vivo, neutra: un `3↓` no es un veredicto de que el repo esté mal (eso es `bond hub check`). Se calcula contra las refs locales del remoto, sin tocar la red; el pie de tabla lo recuerda y `--fetch` hace `git fetch` en cada repo para dar el dato fresco. Un repo sin upstream muestra solo `·` o `·N`; uno que no está en disco, `-`. En `--json`, cada repo lleva `dirty`, `ahead`, `behind`, `upstream` y `fetched` (si el dato viene de un fetch o del último fetch conocido). El cálculo lo comparte `cli/hub-status.mts`, también usado por `bond hub check` y `bond hub pull` (#42).
 - La ruta por defecto de un repo nuevo es `repos/<nombre>` (D16): el asistente de `bond hub init` la propone como valor inicial (editable), `bond hub add` la usa sin preguntar y `--path` manda sobre ella. Al importar submódulos que ya existían en el repo se conserva su ruta; los hubs con los repos en la raíz siguen funcionando igual (`bond hub check` solo avisa).
 - `bond hub init [dir]`: asistente que crea el hub (`git init`, `.bond/`, `AGENTS.md`, `hub.toml`, `.gitignore` y `hub.local.toml`) o lo prepara en un repo existente. **Con una sola ruta, esa ruta es el hub, no un repo a importar** (#40): para importar un repo en el hub del directorio actual escribe `bond hub init . <ruta>` o `bond hub init --repo <ruta>`. Fuera de un repo, si esa ruta única ya es un repo git que no es un hub, `bond` lo avisa antes de crear nada (y pregunta si hay terminal). Importa submódulos existentes con su base y añade repos por URL (submódulo) o ruta local (symlink). Antes de nada hace `bond init` en el propio hub si no lo tiene (con terminal, con sus preguntas; con `--yes`, lo elegido en `bond setup`), con las skills por defecto más `plan-team`. Los repos de la sesión que no tienen bond reciben un `bond init` con la config del hub (sus agentes, con el `agent` del repo como el de por defecto, y las skills por defecto del catálogo); los que ya lo tienen conservan la suya. Esa config se commitea en la rama actual del repo si estaba limpio (si no, se deja sin commitear y se avisa); en un submódulo ese commit es local: haz `git push` en él antes de subir el hub. La ruta al clon local se elige navegando por disco desde la carpeta que contiene el hub (flechas para elegir, Tab completa, `/` entra en la carpeta) y solo acepta un repo git. Con `--yes` usa valores detectados sin preguntar.
 - `bond hub add <url|ruta>`: añade un repositorio a `hub.toml` (como submódulo si es URL o symlink si es clon local) y sincroniza el disco. Con `--description "texto"` le pone descripción al repo.

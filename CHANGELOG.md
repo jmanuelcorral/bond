@@ -2,6 +2,15 @@
 
 ## Sin publicar
 
+- `bond hub` muestra ahora el estado en vivo de cada repo de la sesión en una columna ESTADO
+  compacta y con color: cambios sin commitear (`·N`), commits por delante del remoto (`N↑`) y
+  por detrás (`N↓`); limpio y al día es un punto verde, sin upstream un simple `·`/`·N` y no
+  presente un `-` (no está y HEAD separado se conservan tal cual). Es información neutra, no
+  un veredicto: el diagnóstico con arreglo sigue siendo `bond hub check`. El estado se calcula
+  contra las refs locales del remoto, sin tocar la red, y el pie de tabla lo indica; `--fetch`
+  hace `git fetch` por repo para dar el dato fresco. `--json` añade por repo `dirty`, `ahead`,
+  `behind`, `upstream` y `fetched`. El cálculo ahead/behind, que `check` y `pull` duplicaban,
+  se extrae a `cli/hub-status.mts` y lo usan los tres (#42).
 - `bond hub bump`: mueve el puntero (gitlink) que el hub guarda de cada repo de la sesión enlazado
   como submódulo al commit actual de su rama base y lo commitea en la rama actual del hub, sin push
   nunca: el commit queda local para revisarlo y empujarlo uno mismo (#43). Se apoya en `bond hub pull`

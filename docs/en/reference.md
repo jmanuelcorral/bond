@@ -18,7 +18,7 @@ you see? Open an [issue on GitHub](https://github.com/jmanuelcorral/bond/issues)
 | `bond status` | Live agents in Herdr |
 | `bond sessions` | pi sessions and how to resume them |
 | `bond sync` | Regenerates the repo's agent config from `.bond/bond.toml` |
-| `bond hub` | In a hub: shows the work session declared in `hub.toml` (repos, path, base, link mode and branch) ([below](#bond-hub)) |
+| `bond hub` | In a hub: shows the work session declared in `hub.toml` (repos, path, base, link mode, branch) and each repo's live status (uncommitted changes, ahead/behind its remote) ([below](#bond-hub)) |
 | `bond decisions` | The repo's decision memory: list, `add`, `accept`, `show`, `runs`, `check` ([below](#bond-decisions)) |
 | `bond catalog create\|check` | Sets up a repo as your own catalog of skills, commands and MCP, and checks it ([below](#your-own-catalog-bond-catalog)) |
 | `bond catalog add\|list\|update\|remove\|clean` | Uses your team's catalog in the repo, via git (with the commit pinned) or via a folder ([below](#git-catalogs-bond-catalog-add)) |
@@ -854,7 +854,9 @@ From a submodule, `hubRoot` finds the hub by going up through git
 outside the hub), `hubRoot` finds it thanks to the global registry `~/.bond/hubs.toml`.
 
 ```bash
-bond hub                 # shows the hub's session: repos, path, base, link mode, branch and description (if any)
+bond hub                 # shows the hub's session: repos, path, base, link mode, branch, per-repo status and description (if any)
+bond hub --fetch         # runs git fetch in each repo before computing the status (fresh data)
+bond hub --json          # session and status in JSON (dirty, ahead, behind, upstream, fetched)
 bond hub init [dir]      # creates a hub or prepares it in an existing repo and imports repos
                        # with a single path, that path is the hub: to import, `bond hub init . <path>` or `--repo <path>`
 bond hub add <url|path>  # adds a repo to the hub (as a submodule or a local link)
@@ -892,6 +894,16 @@ source = "~/gitrepos/fluzo-backend"
   and the list of repos with their relative path, base branch and link mode (`submodule` or
   `symlink`). Each repo may also declare `agent` (its default agent) and `description` (what the
   repo is, optional; it feeds the generated block in `AGENTS.md`).
+- Without a subcommand, the STATUS column of `bond hub` shows per repo the uncommitted changes
+  (`·N`), the commits ahead of its remote (`N↑`) and the ones behind (`N↓`), colored (green for
+  your own work, amber for what waits). It is live, neutral information: a `3↓` is not a verdict
+  that the repo is wrong (that is `bond hub check`). It is computed against the remote's local
+  refs, without touching the network; the table footer says so, and `--fetch` runs `git fetch`
+  in each repo for fresh data. A repo without an upstream shows just `·` or `·N`; one that is
+  not on disk shows `-`. In `--json`, each repo carries `dirty`, `ahead`, `behind`, `upstream`
+  and `fetched` (whether the data comes from a fetch or from the last known fetch). The
+  computation is shared by `cli/hub-status.mts`, also used by `bond hub check` and
+  `bond hub pull` (#42).
 - The default path of a new repo is `repos/<name>` (D16): the `bond hub init` assistant proposes
   it as an editable initial value, `bond hub add` uses it without asking and `--path` overrides
   it. Submodules that already existed in the repo keep their path; hubs with repos at the root keep
