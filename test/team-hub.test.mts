@@ -197,6 +197,19 @@ describe("bond team en un hub", () => {
 		expect(bond(["team", "fix/a", "fix/b"]).stderr).toContain("una sola rama vertical");
 	});
 
+	test("--repos con un repo que no está en la sesión falla claro y no crea nada (#44)", () => {
+		const r = bond(["team", "fix/x", "--repos", "nope"]);
+		expect(r.status).toBe(1);
+		expect(r.stderr).toContain("--repos nope: no es un repo de la sesión");
+		expect(r.stderr).toContain("front");
+		expect(r.stderr).toContain("back");
+		expect(branches(hub)).toEqual(["main"]);
+		expect(existsSync(state)).toBe(false);
+		// Uno válido y uno inválido: tampoco, aunque el primero exista.
+		expect(bond(["team", "fix/x", "--repos", "front,nope"]).stderr).toContain("no es un repo de la sesión");
+		expect(branches(hub)).toEqual(["main"]);
+	});
+
 	test("prompt llega a los dos con la nota que nombra al otro; los runs van al hub", () => {
 		bond(["team", "fix/x"]);
 		const r = bond(["team", "prompt", "fix/x", "añade el campo email"]);
