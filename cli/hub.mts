@@ -537,6 +537,10 @@ export async function hub(args: string[]): Promise<void> {
 		const b = await import("./hub-bump.mts");
 		return b.hubBump(rest);
 	}
+	if (sub === "exec") {
+		const x = await import("./hub-exec.mts");
+		return x.hubExec(rest);
+	}
 	if (args.includes("-h") || args.includes("--help")) {
 		console.log(hubHelp().trimEnd());
 		return;

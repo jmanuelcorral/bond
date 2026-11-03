@@ -23,6 +23,8 @@ Comandos:
   pull            Pone al día la base del hub y de sus repos en fast-forward (--dry-run, --json)
   bump            Lleva los punteros de los submódulos a su base y lo commitea en el hub,
                   sin push (--dry-run, --json)
+  exec -- <cmd>   Ejecuta un comando en el hub y en cada repo de la sesión, en orden
+                  (--dry-run, --yes, --shell, --json)
   check           Revisa cada repo de la sesión: qué falta y cómo arreglarlo (--fix, --json)
 
 Sin subcomando: enseña la sesión del hub (repos, ruta, base, enlace, rama actual,
@@ -408,6 +410,51 @@ Opciones:
 	"hub.bump_summary_failed": "{count} con fallo",
 	"hub.bump_pointers_checked": "punteros del hub revisados",
 	"hub.bump_unknown_opt": "opción desconocida: {opt} (bond hub bump --help)",
+
+	// ---- hub-exec.mts ----
+	"hub.exec.help": `Uso: bond hub exec [opciones] -- <comando> [args...]
+
+Ejecuta un comando en el hub y en cada repo de la sesión, en ese orden y de forma
+secuencial (uno tras otro, con cabecera por repo para que la salida no se entrelaza).
+Si un repo falla no se corta el resto: se sigue con los demás y el exit code final es
+el peor (el máximo) de los devueltos por los repos, para que
+\`bond hub exec -- npm test\` sirva en scripts.
+
+El \`--\` es obligatorio: todo lo que va después es el comando y sus argumentos y bond
+no lo interpreta. Sin \`--\` se falla sin ejecutar nada.
+
+Por defecto el comando se ejecuta directamente (argv), sin shell: nada de pipes,
+\`&&\` ni globs. Si necesitas shell, \`--shell\` (en Windows es cmd.exe, con semántica
+distinta; por eso no es el defecto). Es el único caso en que bond usa shell.
+
+El comando se ejecuta con stdin apuntando a /dev/null (NUL en Windows): si intenta
+leer, recibe EOF al instante y termina; nunca se cuelga. Si necesitas pasarle datos
+por stdin, ejecútalo repo a repo.
+
+Antes de ejecutar muestra el comando exacto y los repos afectados y pide confirmación
+una sola vez (\`--yes\`/\`-y\` la salta). Con \`--dry-run\` no pregunta porque no se
+ejecuta nada. Los repos no presentes se omiten y se dice.
+
+Opciones:
+  --dry-run  Muestra qué comando se correrá en qué repo sin ejecutar nada.
+  --yes, -y  Ejecuta sin pedir confirmación.
+  --shell    Pasa el comando por el shell del sistema (cmd.exe en Windows, /bin/sh
+             en el resto). En este modo el comando debe ir entrecomillado como un
+             solo argumento para conservar espacios y comillas.
+  --json     Salida en JSON por repo: comando, cwd, exit code, stdout, stderr y si
+             se confirmó.`,
+	"hub.exec_needs_dashdash": "falta \`--\` antes del comando: usa bond hub exec [opciones] -- <comando> (bond hub exec --help)",
+	"hub.exec_empty_command": "no hay nada después de \`--\`: ¿qué comando quieres ejecutar? (bond hub exec --help)",
+	"hub.exec_unknown_opt": "opción desconocida: {opt} (bond hub exec --help)",
+	"hub.exec_unattended": "sin terminal para confirmar; revisa con \`bond hub exec --dry-run -- <comando>\` y repite con \`--yes\` si es correcto",
+	"hub.exec_confirm_header": "Se va a ejecutar en {count} repo(s) de la sesión:",
+	"hub.exec_confirm_prompt": "¿Ejecutar?",
+	"hub.exec_not_present": "no presente: se omite",
+	"hub.exec_dry_run_note": "dry-run: no se ha ejecutado nada",
+	"hub.exec_done": "comando ejecutado",
+	"hub.exec_summary_ran": "{count} ejecutado(s)",
+	"hub.exec_summary_skipped": "{count} omitido(s)",
+	"hub.exec_summary_worst": "peor exit code {code}",
 } as const;
 
 export const en: Record<keyof typeof es, string> = {
@@ -427,6 +474,8 @@ Commands:
   pull            Update the base of the hub and its repos with fast-forward (--dry-run, --json)
   bump            Move submodule pointers to their base and commit it in the hub,
                   no push (--dry-run, --json)
+  exec -- <cmd>   Run a command in the hub and in each session repo, in order
+                  (--dry-run, --yes, --shell, --json)
   check           Check each session repo: what is missing and how to fix it (--fix, --json)
 
 Without subcommand: shows hub session (repos, path, base, link, current branch,
@@ -813,4 +862,49 @@ Options:
 	"hub.bump_summary_failed": "{count} failed",
 	"hub.bump_pointers_checked": "hub pointers checked",
 	"hub.bump_unknown_opt": "unknown option: {opt} (bond hub bump --help)",
+
+	// ---- hub-exec.mts ----
+	"hub.exec.help": `Usage: bond hub exec [options] -- <command> [args...]
+
+Runs a command in the hub and in each session repo, in that order and sequentially
+(one after another, with a header per repo so output does not interleave). If a repo
+fails the rest is not cut short: it continues with the others and the final exit code
+is the worst (maximum) of those returned by the repos, so that
+\`bond hub exec -- npm test\` works in scripts.
+
+The \`--\` is mandatory: everything after it is the command and its arguments and bond
+does not interpret it. Without \`--\` it fails without running anything.
+
+By default the command runs directly (argv), without a shell: no pipes, no \`&&\`, no
+globs. If you need a shell, \`--shell\` (cmd.exe on Windows, with different semantics;
+that is why it is not the default). It is the only case where bond uses a shell.
+
+The command runs with stdin pointing at /dev/null (NUL on Windows): if it tries to
+read it gets EOF immediately and finishes; it never hangs. If you need to feed it data
+on stdin, run it repo by repo.
+
+Before running it shows the exact command and the affected repos and asks for
+confirmation once (\`--yes\`/\`-y\` skips it). With \`--dry-run\` it does not ask because
+nothing runs. Repos not present are omitted and reported.
+
+Options:
+  --dry-run  Show which command would run in which repo without running anything.
+  --yes, -y  Run without asking for confirmation.
+  --shell    Pass the command through the system shell (cmd.exe on Windows, /bin/sh
+             elsewhere). In this mode the command must be quoted as a single argument
+             to preserve spaces and quotes.
+  --json     JSON output per repo: command, cwd, exit code, stdout, stderr and whether
+             it was confirmed.`,
+	"hub.exec_needs_dashdash": "missing \`--\` before the command: use bond hub exec [options] -- <command> (bond hub exec --help)",
+	"hub.exec_empty_command": "nothing after \`--\`: which command do you want to run? (bond hub exec --help)",
+	"hub.exec_unknown_opt": "unknown option: {opt} (bond hub exec --help)",
+	"hub.exec_unattended": "no terminal to confirm; review with \`bond hub exec --dry-run -- <command>\` and repeat with \`--yes\` if it is correct",
+	"hub.exec_confirm_header": "About to run in {count} session repo(s):",
+	"hub.exec_confirm_prompt": "Run it?",
+	"hub.exec_not_present": "not present: skipped",
+	"hub.exec_dry_run_note": "dry-run: nothing was run",
+	"hub.exec_done": "command run",
+	"hub.exec_summary_ran": "{count} run",
+	"hub.exec_summary_skipped": "{count} skipped",
+	"hub.exec_summary_worst": "worst exit code {code}",
 };
