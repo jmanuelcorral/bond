@@ -706,10 +706,8 @@ export function hubAgentsBlock(hub: HubSession, decisionsDir: string): string {
 
 // --- aplicar ------------------------------------------------------------------------------
 
-// Funcion, no constante: el idioma puede cambiar despues del import (el asistente de `bond setup`
-// llama a `setLang` tras preguntar). El parametro por defecto se evalua en cada llamada, asi que
-// con la funcion el bloque sale siempre en el idioma en vigor.
-const defaultNote = () => t("gen.default_note");
+// Nota del marcador: fija, sin idioma (ver el porque en cli/messages/gen.mts).
+const DEFAULT_NOTE = "generado por `bond sync`; no editar";
 const MARKER_TEXT: Record<BlockStyle, { open: string; begin: (note: string) => string; end: string }> = {
 	md: { open: "<!-- >>> bond >>>", begin: (n) => `<!-- >>> bond >>> ${n} -->`, end: "<!-- <<< bond <<< -->" },
 	hash: { open: "# >>> bond >>>", begin: (n) => `# >>> bond >>> ${n}`, end: "# <<< bond <<<" },
@@ -722,7 +720,7 @@ const MARKER_TEXT: Record<BlockStyle, { open: string; begin: (note: string) => s
  * El bloque de bond va al final; en TOML, unas tablas al final no cambian el resto. El bloque
  * existente se reconoce por el principio de la marca, sea cual sea su nota.
  */
-export function withBlock(current: string, body: string, style: BlockStyle, note = defaultNote()): string {
+export function withBlock(current: string, body: string, style: BlockStyle, note = DEFAULT_NOTE): string {
 	const { open, begin, end } = MARKER_TEXT[style];
 	const start = current.indexOf(open);
 	let rest = current;

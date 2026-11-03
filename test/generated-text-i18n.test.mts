@@ -11,13 +11,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-gen-"));
-const { syncRepo, hubAgentsBlock } = await import("../cli/repo.mts");
+const { syncRepo, hubAgentsBlock, withBlock } = await import("../cli/repo.mts");
 const { setLang, t } = await import("../cli/messages.mts");
 const { ensurePersonal, PERSONAL_FILE } = await import("../cli/instructions.mts");
 const { verticalNote } = await import("../cli/team.mts");
 
 const origCwd = process.cwd();
-const pinnedLang = t("gen.block_note").includes("generado por") ? "es" : "en";
+const pinnedLang = t("gen.hub_title").includes("El hub") ? "es" : "en";
 let repo: string;
 
 beforeEach(() => {
@@ -211,15 +211,22 @@ describe("el espanol no cambia de lo que ya se escribia (regresion)", () => {
 		expect(r).toContain("`Agent:` y `Decision:` en los commits.");
 	});
 
-	test("la nota del marcador conserva el texto de antes", () => {
+	test("las notas del marcador no dependen del idioma", () => {
+		// Es lo que hace que lo commiteado sea estable entre maquinas: si la nota siguiera el
+		// idioma, un runner que detecta en contra un bloque commiteado en es y `sync --check`
+		// falla sin que nadie haya elegido idioma.
 		setLang("es");
-		expect(t("gen.block_note")).toBe("generado por bond setup; no editar: cambia ~/.bond/AGENTS.md");
+		const a = withBlock("", "cuerpo", "md");
+		setLang("en");
+		const b = withBlock("", "cuerpo", "md");
+		expect(b).toBe(a);
+		expect(a).toContain("generado por `bond sync`; no editar");
 	});
 });
 
 describe("los dos catalogos dicen lo mismo", () => {
 	test("toda clave gen.* tiene traducción y no esta vacia", () => {
-		for (const key of ["gen.rules", "gen.personal_template", "gen.block_note", "gen.default_note", "gen.hub_title", "gen.hub_intro", "gen.hub_repos_title", "gen.hub_is_hub", "gen.hub_link_submodule", "gen.hub_col_repo", "gen.hub_col_path", "gen.hub_col_base", "gen.hub_col_link", "gen.hub_col_agent", "gen.hub_col_description", "gen.hub_rules_title", "gen.hub_rule_no_edit", "gen.hub_rule_coordinate", "gen.hub_rule_check", "gen.vertical_head", "gen.vertical_alone", "gen.vertical_others", "gen.vertical_other_entry", "gen.lang_rewritten", "gen.lang_check"]) {
+		for (const key of ["gen.rules", "gen.personal_template", "gen.hub_title", "gen.hub_intro", "gen.hub_repos_title", "gen.hub_is_hub", "gen.hub_link_submodule", "gen.hub_col_repo", "gen.hub_col_path", "gen.hub_col_base", "gen.hub_col_link", "gen.hub_col_agent", "gen.hub_col_description", "gen.hub_rules_title", "gen.hub_rule_no_edit", "gen.hub_rule_coordinate", "gen.hub_rule_check", "gen.vertical_head", "gen.vertical_alone", "gen.vertical_others", "gen.vertical_other_entry", "gen.lang_rewritten", "gen.lang_check"]) {
 			setLang("es");
 			const es = t(key as never);
 			setLang("en");

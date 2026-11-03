@@ -47,13 +47,14 @@ function blockBody(): string {
 	return `${personal ? `${personal}\n\n` : ""}${bondRules()}`;
 }
 
-const blockNote = () => t("gen.block_note");
+// Nota del marcador: fija, sin idioma (ver el porque en cli/messages/gen.mts).
+const BLOCK_NOTE = "generado por bond setup; no editar: cambia ~/.bond/AGENTS.md";
 
 /** El fichero tiene el bloque de bond y está al día con ~/.bond/AGENTS.md y las reglas. */
 export function blockCurrent(file: string): boolean {
 	if (!existsSync(file)) return false;
 	const current = readFileSync(file, "utf8");
-	return withBlock(current, blockBody(), "md", blockNote()) === current;
+	return withBlock(current, blockBody(), "md", BLOCK_NOTE) === current;
 }
 
 /**
@@ -82,7 +83,7 @@ export function propagate(agents: string[]): Array<{ agent: string; file: string
 			continue;
 		}
 		const current = existsSync(file) ? readFileSync(file, "utf8") : "";
-		const next = withBlock(current, body, "md", blockNote());
+		const next = withBlock(current, body, "md", BLOCK_NOTE);
 		if (next === current) {
 			out.push({ agent: id, file, result: "current" as const });
 			continue;
