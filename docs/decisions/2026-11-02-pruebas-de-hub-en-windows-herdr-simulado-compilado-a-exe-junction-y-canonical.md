@@ -1,11 +1,11 @@
 ---
 id: "2026-11-02-pruebas-de-hub-en-windows-herdr-simulado-compilado-a-exe-junction-y-canonical"
 title: "Pruebas de hub en Windows: herdr simulado compilado a .exe, junction y canonical()"
-status: "proposed"
+status: "accepted"
 date: "2026-11-02"
 decided_by: "agent:pi/kevin"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "Apruebo el arnes de tests de Windows"
+accepted_via: "agent:pi/gru"
 supersedes: ""
 superseded_by: ""
 links:
