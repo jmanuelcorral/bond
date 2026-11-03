@@ -1,11 +1,11 @@
 ---
 id: "2026-11-03-bond-hub-columna-estado-compacta-y-con-color-en-vez-de-tres-columnas"
 title: "bond hub: columna ESTADO compacta y con color en vez de tres columnas"
-status: "proposed"
+status: "accepted"
 date: "2026-11-03"
 decided_by: "agent:pi/kevin"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "Aprobadas: bond-hub-estado-en-vivo-contra-refs-locales-con-fetch-opt-in y bond-hub-columna-estado-compacta-y-con-color-en-vez-de-tres-columnas"
+accepted_via: "agent:pi/gru"
 supersedes: ""
 superseded_by: ""
 links:
