@@ -1,11 +1,11 @@
 ---
 id: "2026-11-03-a-phase-without-a-repos-field-means-ask-never-all-session-repos"
 title: "A phase without a Repos field means ask, never all session repos"
-status: "proposed"
+status: "accepted"
 date: "2026-11-03"
 decided_by: "agent:pi/kevin"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "Approve both proposed decisions: phase-plans-name-their-repos-with-a-repos-field-in-the-phase-block and a-phase-without-a-repos-field-means-ask-never-all-session-repos"
+accepted_via: "agent:pi/gru"
 supersedes: ""
 superseded_by: ""
 links:
