@@ -476,7 +476,7 @@ your explicit OK. A missing skill only cuts that step; it is not downloaded.
 | `delivery-review-github` | Review the phase, push and open its PR; after the merge, recommend what's next (and `bond team clean` if it came from a worktree) | optional |
 | `release-prepare-github` | Changelog, version with evidence and approved release; if a workflow publishes on tag push, that push is the publication | optional |
 | `convention-document` | Turn a confirmed agreement into a documented convention indexed in `AGENTS.md` | optional |
-| `plan-team` | Run a plan's independent phases in parallel: one branch, worktree and agent per phase with `bond team`, each with `plan-execute` and its commit; as each branch is integrated, it updates the plan | optional |
+| `plan-team` | Run a plan's independent phases in parallel: one branch, worktree and agent per phase with `bond team`, each with `plan-execute` and its commit; in a hub it opens the repos from the phase's `Repos` field (and asks if it is missing); as each branch is integrated, it updates the plan | optional |
 | `catalog-maintain` | Fill and maintain a team catalog (created with `bond catalog create`): skills, commands and MCP servers in the right format and `bond catalog check` green before publishing | optional |
 
 All except `code-context`, `plan-team` and `catalog-maintain` are adapted from
@@ -1098,6 +1098,13 @@ vertical branch ([workstation.md](workstation.md#a-vertical-branch-in-a-hub)):
   is and how to close it.
 - Runs: in the hub's `<dir>/runs/` if it has `[decisions]`; otherwise, the repo's. The decision
   memory note only goes to agents whose repo has `[decisions]`.
+- Which repos a phase opens: the place to say it is the phase block's `- Repos: front, back` field
+  in the plan (`docs/plans/`), next to `Affected contracts`. Those are paths or folder names of
+  the ones declared in `hub.toml`; `plan-create` validates them against the session when writing
+  the plan (`bond hub --json`) and `plan-team` reads it to pass `--repos`. Leaving it out does not
+  mean "all of them": `plan-team` asks. Outside a hub the field does not apply and is ignored with
+  a notice. The flag itself fails with `--repos <x>: not a session repo (...)` if it names something
+  that is not in `hub.toml`.
 
 ## Herdr snippet
 

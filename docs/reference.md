@@ -475,7 +475,7 @@ tu OK explícito. Una skill que falta corta solo ese paso; no se descarga.
 | `delivery-review-github` | Revisar la fase, hacer push y abrir su PR; tras el merge, recomendar lo siguiente (y `bond team clean` si venía de un worktree) | opcional |
 | `release-prepare-github` | Changelog, versión con evidencia y release aprobada; si un workflow publica al empujar el tag, ese push es la publicación | opcional |
 | `convention-document` | Convertir un acuerdo confirmado en una convención documentada e indexada en `AGENTS.md` | opcional |
-| `plan-team` | Ejecutar en paralelo las fases independientes de un plan: una rama, worktree y agente por fase con `bond team`, cada uno con `plan-execute` y su commit; al integrar cada rama, actualiza el plan | opcional |
+| `plan-team` | Ejecutar en paralelo las fases independientes de un plan: una rama, worktree y agente por fase con `bond team`, cada uno con `plan-execute` y su commit; en un hub abre los repos del campo `Repos` de la fase (pregunta si falta); al integrar cada rama, actualiza el plan | opcional |
 | `catalog-maintain` | Llenar y mantener un catálogo de equipo (creado con `bond catalog create`): skills, comandos y servidores MCP con el formato correcto y `bond catalog check` en verde antes de publicar | opcional |
 
 Todas menos `code-context`, `plan-team` y `catalog-maintain` están adaptadas de
@@ -1048,6 +1048,13 @@ vertical ([puesto.md](puesto.md#una-rama-vertical-en-un-hub)):
   y cómo cerrarla.
 - Runs: en `<dir>/runs/` del hub si tiene `[decisions]`; si no, en el del repo. La nota de
   la memoria de decisiones solo va a los agentes cuyo repo tiene `[decisions]`.
+- Qué repos abre la fase: el sitio donde se dice es el campo `- Repos: front, back` del bloque de
+  fase del plan (`docs/plans/`), junto a `Affected contracts`. Son rutas o nombres de carpeta de
+  los declarados en `hub.toml`; `plan-create` los valida contra la sesión al escribir el plan
+  (`bond hub --json`) y `plan-team` lo lee para pasar `--repos`. Omitirlo no significa "todos":
+  `plan-team` pregunta. Fuera de un hub el campo no aplica y se ignora con aviso. El propio flag
+  falla con `--repos <x>: no es un repo de la sesión (...)` si nombra algo que no está en
+  `hub.toml`.
 
 ## Snippet de Herdr
 
