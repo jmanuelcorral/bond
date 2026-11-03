@@ -1,11 +1,11 @@
 ---
 id: "2026-11-03-hub-bump-comando-nuevo-bond-hub-bump-en-cli-hub-bump-mts"
 title: "hub bump: comando nuevo `bond hub bump` en cli/hub-bump.mts"
-status: "proposed"
+status: "accepted"
 date: "2026-11-03"
 decided_by: "agent:pi/kevin"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "Apruebo la decision hub-bump-comando-nuevo: bond hub bump como subcomando nuevo."
+accepted_via: "agent:pi/gru"
 supersedes: ""
 superseded_by: ""
 links:
