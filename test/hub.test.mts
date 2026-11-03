@@ -140,7 +140,7 @@ describe("hub.toml y .bond/hub.local.toml como fuente de la sesión", () => {
 		writeFileSync(join(hub, "hub.toml"), readFileSync(join(hub, "hub.toml"), "utf8").replace("[repos.front]", '[repos.front]\ndescription = "el frontend del producto"'));
 		const show = bond(["hub"]);
 		expect(show.status).toBe(0);
-		expect(show.stdout).toMatch(/REPO\s+RUTA\s+BASE\s+ENLACE\s+RAMA\s+DESCRIPCIÓN/);
+		expect(show.stdout).toMatch(/REPO\s+RUTA\s+BASE\s+ENLACE\s+RAMA\s+ESTADO\s+DESCRIPCIÓN/);
 		expect(show.stdout).toContain("el frontend del producto");
 		expect(show.stdout).toContain("back");
 	});
