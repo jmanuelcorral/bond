@@ -2196,9 +2196,10 @@ async function createInHub(s: HubSession, o: TeamArgs): Promise<void> {
  */
 export function verticalNote(hub: string, branch: string, me: { name: string; repo: string }, team: Array<{ name: string; repo: string; path: string }>): string {
 	const others = team.filter((t) => t.name !== me.name);
-	const head = `[equipo vertical] Trabajas en ${me.repo}, en la rama ${branch} del hub ${hub}; commitea solo en ese repo.`;
-	if (!others.length) return `${head} Eres el único agente de la rama.`;
-	return `${head} En la misma rama: ${others.map((o) => `${o.name} en ${o.repo} (${o.path})`).join("; ")}. Lo que cruce de un repo a otro (contratos, API, tipos) tiene que encajar con lo suyo: dilo en tu informe.`;
+	const head = t("gen.vertical_head", { repo: me.repo, branch, hub });
+	if (!others.length) return `${head}${t("gen.vertical_alone")}`;
+	const list = others.map((o) => t("gen.vertical_other_entry", { name: o.name, repo: o.repo, path: o.path })).join("; ");
+	return `${head}${t("gen.vertical_others", { others: list })}`;
 }
 
 /**

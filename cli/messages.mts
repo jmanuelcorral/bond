@@ -3,8 +3,10 @@
  * una clave sin su traducción en `en` no pasa `npm run typecheck`, así que el typecheck actúa
  * de inventario de traducciones pendientes.
  *
- * Aquí va solo lo que bond imprime por consola. Los textos que reciben los agentes (las reglas
- * de cli/instructions.mts, la plantilla de ~/.bond/AGENTS.md) no están: siguen en español.
+ * Aquí va lo que bond imprime por consola. El texto que bond escribe en ficheros para los
+ * agentes (las reglas globales, el bloque `bond:hub`, la nota de coordinación del encargo) va
+ * en cli/messages/gen.mts, con claves `gen.*`: es otra categoría, se genera en otro momento y
+ * lo lee el agente, no tú por una terminal.
  */
 
 import { type Lang, resolveLang } from "../lib/lang.mts";
@@ -22,6 +24,7 @@ import { es as decisionsEs, en as decisionsEn } from "./messages/decisions.mts";
 import { es as doctorEs, en as doctorEn } from "./messages/doctor.mts";
 import { es as updateEs, en as updateEn } from "./messages/update.mts";
 import { es as mainEs, en as mainEn } from "./messages/main.mts";
+import { es as genEs, en as genEn } from "./messages/gen.mts";
 
 const es = {
 	// ---- bond setup: ayuda y opciones ----
@@ -189,6 +192,7 @@ Configura bond en esta máquina (una vez; se puede repetir para cambiar algo):
 	...doctorEs,
 	...updateEs,
 	...mainEs,
+	...genEs,
 } as const;
 
 export type MessageKey = keyof typeof es;
@@ -359,6 +363,7 @@ Sets bond up on this machine (once; rerun it to change anything):
 	...doctorEn,
 	...updateEn,
 	...mainEn,
+	...genEn,
 };
 
 const CATALOGS: Record<Lang, Record<MessageKey, string>> = { es, en };
