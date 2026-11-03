@@ -9,10 +9,13 @@
   tuvieras `lang = "en"`. Esas ~25 cadenas viven ahora en un área nueva de mensajes
   (`cli/messages/gen.mts`, claves `gen.*`) y se resuelven en el idioma en vigor al generar. Son
   área aparte y no se han mezclado con las de consola porque son otra categoría: se generan en otro
-  momento y lo lee el agente, no tú por una terminal. Dos cosas no se traducen nunca: los caminos
-  (`docs/plans/`, `docs/decisions/`, `hub.toml`, `repos/`) y los comandos de bond y de Herdr, que
-  tienen que poder copiarse tal cual. Sí se traducen las cabeceras de la tabla del hub
-  (`RUTA`→`PATH`, `ENLACE`→`LINK`, `AGENTE`→`AGENT`…). Cambiar de idioma reescribe los bloques, y
+  momento y lo lee el agente, no tú por una terminal. Tres cosas no se traducen nunca: los caminos
+  (`docs/plans/`, `docs/decisions/`, `hub.toml`, `repos/`), los comandos de bond y de Herdr, que
+  tienen que poder copiarse tal cual, y las notas del marcador («generado por bond sync; no editar»),
+  que son metadato del marcador y no prosa para el agente: hacerlas depender del idioma acopla lo
+  commiteado al locale que detecta cada máquina, y en esta misma PR reventó así `bond sync --check`
+  en CI — bloque escrito en español, runner detectando inglés. Sí se traducen las cabeceras de la
+  tabla del hub (`RUTA`→`PATH`, `ENLACE`→`LINK`, `AGENTE`→`AGENT`). Cambiar de idioma reescribe los bloques, y
   se dice: `bond sync` avisa de cuántos bloques reescribe y a qué idioma, y `bond sync --check` lo
   distingue de un bloque desactualizado genérico (`block in es, current language en: AGENTS.md`).
   Para eso el manifiesto guarda el idioma con que se escribió (`manifest.lang`); los manifiestos de

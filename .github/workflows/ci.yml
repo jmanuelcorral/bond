@@ -34,12 +34,18 @@ jobs:
       - run: npx tsc -p .
       - run: bun test
       - run: bun scripts/build.mts --targets ${{ matrix.target }} --no-npm
-      # Este repo usa bond: .agents/skills/ y demás deben seguir al catálogo (tras cambiarlo, bond
+      # Este repo usa bond: .agents/skills/ y demas deben seguir al catalogo (tras cambiarlo, bond
       # sync). Solo en Linux: en Windows sync copia en vez de enlazar.
-      - name: La config de bond del repo está al día
+      #
+      # BOND_LANG fijado a es: los artefactos que bond dejo commiteados aqui (bloque de CLAUDE.md,
+      # .agents/, .mcp.json...) se escribieron en espanol. Sin fijarlo, el idioma lo deduce el
+      # locale del runner y un bloque commiteado en es contra un runner que detecta en da
+      # `sync --check` en falso, como ya paso en la PR #61.
+      - name: La config de bond del repo esta al dia
         if: matrix.target == 'linux-x64'
         env:
           BOND_HOME: ${{ runner.temp }}/bond-home-sync
+          BOND_LANG: es
         run: dist/bond-linux-x64 sync --check
       - name: Prueba del binario fuera del repo
         env:

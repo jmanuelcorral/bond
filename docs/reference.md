@@ -94,7 +94,9 @@ comentarios y tus `[mcp_servers]` se conservan, y `sync` quita lo que ya no se p
 escribe en ficheros para los agentes: las reglas globales de su fichero de instrucciones, el bloque
 `bond:hub` del `AGENTS.md` y la nota de coordinación que lleva cada encargo de una rama vertical.
 No se traducen los caminos (`docs/plans/`, `docs/decisions/`, `hub.toml`, `repos/`) ni los
-comandos: son literales que hay que poder copiar tal cual. Cambiar de idioma reescribe esos bloques,
+comandos: son literales que hay que poder copiar tal cual. Tampoco las notas del marcador
+(«generado por bond sync; no editar»): son metadato del marcador, no texto para el agente, y si
+dependieran del idioma cada máquina esperaría una cosa distinta en el mismo fichero commiteado. Cambiar de idioma reescribe esos bloques,
 y se avisa: `bond sync` dice cuántos reescribe y a qué idioma, y `bond sync --check` lo distingue
 de un bloque desactualizado normal (`block in es, current language en: AGENTS.md`). El manifiesto
 guarda el idioma con que se escribió, así que el aviso solo aparece cuando de verdad cambió.
