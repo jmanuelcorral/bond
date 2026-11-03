@@ -5,7 +5,13 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { parseFm } from "../cli/decisions.mts";
 import { blockedOnStart, defaultAgentArgs, missingAgentDir, questionIn, startupNoticeIn } from "../cli/herdr.mts";
-import { branchInfo, classify, collectBlocker, collectRun, findBranchAgent, type HerdrPane, lastAssistantText, runDecisions, sessionFile, trimAgentBanner, trimAgyPane, withMemoryNote, findWatchPane, gitWorktrees, idleTables, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runFileText, type State, STATE_CODE, selfCommand, type Split, tabLayout, tabRoom, tabWorktreePath, teamTabLabel, textWidth, WATCH_GROUPS, watchCommand, watchIdle, worktreeNamespace } from "../cli/team.mts";
+import {
+	branchInfo, classify, clip, clusters, collectBlocker, collectRun, detailLines, findBranchAgent, findWatchPane, footerTotals, gitWorktrees, idleTables, lastAssistantText,
+	type HerdrPane, MIN_TABLE_WIDTH, MINIONS, minionName, paintState, parseTeam, pendingWork, recordRequest, renderWatch, type Row, type RunCtx, runDecisions, runFileText, type State,
+	STATE_CODE, STATE_ICONS, selfCommand, sessionFile, type Split, stateIcon, tableFooter, tableIconStyle, tableLines, tabLayout, tabRoom, tabWorktreePath, teamTabLabel,
+	textWidth, trimAgentBanner, trimAgyPane, WATCH_GROUPS, watchCommand, watchIdle, withMemoryNote, worktreeNamespace,
+} from "../cli/team.mts";
+import { iconStyle } from "../lib/status-bar.mts";
 
 const dirs = (...existing: string[]) => (p: string) => existing.includes(p);
 
@@ -251,6 +257,30 @@ describe("equipo en la pestaña", () => {
 	});
 });
 
+const plain = (l: string) => l.replace(/\x1b\[[0-9;]*m/g, "");
+// Con rejilla la comprobacion de alineacion es directa: las barras de una fila de datos tienen
+// que caer en las mismas columnas visuales que las de la cabecera. Se mide con los clusters del
+// propio renderizador y no con slice(): el indice de caracter y la columna visual no coinciden
+// en cuanto hay emoji (⛔ ocupa 1 caracter y 2 columnas, 🔄 ocupa 2 y 2).
+function barCols(l: string): number[] {
+	let w = 0;
+	const at: number[] = [];
+	for (const c of clusters(plain(l))) {
+		if (c.text === "│") at.push(w);
+		w += c.w;
+	}
+	return at;
+}
+function assertColumns(header: string, dataRows: string[]) {
+	const cols = barCols(header);
+	expect(cols.length).toBeGreaterThan(2);
+	for (const l of dataRows) expect(barCols(l)).toEqual(cols);
+}
+/** Titulo de una banda (la fila ancha de grupo) sin el trazado de los bordes. */
+const bandTitle = (l: string) => plain(l).replace(/^│ /, "").replace(/ │$/, "").trim();
+/** Lineas de trazado horizontal: no son contenido, son el borde de la rejilla. */
+const isRule = (l: string) => /^[┌├└]/.test(plain(l));
+
 describe("tabla en vivo", () => {
 	const row = (branch: string, state: State, extra: Partial<Row> = {}): Row => ({ branch, state, path: `/w/${branch}`, ahead: 0, files: [], dirty: 0, integrated: false, worked: false, managed: true, ...extra });
 	const rows = [
@@ -262,7 +292,10 @@ describe("tabla en vivo", () => {
 		row("feat/f", "sin commits"),
 	];
 	const opts = { width: 80, color: false, repo: "fluzo", base: "main", time: "10:00:00" };
-	const plain = (l: string) => l.replace(/\x1b\[[0-9;]*m/g, "");
+	// Las columnas de la cabecera marcan en que columna empiezan los datos. Se comprueba con los
+	// clusters del propio renderizador y no con slice(): el indice de caracter y la columna visual
+	// no coinciden en cuanto hay emoji (⛔ ocupa 1 caracter y 2 columnas, 🔄 ocupa 2 y 2).
+
 
 	test("ancho visual: emoji a 2 columnas, sin contar el color ni lo que se combina", () => {
 		expect(textWidth("abc")).toBe(3);
@@ -274,38 +307,45 @@ describe("tabla en vivo", () => {
 		expect(textWidth("…└")).toBe(2);
 	});
 
-	test("grupos por estado, en orden: lo que te espera primero, y sin la última línea del panel", () => {
+	test("grupos por estado, en orden: lo que te espera primero, una cabecera por grupo y sin líneas en blanco dentro", () => {
 		const out = renderWatch(rows, opts);
 		expect(out).toEqual([
 			`${"bond team · fluzo · base main".padEnd(72)}10:00:00`,
+			"┌───────────┬────────┬─────────┬──────────┬─────────────┐",
+			"│ MINION    │ RAMA   │ COMMITS │ FICHEROS │ DÓNDE       │",
+			"├───────────┴────────┴─────────┴──────────┴─────────────┤",
+			"│ ⛔ Necesita tu respuesta                              │",
+			"├───────────┬────────┬─────────┬──────────┬─────────────┤",
+			"│ ⛔ stuart │ feat/b │ -       │ -        │ panel w1:p3 │",
+			"├───────────┴────────┴─────────┴──────────┴─────────────┤",
+			"│ 🔄 Trabajando                                         │",
+			"├───────────┬────────┬─────────┬──────────┬─────────────┤",
+			"│ 🔄 kevin  │ feat/a │ +2      │ 3        │ panel w1:p2 │",
+			"├───────────┴────────┴─────────┴──────────┴─────────────┤",
+			"│ ✏️ Sin commitear                                      │",
+			"├───────────┬────────┬─────────┬──────────┬─────────────┤",
+			"│ ✏️ bob    │ feat/e │ -       │ 1        │ cerrado     │",
+			"├───────────┴────────┴─────────┴──────────┴─────────────┤",
+			"│ 📦 Por revisar                                        │",
+			"├───────────┬────────┬─────────┬──────────┬─────────────┤",
+			"│ 📦 -      │ feat/c │ +1      │ 1        │ cerrado     │",
+			"├───────────┴────────┴─────────┴──────────┴─────────────┤",
+			"│ ✅ Integradas / sin empezar                           │",
+			"├───────────┬────────┬─────────┬──────────┬─────────────┤",
+			"│ ✅ -      │ feat/d │ +1      │ -        │ cerrado     │",
+			"│ ✅ -      │ feat/f │ -       │ -        │ cerrado     │",
+			"└───────────┴────────┴─────────┴──────────┴─────────────┘",
 			"",
-			"MINION  RAMA    COMMITS  FICHEROS",
-			"",
-			"⛔ Necesita tu respuesta",
-			"stuart  feat/b  -        -",
-			"   └ pregunta: confiar en la carpeta del proyecto",
-			"",
-			"🔄 Trabajando",
-			"kevin   feat/a  +2       3",
-			"",
-			"✏️ Sin commitear",
-			"bob     feat/e  -        1",
-			"",
-			"📦 Por revisar",
-			"-       feat/c  +1       1",
-			"",
-			"✅ Integradas / sin empezar",
-			"-       feat/d  +1       -",
-			"-       feat/f  -        -",
-			"",
-			"q o Ctrl+C para salir · se actualiza cada 2 s",
+			"6 ramas · ⛔1 🔄1 ✏️1 📦1 ✅2 · q o Ctrl+C para salir · se actualiza cada 2 s",
 		]);
-		expect(out.join("\n")).not.toContain("ÚLTIMA");
+		// D2: dentro de la tabla no queda ni una linea en blanco; antes se perdian diez entre
+		// cabeceras de dos pisos y separadores. Solo el pie va separado.
+		expect(out.slice(1, -2).filter((l) => l === "")).toEqual([]);
 	});
 
 	test("los grupos vacíos no salen", () => {
 		const out = renderWatch([row("feat/c", "lista", { ahead: 1 }), row("feat/a", "trabajando")], opts);
-		expect(out.filter((l) => WATCH_GROUPS.some((g) => l === `${g.icon} ${g.title}`))).toEqual(["🔄 Trabajando", "📦 Por revisar"]);
+		expect(out.filter((l) => WATCH_GROUPS.some((g) => bandTitle(l) === `${g.icon} ${g.title}`)).map(bandTitle)).toEqual(["🔄 Trabajando", "📦 Por revisar"]);
 		expect(WATCH_GROUPS.map((g) => g.states)).toEqual([["bloqueado"], ["trabajando"], ["sin commitear"], ["lista"], ["integrada", "sin commits"]]);
 	});
 
@@ -313,51 +353,112 @@ describe("tabla en vivo", () => {
 		for (const width of [40, 60, 80]) {
 			const out = renderWatch(rows, { ...opts, width, color: true }).map(plain);
 			expect(out.every((l) => textWidth(l) <= width)).toBe(true);
-			// Cada columna empieza en la misma posición visual en la cabecera y en todas las filas.
-			const lines = [out[2], ...out.filter((l) => /feat\//.test(l))];
-			expect(lines).toHaveLength(7);
-			const starts = (l: string) => [...l.matchAll(/(?<=^|\s)\S+/g)].map((m) => textWidth(l.slice(0, m.index)));
-			for (const l of lines.slice(1)) expect(starts(l)).toEqual(starts(out[2]));
+			assertColumns(out[2], out.filter((l) => /feat\//.test(l)));
 		}
-		expect(renderWatch(rows, { ...opts, width: 40 })[6]).toBe("   └ pregunta: confiar en la carpeta de…");
-		expect(renderWatch(rows, { ...opts, width: 20 }).every((l) => textWidth(l) <= 20)).toBe(true);
+		// La tabla no pinta preguntas en ningun ancho: lo unico que bond reconoce en un panel
+		// es el aviso de confianza de la carpeta, y eso es una cadena fija, no lo que el agente
+		// ha escrito. La fila dice el estado; el que espera se ve en `status <rama>`.
+		expect(renderWatch(rows, { ...opts, width: 40 }).filter((l) => /pregunta|question/.test(plain(l)))).toEqual([]);
 	});
 
-	test("muy estrecha: cabeceras cortas y la rama recortada para que quepan las columnas", () => {
-		const out = renderWatch(rows, { ...opts, width: 26 });
-		expect(out[2]).toBe("MINION  RAMA   COM  FICH");
-		expect(out[9]).toBe("kevin   feat…  +2   3");
+	test("estrecha: se caen columnas desde el final y se avisa cuáles; MINION y RAMA no se caen nunca (D3)", () => {
+		const head = (w: number) => renderWatch(rows, { ...opts, width: w })[2];
+		expect(head(80)).toBe("│ MINION    │ RAMA   │ COMMITS │ FICHEROS │ DÓNDE       │");
+		expect(head(55)).toBe("│ MINION    │ RAMA   │ COMMITS │ FICHEROS │");
+		expect(head(40)).toBe("│ MINION    │ RAMA   │ COMMITS │");
+		expect(head(30)).toBe("│ MINION    │ RAMA   │");
+		// El trazado de la rejilla cuesta columnas: a 60 aun caben las cinco, que es el minimo
+		// por el que se diseno la tabla; por debajo de ahi empieza a caer cosas.
+		expect(head(60)).toContain("DÓNDE");
+		// El aviso de lo que se ha caido va debajo de la cabecera: en el pie competiria con
+		// como salir de la tabla y acabaria perdiendose.
+		expect(renderWatch(rows, { ...opts, width: 40 })[4]).toBe("│ sin FICHEROS, DÓNDE          │");
+		expect(renderWatch(rows, { ...opts, width: 55 })[4]).toBe("│ sin DÓNDE                               │");
+		// Y la rama larga se recorta en vez de descuadrar la tabla.
+		const long = renderWatch([row("una-rama-muy-larga-de-vertical", "trabajando", { agent: { name: "kevin", kind: "pi" } })], { ...opts, width: 26 });
+		expect(long.every((l) => textWidth(plain(l)) <= 26)).toBe(true);
+		expect(long[8]).toContain("una-rama-m…");
 	});
 
-	test("el título del grupo va en el color de su estado y las filas también; sin color, el título dice el estado", () => {
+	test("por debajo del mínimo declarado no se deforma la tabla: se dice, y se puede salir (D3)", () => {
+		expect(MIN_TABLE_WIDTH).toBe(24);
+		const out = renderWatch(rows, { ...opts, width: MIN_TABLE_WIDTH - 1 });
+		expect(out).toHaveLength(3);
+		expect(out[2]).toContain("No cabe la tabla");
+		expect(out.every((l) => textWidth(plain(l)) <= MIN_TABLE_WIDTH - 1)).toBe(true);
+	});
+
+	test("el color va solo en el icono y el estado; el resto sale en el color por defecto (D6)", () => {
 		const out = renderWatch(rows, { ...opts, color: true });
-		expect(out[4]).toBe("\x1b[31m⛔ Necesita tu respuesta\x1b[0m");
-		expect(out[5]).toBe("\x1b[31mstuart  feat/b  -        -\x1b[0m");
-		expect(out[9]).toStartWith("\x1b[33mkevin");
-		expect(out[15]).toStartWith("\x1b[32m-");
+		// El trazado de la rejilla va sin pintar: el color sigue solo en icono y estado.
+		expect(out[4]).toBe(`│ \x1b[31m⛔ Necesita tu respuesta\x1b[0m                              │`);
+		// En la fila, solo el icono va pintado; el minion y la rama salen sin color.
+		expect(out[6]).toBe(`│ ${paintState("bloqueado", "⛔", true)} stuart │ feat/b │ -       │ -        │ panel w1:p3 │`);
+		expect(out[6]).not.toContain("\x1b[31mstuart");
+		expect(out[1]).toBe(plain(out[1]));
+		// Sin color el contenido es identico: el icono lleva el significado, no el color.
 		expect(out.map(plain)).toEqual(renderWatch(rows, opts));
-		const bare = renderWatch(rows, opts);
-		expect(bare.join("\n")).not.toContain("\x1b[");
-		expect(bare[4]).toStartWith("⛔ ");
-		expect(bare[8]).toStartWith("🔄 ");
+	});
+
+	test("los tres juegos de iconos cubren los seis estados y el estilo en vigor viene de la config", () => {
+		const states: State[] = ["bloqueado", "trabajando", "sin commitear", "lista", "integrada", "sin commits"];
+		for (const style of ["nerd", "emoji", "unicode"] as const) {
+			for (const st of states) {
+				expect(stateIcon(st, style)).toBe(STATE_ICONS[style][st]);
+				// Cortos: un icono de dos columnas en la celda de minion ya es el maximo admisible.
+				expect(textWidth(stateIcon(st, style))).toBeLessThanOrEqual(2);
+			}
+			// Integrada y sin commits comparten icono en los tres juegos: el pie los suma como uno.
+			expect(stateIcon("integrada", style)).toBe(stateIcon("sin commits", style));
+		}
+		// Los glifos nerd van en el plano de uso privado: sin la fuente no se confunden con texto.
+		for (const st of states) expect(stateIcon(st, "nerd").codePointAt(0)!).toBeGreaterThan(0xe000);
+		// Y el que se usa se decide como el del pie, no hardcodeado en la tabla.
+		expect(tableIconStyle()).toBe(iconStyle());
 	});
 
 	test("colores por estado: rojo si te espera, verde si toca revisar, tenue si no hay nada", () => {
 		expect(STATE_CODE).toEqual({ trabajando: "33", bloqueado: "31", "sin commitear": "33", lista: "32", integrada: "2", "sin commits": "2" });
 		expect(paintState("lista", "x", true)).toBe("\x1b[32mx\x1b[0m");
-		expect(paintState("lista", "x", false)).toBe("x");
 	});
 
 	test("bloqueada sin pregunta en pantalla: sin línea de pregunta", () => {
 		const out = renderWatch([row("feat/b", "bloqueado", { agent: { name: "stuart", kind: "pi", status: "blocked" } })], opts);
-		expect(out.slice(4, 7)).toEqual(["⛔ Necesita tu respuesta", "stuart  feat/b  -        -", ""]);
+		expect(out.filter((l) => l.includes("pregunta"))).toEqual([]);
+		expect(out.slice(4, 7)).toEqual([
+			"│ ⛔ Necesita tu respuesta                          │",
+			"├───────────┬────────┬─────────┬──────────┬─────────┤",
+			"│ ⛔ stuart │ feat/b │ -       │ -        │ cerrado │",
+		]);
 	});
 
 	test("sin worktrees", () => {
 		expect(renderWatch([], opts)[2]).toBe("Sin worktrees en este repo.");
 	});
 
-	test("modo hub: cabecera con rama vertical, columna REPO en vez de RAMA y anchos 20/35/50/80", () => {
+	test("en un hub la tabla se agrupa por vertical, no por estado: la vertical se ve entera (D2)", () => {
+		const vertical = [
+			row("plan/pagos-p1", "trabajando", { repo: "front", base: "main", agent: { name: "kevin", kind: "pi" }, ahead: 2, files: ["a"] }),
+			row("plan/pagos-p1", "lista", { repo: "back", base: "main", ahead: 3, files: ["b", "c"] }),
+			row("plan/pagos-p1", "bloqueado", { repo: "docs", base: "main", agent: { name: "bob", kind: "claude", question: "¿qué enfoque?" } }),
+			row("plan/usuarios-p1", "sin commitear", { repo: "front", base: "main", agent: { name: "ana", kind: "pi" }, dirty: 2 }),
+		];
+		const out = renderWatch(vertical, { width: 72, color: false, repo: "mi-hub", time: "10:00:00" });
+		expect(bandTitle(out[4])).toBe("── plan/pagos-p1");
+		// Las tres ramas de una misma vertical salen juntas, en orden de urgencia dentro del grupo,
+		// y la otra vertical detras: sin trazado horizontal en medio del contenido.
+		expect(out.slice(2, -2).filter((l) => !isRule(l)).map(bandTitle)).toEqual([
+			"MINION   │ REPO  │ COMMITS │ FICHEROS │ DÓNDE",
+			"── plan/pagos-p1",
+			"⛔ bob   │ docs  │ -       │ -        │ cerrado",
+			"🔄 kevin │ front │ +2      │ 1        │ cerrado",
+			"📦 -     │ back  │ +3      │ 2        │ cerrado",
+			"── plan/usuarios-p1",
+			"✏️ ana   │ front │ -       │ -        │ cerrado",
+		]);
+	});
+
+	test("una sola vertical no lleva cabecera: no distingue nada", () => {
 		const hubRows = [
 			row("fix/x", "trabajando", { repo: "front", base: "main", agent: { name: "kevin", kind: "pi", status: "working", pane: "w1:p2" }, ahead: 2, files: ["a", "b", "c"] }),
 			row("fix/x", "bloqueado", { repo: "back", base: "v2", agent: { name: "stuart", kind: "pi", status: "idle", question: "confiar en la carpeta", pane: "w1:p3" } }),
@@ -367,17 +468,74 @@ describe("tabla en vivo", () => {
 		const hubOpts = { width: 80, color: false, repo: "mi-hub", time: "10:00:00" };
 		const out = renderWatch(hubRows, hubOpts);
 		expect(out[0]).toBe(`${"bond team · mi-hub · fix/x".padEnd(72)}10:00:00`);
-		expect(out[2]).toBe("MINION  REPO   COMMITS  FICHEROS");
-		expect(out.filter((l) => /front/.test(l))[0]).toBe("kevin   front  +2       3");
-
-		for (const width of [20, 35, 50, 80]) {
+		expect(out[2]).toBe("│ MINION    │ REPO  │ COMMITS │ FICHEROS │ DÓNDE       │");
+		expect(out.filter((l) => /front/.test(l))[0]).toBe("│ 🔄 kevin  │ front │ +2      │ 3        │ panel w1:p2 │");
+		// Sin cabecera de grupo: con una sola vertical no distingue nada, y tampoco su rejilla.
+		expect(out.filter((l) => bandTitle(l).startsWith("── "))).toEqual([]);
+		expect(out.filter(isRule).length).toBe(3); // superior, la que abre datos y la inferior
+		for (const width of [MIN_TABLE_WIDTH, 35, 50, 80]) {
 			const rendered = renderWatch(hubRows, { ...hubOpts, width, color: true }).map(plain);
 			expect(rendered.every((l) => textWidth(l) <= width)).toBe(true);
-			const lines = [rendered[2], ...rendered.filter((l) => /(front|back|lib|docs)/.test(l))];
-			const starts = (l: string) => [...l.matchAll(/(?<=^|\s)\S+/g)].map((m) => textWidth(l.slice(0, m.index)));
-			for (const l of lines.slice(1)) expect(starts(l)).toEqual(starts(rendered[2]));
+			assertColumns(rendered[2], rendered.filter((l) => /(front|back|lib|docs)/.test(l)));
 		}
-		expect(renderWatch(hubRows, { ...hubOpts, width: 26 })[2]).toBe("MINION  REPO   COM  FICH");
+		// Por debajo del minimo no hay tabla que alinear: se dice y ya esta.
+		const tiny = renderWatch(hubRows, { ...hubOpts, width: MIN_TABLE_WIDTH - 1 }).map(plain);
+		expect(tiny.every((l) => textWidth(l) <= MIN_TABLE_WIDTH - 1)).toBe(true);
+		expect(tiny[2]).toContain("No cabe la tabla");
+		// En el hub el trazado cuesta lo mismo y las columnas son algo mas anchas: a 30 se queda
+		// en las dos primeras, que son las que nunca caen.
+		expect(renderWatch(hubRows, { ...hubOpts, width: 30 })[2]).toBe("│ MINION    │ REPO  │");
+	});
+
+	test("el pie lleva totales derivados de lo que se enseña y se degrada sin perder la salida (D5)", () => {
+		expect(footerTotals(rows)).toBe("6 ramas · ⛔1 🔄1 ✏️1 📦1 ✅2");
+		expect(footerTotals([row("a", "lista")])).toBe("1 rama · 📦1");
+		expect(footerTotals([])).toBe("");
+		// Integrada y sin commits comparten icono: se suman como una sola cosa, que es como se ensenan.
+		expect(footerTotals([row("a", "integrada"), row("b", "sin commits")])).toBe("2 ramas · ✅2");
+		// Escalera de degradacion: si no cabe, caen los conteos antes que el como salir.
+		expect(tableFooter(rows, "q o Ctrl+C para salir", 80)).toBe("6 ramas · ⛔1 🔄1 ✏️1 📦1 ✅2 · q o Ctrl+C para salir");
+		expect(tableFooter(rows, "q o Ctrl+C para salir", 40)).toBe("6 ramas · q o Ctrl+C para salir");
+		// Con lo justo se guarda el total y la salida; los conteos fueron lo primero en caerse.
+		expect(tableFooter(rows, "q o Ctrl+C para salir", 20)).toBe("6 ramas · q o Ctrl+C para salir");
+	});
+
+	test("bond team status <rama> da la fila entera, sin truncar (D4)", () => {
+		const wide = row("plan/pagos-p1", "sin commitear", {
+			repo: "back",
+			base: "main",
+			agent: { name: "ana", kind: "pi", question: "¿fusiono ya?" },
+			dirty: 3,
+			files: ["a.ts", "b.ts"],
+			workspace: "/home/jose/.herdr/worktrees/bond-d201149/plan-pagos-p1/back",
+		});
+		const out = detailLines([wide], { color: false, hubName: "mi-hub" }).join("\n");
+		expect(out).toContain("/home/jose/.herdr/worktrees/bond-d201149/plan-pagos-p1/back");
+		expect(out).not.toContain("…");
+		expect(out).toContain("✏️ sin commitear");
+		expect(out).toContain("ana (pi)");
+		expect(out).toMatch(/sin commitear\s+3/);
+		expect(out).toMatch(/espera\s+¿fusiono ya\?/);
+	});
+
+	test("clip no deja una secuencia de color a medias ni despega un cluster (D6)", () => {
+		const red = paintState("bloqueado", "⛔ bloqueado con un mensaje largo", true);
+		for (let n = 1; n <= 14; n++) {
+			const c = clip(red, n);
+			expect(textWidth(c)).toBeLessThanOrEqual(n);
+			const opens = (c.match(/\x1b\[[0-9;]*m/g) ?? []).filter((s) => s !== "\x1b[0m").length;
+			if (opens > 0) expect(c).toContain("\x1b[0m");
+		}
+		// El cluster ✏️ (U+270F + U+FE0F) no se parte: o sale entero, o no sale.
+		expect(clip("✏️ bob", 4)).toBe("✏️ …");
+		expect(clip("✏️ bob", 3)).toBe("✏️…");
+		expect(clip("✏️ bob", 2)).toBe("…");
+		expect(clip("日本語のラマ", 5)).toBe("日本…");
+	});
+
+	test("tableLines y renderWatch usan el mismo renderizador: una sola tabla en el código (D1)", () => {
+		const { lines } = tableLines(rows, { width: 80, color: false, isHub: false, hubName: "fluzo" });
+		expect(renderWatch(rows, opts).slice(1, 1 + lines.length)).toEqual(lines);
 	});
 
 	test("el panel de la tabla se reutiliza: el de la misma pestaña y el mismo repo", () => {
@@ -432,7 +590,7 @@ describe("cerrar al terminar", () => {
 	test("si solo queda el grupo ✅, no hay trabajo pendiente y la tabla se cierra", () => {
 		const done = [row("a", "integrada", { ahead: 1 }), row("b", "sin commits", { agent: kevin })];
 		const out = renderWatch(done, { width: 60, color: false, repo: "fluzo", base: "main", time: "10:00:00" });
-		expect(out.filter((l) => WATCH_GROUPS.some((g) => l === `${g.icon} ${g.title}`))).toEqual(["✅ Integradas / sin empezar"]);
+		expect(out.filter((l) => WATCH_GROUPS.some((g) => bandTitle(l) === `${g.icon} ${g.title}`)).map(bandTitle)).toEqual(["✅ Integradas / sin empezar"]);
 		expect(watchIdle(done, table, "fluzo", false, new Set(["b"]))).toBe("close");
 	});
 
@@ -448,7 +606,7 @@ describe("cerrar al terminar", () => {
 	test("el aviso va encima del pie de la tabla", () => {
 		const out = renderWatch([row("a", "integrada")], { width: 80, color: false, repo: "fluzo", base: "main", time: "10:00:00", notice: "sin trabajo pendiente" });
 		expect(out.slice(-3)).toEqual(["sin trabajo pendiente", "", expect.stringContaining("q o Ctrl+C")]);
-		expect(renderWatch([], { width: 30, color: false, repo: "fluzo", base: "main", time: "10:00:00", notice: "sin trabajo pendiente\nel panel se cierra en 4 s" }).slice(-4, -2)).toEqual(["sin trabajo pendiente", "el panel se cierra en 4 s"]);
+		expect(renderWatch([], { width: 30, color: false, repo: "fluzo", base: "main", time: "10:00:00", notice: "sin trabajo pendiente\nel panel se cierra en 4 s" }).slice(-2)).toEqual(["sin trabajo pendiente", "el panel se cierra en 4 s"]);
 		expect(renderWatch([], { width: 80, color: false, repo: "fluzo", base: "main", time: "10:00:00" })).not.toContain("sin trabajo pendiente");
 	});
 
