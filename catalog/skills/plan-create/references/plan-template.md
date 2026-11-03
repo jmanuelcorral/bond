@@ -48,6 +48,7 @@ The Approval field is an annotation, not proof of authorization by itself. Do no
 - Owning repository: {confirmed destination}.
 - Dependencies: {specific phases or issues; no cycles}.
 - Affected contracts: {create, modify, or remove; relevant signatures, events, schema, or visible behavior}.
+- Repos: {hub plans only: the session repos this phase touches, comma-separated by their `hub.toml` names or paths, e.g. `front, back`. Validate every name against the session before saving the plan (`bond hub --json` lists them); an unknown name is an error in the plan, not something to leave for `bond team` to discover at team creation. Omit the field entirely outside a hub.}
 - Acceptance criteria: {verifiable outcomes and necessary negative cases}.
 - Actions:
   - [ ] {complete functional change with relevant documentation and tests}.
@@ -55,6 +56,8 @@ The Approval field is an annotation, not proof of authorization by itself. Do no
   - [ ] Present evidence and stop for review before another phase.
 - Verification: {observed command, working directory, environment, and expected evidence; or a manual method if there is no command}.
 - Risks and recovery: {migration, compatibility, and recovery measures requiring authorization, if applicable}.
+
+In a hub (a `hub.toml` at the root, created with `bond hub init`), the `Repos` field is the one place a phase says which repos of the session it touches: `plan-team` reads it and passes it to `bond team --repos`. A phase that leaves it out does not mean "all repos": it means the team has to ask. Outside a hub the field has no meaning and `plan-team` ignores it with a notice.
 
 Repeat the block with identifiers P2, P3, etc., only when they provide independent deliverables. Do not separate UI, logic, and persistence if no isolated layer achieves a useful outcome. An infrastructure deliverable can also be executable and verifiable without a visual interface.
 

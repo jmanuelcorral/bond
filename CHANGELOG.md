@@ -2,6 +2,16 @@
 
 ## Sin publicar
 
+- El bloque de fase de la plantilla de plan tiene campo `- Repos: front, back` (#44). Hasta ahora
+  `plan-team` decía «los repos que la fase toca, según el plan» y `bond team --repos` existía, pero
+  no había dónde escribirlo: cada agente lo ponía donde le parecía y quien leía adivinaba. El campo
+  va dentro del bloque, junto a `Affected contracts`, con rutas o nombres de carpeta declarados en
+  `hub.toml`. `plan-create` lo escribe y lo valida contra la sesión al planificar (`bond hub --json`),
+  no cuando `bond team` falla al montar el equipo; `plan-team` lo lee para pasar `--repos` y, si la
+  fase no lo tiene, pregunta qué repos abre — omitirlo no significa «todos»: un agente en un repo que
+  no tocaba es peor que una pregunta. Fuera de un hub (sin `hub.toml`) el campo no aplica y se
+  ignora con aviso. `bond team` ya fallaba si `--repos` nombra algo fuera de la sesión
+  (`pickRepos`); se ha añadido la prueba que lo fija.
 - `bond hub exec`: ejecuta un comando en el hub y en cada repo de la sesión, en ese orden y de
   forma secuencial, con cabecera por repo para que la salida no se entrelaza (#46). Puede ser
   destructivo: antes de ejecutar muestra el comando exacto y los repos afectados y pide
