@@ -221,15 +221,18 @@ describe("bond hub exec", () => {
 	});
 
 	test("(h) --shell interpreta un pipe; en modo argv el pipe es un argumento literal", () => {
-		// Pipe portable (cmd.exe y sh): dos scripts por fichero, sin comillas anidadas en el
-		// comando. Con --shell el shell interpreta el `|` y consum.js ve «hola»; en modo argv
-		// el `|` y lo que le sigue son argumentos literales de gen.js, que los imprime y no
-		// hay pipe.
+		// Pipe portable (cmd.exe y sh): dos helpers por fichero y el comando en modo shell SIN
+		// comillas embebidas (las rutas de la temp no tienen espacios en las tres plataformas):
+		// las comillas dentro de `cmd.exe /s /c` se comen el resultado, el `|` no.
+		// Con --shell el shell interpreta el `|` y consum.js ve «hola»; en modo argv el `|`
+		// y lo que le sigue son argumentos literales de gen.js, que los imprime y no hay pipe.
 		const gen = join(tmp, "gen.js");
 		const consum = join(tmp, "consum.js");
-		const withShell = bond(["hub", "exec", "--yes", "--shell", "--", `node "${gen}" | node "${consum}"`]);
+		const withShell = bond(["hub", "exec", "--yes", "--shell", "--", "node", gen, "|", "node", consum]);
+		// El diagnostic dentro del mensaje: si falla en otra plataforma, CI dice exactamente
+		// que devolvio el shell en vez de haber que adivinar.
+		expect(withShell.stdout, `shell run: ${JSON.stringify({ status: withShell.status, stdout: withShell.stdout, stderr: withShell.stderr })}`).toContain("recibido:hola");
 		expect(withShell.status).toBe(0);
-		expect(withShell.stdout).toContain("recibido:hola");
 
 		// Sin --shell: literal. gen.js imprime sus argumentos como JSON: la barra aparece ahí.
 		const argv = bond(["hub", "exec", "--yes", "--", "node", gen, "|", "node", consum]);
