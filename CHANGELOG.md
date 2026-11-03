@@ -2,6 +2,22 @@
 
 ## Sin publicar
 
+- `bond hub exec`: ejecuta un comando en el hub y en cada repo de la sesión, en ese orden y de
+  forma secuencial, con cabecera por repo para que la salida no se entrelaza (#46). Puede ser
+  destructivo: antes de ejecutar muestra el comando exacto y los repos afectados y pide
+  confirmación una sola vez (`--yes`/`-y` la salta; sin terminal no ejecuta nada y dice cómo
+  repetir; cancelada, sale con 130). La forma exige `--` antes del comando
+  (`bond hub exec [opciones] -- <comando> [args...]`): todo lo posterior es el comando y bond no
+  lo interpreta, por eso el comando arbitrario no choca con la lista blanca de opciones. El
+  comando corre por defecto en argv, sin shell (nada de pipes, `&&` ni globs); `--shell` es
+  opt-in y es la primera y única excepción con shell en bond (en Windows el shell es `cmd.exe`,
+  con semántica distinta, y propagarlo por defecto a N repos es un riesgo). Un repo que falla no
+  corta el resto: el exit code final es el peor (el máximo) de los devueltos, para que
+  `bond hub exec -- npm test` sirva en scripts. El stdin del hijo apunta a `/dev/null` (`NUL` en
+  Windows): si el comando intenta leer, recibe EOF al instante y nunca se cuelga bajo un agente.
+  Los repos `not present` se omiten y se dicen; symlink y submodulo reciben el comando igual.
+  `--dry-run` muestra el de-a sin ejecutar ni preguntar y `--json` da por repo comando, cwd,
+  exit code, stdout y stderr más `confirmed` y el exit code global.
 - `bond hub` muestra ahora el estado en vivo de cada repo de la sesión en una columna ESTADO
   compacta y con color: cambios sin commitear (`·N`), commits por delante del remoto (`N↑`) y
   por detrás (`N↓`); limpio y al día es un punto verde, sin upstream un simple `·`/`·N` y no

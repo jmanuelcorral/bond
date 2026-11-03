@@ -863,6 +863,7 @@ bond hub add <url|path>  # adds a repo to the hub (as a submodule or a local lin
 bond hub sync            # mounts submodules, creates links and updates the global registry
 bond hub pull            # updates the hub's and each repo's base in fast-forward (--dry-run, --json)
 bond hub bump            # moves the submodule pointers to their base and commits it in the hub, no push (--dry-run, --json)
+bond hub exec -- <cmd>   # runs a command in the hub and in each session repo, in order (--dry-run, --yes, --shell, --json)
 bond hub check           # reviews each repo of the session: what's missing and how to fix it (--fix, --json)
 ```
 
@@ -1038,6 +1039,45 @@ Per repo:
 - `--json`: structured per-repo output (`moved`, `up_to_date`, `skipped`, `not_applicable`,
   `failed`) with the short `from`/`to` and the SHA of the created commit. Exits with 1 if any repo ends in `failed`.
 - The command aborts if the hub already has `staged` changes, to avoid committing anything else.
+
+### `bond hub exec`
+
+`cli/hub-exec.mts`. Runs a command in the hub and in each repo of the session, in that order and
+sequentially (one after another, with a header per repo so output does not interleave).
+**It can be destructive**: before running it shows the exact command and the affected repos and
+asks for confirmation once (`--yes`/`-y` skips it; without a terminal it runs nothing and says how
+to repeat).
+
+The form requires `--` before the command: `bond hub exec [options] -- <command> [args...]`.
+Everything after the `--` is the command and its arguments; bond does not interpret it (that is why
+an arbitrary command does not clash with bond's whitelist of options). Without `--`, it fails
+without running anything.
+
+```bash
+bond hub exec --yes -- npm test              # test in the hub and in each session repo
+bond hub exec --dry-run -- git status -sb    # see where and what would run, without running
+bond hub exec --yes --shell -- "make lint | tee /tmp/lint.log"   # with a shell, if needed
+```
+
+- **argv by default, `--shell` opt-in.** Without a shell the command runs as given, no pipes, `&&`
+  or globs. `--shell` passes it through the system shell (`cmd.exe` on Windows, `/bin/sh`
+  elsewhere; the command must be quoted as a single argument). It is the only shell exception in
+  all of bond: on Windows the shell is `cmd.exe`, with different semantics, and propagating a
+  shell by default to N repos is a risk.
+- **A failure does not cut the rest**: if a repo fails it continues with the others and the final
+  exit code is the worst (maximum) of those returned, so `bond hub exec -- npm test` works in
+  scripts. A command that does not exist is reported with 127.
+- **stdin closed**: the command runs with stdin pointing at `/dev/null` (`NUL` on Windows); if it
+  tries to read it gets EOF immediately and finishes — it can never hang under an agent without a
+  TTY. If you need to feed it data on stdin, run it repo by repo.
+- Repos `not present`: omitted and reported. Symlink and submodule receive the command alike
+  (it is their working tree).
+- `--dry-run`: shows which command would run in which repo without running anything (and does
+  not ask).
+- `--json`: structured per-repo output (`executed` / `skipped_not_present`) with `command`,
+  `cwd`, `exitCode`, `stdout`, `stderr`, plus global `confirmed` and `exitCode`. The
+  confirmation, if due, goes to stderr to keep the report clean.
+- Confirmation cancelled: nothing runs and it exits with 130.
 
 ### `bond team` in a hub
 
