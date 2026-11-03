@@ -7,7 +7,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { parse } from "smol-toml";
 import { BOND_HOME } from "./runtime.mts";
-import { act, canonical, catchDie, die, dim, HOME, log, run, warn } from "./util.mts";
+import { act, canonical, catchDie, die, dim, HOME, log, ok, caution, run, warn } from "./util.mts";
+import { repoState, type RepoState } from "./hub-status.mts";
 import { t } from "./messages.mts";
 
 export const hubHelp = (): string => t("hub.help");
@@ -61,6 +62,8 @@ export interface HubRepo {
 	agent?: string;
 	/** Qué es este repo (si se declaró en hub.toml); alimenta el bloque del hub en AGENTS.md (D18). */
 	description?: string;
+	/** Estado en vivo calculado (cambios sin commitear, ahead/behind); undefined si no se pidió o el repo no está. */
+	state?: RepoState;
 }
 
 export interface HubSession {
@@ -421,7 +424,7 @@ export function submodules(root: string): Submodule[] {
 		.map((m) => ({ path: m[2].replace(/\\/g, "/"), initialized: m[1] !== "-" }));
 }
 
-/** Tabla de la sesión: repo, ruta, base, modo de enlace y rama actual. */
+/** Tabla de la sesión: repo, ruta, base, modo de enlace, rama actual y estado en vivo por repo. */
 export function printSession(s: HubSession): void {
 	// La columna DESCRIPCION (D18) solo aparece si algún repo la declara: sin descripciones,
 	// la tabla no se ensancha con huecos vacíos.
@@ -432,6 +435,7 @@ export function printSession(s: HubSession): void {
 		r.base,
 		r.path === "." ? "-" : (r.link ?? "submodule"),
 		!r.present ? t("hub.session_not_present") : (r.branch ?? t("hub.session_detached_head")),
+		statusCell(r),
 		...(hasDesc ? [r.description ?? "-"] : []),
 	]);
 	const all = [
@@ -441,15 +445,70 @@ export function printSession(s: HubSession): void {
 			t("hub.session_col_base"),
 			t("hub.session_col_link"),
 			t("hub.session_col_branch"),
+			t("hub.session_col_status"),
 			...(hasDesc ? [t("hub.session_col_desc")] : []),
 		],
 		...rows,
 	];
-	const widths = all[0].map((_, i) => Math.max(...all.map((r) => r[i].length)));
+	// El ancho se mide sin códigos de color: la columna ESTADO va pintada y padEnd contaría los escapes.
+	const widths = all[0].map((_, i) => Math.max(...all.map((r) => visibleWidth(r[i]))));
 	const fmt = (r: string[]) => `  ${r.map((c, i) => (i === r.length - 1 ? c : c.padEnd(widths[i]))).join("  ")}`;
 	log(`hub ${s.name} ${dim(`(${s.root})`)}`);
 	console.log(dim(fmt(all[0])));
 	for (const r of rows) console.log(fmt(r));
+	// El pie deja claro contra qué se habla: sin --fetch son las refs locales del remoto,
+	// tal como las dejó el último fetch conocido (decisión #42: la tabla no toca la red).
+	const fetched = s.repos.some((r) => r.state?.fetched);
+	console.log(dim(t(fetched ? "hub.session_footer_fetched" : "hub.session_footer_local")));
+}
+
+/** Ancho visible de una cadena: sin códigos de color ANSI (padEnd contaría los escapes). */
+const visibleWidth = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "").length;
+
+/**
+ * Celda compacta y con color para la columna ESTADO: `·3 2↑ 1↓` = 3 cambios sin
+ * commitear, 2 commits por delante y 1 por detrás del remoto (según las refs locales).
+ * El punto verde a secas significa limpio y al día; sin remoto ni base comparable, un
+ * guion explícito. Las piezas van separadas por espacios para que `·2` (sucio) no se
+ * lea como `2↑` al pegarlo delante.
+ */
+export function statusCell(r: HubRepo): string {
+	if (!r.present || !r.state) return dim("-");
+	const st = r.state;
+	const parts = st.dirty ? [caution(`·${st.dirty}`)] : st.upstream === undefined || (!st.ahead && !st.behind) ? [ok("·")] : [];
+	if (st.ahead) parts.push(ok(`${st.ahead}↑`));
+	if (st.behind) parts.push(caution(`${st.behind}↓`));
+	return parts.join(" ");
+}
+
+/** La sesión con su estado en vivo por repo (--fetch para datos frescos; ver cli/hub-status.mts). */
+export function sessionWithStates(s: HubSession, opts: { fetch?: boolean } = {}): HubSession {
+	return { ...s, repos: s.repos.map((r) => (r.present ? { ...r, state: repoState(r.dir, r.base, opts) } : r)) };
+}
+
+/** La sesión ampliada en JSON: declaración + estado (dirty/ahead/behind y si viene de un fetch). */
+export function hubSessionJson(s: HubSession): string {
+	return JSON.stringify(
+		{
+			hub: s.name,
+			root: s.root,
+			repos: s.repos.map((r) => ({
+				repo: hubRepoLabel(s, r),
+				path: r.path,
+				base: r.base,
+				link: r.path === "." ? null : (r.link ?? "submodule"),
+				branch: r.present ? (r.branch ?? null) : null,
+				present: r.present,
+				dirty: r.state?.dirty ?? null,
+				upstream: r.state?.upstream ?? null,
+				ahead: r.state?.ahead ?? null,
+				behind: r.state?.behind ?? null,
+				fetched: r.state?.fetched ?? false,
+			})),
+		},
+		null,
+		2,
+	);
 }
 
 export async function hub(args: string[]): Promise<void> {
@@ -482,13 +541,19 @@ export async function hub(args: string[]): Promise<void> {
 		console.log(hubHelp().trimEnd());
 		return;
 	}
-	if (args.length > 0) {
-		die(t("hub.unknown_opt", { opt: args[0] }));
-	}
+	// `bond hub` sin subcomando: estado en vivo de la sesión, neutro (no duplica los
+	// veredictos de `bond hub check`). --fetch refresca las refs antes de calcular.
+	const fetch = args.includes("--fetch");
+	const json = args.includes("--json");
+	for (const a of args) if (!["--fetch", "--json"].includes(a)) die(t("hub.unknown_opt", { opt: a }));
 	const cwd = process.cwd();
 	const root = hubRoot(cwd);
 	if (!root) dieNotAHub(cwd);
-	const s = hubSession(root);
-	if (!s) die(t("hub.dir_not_a_hub", { name: basename(root) }));
-	printSession(s);
+	const s0 = hubSession(root);
+	if (!s0) die(t("hub.dir_not_a_hub", { name: basename(root) }));
+	const s = sessionWithStates(s0, { fetch });
+	// Un fetch que falla no cambia la tabla: hay que decirlo, si no el dato parece fresco.
+	for (const r of s.repos) if (r.state?.fetchFailed) warn(t("hub.warn_fetch_failed", { name: hubRepoLabel(s, r) }));
+	if (json) console.log(hubSessionJson(s));
+	else printSession(s);
 }

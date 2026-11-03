@@ -25,10 +25,17 @@ Comandos:
                   sin push (--dry-run, --json)
   check           Revisa cada repo de la sesión: qué falta y cómo arreglarlo (--fix, --json)
 
-Sin subcomando: enseña la sesión del hub (repos, ruta, base, enlace, rama actual y,
-si se declaró en hub.toml, la descripción de cada repo). En el AGENTS.md del hub,
-bond sync mantiene un bloque generado con esa tabla, las reglas del hub y dónde
-viven docs/plans/ y docs/decisions/ (D18).`,
+Sin subcomando: enseña la sesión del hub (repos, ruta, base, enlace, rama actual,
+estado por repo y, si se declaró en hub.toml, la descripción de cada repo). El
+estado (columna ESTADO) son los cambios sin commitear y los commits por delante
+(↑) o por detrás (↓) de su remoto, calculados contra las refs locales: sin tocar
+la red. En el AGENTS.md del hub, bond sync mantiene un bloque generado con esa
+tabla, las reglas del hub y dónde viven docs/plans/ y docs/decisions/ (D18).
+
+Opciones del estado (sin subcomando):
+  --fetch    Hace git fetch en cada repo antes de calcular (datos frescos)
+  --json     Salida en JSON: dirty, ahead, behind, upstream y si los datos
+             vienen de un fetch (fetched) o del último fetch conocido`,
 
 	"hub.init.help": `Uso: bond hub init [dir] [repos...] [opciones]
 
@@ -164,6 +171,10 @@ Opciones:
 	"hub.session_col_desc": "DESCRIPCIÓN",
 	"hub.session_not_present": "(no está)",
 	"hub.session_detached_head": "(HEAD separado)",
+	"hub.session_col_status": "ESTADO",
+	"hub.session_footer_local": "Estado contra el último fetch conocido · bond hub --fetch para datos frescos",
+	"hub.session_footer_fetched": "Estado tras git fetch en cada repo de la sesión",
+	"hub.warn_fetch_failed": "no se pudo hacer fetch en {name}: se muestra el último fetch conocido",
 	"hub.unknown_opt": "opción desconocida: {opt} (bond hub --help)",
 	"hub.not_a_hub": "no es un hub: falta hub.toml (bond hub --help)",
 	"hub.hub_toml_unreadable": "existe {file} pero no se puede leer: {error}",
@@ -418,10 +429,17 @@ Commands:
                   no push (--dry-run, --json)
   check           Check each session repo: what is missing and how to fix it (--fix, --json)
 
-Without subcommand: shows hub session (repos, path, base, link, current branch and,
-if declared in hub.toml, the description of each repo). In the hub's AGENTS.md,
-bond sync maintains a generated block with that table, hub rules, and where
-docs/plans/ and docs/decisions/ live (D18).`,
+Without subcommand: shows hub session (repos, path, base, link, current branch,
+live status and, if declared in hub.toml, the description of each repo). The
+status (STATUS column) is uncommitted changes and commits ahead (↑) or behind (↓)
+of its remote, computed against local refs: no network involved. In the hub's
+AGENTS.md, bond sync maintains a generated block with that table, hub rules,
+and where docs/plans/ and docs/decisions/ live (D18).
+
+Status options (without subcommand):
+  --fetch    Run git fetch in each repo before computing (fresh data)
+  --json     JSON output: dirty, ahead, behind, upstream, and whether the data
+             comes from a fetch (fetched) or the last known fetch`,
 
 	"hub.init.help": `Usage: bond hub init [dir] [repos...] [options]
 
@@ -556,6 +574,10 @@ Options:
 	"hub.session_col_desc": "DESCRIPTION",
 	"hub.session_not_present": "(missing)",
 	"hub.session_detached_head": "(detached HEAD)",
+	"hub.session_col_status": "STATUS",
+	"hub.session_footer_local": "State against the last known fetch · bond hub --fetch for fresh data",
+	"hub.session_footer_fetched": "State after git fetch in each session repo",
+	"hub.warn_fetch_failed": "fetch failed for {name}: showing the last known fetch",
 	"hub.unknown_opt": "unknown option: {opt} (bond hub --help)",
 	"hub.not_a_hub": "not a hub: missing hub.toml (bond hub --help)",
 	"hub.hub_toml_unreadable": "{file} exists but cannot be read: {error}",
