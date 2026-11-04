@@ -172,6 +172,17 @@ function leaveBranch(branch, base, dryRun, log) {
 		return false;
 	}
 	log(`  salido de "${branch}" a "${base}"`);
+
+	// La base local puede estar atrasada respecto a lo que se acaba de fusionar, y
+	// entonces los ficheros nuevos de la PR no aparecen en el arbol de trabajo.
+	// Se pone al dia solo si es fast-forward: si no lo es, la divergencia es del
+	// usuario y no se toca.
+	const ff = git(["merge", "--ff-only", `origin/${base}`]);
+	if (ff.ok) log(`  "${base}" puesta al dia (fast-forward a origin/${base})`);
+	else {
+		log(`  AVISO: "${base}" no se pudo poner al dia por fast-forward; puede estar divergida:`);
+		for (const l of (ff.err || "").split("\n").slice(0, 5)) if (l.trim()) log(`      ${l}`);
+	}
 	return true;
 }
 
