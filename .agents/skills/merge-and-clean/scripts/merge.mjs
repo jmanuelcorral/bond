@@ -143,6 +143,38 @@ function deleteBranch(branch, base, dryRun, log) {
 	return { deleted, skipped: [] };
 }
 
+// Despues de fusionar la PR propia seguimos encima de su rama, y `git branch -D`
+// no borra la rama en la que estas. La guarda esta bien, pero el flujo queda roto
+// si no se sale antes. Solo se sale si el arbol esta limpio: con cambios sin
+// commitear, cambiarse de rama es decision del usuario, no de un script.
+function leaveBranch(branch, base, dryRun, log) {
+	const here = git(["rev-parse", "--abbrev-ref", "HEAD"]).out;
+	if (here !== branch) return true;
+	if (dryRun) {
+		log(`  [dry-run] git checkout ${base} (estas encima de "${branch}")`);
+		return true;
+	}
+	const dirty = git(["status", "--porcelain"]);
+	if (!dirty.ok) {
+		log(`  RECHAZADO: no se pudo comprobar el estado del arbol de trabajo`);
+		return false;
+	}
+	if (dirty.out) {
+		log(`  RECHAZADO: estas encima de "${branch}" y hay cambios sin commitear:`);
+		for (const l of dirty.out.split("\n").slice(0, 8)) log(`      ${l}`);
+		log(`      guarda o commitea antes de borrar la rama`);
+		return false;
+	}
+	// Traer la base y cambiarse a ella creando el branch local si no existe.
+	const co = git(["checkout", base]);
+	if (!co.ok) {
+		log(`  no se pudo cambiar a "${base}": ${co.err}`);
+		return false;
+	}
+	log(`  salido de "${branch}" a "${base}"`);
+	return true;
+}
+
 // ---------------------------------------------------------------------------
 // Fusionar
 // ---------------------------------------------------------------------------
@@ -241,6 +273,10 @@ function main() {
 	const verifyBase = dryRun ? base : `origin/${base}`;
 
 	log("\n  verificacion de integracion (git cherry, por equivalencia de parches):");
+	if (!leaveBranch(pr.headRefName, base, dryRun, log)) {
+		log("\n  no se ha borrado nada. Resolver lo de arriba y repetir con --delete-only.");
+		process.exit(1);
+	}
 	const res = deleteBranch(pr.headRefName, verifyBase, dryRun, log);
 	if (res.skipped.length > 0) {
 		log(`\n  ${res.skipped.length} rama(s) NO borrada(s). Revisar arriba antes de insistir.`);

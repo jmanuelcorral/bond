@@ -56,6 +56,10 @@ no borra nada nunca. `git cherry` sí da `0` parches `+`.
    ```
    Desmontar un worktree puede matar el panel de un agente que está trabajando ahí. La skill lo dice y
    se queda quieto.
+4. **Rama actual → se sale a la base antes de borrar, pero solo si el arbol esta limpio.** Tras fusionar
+   tu propia PR sigues encima de su rama y `git branch -D` no borra la rama en la que estas. Con el
+   arbol limpio se hace `git checkout <base>` y se borra. Con cambios sin commitear **se rechaza** y se
+   listan los ficheros: cambiarse de rama con trabajo por hacer es decision tuya, no de un script.
 
 Además: si `git cherry` falla, **tampoco se borra** — no se asume «no hay pendiente» cuando en
 realidad «no se pudo comprobar».
@@ -67,8 +71,9 @@ realidad «no se pudo comprobar».
 3. Fusionar con `--rebase` (historial lineal, convención del repo).
 4. `git fetch origin <base>` — verificar contra lo que hay en remoto, no contra un `main` local viejo.
 5. Verificar con `git cherry` contra `origin/<base>`.
-6. Borrar local y `origin/<rama>`.
-7. `git fetch --prune` para no dejar referencias muertas.
+6. Salir de la rama si es la actual y el arbol esta limpio.
+7. Borrar local y `origin/<rama>`.
+8. `git fetch --prune` para no dejar referencias muertas.
 
 ## `--clean`
 
