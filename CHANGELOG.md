@@ -1,6 +1,14 @@
 # Cambios
 
-## Sin publicar
+## 1.12.0
+
+El modo hub se puede operar de verdad. `bond hub exec` recorre la sesión entera con un comando,
+`bond hub bump` mueve los punteros que el hub guarda de cada repo y `bond hub` enseña el estado en
+vivo de cada uno. La tabla de `bond team` se redibuja entera: un único renderizador, rejilla, y en
+el hub agrupa por rama vertical en vez de partir cada vertical en tres grupos. Y por primera vez lo
+que bond escribe en los ficheros de los agentes sigue el idioma que elegiste en `bond setup`; hasta
+ahora el idioma llegaba a la consola y nada más. De paso, las pruebas de hub se dejan de excusas en
+Windows y se pasan de verdad.
 
 - Lo que bond escribe en ficheros para los agentes sigue el idioma elegido en `bond setup` (#49).
   Hasta ahora el idioma (1.11.0) llegaba a la consola y nada más: las reglas globales que van al
@@ -118,7 +126,19 @@
 - `bond hub init` y `bond hub add` validan los orígenes antes de tocar disco (#35): un origen
   vacío (`file://`, `--repo ""`), una ruta que no existe o no es un repo git, un `--name` vacío
   o una clave de repo con puntos o barras fallan con un mensaje claro y ya no dejan un `hub.toml`
-  inválido.
+  inválido. En Windows los orígenes `file://C:\...` conservan el nombre del repo: se separaba la URL
+  solo por `/` y la carpeta salía con nombre vacío, y las etiquetas de `hub.toml` se comparan ahora
+  normalizadas por los dos lados de `relative()`, que daba rutas relativas absurdas entre unidades.
+- `bond team` enruta los encargos al agente de la rama por el emparejamiento del panel y no por el
+  directorio de trabajo (#37). `teamRows` y `sessionRows` buscaban al agente comparando el `cwd` del
+  panel, y con worktrees de una misma repo o paneles abiertos después eso elegía a quien no era: el
+  encargo se iba a un agente de otra rama sin manera de darse cuenta. Se usa ahora el emparejamiento
+  (nombre y `pane_id`) fijado al crear el equipo; si no existe o está obsoleto se devuelve
+  `undefined`, así que el comando falla diciendo que no hay a quién hablar en vez de elegir a ciegas.
+- `bond team collect` recoge la última ejecución de la rama y lee la transcripción completa (#38).
+  Las ejecuciones se ordenan por `started_at` para ir a la tarea más reciente de la rama y no a una
+  anterior, y en las sesiones de `agy` se lee `transcript_full.jsonl`: con la transcripción recortada
+  el informe salía truncado aunque el agente hubiera terminado del todo.
 - `bond hub`, `bond hub sync`, `bond hub check` y `bond hub pull` distinguen «falta hub.toml» de
   «existe hub.toml pero no se puede leer» (#39): con un `hub.toml` que no parsea o no define la
   sesión, el error final dice que el fichero está ahí y lleva el error de parseo.
