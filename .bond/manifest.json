@@ -47,7 +47,10 @@
     ".claude/skills/delivery-review-github": "../../.agents/skills/delivery-review-github",
     ".claude/skills/release-prepare-github": "../../.agents/skills/release-prepare-github",
     ".claude/skills/convention-document": "../../.agents/skills/convention-document",
-    ".claude/skills/plan-team": "../../.agents/skills/plan-team"
+    ".claude/skills/plan-team": "../../.agents/skills/plan-team",
+    ".claude/skills/ci-status": "../../.agents/skills/ci-status",
+    ".claude/skills/merge-and-clean": "../../.agents/skills/merge-and-clean",
+    ".claude/skills/tui-design": "../../.agents/skills/tui-design"
   },
   "json": {
     ".pi/mcp.json": [
@@ -80,5 +83,6 @@
   },
   "blocks": {
     "CLAUDE.md": "md"
-  }
+  },
+  "lang": "es"
 }

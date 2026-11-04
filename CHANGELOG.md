@@ -1,5 +1,31 @@
 # Cambios
 
+## Sin publicar
+
+Tres skills propias del repo, en `.agents/skills/`, para quien se lo baje. No son del catálogo: no
+están declaradas en el array `skills` de `.bond/bond.toml`, así que `bond init` no las instala en
+otros proyectos. `bond sync` sí las enlaza a `.claude/skills/` y viajan versionadas con el repo.
+
+- `ci-status`: estado de la pipeline de GitHub en una sola llamada, y sobre todo, distinción entre
+  fallo de código y capricho de la infraestructura (#64). Un `cancelled` porque el runner se cayó no
+  es un fallo tuyo, y tratarlo como tal manda a buscar un bug que no existe. Sin dependencias: Node
+  ≥ 22 y `gh`; los comandos van con argv, nunca con string de shell, para que no haya problemas de
+  comillas ni de separadores en Windows. `--watch` bloquea hasta el veredicto, `--log` saca la causa
+  del fallo sin abrir el navegador, `--rerun-failed` reejecuta solo lo caído y `--json` da salida de
+  máquina. El refino por log se limita a cinco fallos porque cada uno cuesta una llamada a la API.
+- `merge-and-clean`: fusionar con rebase y borrar las ramas sin perder nada por el camino (#65).
+  Verifica la integración con `git cherry` — equivalencia de parches, no SHA — antes de borrar nada,
+  porque tras un rebase los SHA se reescriben y `git log main..rama` dice que hay pendientes cuando
+  no los hay. Nunca borra `main`, ni la rama actual, ni una rama con trabajo sin integrar (imprime
+  el parche exacto), y si una rama está montada en un worktree lo reporta en vez de desmontarla: eso
+  puede matar el panel de un agente que está trabajando ahí. Si `git cherry` falla tampoco borra, no
+  se confunde «no se pudo comprobar» con «no hay pendiente». `--clean` barre de golpe las ramas
+  locales fusionadas.
+- `tui-design`: adaptada de [fluzo-labs/fluzo-skills](https://github.com/fluzo-labs/fluzo-skills)
+  (MIT), movida de la configuración global al repo para que la tenga cualquiera que se lo baje. Su
+  `ORIGIN.md` guarda el SHA de origen: la colección no se autoactualiza, cada actualización se revisa
+  y se copia a mano.
+
 ## 1.12.0
 
 El modo hub se puede operar de verdad. `bond hub exec` recorre la sesión entera con un comando,
