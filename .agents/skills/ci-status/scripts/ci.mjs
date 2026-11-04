@@ -36,8 +36,25 @@ function run(cmd, args, opts = {}) {
 	};
 }
 
+// GitHub esta dando 500/502/504 de forma intermitente mientras se escribia esto,
+// incluso en lecturas simples de la API. Un transitorio no deberia parecer que la
+// skill esta rota: se reintenta unas pocas veces con espera creciente.
+const TRANSIENT = /HTTP 5\d\d|502|503|504|Server Error|temporar/i;
 function gh(args, opts = {}) {
-	return run("gh", args, opts);
+	let last = null;
+	for (let attempt = 1; attempt <= 3; attempt++) {
+		last = run("gh", args, opts);
+		if (last.ok) return last;
+		if (!TRANSIENT.test(last.err)) return last;
+		if (attempt < 3) nap(attempt * 4);
+	}
+	return last;
+}
+
+// Espera sin dependencias: `sleep` en Unix, `timeout` en Windows.
+function nap(sec) {
+	if (process.platform === "win32") run("timeout", ["/T", String(sec), "/NOBREAK"], { stdio: "ignore" });
+	else run("sleep", [String(sec)], { stdio: "ignore" });
 }
 
 function die(msg, code = 3) {
@@ -176,6 +193,16 @@ const INFRA_PATTERNS = [
 	/exit code 137/i, // OOM del runner
 	/repository rule or deploy key/i,
 	/secondary rate limit/i,
+	// Fallos del lado de GitHub, no del nuestro. Cazado en vivo: un 500 de Pages al
+	// crear el deployment se clasificaba como "codigo" y mandaba buscar un bug que
+	// no existia.
+	/Failed to create deployment \(status: 5\d\d\)/i,
+	/Creating Pages deployment failed/i,
+	/Error: Failed to create deployment/i,
+	/is githubstatus\.com/i,
+	/HttpError: /i,
+	/error 5\d\d from github/i,
+	/the deployment was not created due to a server error/i,
 ];
 
 function classify(c) {
@@ -193,7 +220,11 @@ function refineWithLog(c) {
 	const r = gh(["run", "view", "--job", String(c.job_id), "--log-failed"]);
 	const blob = (r.ok ? r.out : "") + " " + (c.title || "");
 	for (const p of INFRA_PATTERNS) {
-		if (p.test(blob)) return { ...c, why: `infra: ${p.source}` };
+		if (p.test(blob)) {
+			// Cambia la clase, no solo el motivo: si no, el veredicto sigue siendo
+			// "rojo de codigo" y se manda a buscar un bug que no existe.
+			return { ...c, kind: "infra", why: `infra: ${p.source}` };
+		}
 	}
 	return { ...c, why: "fallo del trabajo (ver log)" };
 }
@@ -317,12 +348,8 @@ function runIdOf(target) {
 // Watch
 // ---------------------------------------------------------------------------
 function sleep(sec) {
-	// Sin dependencias: un spawn de `sleep`/`timeout` es lo portatil entre Unix y Windows.
-	const r =
-		process.platform === "win32"
-			? run("timeout", ["/T", String(sec), "/NOBREAK"], { stdio: "ignore" })
-			: run("sleep", [String(sec)], { stdio: "ignore" });
-	return r.ok;
+	nap(sec);
+	return true;
 }
 
 // ---------------------------------------------------------------------------
