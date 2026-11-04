@@ -150,13 +150,7 @@ function resolveTarget(opts) {
 // ---------------------------------------------------------------------------
 // Lectura de checks
 // ---------------------------------------------------------------------------
-function fetchChecks(target) {
-	if (!target.headSha) return [];
-	const r = gh([
-		"api",
-		`repos/{owner}/{repo}/commits/${target.headSha}/check-runs?per_page=100&filter=latest`,
-		"--jq",
-		[
+const JQ_CHECKS = [
 			".check_runs | map({",
 			"  name,",
 			"  status,",
@@ -167,10 +161,35 @@ function fetchChecks(target) {
 			"  started: (.started_at // \"\"),",
 			"  completed: (.completed_at // \"\")",
 			"}) | tojson",
-		].join(""),
+		].join("");
+
+function fetchChecks(target) {
+	if (!target.headSha) return [];
+	let r = gh([
+		"api",
+		`repos/{owner}/{repo}/commits/${target.headSha}/check-runs?per_page=100&filter=latest`,
+		"--jq",
+		JQ_CHECKS,
 	]);
 	if (!r.ok) die(`no se pudieron leer los checks: ${r.err}`);
-	return JSON.parse(r.out);
+	// La API de GitHub puede devolver el cuerpo vacio o truncado sin marcar error de
+	// proceso, y entonces JSON.parse revienta con "unexpected end of JSON input".
+	// Eso es transitorio, no un fallo nuestro: se reintenta antes de rendirse.
+	for (let attempt = 1; ; attempt++) {
+		try {
+			return JSON.parse(r.out);
+		} catch (e) {
+			if (attempt >= 3) die(`respuesta ilegible de la API de GitHub: ${e.message}`);
+			nap(attempt * 4);
+			r = gh([
+				"api",
+				`repos/{owner}/{repo}/commits/${target.headSha}/check-runs?per_page=100&filter=latest`,
+				"--jq",
+				JQ_CHECKS,
+			]);
+			if (!r.ok) die(`no se pudieron leer los checks: ${r.err}`);
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
