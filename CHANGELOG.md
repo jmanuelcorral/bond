@@ -2,6 +2,20 @@
 
 ## Sin publicar
 
+- `bond models sync` respeta la selección de agentes de `cfg.agents` (#73). Sin `--agent`, sincroniza
+  únicamente los agentes seleccionados por el usuario que estén instalados en la máquina, en vez de
+  escribir proveedores en todos los agentes instalados. `--agent <a>` sigue forzando la sincronización
+  de un agente concreto. La comprobación con `--check` y `bond doctor` adopta el mismo criterio: solo
+  auditan los agentes configurados.
+- Codex se soporta con su cuenta oficial y bond deja de aprovisionarlo (#80). Se elimina de `TARGETS`,
+  del aprovisionamiento de `bond setup` y de la comprobación de modelos en `bond doctor`. Codex sigue
+  siendo plenamente seleccionable en `bond init` y `bond setup`, se lanza igual con `bond launch`,
+  recibe instrucciones `AGENTS.md` y su bloque MCP de repo en `.codex/config.toml` permanece intacto.
+  Para usuarios existentes, `bond models sync` barre automáticamente el bloque huérfano `# >>> bond >>>`
+  en `~/.codex/config.toml` con backup `.bak.<STAMP>` y preservando cualquier configuración manual
+  alrededor de forma idempotente. `bond models list` añade una línea informativa explicando que Codex
+  utiliza su cuenta oficial.
+
 Tres skills propias del repo, en `.agents/skills/`, para quien se lo baje. No son del catálogo: no
 están declaradas en el array `skills` de `.bond/bond.toml`, así que `bond init` no las instala en
 otros proyectos. `bond sync` sí las enlaza a `.claude/skills/` y viajan versionadas con el repo.

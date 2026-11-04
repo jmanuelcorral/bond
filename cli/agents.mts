@@ -157,17 +157,21 @@ const opencode: Target = {
 
 // --- bloques de texto (Crush, Codex) --------------------------------------------------
 
-const BEGIN = "# >>> bond >>>";
-const END = "# <<< bond <<<";
+export const BEGIN = "# >>> bond >>>";
+export const END = "# <<< bond <<<";
 const BLOCK_NOTE = "generado por `bond models sync`; no editar: cambia ~/.config/bond/config.toml";
 
 /** Quita el bloque de bond (si lo hay) y devuelve el resto del fichero. */
-function withoutBlock(current: string): string {
+export function withoutBlock(current: string): string {
 	const start = current.indexOf(BEGIN);
 	if (start < 0) return current;
 	const end = current.indexOf(END, start);
 	const after = end < 0 ? "" : current.slice(end + END.length).replace(/^\n/, "");
 	return current.slice(0, start).replace(/\n+$/, "\n") + after;
+}
+
+export function codexConfigFile(): string {
+	return join(process.env.CODEX_HOME || join(HOME, ".codex"), "config.toml");
 }
 
 /** El bloque va siempre al final: en TOML, unas tablas al final no cambian el significado del resto. */
@@ -215,34 +219,7 @@ const crush: Target = {
 	},
 };
 
-const codex: Target = {
-	agent: "codex",
-	needs: "responses",
-	file: () => join(process.env.CODEX_HOME || join(HOME, ".codex"), "config.toml"),
-	installed: () => !!which("codex"),
-	verify: "codex -p <proveedor>-<modelo>",
-	get note() {
-		return t("models.note_codex");
-	},
-	render(current, providers) {
-		let body = "";
-		for (const p of providers) {
-			body += `[model_providers.${p.id}]\nname = ${tomlStr(p.name ?? p.id)}\nbase_url = ${tomlStr(p.base_url)}\nwire_api = "responses"\n`;
-			// Codex solo lee claves de variables de entorno: con clave guardada, la pone `bond run codex`.
-			if (p.key_stored) body += `env_key = ${tomlStr(`BOND_KEY_${p.id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}`)}\n`;
-			else if (p.api_key_env) body += `env_key = ${tomlStr(p.api_key_env)}\n`;
-			for (const m of modelsFor(p, "codex")) {
-				body += `\n[profiles.${tomlStr(`${p.id}-${m.id}`)}]\nmodel_provider = ${tomlStr(p.id)}\nmodel = ${tomlStr(m.id)}\n`;
-				if (m.context) body += `model_context_window = ${m.context}\n`;
-				if (m.max_output) body += `model_max_output_tokens = ${m.max_output}\n`;
-			}
-			body += "\n";
-		}
-		return { text: appendBlock(withoutBlock(current ?? ""), body), managed: providers.map((p) => p.id), skipped: [] };
-	},
-};
-
-export const TARGETS: Target[] = [pi, opencode, crush, codex];
+export const TARGETS: Target[] = [pi, opencode, crush];
 
 /** Agentes que no pueden usar una pasarela compatible con OpenAI, y por qué (para `models list`). */
 export const INCOMPATIBLE: Record<string, string> = {

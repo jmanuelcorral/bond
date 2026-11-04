@@ -5,8 +5,8 @@ import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { inspect } from "node:util";
-import { activeProviders, type Api, CONFIG_DIR, CONFIG_FILE, initialConfig, loadConfig, loadState, providerApis, saveState } from "./config.mts";
-import { INCOMPATIBLE, readCurrent, hasComments, TARGETS } from "./agents.mts";
+import { activeProviders, type Api, CONFIG_DIR, CONFIG_FILE, initialConfig, loadConfig, loadState, providerApis, saveState, type State } from "./config.mts";
+import { BEGIN, codexConfigFile, INCOMPATIBLE, readCurrent, hasComments, TARGETS, withoutBlock } from "./agents.mts";
 import { t } from "./messages.mts";
 import { act, AGENT_DIR, bad, caution, die, dim, isDryRun, log, ok, REPO_DIR, run, STAMP, warn } from "./util.mts";
 
@@ -84,6 +84,9 @@ function list(): void {
 			...Object.keys(INCOMPATIBLE).map((a) => [a, apis.includes("messages") && a === "claude" ? ok("✓") : bad("✗")] as const),
 		];
 		console.log(t("models.list_agents", { agents: agents.map(([a, m]) => `${m} ${a}`).join("  ") }));
+	}
+	if (cfg.providers.length) {
+		console.log(dim(`\n${t("models.note_codex")}`));
 	}
 }
 
@@ -170,6 +173,34 @@ export interface SyncOptions {
 	quiet?: boolean;
 }
 
+/**
+ * Limpia el bloque huérfano que bond dejó en ~/.codex/config.toml (issue #80).
+ * Idempotente: si no hay bloque no hace nada ni deja copia.
+ */
+export function cleanCodexOrphan(say: (s: string) => void, check?: boolean, state?: State): boolean {
+	const file = codexConfigFile();
+	const current = readCurrent(file);
+	if (!current || !current.includes(BEGIN)) return false;
+	const label = `${"codex".padEnd(9)}`;
+	if (check) {
+		say(`${bad("✗")} ${label}${t("models.sync_orphan_block")}  ${dim(file)}`);
+		return true;
+	}
+	if (isDryRun()) {
+		say(`${caution("~")} ${label}${t("models.sync_would_clean_codex")} ${file}`);
+		showDiff(file, current, withoutBlock(current));
+		return true;
+	}
+	if (!state?.backedUp.includes(file)) {
+		writeFileSync(`${file}.bak.${STAMP}`, current);
+		state?.backedUp.push(file);
+	}
+	writeFileSync(file, withoutBlock(current));
+	if (state?.managed?.codex) delete state.managed.codex;
+	say(`${ok("✓")} ${label}${t("models.sync_cleaned_codex")}  ${dim(file)}`);
+	return true;
+}
+
 /** Sincroniza; devuelve los agentes desfasados (para --check y bond doctor). */
 export function syncAgents(opts: SyncOptions = {}): string[] {
 	const cfg = loadConfig();
@@ -177,8 +208,15 @@ export function syncAgents(opts: SyncOptions = {}): string[] {
 	const providers = activeProviders(cfg);
 	const say = (s: string) => !opts.quiet && console.log(s);
 	const stale: string[] = [];
-	const chosen = opts.agents?.length ? TARGETS.filter((t) => opts.agents!.includes(t.agent)) : TARGETS.filter((t) => t.installed());
+	const chosen = opts.agents?.length
+		? TARGETS.filter((t) => opts.agents!.includes(t.agent))
+		: TARGETS.filter((t) => (!cfg.agents.length || cfg.agents.includes(t.agent)) && t.installed());
 	if (opts.agents) for (const a of opts.agents) if (!TARGETS.some((t) => t.agent === a)) die(t("models.sync_unsupported_agent", { agent: a }));
+
+	if (!opts.agents?.length) {
+		const hadOrphan = cleanCodexOrphan(say, opts.check, state);
+		if (hadOrphan && opts.check) stale.push("codex");
+	}
 
 	for (const target of chosen) {
 		const usable = providers.filter((p) => providerApis(p, state).includes(target.needs));
@@ -223,7 +261,7 @@ export function syncAgents(opts: SyncOptions = {}): string[] {
 		for (const n of notes) say(`    ${caution("!")} ${n}`);
 		if (target.note && changed && !opts.check) say(dim(`    ${target.note}`));
 	}
-	const notInstalled = TARGETS.filter((t) => !chosen.includes(t) && !t.installed()).map((t) => t.agent);
+	const notInstalled = TARGETS.filter((t) => (!cfg.agents.length || cfg.agents.includes(t.agent)) && !chosen.includes(t) && !t.installed()).map((t) => t.agent);
 	if (notInstalled.length && !opts.agents) say(dim(t("models.sync_not_installed", { agents: notInstalled.join(", ") })));
 	if (!opts.check && !isDryRun()) saveState(state);
 	return stale;

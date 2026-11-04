@@ -16,14 +16,14 @@ configuración de cada agente que pueda usarlos.
   list              Proveedores, modelos y qué agentes pueden usarlos
   probe [id...]     Pregunta a cada pasarela qué APIs sirve (chat, responses, messages)
   sync [opciones]   Escribe la configuración de modelos de cada agente
-      --agent <a>   Solo ese agente (repetible): pi, opencode, crush, codex
+      --agent <a>   Solo ese agente (repetible): pi, opencode, crush
       --dry-run     Enseña los cambios sin escribir
       --check       No escribe; sale con 1 si algún agente está desfasado
   path              Ruta de config.toml
 
-Agentes: pi, opencode y Crush usan la API de chat; Codex, la API Responses; Copilot se
-lanza con \`bond run copilot\`. Claude Code y Gemini no pueden usar pasarelas compatibles
-con OpenAI.`,
+Agentes: pi, opencode y Crush usan la API de chat; Copilot se lanza con \`bond run copilot\`.
+Codex usa su cuenta oficial (bond no lo aprovisiona). Claude Code y Gemini no pueden usar
+pasarelas compatibles con OpenAI.`,
 	"models.unknown_sub": "subcomando desconocido: models {sub} (bond models --help)",
 	"models.init_exists": "ya existe {file} (--force para recrearlo; se guarda copia)",
 	"models.init_created_imported": "creado {file} (importado de {source})",
@@ -45,7 +45,7 @@ con OpenAI.`,
 	"models.probe_models_missing": "; no sirve {missing}",
 	"models.probe_models_summary": "modelos: {status}{missing}",
 	"models.probe_apis_note": "\nNota: los proveedores con 'apis' en config.toml usan lo declarado, no lo detectado.",
-	"models.sync_unsupported_agent": "agente sin generador de modelos: {agent} (pi, opencode, crush, codex)",
+	"models.sync_unsupported_agent": "agente sin generador de modelos: {agent} (pi, opencode, crush)",
 	"models.sync_api_unsupported": "{id}: la pasarela no sirve la API {api}",
 	"models.sync_up_to_date": "al día",
 	"models.sync_outdated": "desfasado",
@@ -58,7 +58,10 @@ con OpenAI.`,
 	"models.sync_unknown_opt": "opción desconocida: {opt} (bond models --help)",
 	"models.note_opencode": "formato de opencode v2: providers.<id>.settings.baseURL",
 	"models.note_crush": "crushrc es un script de bash; si defines a mano un proveedor con el mismo id, bond no lo duplica",
-	"models.note_codex": "Codex solo habla la API Responses; sin verificar con un Codex instalado",
+	"models.note_codex": "codex: usa su cuenta oficial; bond no lo aprovisiona",
+	"models.sync_cleaned_codex": "bloque huérfano eliminado (backup creado)",
+	"models.sync_would_clean_codex": "eliminaría bloque huérfano",
+	"models.sync_orphan_block": "bloque huérfano de bond presente (ejecuta bond models sync)",
 	"models.crush_skipped_manual": "ya definido a mano en crushrc (fuera del bloque de bond)",
 } as const;
 
@@ -72,14 +75,14 @@ configuration for each agent that can use them.
   list              Providers, models, and which agents can use them
   probe [id...]     Ask each gateway which APIs it serves (chat, responses, messages)
   sync [options]    Write the model configuration for each agent
-      --agent <a>   Only that agent (repeatable): pi, opencode, crush, codex
+      --agent <a>   Only that agent (repeatable): pi, opencode, crush
       --dry-run     Show changes without writing
       --check       Do not write; exit 1 if any agent is out of date
   path              Path of config.toml
 
-Agents: pi, opencode, and Crush use the chat API; Codex, the Responses API; Copilot is
-launched with \`bond run copilot\`. Claude Code and Gemini cannot use OpenAI-compatible
-gateways.`,
+Agents: pi, opencode, and Crush use the chat API; Copilot is launched with \`bond run copilot\`.
+Codex uses its official account (bond does not provision it). Claude Code and Gemini
+cannot use OpenAI-compatible gateways.`,
 	"models.unknown_sub": "unknown subcommand: models {sub} (bond models --help)",
 	"models.init_exists": "{file} already exists (--force to recreate; a backup is saved)",
 	"models.init_created_imported": "created {file} (imported from {source})",
@@ -101,7 +104,7 @@ gateways.`,
 	"models.probe_models_missing": "; does not serve {missing}",
 	"models.probe_models_summary": "models: {status}{missing}",
 	"models.probe_apis_note": "\nNote: providers with 'apis' in config.toml use what is declared, not what was detected.",
-	"models.sync_unsupported_agent": "agent without model generator: {agent} (pi, opencode, crush, codex)",
+	"models.sync_unsupported_agent": "agent without model generator: {agent} (pi, opencode, crush)",
 	"models.sync_api_unsupported": "{id}: gateway does not serve the {api} API",
 	"models.sync_up_to_date": "up to date",
 	"models.sync_outdated": "out of date",
@@ -114,6 +117,9 @@ gateways.`,
 	"models.sync_unknown_opt": "unknown option: {opt} (bond models --help)",
 	"models.note_opencode": "opencode v2 format: providers.<id>.settings.baseURL",
 	"models.note_crush": "crushrc is a bash script; if you define a provider with the same id manually, bond will not duplicate it",
-	"models.note_codex": "Codex only speaks the Responses API; unverified with an installed Codex",
+	"models.note_codex": "codex: uses its official account; bond does not provision it",
+	"models.sync_cleaned_codex": "orphaned block removed (backup created)",
+	"models.sync_would_clean_codex": "would remove orphaned block",
+	"models.sync_orphan_block": "orphaned bond block present (run bond models sync)",
 	"models.crush_skipped_manual": "already defined manually in crushrc (outside the bond block)",
 };

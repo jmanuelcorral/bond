@@ -49,7 +49,7 @@ you see? Open an [issue on GitHub](https://github.com/jmanuelcorral/bond/issues)
 
 | What | Where |
 |---|---|
-| Models from your endpoints | `~/.pi/agent/models.json`, `~/.config/opencode/opencode.jsonc`, `~/.config/crush/crushrc` (block), `~/.codex/config.toml` (block) |
+| Models from your endpoints | `~/.pi/agent/models.json`, `~/.config/opencode/opencode.jsonc`, `~/.config/crush/crushrc` (block) |
 | Your instructions + bond's rules | A block in each agent's global instructions file |
 | Skills `bond-delegate`, `bond-team` | `~/.agents/skills/` and `~/.claude/skills/` |
 | Rules and skills for Antigravity (`agy`) | Global plugin `~/.gemini/config/plugins/bond/` (only if `agy` is one of your agents) |
@@ -381,7 +381,7 @@ maxTokensField = "max_tokens"
 | pi | `~/.pi/agent/models.json` | Its providers inside `providers`; the rest of the file, unchanged | Chat API |
 | opencode v2 | `~/.config/opencode/opencode.json(c)` | Same in `providers` (`settings.baseURL`, `limit.context/output`) | Chat API |
 | Crush | `~/.config/crush/crushrc` | `# >>> bond >>>` block at the end, with `provider add` / `model add` | Chat API |
-| Codex | `~/.codex/config.toml` | Block at the end: `[model_providers.x]` with `wire_api = "responses"` and one profile per model (`codex -p halo-flash-halogen`) | Responses API |
+| Codex | — | Uses its official account; bond does not provision models | — |
 | Copilot CLI | (nothing) | `bond run copilot` sets `COPILOT_PROVIDER_BASE_URL`, `COPILOT_MODEL`, limits and API | chat or Responses |
 | Claude Code | — | Can't: it only speaks the Anthropic API (`/v1/messages`) | — |
 | Gemini CLI | — | Can't: it only speaks the Gemini API | — |
@@ -391,7 +391,7 @@ Rules to avoid overwriting others' settings:
 - In JSON files, bond only rewrites the providers it manages (the current ones and those it
   wrote the previous time, recorded in `state.json`). If you remove a provider from the registry,
   it disappears from the agents; what you added by hand stays.
-- In Crush and Codex, everything from bond goes between markers; nothing outside them is touched. If in
+- In Crush, everything from bond goes between markers; nothing outside them is touched. If in
   `crushrc` you define by hand a provider with the same id, bond doesn't duplicate it and warns: yours
   wins. (Today this happens with `halo`, which your `crushrc` defines with the local IP `<IP-local>:18080`:
   delete it from there if you want bond to manage it.)
@@ -400,7 +400,7 @@ Rules to avoid overwriting others' settings:
 
 Verified end to end with `flash-halogen`: pi (`pi -p`), opencode (`opencode run`),
 Crush (`crush models`) and Copilot (`bond run copilot -p`) respond through `halo`. Codex
-is not installed: its block is generated but has not been tested with a real Codex.
+uses its official account.
 
 ### `bond run copilot`
 

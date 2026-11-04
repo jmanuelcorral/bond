@@ -98,7 +98,7 @@ export async function setup(args: string[]): Promise<void> {
 	if (herdr) herdrIntegrations(agents);
 	if (withHerdrConfig && herdr) herdrConfig();
 	const { syncAgents } = await import("./models.mts");
-	if (!isDryRun() && cfg.providers.length) syncAgents({ agents: agents.filter((a) => ["pi", "opencode", "crush", "codex"].includes(a)) });
+	if (!isDryRun() && cfg.providers.length) syncAgents({ agents: agents.filter((a) => ["pi", "opencode", "crush"].includes(a)) });
 	ensurePersonal(legacyInstructions);
 	for (const r of propagate(agents)) log(t("setup.instructions", { agent: r.agent, result: t(INSTR_RESULT[r.result]), why: r.why ? ` (${t(INSTR_WHY[r.why])})` : "" }) + `  ${r.file}`);
 	if (FROM_SOURCE) linkBond();

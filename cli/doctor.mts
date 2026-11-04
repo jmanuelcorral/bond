@@ -190,7 +190,7 @@ async function checkModels(): Promise<void> {
 	const { CONFIG_FILE, activeProviders, loadConfig } = await import("./config.mts");
 	if (!existsSync(CONFIG_FILE)) return add("fail", t("doctor.row_config"), t("doctor.config_missing", { file: CONFIG_FILE }), "bond setup");
 	const { syncAgents } = await import("./models.mts");
-	const withModels = ["pi", "opencode", "crush", "codex"].filter((a) => !chosen.length || chosen.includes(a));
+	const withModels = ["pi", "opencode", "crush"].filter((a) => !chosen.length || chosen.includes(a));
 	const stale = withModels.length && activeProviders(loadConfig()).length ? syncAgents({ check: true, quiet: true, agents: withModels.filter((a) => which(a)) }) : [];
 	if (withModels.includes("pi") && which("pi")) {
 		if (stale.includes("pi")) add("fail", t("doctor.row_pi_models"), t("doctor.pi_models_stale"), "bond models sync --agent pi");

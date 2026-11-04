@@ -49,7 +49,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 
 | Qué | Dónde |
 |---|---|
-| Modelos de tus endpoints | `~/.pi/agent/models.json`, `~/.config/opencode/opencode.jsonc`, `~/.config/crush/crushrc` (bloque), `~/.codex/config.toml` (bloque) |
+| Modelos de tus endpoints | `~/.pi/agent/models.json`, `~/.config/opencode/opencode.jsonc`, `~/.config/crush/crushrc` (bloque) |
 | Tus instrucciones + reglas de bond | Un bloque en el fichero global de instrucciones de cada agente |
 | Skills `bond-delegate`, `bond-team` | `~/.agents/skills/` y `~/.claude/skills/` |
 | Reglas y skills para Antigravity (`agy`) | Plugin global `~/.gemini/config/plugins/bond/` (solo si `agy` es uno de tus agentes) |
@@ -379,7 +379,7 @@ maxTokensField = "max_tokens"
 | pi | `~/.pi/agent/models.json` | Sus proveedores dentro de `providers`; el resto del fichero, igual | API de chat |
 | opencode v2 | `~/.config/opencode/opencode.json(c)` | Ídem en `providers` (`settings.baseURL`, `limit.context/output`) | API de chat |
 | Crush | `~/.config/crush/crushrc` | Bloque `# >>> bond >>>` al final, con `provider add` / `model add` | API de chat |
-| Codex | `~/.codex/config.toml` | Bloque al final: `[model_providers.x]` con `wire_api = "responses"` y un perfil por modelo (`codex -p halo-flash-halogen`) | API Responses |
+| Codex | — | Usa su cuenta oficial; bond no le aprovisiona modelos | — |
 | Copilot CLI | (nada) | `bond run copilot` pone `COPILOT_PROVIDER_BASE_URL`, `COPILOT_MODEL`, límites y API | chat o Responses |
 | Claude Code | — | No puede: solo habla la API de Anthropic (`/v1/messages`) | — |
 | Gemini CLI | — | No puede: solo habla la API de Gemini | — |
@@ -389,7 +389,7 @@ Reglas para no pisar lo ajeno:
 - En los JSON, bond solo reescribe los proveedores que gestiona (los de ahora y los que
   escribió la vez anterior, apuntados en `state.json`). Si quitas un proveedor del registro,
   desaparece de los agentes; lo que añadiste tú a mano se queda.
-- En Crush y Codex, todo lo de bond va entre marcas; fuera de ellas no se toca nada. Si en
+- En Crush, todo lo de bond va entre marcas; fuera de ellas no se toca nada. Si en
   `crushrc` defines a mano un proveedor con el mismo id, bond no lo duplica y avisa: manda lo
   tuyo. (Hoy pasa con `halo`, que tu `crushrc` define con la IP local `<IP-local>:18080`:
   bórralo de ahí si quieres que lo gestione bond.)
@@ -398,7 +398,7 @@ Reglas para no pisar lo ajeno:
 
 Comprobado de punta a punta con `flash-halogen`: pi (`pi -p`), opencode (`opencode run`),
 Crush (`crush models`) y Copilot (`bond run copilot -p`) responden a través de `halo`. Codex
-no está instalado: su bloque se genera pero no se ha probado con un Codex real.
+usa su cuenta oficial.
 
 ### `bond run copilot`
 
