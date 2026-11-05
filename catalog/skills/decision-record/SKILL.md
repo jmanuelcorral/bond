@@ -58,18 +58,19 @@ in doubt, leave it out; noise is worse than a gap, and `bond decisions check` (a
    conversation — for example by approving the plan that contains it — record it already
    accepted, quoting their words: `confirmed_by` in `record_decision`, or
    `bond decisions add ... --confirmed-by "<what the user said>"`. It keeps `accepted_by`
-   with that quote and `accepted_via` with your authorship; do not ask the user to accept
-   it again. Decisions you take on your own while working (not approved by the user) stay
-   `proposed` for review. To accept those later from the conversation, the
-   `/accept` command lists the `proposed` records, asks which ones the user wants, and
-   runs `bond decisions accept <id>... --confirmed-by "<what the user said>"` — the
-   record then keeps `accepted_by` with that reference and `accepted_via` with whoever
-   executed it (`agent:<kind>[/<name>]` from a Herdr pane, `user` outside). `reject`
-   and `supersede <id> --by <new>` take the same options. You may run accept/reject/
-   supersede with `--confirmed-by` only on an explicit, unambiguous user request in the
-   conversation, quoting their words; never on your own initiative. Without a terminal
-   and without `--confirmed-by`, the commands refuse. Never fabricate `accepted_by`,
-   and never invent a model name in any field.
+   with that quote and `accepted_via: "user"` (representing who accepted; your authorship
+   remains in `decided_by`); do not ask the user to accept it again. Decisions you take on
+   your own while working (not approved by the user) stay `proposed` for review. To accept
+   those later from the conversation, the `/accept` command lists the `proposed` records,
+   asks which ones the user wants, and runs `bond decisions accept <id>... --confirmed-by
+   "<what the user said>"` — the record then keeps `accepted_by` with that reference and
+   `accepted_via: "user"`. `reject` and `supersede <id> --by <new>` take the same options.
+   A command cannot be accepted, rejected or superseded if the executing agent matches
+   `decided_by` (bond enforces this blocking rule). You may run accept/reject/supersede
+   with `--confirmed-by` only on an explicit, unambiguous user request in the conversation,
+   quoting their words; never on your own initiative. Without a terminal and without
+   `--confirmed-by`, the commands refuse. Never fabricate `accepted_by`, and never invent
+   a model name in any field.
 5. Fill the content well: context in two or three factual sentences, the decision stated so
    it can be applied without rereading the conversation, only real rejected alternatives
    with their cost. Write in the language established by the project. `links` entries are

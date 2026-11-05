@@ -19,7 +19,7 @@ you see? Open an [issue on GitHub](https://github.com/jmanuelcorral/bond/issues)
 | `bond sessions` | pi sessions and how to resume them |
 | `bond sync` | Regenerates the repo's agent config from `.bond/bond.toml` |
 | `bond hub` | In a hub: shows the work session declared in `hub.toml` (repos, path, base, link mode, branch) and each repo's live status (uncommitted changes, ahead/behind its remote) ([below](#bond-hub)) |
-| `bond decisions` | The repo's decision memory: list, `add`, `accept`, `show`, `runs`, `check` ([below](#bond-decisions)) |
+| `bond decisions` | The repo's decision memory: list, `add`, `accept`, `show`, `runs`, `check`, `migrate` ([below](#bond-decisions)) |
 | `bond catalog create\|check` | Sets up a repo as your own catalog of skills, commands and MCP, and checks it ([below](#your-own-catalog-bond-catalog)) |
 | `bond catalog add\|list\|update\|remove\|clean` | Uses your team's catalog in the repo, via git (with the commit pinned) or via a folder ([below](#git-catalogs-bond-catalog-add)) |
 | `bond models list\|probe\|sync` | Global endpoints and models, and their config in each agent |
@@ -802,7 +802,8 @@ enable it and everything else exits 0 saying the memory is not in use.
 | `bond decisions supersede <id>... --by <new>` | The old ones become `superseded` and the new one references them in `supersedes` (it stays `proposed` until the user accepts it); same confirmation and options |
 | `bond decisions show <id>` | The decision's whole file (or the run's, if the id is one in `<dir>/runs/`) |
 | `bond decisions runs` | The runs (delegated tasks) in `<dir>/runs/`, with their branch commits and that agent's decisions; `--agent <substring>`, `--json` |
-| `bond decisions check` | Audits the memory: frontmatter, id vs filename, duplicates, broken supersession references and `Decision:` trailers. The README is not audited: there is no index to keep current. Exits 1 on errors |
+| `bond decisions check` | Audits the memory: frontmatter, id vs filename, duplicates, broken supersession references, `Decision:` trailers, and self-acceptances (`status: accepted` with `decided_by == accepted_via`). The README is not audited: there is no index to keep current. Exits 1 on errors |
+| `bond decisions migrate` | Migrates legacy `accepted` decisions with non-empty `accepted_via` to `"user"` (B1 semantics); `--dry-run`, `--json` |
 
 Authorship (`decided_by`): inside a Herdr pane it is `agent:<kind>/<name>` —bond looks up the
 pane's agent, so an agent never needs to know its own name—; outside Herdr, or with no agent
@@ -816,17 +817,32 @@ Valid values are `user` or `agent:<kind>[/<name>]`; `pi/gru` normalizes to
 Acceptance belongs to the user alone, but they can do it from the
 conversation: `accept`, `reject` and `supersede` ask for interactive confirmation with a
 terminal, or take `--confirmed-by "<what the user said>"` without one; in that case
-`accepted_by` keeps the quote and `accepted_via` who executed it (`check` validates its
-format). Without one or the other they refuse: an agent cannot accept on its own; what it
-can do is run the command quoting the user, with the `/accept` command as its guide. The
-barrier prevents accidental acceptances; it is not a security measure — git provides the
-records' integrity, and a wrong acceptance shows up in the diff and can be reverted with
-`supersede` or `git revert`. Accept on approval: when the user already approved a decision in
-the conversation (for example by approving the plan that contains it), it is recorded already
-accepted with `bond decisions add ... --confirmed-by "<what they said>"` (or `confirmed_by` in
-`record_decision`), without asking them to accept it again; only decisions an agent takes on
-its own stay `proposed`. There is no separate permission prompt: `bond sync` removes the
-`ask` rules 1.8.0 left in `.claude/settings.json`, keeping the user's own.
+`accepted_by` keeps the quote and `accepted_via` records who accepted (with `--confirmed-by`
+it is always written as `"user"`; in an interactive terminal it may be empty or `"user"`, while
+the executing agent is recorded in `decided_by` and in the commit's `Agent:` trailer).
+
+Blocking rule: `accept`, `reject` and `supersede` refuse if the executing agent identity
+(`resolveAuthor()`) matches `decided_by`. No agent can self-accept its own decisions by quoting
+prompt instructions without the user's explicit approval.
+Detection: `bond decisions check` and `bond doctor` flag as errors any `accepted` decision where
+`decided_by == accepted_via`, detecting unauthorized self-acceptances.
+
+Migration (`bond decisions migrate`): inspects the decision directory and sets `accepted_via: "user"`
+for any `accepted` decision with a non-empty `accepted_via`, leaving untouched those already set to
+`"user"` or empty (interactive terminal acceptances). It is idempotent, supports `--dry-run` to preview
+changes before writing, and supports `--json`. The command assumes each existing `accepted_by` was
+authentic user words (rare historical corrections remain recorded in git and traceability notes).
+
+Without an interactive confirmation or `--confirmed-by`, acceptance actions refuse: an agent
+cannot accept on its own; what it can do is run the command quoting the user, with the `/accept`
+command as its guide. The barrier prevents accidental acceptances; it is not a security measure — git
+provides the records' integrity, and a wrong acceptance shows up in the diff and can be reverted with
+`supersede` or `git revert`. Accept on approval: when the user already approved a decision in the
+conversation (for example by approving the plan that contains it), it is recorded already accepted with
+`bond decisions add ... --confirmed-by "<what they said>"` (or `confirmed_by` in `record_decision`),
+writing `accepted_via: "user"` without asking them to accept it again; only decisions an agent takes
+on its own stay `proposed`. There is no separate permission prompt: `bond sync` removes the `ask` rules
+1.8.0 left in `.claude/settings.json`, keeping the user's own.
 
 pi has the `record_decision` tool (`extensions/record-decision.ts`), which calls this same
 `bond decisions add --stdin`: the model passes only the content and bond writes the record

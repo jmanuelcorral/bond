@@ -19,7 +19,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
 | `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
 | `bond hub` | En un hub: enseña la sesión de trabajo declarada en `hub.toml` (repos, ruta, base, modo de enlace, rama) y el estado en vivo de cada repo (cambios sin commitear, delante/detrás de su remoto) ([abajo](#bond-hub)) |
-| `bond decisions` | Memoria de decisiones del repo: lista, `add`, `accept`, `show`, `runs`, `check` ([abajo](#bond-decisions)) |
+| `bond decisions` | Memoria de decisiones del repo: lista, `add`, `accept`, `show`, `runs`, `check`, `migrate` ([abajo](#bond-decisions)) |
 | `bond catalog create\|check` | Prepara un repo como catálogo propio de skills, comandos y MCP, y lo comprueba ([abajo](#catálogo-propio-bond-catalog)) |
 | `bond catalog add\|list\|update\|remove\|clean` | Usa en el repo el catálogo de tu equipo, por git (con el commit fijado) o por carpeta ([abajo](#catálogos-por-git-bond-catalog-add)) |
 | `bond models list\|probe\|sync` | Endpoints y modelos globales, y su config en cada agente |
@@ -800,7 +800,8 @@ sale con 0 explicando que no se usa la memoria.
 | `bond decisions supersede <id>... --by <nueva>` | Las viejas quedan `superseded` y la nueva las referencia en `supersedes` (ella sigue `proposed` hasta que el usuario la acepte); misma confirmación y opciones |
 | `bond decisions show <id>` | El fichero entero de la decisión (o del run si el id es de uno en `<dir>/runs/`) |
 | `bond decisions runs` | Los runs (encargos a agentes) en `<dir>/runs/`, con los commits de su rama y las decisiones de ese agente; `--agent <subcadena>`, `--json` |
-| `bond decisions check` | Audita la memoria: frontmatter, id contra nombre de fichero, duplicados, referencias de sustitución rotas y trailers `Decision:`. El README no se audita: no hay índice que mantener al día. Sale con 1 si hay errores |
+| `bond decisions check` | Audita la memoria: frontmatter, id contra nombre de fichero, duplicados, referencias de sustitución rotas, trailers `Decision:` y auto-aceptaciones (`status: accepted` con `decided_by == accepted_via`). El README no se audita: no hay índice que mantener al día. Sale con 1 si hay errores |
+| `bond decisions migrate` | Migra las decisiones `accepted` históricas con `accepted_via` no vacío a `"user"` (semántica B1); `--dry-run`, `--json` |
 
 La autoría (`decided_by`): en un panel de Herdr, `agent:<kind>/<nombre>` —bond mira el agente
 del panel, el agente no necesita saber su propio nombre—; fuera de Herdr o sin agente en el
@@ -814,17 +815,35 @@ decidió. Vale `user` o `agent:<kind>[/<nombre>]`; `pi/gru` se normaliza a
 es solo del usuario, pero puede hacerlo desde la conversación:
 `accept`, `reject` y `supersede` piden confirmación interactiva con terminal, o
 `--confirmed-by "<lo que dijo el usuario>"` sin ella; en ese caso `accepted_by` guarda la
-cita y `accepted_via` quién ejecutó (`check` valida su formato). Sin una cosa ni la otra, se
+cita y `accepted_via` guarda quién aceptó (con `--confirmed-by` se escribe siempre `"user"`;
+en terminal interactiva puede quedar vacío o `"user"`, mientras que el agente que ejecuta queda
+en `decided_by` y en el trailer `Agent:` del commit).
+
+Regla de bloqueo: `accept`, `reject` y `supersede` se niegan si el agente que ejecuta el comando
+es el mismo que `decided_by`. Ningún agente puede auto-aceptarse una decisión citando texto del
+encargo o reciclando una frase sin la aprobación explícita del usuario.
+Detección: `bond decisions check` y la comprobación de decisiones en `bond doctor` marcan como error
+cualquier decisión `accepted` donde `decided_by == accepted_via`, evitando auto-aceptaciones
+ilegítimas en el repositorio.
+
+Migración (`bond decisions migrate`): recorre el directorio de decisiones y pasa cualquier decisión
+`accepted` con `accepted_via` no vacío a `"user"`, dejando intactas las que ya dicen `"user"` y las
+que están vacías (aceptaciones interactivas en terminal). Es idempotente y admite `--dry-run` para
+inspeccionar los cambios antes de aplicarlos y `--json`. El comando asume que cada `accepted_by`
+existente correspondió a palabras del usuario (la corrección de casos excepcionales de auto-aceptación
+previa queda reflejada en el historial de git y en notas de trazabilidad).
+
+Sin una confirmación interactiva ni `--confirmed-by`, las acciones de aceptación se
 niegan: un agente no acepta por su cuenta; lo que sí puede es ejecutar el comando citando al
 usuario, con el comando `/accept` como guía. La barrera evita aceptaciones por descuido; no
 es una medida de seguridad: la integridad de los registros la da git, y una aceptación
 indebida se ve en el diff y se revierte con `supersede` o `git revert`. Aceptar al aprobar:
 si el usuario ya aprobó la decisión en la conversación (por ejemplo, al aprobar el plan que
 la contiene), se registra directamente aceptada con `bond decisions add ... --confirmed-by
-"<lo que dijo>"` (o `confirmed_by` en `record_decision`), sin volver a pedirle que la acepte;
-solo quedan `proposed` las que un agente toma por su cuenta. No hay cuadro de permiso aparte:
-las reglas `ask` que la 1.8.0 dejaba en `.claude/settings.json` las quita `bond sync`,
-conservando las del usuario.
+"<lo que dijo>"` (o `confirmed_by` en `record_decision`), escribiendo `accepted_via: "user"`
+sin volver a pedirle que la acepte; solo quedan `proposed` las que un agente toma por su cuenta.
+No hay cuadro de permiso aparte: las reglas `ask` que la 1.8.0 dejaba en `.claude/settings.json`
+las quita `bond sync`, conservando las del usuario.
 
 pi tiene la tool `record_decision` (`extensions/record-decision.ts`), que llama a este mismo
 `bond decisions add --stdin`: el modelo pasa solo el contenido y bond escribe el registro con

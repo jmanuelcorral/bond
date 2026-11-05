@@ -2,6 +2,16 @@
 
 ## Sin publicar
 
+- Semántica de `accepted_via`, bloqueo por identidad y comando de migración de decisiones (#82).
+  `accepted_via` pasa a representar quién aceptó la decisión en lugar de quién ejecutó el comando:
+  con `--confirmed-by` se escribe `"user"`, mientras que el agente ejecutor queda registrado en `decided_by`
+  y en el trailer `Agent:` del commit. `accept`, `reject` y `supersede` se niegan si el agente que ejecuta
+  coincide con `decided_by`, bloqueando que un agente pueda auto-aceptarse una decisión citando texto de un
+  encargo. `bond decisions check` y `bond doctor` auditan y marcan como error los registros `accepted` con
+  `decided_by == accepted_via`. El nuevo subcomando `bond decisions migrate` actualiza de forma idempotente
+  las decisiones `accepted` históricas con `accepted_via` no vacío a `"user"`, respetando las aceptadas en
+  terminal (vacías) y las que ya tienen `"user"`, con soporte de `--dry-run` y `--json`.
+
 - Rechazo explícito de la forma `[[providers]]` y claves de proveedor puramente numéricas (#77).
   Si el usuario escribe los proveedores como array de tablas de TOML (`[[providers]]`) o define una
   clave puramente numérica (`[providers.0]`), `loadConfig()` falla inmediatamente con un mensaje claro
