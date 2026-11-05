@@ -114,6 +114,14 @@ export interface State {
 	update?: UpdateState;
 }
 
+export const CANONICAL_PROVIDERS_MSG = `proveedores en la forma [[providers]]: bond espera una tabla por proveedor, [providers.halo]
+  cambia:
+    [[providers]]
+    id = "halo"
+  por:
+    [providers.halo]
+    base_url = "https://..."`;
+
 export function loadConfig(): Config {
 	if (!configExists()) die(`no hay configuración global: ${CONFIG_FILE}\n  créala con: bond setup`);
 	let raw: Record<string, unknown>;
@@ -122,8 +130,10 @@ export function loadConfig(): Config {
 	} catch (e) {
 		die(`${CONFIG_FILE} no es TOML válido: ${(e as Error).message}`);
 	}
+	if (Array.isArray(raw.providers) && raw.providers.length) die(CANONICAL_PROVIDERS_MSG);
 	const providers: Provider[] = [];
 	for (const [id, value] of Object.entries((raw.providers ?? {}) as Record<string, Record<string, unknown>>)) {
+		if (/^\d+$/.test(id)) die(CANONICAL_PROVIDERS_MSG);
 		if (!/^[a-z0-9][a-z0-9_-]*$/.test(id)) die(`proveedor '${id}': usa minúsculas, dígitos, - o _`);
 		if (typeof value.base_url !== "string") die(`proveedor '${id}': falta base_url`);
 		const p = { ...value, id, models: (value.models ?? []) as Model[] } as Provider;

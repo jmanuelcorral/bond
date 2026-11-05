@@ -2,6 +2,13 @@
 
 ## Sin publicar
 
+- Rechazo explícito de la forma `[[providers]]` y claves de proveedor puramente numéricas (#77).
+  Si el usuario escribe los proveedores como array de tablas de TOML (`[[providers]]`) o define una
+  clave puramente numérica (`[providers.0]`), `loadConfig()` falla inmediatamente con un mensaje claro
+  que muestra la forma canónica esperada (`[providers.<id>]` y sus `[[providers.<id>.models]]`) junto
+  a un ejemplo de migración, en lugar de aceptar índices numéricos silenciosamente como nombres de
+  proveedor y buscar claves de autenticación en rutas inexistentes como `~/.bond/keys/0`. Un array vacío
+  inline (`providers = []`) se acepta sin error como configuración sin proveedores.
 - `bond models sync` respeta la selección de agentes de `cfg.agents` (#73). Sin `--agent`, sincroniza
   únicamente los agentes seleccionados por el usuario que estén instalados en la máquina, en vez de
   escribir proveedores en todos los agentes instalados. `--agent <a>` sigue forzando la sincronización

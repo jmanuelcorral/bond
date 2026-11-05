@@ -20,7 +20,7 @@ beforeEach(() => {
 	codexDir = join(home, ".codex");
 	mkdirSync(codexDir, { recursive: true });
 	mkdirSync(join(home, ".bond"), { recursive: true });
-	writeFileSync(join(home, ".bond", "config.toml"), 'agents = ["pi"]\nproviders = []\n');
+	writeFileSync(join(home, ".bond", "config.toml"), 'agents = ["pi"]\n');
 });
 
 afterEach(() => {
@@ -77,11 +77,10 @@ const { join } = await import("node:path");
 mkdirSync(join(process.env.BOND_HOME), { recursive: true });
 writeFileSync(join(process.env.BOND_HOME, "config.toml"), [
   'agents = ["pi"]',
-  '[[providers]]',
-  'id = "prov-1"',
+  '[providers.prov-1]',
   'base_url = "http://127.0.0.1:8080/v1"',
   'apis = ["chat"]',
-  '[[providers.models]]',
+  '[[providers.prov-1.models]]',
   'id = "m1"',
 ].join("\\n"));
 
@@ -109,11 +108,10 @@ const { join } = await import("node:path");
 mkdirSync(join(process.env.BOND_HOME), { recursive: true });
 writeFileSync(join(process.env.BOND_HOME, "config.toml"), [
   'agents = ["pi"]',
-  '[[providers]]',
-  'id = "prov-1"',
+  '[providers.prov-1]',
   'base_url = "http://127.0.0.1:8080/v1"',
   'apis = ["chat"]',
-  '[[providers.models]]',
+  '[[providers.prov-1.models]]',
   'id = "m1"',
 ].join("\\n"));
 
@@ -161,11 +159,10 @@ const { join } = await import("node:path");
 mkdirSync(join(process.env.BOND_HOME), { recursive: true });
 writeFileSync(join(process.env.BOND_HOME, "config.toml"), [
   'agents = ["codex", "pi"]',
-  '[[providers]]',
-  'id = "prov-1"',
+  '[providers.prov-1]',
   'base_url = "http://127.0.0.1:8080/v1"',
   'apis = ["chat", "responses"]',
-  '[[providers.models]]',
+  '[[providers.prov-1.models]]',
   'id = "m1"',
 ].join("\\n"));
 
@@ -256,11 +253,10 @@ syncAgents({ quiet: true });
 			join(home, ".bond", "config.toml"),
 			[
 				'agents = ["pi", "codex"]',
-				"[[providers]]",
-				'id = "prov-test"',
+				"[providers.prov-test]",
 				'base_url = "http://127.0.0.1:8080/v1"',
 				'apis = ["chat"]',
-				"[[providers.models]]",
+				"[[providers.prov-test.models]]",
 				'id = "test-model"',
 			].join("\n"),
 		);
@@ -277,11 +273,10 @@ syncAgents({ quiet: true });
 			join(home, ".bond", "config.toml"),
 			[
 				`agents = ${agents}`,
-				"[[providers]]",
-				'id = "prov-test"',
+				"[providers.prov-test]",
 				'base_url = "http://127.0.0.1:8080/v1"',
 				'apis = ["chat"]',
-				"[[providers.models]]",
+				"[[providers.prov-test.models]]",
 				'id = "test-model"',
 			].join("\n"),
 		);
@@ -388,5 +383,140 @@ console.log(JSON.stringify({ before, after: codexOrphan() }));
 		const res = JSON.parse(r.stdout.trim().split("\n").pop() ?? "{}");
 		expect(res.before).toBe(true);
 		expect(res.after).toBe(false);
+	});
+});
+
+describe("Issue #77: rechazar la forma [[providers]] y nombres de proveedor numéricos", () => {
+	test("la forma [[providers]] falla con el mensaje de forma canónica y sugerencia de migración", () => {
+		writeFileSync(
+			join(home, ".bond", "config.toml"),
+			[
+				'agents = ["pi"]',
+				"",
+				"[[providers]]",
+				'id = "halo"',
+				'base_url = "http://127.0.0.1:18080/v1"',
+				"",
+				"[[providers.halo.models]]",
+				'id = "m1"',
+			].join("\n"),
+		);
+
+		const r = runBond(["models", "list"]);
+		expect(r.status).not.toBe(0);
+		expect(r.stderr).toContain("proveedores en la forma [[providers]]: bond espera una tabla por proveedor, [providers.halo]");
+		expect(r.stderr).toContain('[[providers]]\n    id = "halo"');
+		expect(r.stderr).toContain('[providers.halo]\n    base_url = "https://..."');
+	});
+
+	test("un proveedor con clave numérica pura ([providers.0]) falla con el mensaje de forma canónica", () => {
+		writeFileSync(
+			join(home, ".bond", "config.toml"),
+			[
+				'agents = ["pi"]',
+				"",
+				"[providers.0]",
+				'base_url = "http://127.0.0.1:18080/v1"',
+				"",
+				"[[providers.0.models]]",
+				'id = "m1"',
+			].join("\n"),
+		);
+
+		const r = runBond(["models", "list"]);
+		expect(r.status).not.toBe(0);
+		expect(r.stderr).toContain("proveedores en la forma [[providers]]: bond espera una tabla por proveedor, [providers.halo]");
+	});
+
+	test("un proveedor con clave numérica de varios dígitos ([providers.42]) falla también", () => {
+		writeFileSync(
+			join(home, ".bond", "config.toml"),
+			[
+				'agents = ["pi"]',
+				"",
+				"[providers.42]",
+				'base_url = "http://127.0.0.1:18080/v1"',
+				"",
+				"[[providers.42.models]]",
+				'id = "m1"',
+			].join("\n"),
+		);
+
+		const r = runBond(["models", "list"]);
+		expect(r.status).not.toBe(0);
+		expect(r.stderr).toContain("proveedores en la forma [[providers]]: bond espera una tabla por proveedor, [providers.halo]");
+	});
+
+	test("la forma canónica [providers.halo] se lee con el id 'halo' y nunca produce índices", () => {
+		writeFileSync(
+			join(home, ".bond", "config.toml"),
+			[
+				'agents = ["pi"]',
+				"",
+				"[providers.halo]",
+				'base_url = "http://127.0.0.1:18080/v1"',
+				"",
+				"[[providers.halo.models]]",
+				'id = "m1"',
+			].join("\n"),
+		);
+
+		const r = runBond(["models", "list"]);
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain("halo");
+		expect(r.stdout).toContain("m1");
+		expect(r.stdout).not.toMatch(/^0\s/m);
+	});
+
+	test("proveedores alfanuméricos válidos que no sean número puro son aceptados", () => {
+		writeFileSync(
+			join(home, ".bond", "config.toml"),
+			[
+				'agents = ["pi"]',
+				"",
+				"[providers.prov-1]",
+				'base_url = "http://127.0.0.1:18080/v1"',
+				"[[providers.prov-1.models]]",
+				'id = "m1"',
+				"",
+				"[providers.1st]",
+				'base_url = "http://127.0.0.1:18080/v1"',
+				"[[providers.1st.models]]",
+				'id = "m2"',
+			].join("\n"),
+		);
+
+		const r = runBond(["models", "list"]);
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain("prov-1");
+		expect(r.stdout).toContain("1st");
+	});
+
+	test("bond models init genera config con la forma canónica de ejemplo y models list la lee sin error", () => {
+		const emptyBond = join(home, "bond-init-test");
+		const rInit = runBond(["models", "init"], { BOND_HOME: emptyBond });
+		expect(rInit.status).toBe(0);
+		const content = readFileSync(join(emptyBond, "config.toml"), "utf8");
+		expect(content).toContain("[providers.halo]");
+		expect(content).toContain("[[providers.halo.models]]");
+		expect(content).not.toContain("[[providers]]\n");
+
+		const rList = runBond(["models", "list"], { BOND_HOME: emptyBond });
+		expect(rList.status).toBe(0);
+	});
+
+	test("la forma providers = [] (array vacío inline) se acepta sin error y models list no lista proveedores", () => {
+		writeFileSync(
+			join(home, ".bond", "config.toml"),
+			[
+				'agents = ["pi"]',
+				'providers = []',
+			].join("\n"),
+		);
+
+		const r = runBond(["models", "list"]);
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain("Sin proveedores");
+		expect(r.stdout).not.toContain("halo");
 	});
 });
