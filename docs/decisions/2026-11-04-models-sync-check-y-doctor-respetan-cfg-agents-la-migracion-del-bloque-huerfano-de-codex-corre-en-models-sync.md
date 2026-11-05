@@ -1,11 +1,11 @@
 ---
 id: "2026-11-04-models-sync-check-y-doctor-respetan-cfg-agents-la-migracion-del-bloque-huerfano-de-codex-corre-en-models-sync"
 title: "models sync, --check y doctor respetan cfg.agents; la migración del bloque huérfano de Codex corre en models sync"
-status: "proposed"
+status: "accepted"
 date: "2026-11-04"
 decided_by: "agent:pi"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "paso la decisión de models-sync como aceptada"
+accepted_via: "agent:pi"
 supersedes: ""
 superseded_by: ""
 links:
