@@ -399,7 +399,8 @@ Rules to avoid overwriting others' settings:
 - The block bond wrote in `~/.codex/config.toml` before it stopped provisioning Codex is
   swept automatically when `bond models sync` runs, with a backup first and leaving your own
   settings around it untouched. While it remains, `bond doctor` warns about it, and
-  `bond models sync --agent codex` cleans it without syncing the other agents.
+  `bond models sync --agent codex` cleans it without syncing the other agents. The Codex note in
+  `bond models list` only shows when Codex is in your `bond setup` selection or installed on the machine.
 - JSON files with comments lose them when rewritten; bond warns beforehand.
 
 Verified end to end with `flash-halogen`: pi (`pi -p`), opencode (`opencode run`),

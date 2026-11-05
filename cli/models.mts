@@ -8,7 +8,7 @@ import { inspect } from "node:util";
 import { activeProviders, type Api, CONFIG_DIR, CONFIG_FILE, initialConfig, loadConfig, loadState, providerApis, saveState, type State } from "./config.mts";
 import { BEGIN, codexConfigFile, INCOMPATIBLE, readCurrent, hasComments, TARGETS, withoutBlock } from "./agents.mts";
 import { t } from "./messages.mts";
-import { act, AGENT_DIR, bad, caution, die, dim, isDryRun, log, ok, REPO_DIR, run, STAMP, warn } from "./util.mts";
+import { act, AGENT_DIR, bad, caution, die, dim, isDryRun, log, ok, REPO_DIR, run, STAMP, warn, which } from "./util.mts";
 
 export const modelsHelp = (): string => t("models.help", { file: CONFIG_FILE });
 export const MODELS_HELP = modelsHelp;
@@ -85,7 +85,9 @@ function list(): void {
 		];
 		console.log(t("models.list_agents", { agents: agents.map(([a, m]) => `${m} ${a}`).join("  ") }));
 	}
-	if (cfg.providers.length) {
+	// La nota de Codex solo interesa a quien lo eligió en `bond setup` o lo tiene instalado:
+	// para el resto es ruido de un agente que no usa (#80).
+	if (cfg.agents.includes("codex") || which("codex")) {
 		console.log(dim(`\n${t("models.note_codex")}`));
 	}
 }

@@ -255,7 +255,7 @@ syncAgents({ quiet: true });
 		writeFileSync(
 			join(home, ".bond", "config.toml"),
 			[
-				'agents = ["pi"]',
+				'agents = ["pi", "codex"]',
 				"[[providers]]",
 				'id = "prov-test"',
 				'base_url = "http://127.0.0.1:8080/v1"',
@@ -268,6 +268,45 @@ syncAgents({ quiet: true });
 		const r = runBond(["models", "list"]);
 		expect(r.status).toBe(0);
 		expect(r.stdout).toContain("codex: usa su cuenta oficial; bond no lo aprovisiona");
+	});
+
+	// La nota es ruido para quien no usa Codex: sale solo si esta en su seleccion o instalado.
+	const providersOnly = (agents: string) => {
+		mkdirSync(join(home, ".bond"), { recursive: true });
+		writeFileSync(
+			join(home, ".bond", "config.toml"),
+			[
+				`agents = ${agents}`,
+				"[[providers]]",
+				'id = "prov-test"',
+				'base_url = "http://127.0.0.1:8080/v1"',
+				'apis = ["chat"]',
+				"[[providers.models]]",
+				'id = "test-model"',
+			].join("\n"),
+		);
+	};
+	const note = "codex: usa su cuenta oficial";
+
+	test("bond models list calla la nota de Codex si no esta en la seleccion ni instalado", () => {
+		providersOnly('["pi"]');
+		const emptyBin = join(home, "bin-vacio");
+		mkdirSync(emptyBin, { recursive: true });
+		const r = runBond(["models", "list"], { PATH: emptyBin });
+		expect(r.status).toBe(0);
+		expect(r.stdout).not.toContain(note);
+	});
+
+	test("bond models list saca la nota de Codex si esta instalado aunque no este en la seleccion", () => {
+		providersOnly('["pi"]');
+		const fakeBin = join(home, "bin-codex");
+		mkdirSync(fakeBin, { recursive: true });
+		// Las dos formas: `which` mira PATHEXT en Windows y el nombre tal cual en el resto.
+		writeFileSync(join(fakeBin, "codex"), "#!/bin/sh\n");
+		writeFileSync(join(fakeBin, "codex.cmd"), "@echo off\n");
+		const r = runBond(["models", "list"], { PATH: fakeBin });
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain(note);
 	});
 
 	test("Codex sigue soportado en SUPPORTED_AGENTS y recibe instrucciones", () => {

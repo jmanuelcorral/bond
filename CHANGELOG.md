@@ -14,7 +14,8 @@
   Para usuarios existentes, `bond models sync` barre automáticamente el bloque huérfano `# >>> bond >>>`
   en `~/.codex/config.toml` con backup `.bak.<STAMP>` y preservando cualquier configuración manual
   alrededor de forma idempotente. `bond models list` añade una línea informativa explicando que Codex
-  utiliza su cuenta oficial.
+  utiliza su cuenta oficial, pero solo si Codex está en tu selección de `bond setup` o instalado en la
+  máquina: para quien no lo usa no es información, es ruido.
   La limpieza corre siempre, también cuando se pasa `--agent`: `bond models sync --agent codex` limpia
   ese bloque en lugar de morir con «agente sin generador de modelos», y `bond doctor` saca una fila de
   aviso mientras el bloque siga en el disco (se resuelve con `bond models sync`). Sin bloque, `doctor`

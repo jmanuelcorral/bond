@@ -397,7 +397,8 @@ Reglas para no pisar lo ajeno:
 - El bloque que bond escribió en `~/.codex/config.toml` antes de dejar de aprovisionar Codex
   se barre solo al correr `bond models sync`, con copia previa y sin tocar lo que pongas tú
   alrededor. Mientras quede, `bond doctor` lo avisa, y `bond models sync --agent codex` lo
-  limpia sin tener que sincronizar el resto de agentes.
+  limpia sin tener que sincronizar el resto de agentes. La nota de Codex en `bond models list`
+  solo aparece si Codex está en tu selección de `bond setup` o instalado en la máquina.
 - Los JSON con comentarios los pierden al reescribirse; bond avisa antes.
 
 Comprobado de punta a punta con `flash-halogen`: pi (`pi -p`), opencode (`opencode run`),
