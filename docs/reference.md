@@ -1307,9 +1307,8 @@ bond setup && bond doctor                       # revalida todo tras actualizar
 `bond update` sustituye el binario si lo instalaste con `install.sh` o `install.ps1`: descarga
 el de la release, comprueba su SHA-256 contra `SHA256SUMS` y prueba que arranca antes de
 cambiarlo. Con Homebrew te dice el comando (`brew update && brew upgrade
-jmanuelcorral/tap/bond`). `@jmanuelcorral/bond` aún no está publicado en npm: en una instalación
-por npm te remite al paquete de la release (`npm i -g
-https://github.com/jmanuelcorral/bond/releases/download/vX.Y.Z/jmanuelcorral-bond-X.Y.Z.tgz`).
+jmanuelcorral/tap/bond`) y con npm también (`npm i -g @jmanuelcorral/bond@X.Y.Z`, publicado
+desde la 1.13.0).
 `--version vX.Y.Z` instala una concreta, también anterior. Venga de donde venga, la versión
 nueva pasa a sus ficheros `~/.bond/pi` y los skills globales que apuntaban a los de otra, y
 borra las versiones viejas de `~/.bond/runtime/`.

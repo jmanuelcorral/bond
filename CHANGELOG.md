@@ -1,5 +1,21 @@
 # Cambios
 
+## Sin publicar
+
+- Los mensajes de `bond update` dejan de decir que `@jmanuelcorral/bond` no está publicado (#66).
+  Con el paquete ya en npm desde la 1.13.0, una instalación por npm recibe el comando de la
+  versión concreta (`npm i -g @jmanuelcorral/bond@X.Y.Z`) en vez del `.tgz` de la release.
+  Cambian `update.manual_npm` (español e inglés), el texto de ayuda de `bond update`, el
+  comentario de `manualCommand` en `cli/update.mts` —que deja de recibir `base`, porque ya nada
+  depende del URL de la release— y las secciones de actualización de `docs/reference.md` y
+  `docs/en/reference.md`.
+- La skill `release-bond` incorpora lo aprendido al publicar la 1.13.0: el `NPM_TOKEN` tiene que
+  ser de tipo Automation (uno «Read and write» con 2FA responde `EOTP` y CI no puede producir el
+  código de un solo uso), `gh release create` no es idempotente —un fallo aguas abajo solo se
+  reintenta borrando la release con `--cleanup-tag` y rehaciendo el tag, lo que recompila los
+  binarios y cambia todas las sumas— y el aviso de «no publicado» ya está volteado: si npm dejara
+  de publicar, se arregla la publicación, no se vuelve a escribir el texto viejo.
+
 ## 1.13.0
 
 Semáforos en la memoria de decisiones y aprovisionamiento de modelos por selección. Un agente ya

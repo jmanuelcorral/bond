@@ -158,11 +158,11 @@ export async function refreshRuntime(): Promise<void> {
 const BREW_FORMULA = "jmanuelcorral/tap/bond";
 
 /** Comando para actualizar a mano con un método que bond no aplica solo. */
-function manualCommand(method: Exclude<Method, "binary">, version: string, base = releases()): string {
+function manualCommand(method: Exclude<Method, "binary">, version: string): string {
 	if (method === "source") return t("update.manual_source", { dir: REPO_DIR });
 	if (method === "brew") return t("update.manual_brew", { formula: BREW_FORMULA });
-	// @jmanuelcorral/bond aún no está en npm (npm i -g daría 404): el paquete va en la release.
-	return t("update.manual_npm", { url: `${base}/download/v${version}/jmanuelcorral-bond-${version}.tgz` });
+	// Publicado en npm desde la 1.13.0: se dice el comando de la versión concreta.
+	return t("update.manual_npm", { version });
 }
 
 function assertWritable(exe: string): void {
@@ -382,7 +382,7 @@ export async function offerUpdate(o: OfferOptions = {}): Promise<Offer> {
 
 	const method = o.method ?? installMethod();
 	if (method !== "binary" && method !== "brew") {
-		console.log(manualCommand(method, version, o.base ?? releases()));
+		console.log(manualCommand(method, version));
 		return "manual";
 	}
 	try {

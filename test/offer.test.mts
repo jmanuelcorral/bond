@@ -172,12 +172,12 @@ describe("respuestas", () => {
 		expect(readFileSync(exe, "utf8")).toBe("viejo");
 	});
 
-	test("«1» con npm no promete un paquete que no está publicado: remite al .tgz", async () => {
+	test("«1» con npm da el comando de la versión, no el .tgz de la release", async () => {
 		const r = await offer({ answer: "1", method: "npm" });
 		expect(r.result).toBe("manual");
-		expect(r.out).toContain("aún no está publicado en npm");
-		expect(r.out).toContain(`npm i -g ${base}/download/v9.1.0/jmanuelcorral-bond-9.1.0.tgz`);
-		expect(r.out).not.toContain("@jmanuelcorral/bond@");
+		expect(r.out).toContain("npm i -g @jmanuelcorral/bond@9.1.0");
+		expect(r.out).not.toContain("aún no está publicado");
+		expect(r.out).not.toContain(".tgz");
 	});
 });
 

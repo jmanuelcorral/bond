@@ -11,9 +11,8 @@ export const es = {
 
 Pone bond al día con la última release de GitHub. Si lo instalaste con install.sh o
 install.ps1, descarga el binario, comprueba su SHA-256 y sustituye el actual; con Homebrew
-te dice el comando. El paquete aún no está publicado en npm: con npm te remite al .tgz de la
-release. La versión nueva quita los ficheros de las anteriores (~/.bond/runtime) tras
-reenlazar lo que los usaba.
+o con npm te dice el comando. La versión nueva quita los ficheros de las anteriores
+(~/.bond/runtime) tras reenlazar lo que los usaba.
 
   --check              Solo dice si hay una versión nueva
   --version <vX.Y.Z>   Instala esa versión (también para volver a una anterior)
@@ -35,7 +34,7 @@ con la versión que tenías. Sin terminal solo avisa. BOND_NO_UPDATE=1 lo desact
 	"update.err_sha_mismatch": "la suma SHA-256 no coincide: descarga corrupta o alterada",
 	"update.manual_source": "Desde el código: git -C {dir} pull && npm ci --ignore-scripts",
 	"update.manual_brew": "Con Homebrew: brew update && brew upgrade {formula}",
-	"update.manual_npm": "Con npm: @jmanuelcorral/bond aún no está publicado en npm. Instala el paquete de la release: npm i -g {url}",
+	"update.manual_npm": "Con npm: npm i -g @jmanuelcorral/bond@{version}",
 	"update.err_not_writable": "no puedo escribir en {dir}: actualiza con el mismo método con el que instalaste bond",
 	"update.downloading": "Descargando {asset} ({tag})",
 	"update.err_binary_start": "el binario descargado no arranca bien: {detail}",
@@ -80,9 +79,8 @@ export const en: Record<keyof typeof es, string> = {
 
 Updates bond to the latest GitHub release. If you installed it with install.sh or
 install.ps1, it downloads the binary, verifies its SHA-256 and replaces the current
-one; with Homebrew it tells you the command. The package is not yet published on npm:
-with npm it points you to the release .tgz. The new version removes files from previous
-ones (~/.bond/runtime) after relinking whatever was using them.
+one; with Homebrew or npm it tells you the command. The new version removes files from
+previous ones (~/.bond/runtime) after relinking whatever was using them.
 
   --check              Only check if there is a new version
   --version <vX.Y.Z>   Install that version (also to revert to a previous one)
@@ -105,7 +103,7 @@ warns. BOND_NO_UPDATE=1 disables it.`,
 	"update.err_sha_mismatch": "SHA-256 checksum mismatch: corrupted or altered download",
 	"update.manual_source": "From source: git -C {dir} pull && npm ci --ignore-scripts",
 	"update.manual_brew": "With Homebrew: brew update && brew upgrade {formula}",
-	"update.manual_npm": "With npm: @jmanuelcorral/bond is not yet published on npm. Install the release package: npm i -g {url}",
+	"update.manual_npm": "With npm: npm i -g @jmanuelcorral/bond@{version}",
 	"update.err_not_writable": "cannot write to {dir}: update using the same method used to install bond",
 	"update.downloading": "Downloading {asset} ({tag})",
 	"update.err_binary_start": "the downloaded binary does not start properly: {detail}",

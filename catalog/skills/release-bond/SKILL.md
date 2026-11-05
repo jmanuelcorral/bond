@@ -154,10 +154,18 @@ has its own history, its own CI (`brew.yml`) and its own mistakes.
   release ever lands in GitHub Packages instead of npmjs.com, look there first.
 - **`npm publish --dry-run` needs no credentials**: it prints the tarball contents and the target
   registry without authenticating, so it is safe to run anywhere to inspect what would ship.
-- **After the first real npm publish**, the "not published yet" messages become lies and must be
-  updated in the same release train: `update.manual_npm` in `cli/messages/update.mts` (Spanish and
-  English entries), the comment above `manualCommand` in `cli/update.mts`, and the update sections
-  of `docs/reference.md` and `docs/en/reference.md`. Do not touch them before the package exists.
+- **The "not published yet" messages were flipped after 1.13.0**, the first real npm publish:
+  `update.manual_npm` in `cli/messages/update.mts` (both locales), the comment above
+  `manualCommand` in `cli/update.mts` and the update sections of `docs/reference.md` and
+  `docs/en/reference.md` now give `npm i -g @jmanuelcorral/bond@<version>`. If npm ever stops
+  publishing, fix the publish - do not put the old wording back.
+- **`NPM_TOKEN` has to be an automation token.** A granular "Read and write" token on an account
+  with 2FA publishes nothing: npm answers `EOTP` and asks for a one-time password that CI cannot
+  produce. The token type must be Automation, the one that bypasses 2FA for CI.
+- **`gh release create` is not idempotent.** Rerunning the release job once the release exists
+  dies on that step, so a downstream failure can only be retried by deleting the release with
+  `--cleanup-tag` and re-pushing the tag - which rebuilds the binaries and changes every hash.
+  Generate the packaging and the tap only after the run you are keeping has finished.
 
 ## Guided next step
 
