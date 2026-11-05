@@ -35,6 +35,10 @@ default = false
 summary = "Write the changelog, prepare a version and publish an approved release"
 default = false
 
+[skills.release-bond]
+summary = "Ship a bond release: tag, GitHub release, packaging and the Homebrew tap, in order"
+default = false
+
 [skills.plan-team]
 summary = "Run a plan's independent phases in parallel, one bond team branch each"
 default = false

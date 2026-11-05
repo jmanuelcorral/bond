@@ -1,6 +1,7 @@
 # Al subir un tag vX.Y.Z: compila bond para todas las plataformas, genera SHA256SUMS y crea la
 # release de GitHub con las notas de esa versión del CHANGELOG. Los instaladores (install.sh,
-# install.ps1) y la fórmula de Homebrew descargan de aquí.
+# install.ps1) y la fórmula de Homebrew descargan de aquí. Si existe el secret NPM_TOKEN, publica
+# además en npm el mismo .tgz que se adjunta a la release; sin él, la release se crea igual.
 name: release
 
 on:
@@ -45,3 +46,33 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" --title "bond $GITHUB_REF_NAME" --notes-file notes.md dist/bond-* dist/*.tgz dist/SHA256SUMS
+      # npm: se publica el MISMO .tgz que se adjunta a la release, no un pack nuevo. Sin el
+      # secret NPM_TOKEN la release se crea igual que siempre y este paso no hace nada.
+      # --provenance no va todavía: exige trusted publishing configurado en npm por paquete.
+      - name: ¿Hay NPM_TOKEN?
+        id: npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            echo enabled=true >> "$GITHUB_OUTPUT"
+          else
+            echo enabled=false >> "$GITHUB_OUTPUT"
+            echo "Sin el secret NPM_TOKEN: no se publica @jmanuelcorral/bond en npm. La release queda creada igual; añade el secret en Settings -> Secrets and variables -> Actions para publicar." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Publicar en npm
+        if: steps.npm.outputs.enabled == 'true'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Registry explicito: una config de scope rara (p.ej. el scope apuntando a
+          # npm.pkg.github.com) no debe desviar la publicacion.
+          printf '@jmanuelcorral:registry=https://registry.npmjs.org/\n//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$HOME/.npmrc"
+          cd "$GITHUB_WORKSPACE/dist"
+          tgz="$(ls ./*.tgz)"
+          [ -f "$tgz" ] || { echo "esperaba un unico .tgz en dist/"; exit 1; }
+          grep -F " $(basename "$tgz")" SHA256SUMS | sha256sum -c -
+          npm publish "$tgz" --access public
+          name="$(jq -r .name npm/package.json)"
+          npm view "$name@$(jq -r .version ../package.json)" version \
+            || echo "::warning::npm todavia no responde por $name; revisa https://www.npmjs.com/package/$name"

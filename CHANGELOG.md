@@ -27,6 +27,24 @@
   ese bloque en lugar de morir con «agente sin generador de modelos», y `bond doctor` saca una fila de
   aviso mientras el bloque siga en el disco (se resuelve con `bond models sync`). Sin bloque, `doctor`
   no dice nada y `--agent codex` lo hace constar en una línea.
+- `release-bond`, la skill del catálogo que convierte el publicar bond en un procedimiento con
+  puertas (#66). Los cuatro pasos reales —versión, tag y changelog; la release que compila
+  `release.yml`; `bun scripts/packaging.mts`; y la fórmula en el tap `jmanuelcorral/homebrew-tap`,
+  que es otro repo— estaban solo en prosa en `AGENTS.md`. La skill deja escritas las comprobaciones
+  que evitan los errores caros: no lanzar el packaging antes de que la release esté publicada y
+  completa (el generador lee `SHA256SUMS` de la release, no de `dist/`), que el tag coincida con
+  `package.json` antes de empujar, verificar las sumas contra lo descargado de verdad y que los
+  hashes del `.rb` del tap sean los de la release. Incluye qué hacer cuando algo se rompe a
+  mitad. Es una skill de mantenedor: `default = false`, para que `bond init` no se la instale en
+  cualquier repo.
+- `release.yml` publica `@jmanuelcorral/bond` en npm cuando existe el secret `NPM_TOKEN` (#66).
+  Publica el mismo `.tgz` que se adjunta a la release, no un `npm pack` nuevo: comprueba su
+  SHA-256 contra `SHA256SUMS` antes de subirlo y fija el registry en `registry.npmjs.org`, porque
+  una entrada `@jmanuelcorral:registry` en cualquier `.npmrc` tiene prioridad sobre la opción
+  `--registry` y puede desviar el paquete a GitHub Packages. Sin el secret, el paso se salta con
+  un aviso en el resumen de la run y la release se crea exactamente igual que hoy. `--provenance`
+  no va todavía: exige trusted publishing configurado en npm por paquete, y se anotó como
+  seguimiento en la skill.
 
 Tres skills propias del repo, en `.agents/skills/`, para quien se lo baje. No son del catálogo: no
 están declaradas en el array `skills` de `.bond/bond.toml`, así que `bond init` no las instala en
