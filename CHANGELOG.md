@@ -1,6 +1,14 @@
 # Cambios
 
-## Sin publicar
+## 1.13.0
+
+Semáforos en la memoria de decisiones y aprovisionamiento de modelos por selección. Un agente ya
+no puede aceptarse sus propias decisiones: `accepted_via` pasa a significar quién aceptó, `accept`,
+`reject` y `supersede` se niegan si quien ejecuta es quien registró la decisión, y `bond decisions
+check` y `bond doctor` sacan los registros auto-aceptados. `bond models sync` deja de escribir en
+agentes que no elegiste, Codex pasa a usar su cuenta oficial con limpieza automática del bloque
+huérfano, y la forma TOML `[[providers]]` se rechaza teniendo delante la canónica. Y por primera vez
+bond se publica en npm como `@jmanuelcorral/bond`: el mismo `.tgz` que se adjunta a la release.
 
 - Semántica de `accepted_via`, bloqueo por identidad y comando de migración de decisiones (#82).
   `accepted_via` pasa a representar quién aceptó la decisión en lugar de quién ejecutó el comando:
