@@ -29,11 +29,14 @@ lista las decisiones.
   accept <id>... [--ref <aceptación>] [--confirmed-by "<lo que dijo el usuario>"] [--all-proposed]
             La pasa a "accepted". Es solo del usuario, pero puede hacerlo desde la
             conversación: con --confirmed-by (una referencia a sus palabras) no hace
-            falta terminal y la decisión guarda además accepted_via: quién lo ejecutó
-            (agent:<kind>/<nombre> desde un panel de Herdr, user fuera). Con terminal y
-            sin --confirmed-by, pregunta. Sin una cosa ni otra, se niega. Admite varios
-            ids y --all-proposed; un id desconocido o no "proposed" se informa sin
-            abortar los demás (salida != 0 si alguno falló). --confirmed-by vacío se rechaza.
+            falta terminal y la decisión guarda además accepted_via: "user" (aceptó el
+            usuario; quien tecleó queda ya en decided_by). Con terminal y sin
+            --confirmed-by, pregunta. Sin una cosa ni otra, se niega. Admite varios ids
+            y --all-proposed; un id desconocido o no "proposed" se informa sin abortar
+            los demás (salida != 0 si alguno falló). --confirmed-by vacío se rechaza.
+            Se niega también si quien ejecuta es el mismo agente que la registró
+            (decided_by): un agente no se acepta sus propias decisiones; las registra ya
+            aceptadas con add --confirmed-by, o las acepta el usuario.
   reject <id>... [--ref <motivo>] [--confirmed-by <ref>] [--all-proposed]
             La pasa a "rejected" (misma confirmación).
   supersede <id>... --by <nueva> [--confirmed-by <ref>] [--all-proposed]
@@ -44,11 +47,18 @@ lista las decisiones.
   runs [--agent <a>] [--json]     Los runs (encargos a agentes) de <dir>/runs/, con los
                                   commits de su rama y las decisiones de ese agente.
   check                           Audita la memoria: frontmatter, ids, duplicados,
-                                  sustituciones y trailers Decision:. Sale con 1 si hay
-                                  errores. El README no se audita: no hay índice que
-                                  mantener al día.
+                                  sustituciones, trailers Decision: y auto-aceptaciones
+                                  (accepted con decided_by == accepted_via). Sale con 1
+                                  si hay errores. El README no se audita: no hay índice
+                                  que mantener al día.
+  migrate [--dry-run] [--json]    Pasa las decisiones "accepted" cuyo accepted_via es de
+                                  agente a accepted_via: "user" (aceptó el usuario).
+                                  Idempotente; deja intactas las que lo tienen vacío
+                                  (aceptadas en terminal). --dry-run informa sin escribir.
+                                  Asume que cada accepted_by fue palabra del usuario:
+                                  desde el frontmatter no se puede verificar.
 
-  --json     Salida JSON estable en lista, add, runs y check.
+  --json     Salida JSON estable en lista, add, runs, check y migrate.
   -h, --help Esta ayuda.
 
 Autoría: la calcula bond (en un panel de Herdr, agent:<kind>/<nombre>; fuera, user).
@@ -136,12 +146,15 @@ lists decisions.
   accept <id>... [--ref <acceptance>] [--confirmed-by "<what the user said>"] [--all-proposed]
             Changes status to "accepted". Only the user can do this, but may do so
             from conversation: with --confirmed-by (a reference to their words) no
-            terminal is required and the decision also records accepted_via: who
-            executed it (agent:<kind>/<name> from a Herdr pane, user outside). With
-            a terminal and without --confirmed-by, prompts. Without either, refuses.
+            terminal is required and the decision also records accepted_via: "user"
+            (the user accepted; whoever typed it is already in decided_by). With a
+            terminal and without --confirmed-by, prompts. Without either, refuses.
             Accepts multiple ids and --all-proposed; an unknown id or one not
             "proposed" is reported without aborting others (exit != 0 if any failed).
-            Empty --confirmed-by is rejected.
+            Empty --confirmed-by is rejected. Also refuses when the running agent is
+            the one that recorded the decision (decided_by): an agent does not accept
+            its own decisions; it records them already accepted with add
+            --confirmed-by, or the user accepts them.
   reject <id>... [--ref <reason>] [--confirmed-by <ref>] [--all-proposed]
             Changes status to "rejected" (same confirmation).
   supersede <id>... --by <new> [--confirmed-by <ref>] [--all-proposed]
@@ -152,11 +165,18 @@ lists decisions.
   runs [--agent <a>] [--json]     Runs (agent tasks) in <dir>/runs/, with commits
                                   from their branch and decisions by that agent.
   check                           Audits decision memory: frontmatter, ids, duplicates,
-                                  supersessions, and Decision: trailers. Exits with 1
-                                  on errors. The README is not audited: there is no
+                                  supersessions, Decision: trailers, and self-acceptances
+                                  (accepted with decided_by == accepted_via). Exits with
+                                  1 on errors. The README is not audited: there is no
                                   index to maintain.
+  migrate [--dry-run] [--json]    Rewrites "accepted" decisions whose accepted_via is an
+                                  agent to accepted_via: "user" (the user accepted).
+                                  Idempotent; leaves the empty ones alone (accepted in a
+                                  terminal). --dry-run reports without writing. Assumes
+                                  every accepted_by was the user's word: the front matter
+                                  cannot verify it.
 
-  --json     Stable JSON output for list, add, runs, and check.
+  --json     Stable JSON output for list, add, runs, check, and migrate.
   -h, --help This help.
 
 Authorship: bond computes it (in a Herdr pane, agent:<kind>/<name>; outside, user).

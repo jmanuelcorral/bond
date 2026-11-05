@@ -16,6 +16,7 @@ import { agents } from "./herdr.mts";
 import { configExists, loadConfigOrEmpty } from "./config.mts";
 import { repoDecisions, repoRoot } from "./repo.mts";
 import { bad, catchDie, die, dim, ok, run } from "./util.mts";
+import { runMigrate } from "./decisions-migrate.mts";
 
 export const STATUSES = ["proposed", "accepted", "rejected", "superseded"];
 
@@ -486,7 +487,7 @@ function parseArgs(args: string[]): Args {
 	const links: string[] = [];
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
-		if (a === "--json" || a === "--stdin" || a === "--all-proposed") opts[a] = "";
+		if (a === "--json" || a === "--stdin" || a === "--all-proposed" || a === "--dry-run") opts[a] = "";
 		else if (VALUE_OPTS.includes(a)) {
 			const v = args[++i];
 			if (v === undefined) die(t("decisions.opt_needs_value", { opt: a }));
@@ -536,7 +537,7 @@ async function runAdd(root: string, dir: string, a: Args): Promise<void> {
 export async function decisions(args: string[]): Promise<void> {
 	const [sub, ...rest] = args;
 	const root = repoRoot();
-	const known = ["add", "accept", "reject", "supersede", "show", "runs", "check"];
+	const known = ["add", "accept", "reject", "supersede", "show", "runs", "check", "migrate"];
 	const name = known.includes(sub ?? "") ? sub! : undefined;
 	const a = parseArgs(name ? rest : args);
 	const dec = memory(root);
@@ -598,6 +599,9 @@ export async function decisions(args: string[]): Promise<void> {
 			for (const r of filtered) console.log(`${r.file}  ${dim(`${r.fm.scalars.kind ?? "?"}/${r.fm.scalars.agent ?? "?"} · ${r.fm.scalars.branch ?? "?"} · ${r.fm.scalars.status ?? "?"} · ${t("decisions.runs_counts", { commits: n(r.fm.lists.commits), decisions: n(r.fm.lists.decisions) })}`)}`);
 			return;
 		}
+		case "migrate":
+			runMigrate(root, dec.dir, { dryRun: a.opts["--dry-run"] !== undefined, json: a.json });
+			return;
 		case "check": {
 			const rep = checkDecisions(root, dec.dir);
 			if (a.json) return console.log(JSON.stringify(rep));
