@@ -1,6 +1,19 @@
 # Cambios
 
-## Sin publicar
+## 1.13.1
+
+Publicación en npm con identidad propia: trusted publishing por OIDC y tarball firmado con
+provenance, sin depender ya de un token de larga vida para autorizar el publish. Además los
+mensajes de `bond update` dejan de anunciar que el paquete no existe, porque desde la 1.13.0 sí
+existe.
+
+- `@jmanuelcorral/bond` se publica en npm por **trusted publishing** y con **provenance** (#66).
+  El `release.yml` pide `id-token: write` para que GitHub cuñe el OIDC token, fija Node 24 con
+  `actions/setup-node` (trusted publishing exige npm ≥ 11.5.1 y `ubuntu-latest` trae 10.9.9, que
+  no habla OIDC) y publica con `--access public --provenance`, de modo que el tarball queda firmado
+  con una attestation que lo enlaza con este commit y esta workflow. El secret `NPM_TOKEN` se
+  mantiene como red de seguridad: npm detecta el entorno OIDC y lo usa antes de mirar tokens
+  tradicionales, así que el token ya no es lo que autoriza el publish.
 
 - Los mensajes de `bond update` dejan de decir que `@jmanuelcorral/bond` no está publicado (#66).
   Con el paquete ya en npm desde la 1.13.0, una instalación por npm recibe el comando de la

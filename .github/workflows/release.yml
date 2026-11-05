@@ -1,7 +1,8 @@
 # Al subir un tag vX.Y.Z: compila bond para todas las plataformas, genera SHA256SUMS y crea la
 # release de GitHub con las notas de esa versión del CHANGELOG. Los instaladores (install.sh,
-# install.ps1) y la fórmula de Homebrew descargan de aquí. Si existe el secret NPM_TOKEN, publica
-# además en npm el mismo .tgz que se adjunta a la release; sin él, la release se crea igual.
+# install.ps1) y la fórmula de Homebrew descargan de aquí. Además publica en npm el mismo .tgz
+# que se adjunta a la release, autenticando por OIDC (trusted publishing); el secret NPM_TOKEN
+# se mantiene como red de seguridad.
 name: release
 
 on:
@@ -10,6 +11,9 @@ on:
 
 permissions:
   contents: write
+  # Se cuña el OIDC token de GitHub: de aqui salen el trusted publishing de npm y las
+  # attestations de --provenance. Sin esto, ni lo uno ni lo otro.
+  id-token: write
 
 jobs:
   release:
@@ -19,6 +23,13 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.3
+      # Trusted publishing exige npm >= 11.5.1 y Node >= 22.14.0. ubuntu-latest trae
+      # npm 10.9.9, que no habla OIDC: sin este paso el publish se haria con token y la
+      # configuracion de trusted publisher de npm no llegaria a validarse nunca.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Versión del tag = versión de package.json
         run: |
@@ -46,9 +57,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" --title "bond $GITHUB_REF_NAME" --notes-file notes.md dist/bond-* dist/*.tgz dist/SHA256SUMS
-      # npm: se publica el MISMO .tgz que se adjunta a la release, no un pack nuevo. Sin el
-      # secret NPM_TOKEN la release se crea igual que siempre y este paso no hace nada.
-      # --provenance no va todavía: exige trusted publishing configurado en npm por paquete.
+      # npm: se publica el MISMO .tgz que se adjunta a la release, no un pack nuevo.
+      # La autentificacion va por OIDC (trusted publishing): npm detecta el entorno GitHub
+      # Actions y usa el OIDC token antes de mirar tokens tradicionales. El NPM_TOKEN se
+      # mantiene como red de seguridad, no como lo que autoriza el publish.
       - name: ¿Hay NPM_TOKEN?
         id: npm
         env:
@@ -72,7 +84,7 @@ jobs:
           tgz="$(ls ./*.tgz)"
           [ -f "$tgz" ] || { echo "esperaba un unico .tgz en dist/"; exit 1; }
           grep -F " $(basename "$tgz")" SHA256SUMS | sha256sum -c -
-          npm publish "$tgz" --access public
+          npm publish "$tgz" --access public --provenance
           name="$(jq -r .name npm/package.json)"
           npm view "$name@$(jq -r .version ../package.json)" version \
             || echo "::warning::npm todavia no responde por $name; revisa https://www.npmjs.com/package/$name"

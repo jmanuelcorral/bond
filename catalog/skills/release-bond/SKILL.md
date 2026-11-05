@@ -143,10 +143,14 @@ has its own history, its own CI (`brew.yml`) and its own mistakes.
 
 ## Follow-up work not covered by this run
 
-- **npm provenance is not enabled.** `release.yml` publishes with `--access public` only. Adding
-  `--provenance` needs trusted publishing configured per package on npmjs.com (provider GitHub
-  Actions, pinned to this repo and workflow) plus `id-token: write` in the workflow. Do that once
-  the package exists on the registry, then add the flag; until then, do not pass it - it fails.
+- **npm provenance is enabled since 1.13.1.** `release.yml` publishes with `--access public
+  --provenance` and holds `id-token: write` so GitHub can mint the OIDC token, and pins Node 24
+  because trusted publishing needs npm >= 11.5.1 while `ubuntu-latest` ships 10.9.x. The trusted
+  publisher on npmjs.com must name the workflow file `release.yml` (filename only) and allow the
+  `npm publish` action. **An unvalidated trusted publisher config expires 48 hours after it is
+  created**, and it only becomes validated by a publish that actually goes through it: since
+  `NPM_TOKEN` is kept as a fallback, read the publish log and confirm it authenticated with OIDC.
+  A publish that silently used the token leaves the config unvalidated and it dies on the clock.
 - **The publish step pins the registry on purpose.** A scoped `@jmanuelcorral:registry` entry in
   any `.npmrc` in effect (a developer machine pointing the scope at `npm.pkg.github.com`, for
   instance) wins over `npm publish --registry=...`, so the workflow writes both the scoped line
