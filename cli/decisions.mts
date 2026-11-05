@@ -202,7 +202,7 @@ function buildBody(in_: AddInput): string {
 }
 
 /** Registra una decisión: fichero con el formato de D6. No toca el README (D19). */
-export function addDecision(root: string, dirRel: string, in_: AddInput): { id: string; rel: string; decided_by: string; status: string } {
+export function addDecision(root: string, dirRel: string, in_: AddInput): { id: string; rel: string; decided_by: string; status: string; accepted_via: string } {
 	const title = in_.title?.trim();
 	const decision = in_.decision?.trim();
 	if (!title) die(t("decisions.need_title"));
@@ -233,7 +233,7 @@ export function addDecision(root: string, dirRel: string, in_: AddInput): { id: 
 		rel: `${dirRel}/${id}.md`,
 	};
 	writeFileSync(join(dir, `${id}.md`), decisionFile(d));
-	return { id, rel: `${dirRel}/${id}.md`, decided_by, status: d.status };
+	return { id, rel: `${dirRel}/${id}.md`, decided_by, status: d.status, accepted_via: d.accepted_via };
 }
 
 // --- cambiar estado ------------------------------------------------------------------------
@@ -528,9 +528,9 @@ async function runAdd(root: string, dir: string, a: Args): Promise<void> {
 	} else {
 		input = { title: a.opts["--title"] ?? "", context: a.opts["--context"], decision: a.opts["--decision"] ?? "", alternatives: a.opts["--alternatives"], consequences: a.opts["--consequences"], links: a.links, confirmed_by: a.opts["--confirmed-by"] };
 	}
-	const { id, rel, decided_by, status } = addDecision(root, dir, input);
-	if (a.json) console.log(JSON.stringify({ id, path: rel, status, decided_by }));
-	else if (status === "accepted") console.log(`${ok("+")} ${rel}  ${dim(`accepted · ${input.confirmed_by?.trim()} · via ${decided_by}`)}`);
+	const { id, rel, decided_by, status, accepted_via } = addDecision(root, dir, input);
+	if (a.json) console.log(JSON.stringify({ id, path: rel, status, decided_by, accepted_via }));
+	else if (status === "accepted") console.log(`${ok("+")} ${rel}  ${dim(`accepted · ${input.confirmed_by?.trim()} · via ${accepted_via}`)}`);
 	else console.log(`${ok("+")} ${rel}  ${dim(t("decisions.add_proposed_ack", { author: decided_by, id }))}`);
 }
 
