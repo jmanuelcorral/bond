@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { agentPath } from "../cli/catalog-agents.mts";
-import { agyCheck, agyPluginCheck, catalogCheck, updateCheck } from "../cli/doctor.mts";
+import { agyCheck, agyPluginCheck, catalogCheck, codexOrphanCheck, updateCheck } from "../cli/doctor.mts";
 import { addDecision, decisionsDoctor } from "../cli/decisions.mts";
 import { installedRuntime } from "../cli/runtime.mts";
 import { integrationsFor, parseIntegrationStatus } from "../cli/setup.mts";
@@ -52,6 +52,21 @@ describe("fila de agy", () => {
 		expect(r.level).toBe("warn");
 		expect(r.detail).toBe("no está instalado");
 		expect(r.fix).toContain("antigravity.google");
+	});
+});
+
+describe("fila del huérfano de Codex (issue #80)", () => {
+	test("sin bloque no hay fila: no se molesta a quien nunca aprovisionó Codex", () => {
+		expect(codexOrphanCheck(false, "/home/u/.codex/config.toml")).toBeUndefined();
+	});
+
+	test("con bloque avisa, dice dónde está y cómo limpiarlo", () => {
+		const c = codexOrphanCheck(true, "/home/u/.codex/config.toml");
+		expect(c?.level).toBe("warn");
+		expect(c?.name).toBe("codex");
+		expect(c?.detail).toContain("/home/u/.codex/config.toml");
+		expect(c?.detail).toContain("bloque de modelos que bond escribió");
+		expect(c?.fix).toBe("bond models sync");
 	});
 });
 

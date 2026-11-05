@@ -182,6 +182,15 @@ function checkMcp(): void {
 	if (r.status !== 0 && !/connected/.test(r.stdout)) add("fail", "mcp", r.stderr.trim().split("\n")[0] || t("doctor.mcp_failed"));
 }
 
+/**
+ * Fila de Codex en `bond doctor`: el bloque huérfano que bond dejó en ~/.codex/config.toml al
+ * dejar de aprovisionarlo (#80). Sin bloque no hay fila: no se molesta a quien no lo usó.
+ */
+export function codexOrphanCheck(present: boolean, file: string): Check | undefined {
+	if (!present) return undefined;
+	return { level: "warn", name: "codex", detail: t("doctor.codex_orphan", { file }), fix: t("doctor.codex_orphan_fix") };
+}
+
 /** Registro global de modelos: config, sincronía con cada agente y que las pasarelas respondan. */
 async function checkModels(): Promise<void> {
 	if (FROM_SOURCE && !existsSync(join(REPO_DIR, "node_modules", "smol-toml"))) {
@@ -189,14 +198,19 @@ async function checkModels(): Promise<void> {
 	}
 	const { CONFIG_FILE, activeProviders, loadConfig } = await import("./config.mts");
 	if (!existsSync(CONFIG_FILE)) return add("fail", t("doctor.row_config"), t("doctor.config_missing", { file: CONFIG_FILE }), "bond setup");
-	const { syncAgents } = await import("./models.mts");
+	const { syncAgents, codexOrphan } = await import("./models.mts");
+	const { codexConfigFile } = await import("./agents.mts");
 	const withModels = ["pi", "opencode", "crush"].filter((a) => !chosen.length || chosen.includes(a));
 	const stale = withModels.length && activeProviders(loadConfig()).length ? syncAgents({ check: true, quiet: true, agents: withModels.filter((a) => which(a)) }) : [];
+	// El huérfano de Codex se comprueba aparte: `syncAgents` lo barre y lo mete en `stale`, pero
+	// aquí interesa su fila propia, no que salga mezclado con los agentes desfasados.
+	const orphan = codexOrphanCheck(codexOrphan(), codexConfigFile());
+	if (orphan) add(orphan);
 	if (withModels.includes("pi") && which("pi")) {
 		if (stale.includes("pi")) add("fail", t("doctor.row_pi_models"), t("doctor.pi_models_stale"), "bond models sync --agent pi");
 		else add("ok", t("doctor.row_pi_models"), t("doctor.pi_models_ok"));
 	}
-	const others = stale.filter((a) => a !== "pi");
+	const others = stale.filter((a) => a !== "pi" && a !== "codex");
 	if (others.length) add("warn", t("doctor.row_other_models"), t("doctor.other_models_stale", { list: others.join(", ") }), "bond models sync");
 
 	for (const p of activeProviders(loadConfig())) {

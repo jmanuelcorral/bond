@@ -394,6 +394,10 @@ Reglas para no pisar lo ajeno:
   tuyo. (Hoy pasa con `halo`, que tu `crushrc` define con la IP local `<IP-local>:18080`:
   bórralo de ahí si quieres que lo gestione bond.)
 - La primera vez que bond toca un fichero, guarda una copia `.bak.<fecha>`.
+- El bloque que bond escribió en `~/.codex/config.toml` antes de dejar de aprovisionar Codex
+  se barre solo al correr `bond models sync`, con copia previa y sin tocar lo que pongas tú
+  alrededor. Mientras quede, `bond doctor` lo avisa, y `bond models sync --agent codex` lo
+  limpia sin tener que sincronizar el resto de agentes.
 - Los JSON con comentarios los pierden al reescribirse; bond avisa antes.
 
 Comprobado de punta a punta con `flash-halogen`: pi (`pi -p`), opencode (`opencode run`),

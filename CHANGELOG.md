@@ -15,6 +15,10 @@
   en `~/.codex/config.toml` con backup `.bak.<STAMP>` y preservando cualquier configuración manual
   alrededor de forma idempotente. `bond models list` añade una línea informativa explicando que Codex
   utiliza su cuenta oficial.
+  La limpieza corre siempre, también cuando se pasa `--agent`: `bond models sync --agent codex` limpia
+  ese bloque en lugar de morir con «agente sin generador de modelos», y `bond doctor` saca una fila de
+  aviso mientras el bloque siga en el disco (se resuelve con `bond models sync`). Sin bloque, `doctor`
+  no dice nada y `--agent codex` lo hace constar en una línea.
 
 Tres skills propias del repo, en `.agents/skills/`, para quien se lo baje. No son del catálogo: no
 están declaradas en el array `skills` de `.bond/bond.toml`, así que `bond init` no las instala en

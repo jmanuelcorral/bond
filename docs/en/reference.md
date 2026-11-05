@@ -396,6 +396,10 @@ Rules to avoid overwriting others' settings:
   wins. (Today this happens with `halo`, which your `crushrc` defines with the local IP `<IP-local>:18080`:
   delete it from there if you want bond to manage it.)
 - The first time bond touches a file, it saves a `.bak.<fecha>` copy.
+- The block bond wrote in `~/.codex/config.toml` before it stopped provisioning Codex is
+  swept automatically when `bond models sync` runs, with a backup first and leaving your own
+  settings around it untouched. While it remains, `bond doctor` warns about it, and
+  `bond models sync --agent codex` cleans it without syncing the other agents.
 - JSON files with comments lose them when rewritten; bond warns beforehand.
 
 Verified end to end with `flash-halogen`: pi (`pi -p`), opencode (`opencode run`),

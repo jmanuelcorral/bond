@@ -16,7 +16,7 @@ configuración de cada agente que pueda usarlos.
   list              Proveedores, modelos y qué agentes pueden usarlos
   probe [id...]     Pregunta a cada pasarela qué APIs sirve (chat, responses, messages)
   sync [opciones]   Escribe la configuración de modelos de cada agente
-      --agent <a>   Solo ese agente (repetible): pi, opencode, crush
+      --agent <a>   Solo ese agente (repetible): pi, opencode, crush; codex solo limpia su bloque huérfano
       --dry-run     Enseña los cambios sin escribir
       --check       No escribe; sale con 1 si algún agente está desfasado
   path              Ruta de config.toml
@@ -45,7 +45,7 @@ pasarelas compatibles con OpenAI.`,
 	"models.probe_models_missing": "; no sirve {missing}",
 	"models.probe_models_summary": "modelos: {status}{missing}",
 	"models.probe_apis_note": "\nNota: los proveedores con 'apis' en config.toml usan lo declarado, no lo detectado.",
-	"models.sync_unsupported_agent": "agente sin generador de modelos: {agent} (pi, opencode, crush)",
+	"models.sync_unsupported_agent": "agente sin generador de modelos: {agent} (pi, opencode, crush; codex solo se le limpia el bloque huérfano)",
 	"models.sync_api_unsupported": "{id}: la pasarela no sirve la API {api}",
 	"models.sync_up_to_date": "al día",
 	"models.sync_outdated": "desfasado",
@@ -59,6 +59,7 @@ pasarelas compatibles con OpenAI.`,
 	"models.note_opencode": "formato de opencode v2: providers.<id>.settings.baseURL",
 	"models.note_crush": "crushrc es un script de bash; si defines a mano un proveedor con el mismo id, bond no lo duplica",
 	"models.note_codex": "codex: usa su cuenta oficial; bond no lo aprovisiona",
+	"models.sync_codex_no_orphan": "cuenta oficial: no hay bloque huérfano que limpiar",
 	"models.sync_cleaned_codex": "bloque huérfano eliminado (backup creado)",
 	"models.sync_would_clean_codex": "eliminaría bloque huérfano",
 	"models.sync_orphan_block": "bloque huérfano de bond presente (ejecuta bond models sync)",
@@ -75,7 +76,7 @@ configuration for each agent that can use them.
   list              Providers, models, and which agents can use them
   probe [id...]     Ask each gateway which APIs it serves (chat, responses, messages)
   sync [options]    Write the model configuration for each agent
-      --agent <a>   Only that agent (repeatable): pi, opencode, crush
+      --agent <a>   Only that agent (repeatable): pi, opencode, crush; codex only cleans its orphaned block
       --dry-run     Show changes without writing
       --check       Do not write; exit 1 if any agent is out of date
   path              Path of config.toml
@@ -104,7 +105,7 @@ cannot use OpenAI-compatible gateways.`,
 	"models.probe_models_missing": "; does not serve {missing}",
 	"models.probe_models_summary": "models: {status}{missing}",
 	"models.probe_apis_note": "\nNote: providers with 'apis' in config.toml use what is declared, not what was detected.",
-	"models.sync_unsupported_agent": "agent without model generator: {agent} (pi, opencode, crush)",
+	"models.sync_unsupported_agent": "agent without model generator: {agent} (pi, opencode, crush; for codex only the orphaned block is cleaned)",
 	"models.sync_api_unsupported": "{id}: gateway does not serve the {api} API",
 	"models.sync_up_to_date": "up to date",
 	"models.sync_outdated": "out of date",
@@ -118,6 +119,7 @@ cannot use OpenAI-compatible gateways.`,
 	"models.note_opencode": "opencode v2 format: providers.<id>.settings.baseURL",
 	"models.note_crush": "crushrc is a bash script; if you define a provider with the same id manually, bond will not duplicate it",
 	"models.note_codex": "codex: uses its official account; bond does not provision it",
+	"models.sync_codex_no_orphan": "official account: no orphaned block to clean",
 	"models.sync_cleaned_codex": "orphaned block removed (backup created)",
 	"models.sync_would_clean_codex": "would remove orphaned block",
 	"models.sync_orphan_block": "orphaned bond block present (run bond models sync)",

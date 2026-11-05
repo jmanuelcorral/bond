@@ -132,10 +132,10 @@ console.log(JSON.stringify(stale));
 	test("agente no soportado en --agent falla con error", () => {
 		const r = runNode(`
 const { syncAgents } = await import(${url("models.mts")});
-syncAgents({ agents: ["codex"] });
+syncAgents({ agents: ["claude"] });
 `);
 		expect(r.status).not.toBe(0);
-		expect(r.stderr).toContain("codex");
+		expect(r.stderr).toContain("claude");
 	});
 });
 
@@ -283,5 +283,71 @@ console.log(JSON.stringify({
 		const res = JSON.parse(r.stdout.trim().split("\n").pop() ?? "{}");
 		expect(res.supported).toBe(true);
 		expect(res.hasInfo).toBe(true);
+	});
+
+	// El bloque huérfano de cada prueba: config manual alrededor, lo de bond en medio.
+	const orphanFile = () => join(codexDir, "config.toml");
+	const writeOrphan = () => {
+		mkdirSync(codexDir, { recursive: true });
+		writeFileSync(
+			orphanFile(),
+			[
+				'model = "gpt-4o"',
+				"",
+				"# >>> bond >>> generado por `bond models sync`; no editar",
+				"[model_providers.old_prov]",
+				'name = "old_prov"',
+				"# <<< bond <<<",
+				"",
+				"[user_section]",
+				"custom = true",
+			].join("\n"),
+		);
+	};
+	const backups = () => readdirSync(codexDir).filter((f) => f.startsWith("config.toml.bak.")).length;
+
+	test("--agent codex limpia el bloque huérfano en vez de fallar", () => {
+		writeOrphan();
+		const r = runBond(["models", "sync", "--agent", "codex"]);
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain("bloque huérfano eliminado");
+		const after = readFileSync(orphanFile(), "utf8");
+		expect(after).not.toContain("# >>> bond >>>");
+		expect(after).not.toContain("model_providers.old_prov");
+		expect(after).toContain("custom = true");
+		expect(backups()).toBe(1);
+	});
+
+	test("--agent codex sin bloque huérfano lo dice y no deja copia", () => {
+		const r = runBond(["models", "sync", "--agent", "codex"]);
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain("no hay bloque huérfano que limpiar");
+		expect(backups()).toBe(0);
+	});
+
+	test("--check con --agent de otro agente reporta igualmente el huérfano (camino de bond doctor)", () => {
+		writeOrphan();
+		const r = runNode(`
+const { syncAgents } = await import(${url("models.mts")});
+const stale = syncAgents({ check: true, quiet: true, agents: ["pi"] });
+console.log(JSON.stringify(stale));
+`);
+		expect(r.status).toBe(0);
+		const stale = JSON.parse(r.stdout.trim().split("\n").pop() ?? "[]");
+		expect(stale).toContain("codex");
+	});
+
+	test("codexOrphan() detecta el bloque y deja de detectarlo tras limpiarlo", () => {
+		writeOrphan();
+		const r = runNode(`
+const { codexOrphan, syncAgents } = await import(${url("models.mts")});
+const before = codexOrphan();
+syncAgents({ quiet: true, agents: ["codex"] });
+console.log(JSON.stringify({ before, after: codexOrphan() }));
+`);
+		expect(r.status).toBe(0);
+		const res = JSON.parse(r.stdout.trim().split("\n").pop() ?? "{}");
+		expect(res.before).toBe(true);
+		expect(res.after).toBe(false);
 	});
 });

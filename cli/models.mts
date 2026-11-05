@@ -173,6 +173,12 @@ export interface SyncOptions {
 	quiet?: boolean;
 }
 
+/** ¿Sigue en pie el bloque huérfano de bond en ~/.codex/config.toml? (issue #80) */
+export function codexOrphan(): boolean {
+	const current = readCurrent(codexConfigFile());
+	return !!current && current.includes(BEGIN);
+}
+
 /**
  * Limpia el bloque huérfano que bond dejó en ~/.codex/config.toml (issue #80).
  * Idempotente: si no hay bloque no hace nada ni deja copia.
@@ -211,11 +217,18 @@ export function syncAgents(opts: SyncOptions = {}): string[] {
 	const chosen = opts.agents?.length
 		? TARGETS.filter((t) => opts.agents!.includes(t.agent))
 		: TARGETS.filter((t) => (!cfg.agents.length || cfg.agents.includes(t.agent)) && t.installed());
-	if (opts.agents) for (const a of opts.agents) if (!TARGETS.some((t) => t.agent === a)) die(t("models.sync_unsupported_agent", { agent: a }));
+	// `codex` se quedó sin generador de modelos al pasar a su cuenta oficial (#80), pero sigue
+	// valiendo en --agent: es la forma de limpiar su bloque huérfano sin tocar los demás.
+	if (opts.agents)
+		for (const a of opts.agents) if (a !== "codex" && !TARGETS.some((t) => t.agent === a)) die(t("models.sync_unsupported_agent", { agent: a }));
 
-	if (!opts.agents?.length) {
-		const hadOrphan = cleanCodexOrphan(say, opts.check, state);
-		if (hadOrphan && opts.check) stale.push("codex");
+	// La limpieza del huérfano corre siempre, también con --agent explícito: así la ven
+	// `bond doctor`, que pasa su propia lista, y `bond models sync --agent codex`.
+	const hadOrphan = cleanCodexOrphan(say, opts.check, state);
+	if (hadOrphan) {
+		if (opts.check) stale.push("codex");
+	} else if (opts.agents?.includes("codex")) {
+		say(`${ok("✓")} ${"codex".padEnd(9)}${t("models.sync_codex_no_orphan")}  ${dim(codexConfigFile())}`);
 	}
 
 	for (const target of chosen) {
