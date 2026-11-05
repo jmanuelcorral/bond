@@ -1,11 +1,11 @@
 ---
 id: "2026-11-05-release-bond-la-skill-de-release-de-bond-va-en-el-catalogo-con-default-false"
 title: "release-bond: la skill de release de bond va en el catálogo con default = false"
-status: "proposed"
+status: "accepted"
 date: "2026-11-05"
 decided_by: "agent:pi/stuart"
-accepted_by: ""
-accepted_via: ""
+accepted_by: "Acepto los dos registros de decisión."
+accepted_via: "agent:pi"
 supersedes: ""
 superseded_by: ""
 links:

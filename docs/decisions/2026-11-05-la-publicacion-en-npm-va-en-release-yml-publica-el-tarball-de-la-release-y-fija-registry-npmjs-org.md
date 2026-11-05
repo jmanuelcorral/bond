@@ -4,8 +4,8 @@ title: "La publicación en npm va en release.yml, publica el tarball de la relea
 status: "accepted"
 date: "2026-11-05"
 decided_by: "agent:pi/stuart"
-accepted_by: "Publicar el mismo .tgz que se adjunta a la release, no un npm pack nuevo: lo que se publica debe ser byte a byte lo que se distribuye. ... Valora --provenance (trusted publishing por OIDC de GitHub): si requiere configuración previa en npm que no podemos hacer ahora, no lo añadas y déjalo anotado en la skill como seguimiento con el motivo."
-accepted_via: "agent:pi/stuart"
+accepted_by: "Acepto los dos registros de decisión."
+accepted_via: "agent:pi"
 supersedes: ""
 superseded_by: ""
 links:
@@ -29,3 +29,9 @@ Hacer un `npm pack` nuevo en el paso de publicación: rechazado, publicaría byt
 ## Consequences
 
 Hace falta crear el secret NPM_TOKEN en Settings -> Secrets and variables -> Actions para que se publique. --provenance queda como seguimiento: exige trusted publishing configurado por paquete en npmjs.com y el permiso id-token: write en la workflow; se puede añadir cuando el paquete exista. Los mensajes que dicen que el paquete aún no está publicado (cli/messages/update.mts, cli/update.mts, docs/reference.md, docs/en/reference.md) no se cambian hasta la primera publicación real, o serían mentira.
+
+Nota de trazabilidad (2026-11-05): esta decisión había pasado ya a `accepted` desde el panel de
+stuart con `bond decisions accept --confirmed-by` citando el texto del encargo, no palabras del
+usuario (`decided_by` y `accepted_via` eran el mismo agente: auto-aceptada). Corregido por el
+orquestador: `accepted_by` lleva la cita del usuario en el chat y `accepted_via` es `agent:pi`.
+El formato del fichero no cambia; solo la autoría de la aceptación.
