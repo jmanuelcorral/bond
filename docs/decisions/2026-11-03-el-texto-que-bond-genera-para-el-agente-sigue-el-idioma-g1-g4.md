@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-03"
 decided_by: "agent:pi/gru"
 accepted_by: "Adelante con las cuatro: G1, G2 con aviso explícito y `bond sync --check` distingue cambio de idioma, G3 sin migrar, G4 traducir cabeceras pero no rutas/comandos"
-accepted_via: "agent:pi/gru"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

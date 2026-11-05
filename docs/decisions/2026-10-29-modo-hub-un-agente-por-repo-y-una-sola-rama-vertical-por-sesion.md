@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-29"
 decided_by: "agent:claude"
 accepted_by: "El usuario: \"Uno por repo y rama\" y \"si trabajas en modo hub, de momento no paralelizas varios worktrees por rama. Eso lo dejamos a una futura feature.\""
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

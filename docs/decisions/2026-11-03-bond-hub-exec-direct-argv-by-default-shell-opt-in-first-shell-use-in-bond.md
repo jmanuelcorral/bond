@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-03"
 decided_by: "agent:pi/kevin"
 accepted_by: "Apruebo ambas decisiones propuestas: bond-hub-exec-requires-before-the-command y bond-hub-exec-direct-argv-by-default-shell-opt-in-first-shell-use-in-bond"
-accepted_via: "agent:pi/gru"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-30"
 decided_by: "agent:claude"
 accepted_by: "acéptalo y fusiona la PR"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: "2026-10-30-bond-hub-pull-solo-avanza-la-base-en-fast-forward"
 superseded_by: ""
 links:

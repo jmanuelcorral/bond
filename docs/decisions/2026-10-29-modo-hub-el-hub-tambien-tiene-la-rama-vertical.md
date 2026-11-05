@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-29"
 decided_by: "agent:claude"
 accepted_by: "El usuario: \"Sí\" a que el hub tenga la rama fix/x"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

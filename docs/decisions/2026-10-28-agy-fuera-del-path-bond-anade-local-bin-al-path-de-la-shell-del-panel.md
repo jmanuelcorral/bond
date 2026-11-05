@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-28"
 decided_by: "agent:claude/kevin"
 accepted_by: "usuario en sesión el 2026-10-28: «integra P4, acepto, acepta las dos»"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

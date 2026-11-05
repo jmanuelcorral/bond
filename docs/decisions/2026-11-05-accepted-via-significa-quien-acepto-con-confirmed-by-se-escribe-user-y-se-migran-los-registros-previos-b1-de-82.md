@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-05"
 decided_by: "agent:pi"
 accepted_by: "Confirmo B1: con `--confirmed-by`, `accepted_via` se escribe \"user\"; migrar los registros legítimos ya escritos a accepted_via: \"user\"."
-accepted_via: "agent:pi"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

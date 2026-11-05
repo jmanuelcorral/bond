@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-04"
 decided_by: "agent:pi"
 accepted_by: "paso la decisión de models-sync como aceptada"
-accepted_via: "agent:pi"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

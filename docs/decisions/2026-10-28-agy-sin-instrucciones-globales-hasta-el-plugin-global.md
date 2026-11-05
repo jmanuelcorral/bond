@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-28"
 decided_by: "agent:claude/kevin"
 accepted_by: "chat 2026-10-28: «integra P1, acepto, acepta la de kevin, arregla collect y lanza P2 y P3»"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

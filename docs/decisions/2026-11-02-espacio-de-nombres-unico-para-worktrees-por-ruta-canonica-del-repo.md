@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-02"
 decided_by: "agent:agy/kevin"
 accepted_by: "Acepto la decision 2026-11-02-espacio-de-nombres-unico-para-worktrees-por-ruta-canonica-del-repo tal como esta; no la cambio."
-accepted_via: "agent:pi/gru"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

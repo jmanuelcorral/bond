@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-03"
 decided_by: "agent:pi/kevin"
 accepted_by: "Approve both proposed decisions: phase-plans-name-their-repos-with-a-repos-field-in-the-phase-block and a-phase-without-a-repos-field-means-ask-never-all-session-repos"
-accepted_via: "agent:pi/gru"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

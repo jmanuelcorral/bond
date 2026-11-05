@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-28"
 decided_by: "agent:claude"
 accepted_by: "usuario en sesión el 2026-10-28: «a partir de ahora si el orquestador confia en el repo, hagamos que el resto de agentes confien» y «si funcona con trustedWorkspaces perfecto»"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: "2026-10-28-confianza-heredada-para-agy-en-bond-team"
 superseded_by: ""
 links:

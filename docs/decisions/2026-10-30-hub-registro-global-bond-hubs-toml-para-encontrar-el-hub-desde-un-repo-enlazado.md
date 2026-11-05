@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-30"
 decided_by: "agent:claude"
 accepted_by: "El usuario aprobó el plan 2026-10-30-hub-guided con D11–D15: \"si, quita [hub] y guárdalo\" (2026-10-30)"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

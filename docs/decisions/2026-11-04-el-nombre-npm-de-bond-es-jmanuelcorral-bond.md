@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-04"
 decided_by: "agent:pi/gru"
 accepted_by: "para #66 usa @jmanuelcorral/bond como nombre npm"
-accepted_via: "agent:pi/gru"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

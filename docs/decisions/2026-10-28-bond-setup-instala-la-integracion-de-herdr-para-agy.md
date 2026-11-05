@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-28"
 decided_by: "agent:claude"
 accepted_by: "chat 2026-10-28: «acepta P3, añade P4 y mándala a claude», aprobando los arreglos propuestos tras la prueba real"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: "2026-10-28-p3-no-instala-la-integracion-de-herdr-para-agy"
 superseded_by: ""
 links:

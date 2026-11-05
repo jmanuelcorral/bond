@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-29"
 decided_by: "agent:claude"
 accepted_by: "El usuario: \"trabajas en los repos de forma vertical, si hago un fix, la rama se llama igual en los 2 repos\""
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

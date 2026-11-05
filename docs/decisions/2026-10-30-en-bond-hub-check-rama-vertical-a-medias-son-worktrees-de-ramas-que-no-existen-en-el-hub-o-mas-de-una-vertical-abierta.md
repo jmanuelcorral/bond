@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-30"
 decided_by: "agent:pi/stuart"
 accepted_by: "todas, y la de H4 dala por buena"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-29"
 decided_by: "agent:claude"
 accepted_by: "El usuario aprobó el plan 2026-10-29-hub-session con D1–D10: \"si, guárdalo\" (2026-10-29)"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

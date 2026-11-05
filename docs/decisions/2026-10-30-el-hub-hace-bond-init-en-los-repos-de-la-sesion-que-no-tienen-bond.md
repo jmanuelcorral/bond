@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-30"
 decided_by: "agent:claude"
 accepted_by: "Creo que deberia detectarlo y hacer un init para que el hub funcione correctamente"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-03"
 decided_by: "agent:pi/gru"
 accepted_by: "Global en ~/.agents/skills/tui-design/ y sí, con ORIGIN.md fijando URL, commit SHA, fecha y quién lo copió."
-accepted_via: "agent:pi/gru"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

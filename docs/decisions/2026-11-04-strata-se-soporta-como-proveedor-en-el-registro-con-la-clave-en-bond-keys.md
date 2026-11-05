@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-04"
 decided_by: "agent:pi/gru"
 accepted_by: "1a 3a"
-accepted_via: "agent:pi/gru"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

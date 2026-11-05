@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-02"
 decided_by: "agent:pi/kevin"
 accepted_by: "A"
-accepted_via: "agent:pi/kevin"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

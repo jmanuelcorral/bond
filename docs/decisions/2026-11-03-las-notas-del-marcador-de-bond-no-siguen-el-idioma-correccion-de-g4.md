@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-03"
 decided_by: "agent:pi/gru"
 accepted_by: "Usa el mensaje en español: feat(i18n): el texto generado para agentes sigue el idioma configurado (corrección aplicada por el agente al ver fallar la CI de la PR #61; el usuario pidió empujar y abrir PR, y la corrección era necesaria para que la PR pase)"
-accepted_via: "agent:pi/gru"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

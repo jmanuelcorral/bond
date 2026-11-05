@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-04"
 decided_by: "agent:pi/gru"
 accepted_by: "no, cualquiera que se baje el repo, no cualquiera que use bond"
-accepted_via: "agent:pi/gru"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

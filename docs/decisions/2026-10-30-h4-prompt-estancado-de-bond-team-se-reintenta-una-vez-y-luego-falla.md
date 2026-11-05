@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-30"
 decided_by: "agent:pi/kevin"
 accepted_by: "\"wait briefly and retry ONCE; if still stalls, fail with a clear message instead of a warning. Applies to hub and non-hub prompts.\""
-accepted_via: "agent:pi/kevin"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

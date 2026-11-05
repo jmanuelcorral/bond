@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-03"
 decided_by: "agent:pi/gru"
 accepted_by: "la tabla se ve muy mal, no parece una tabla, añade lineas y si tenemos en la config la nerdfont utilizala"
-accepted_via: "agent:pi/gru"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

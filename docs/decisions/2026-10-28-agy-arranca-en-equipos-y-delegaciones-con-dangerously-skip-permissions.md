@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-28"
 decided_by: "agent:claude"
 accepted_by: "chat 2026-10-28: «la proxima vez que ejecutes agy, hazlo con el flag --dangerously-skip-permissions por que si no pregunta mucho y no avanza» y «acepta P3, añade P4 y mándala a claude»"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

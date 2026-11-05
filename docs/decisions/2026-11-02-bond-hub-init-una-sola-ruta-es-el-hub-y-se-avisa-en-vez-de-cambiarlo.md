@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-02"
 decided_by: "agent:pi/gru"
 accepted_by: "Acepto la decision del hub init a una sola ruta; puedes fusionar #53."
-accepted_via: "agent:pi/gru"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

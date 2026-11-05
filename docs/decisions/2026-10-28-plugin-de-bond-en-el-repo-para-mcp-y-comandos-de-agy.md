@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-28"
 decided_by: "agent:claude"
 accepted_by: "chat 2026-10-28: «aprueba y guarda» (plan de agy) y «acepta A1–A4, commitea y manda P1 a claude»"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

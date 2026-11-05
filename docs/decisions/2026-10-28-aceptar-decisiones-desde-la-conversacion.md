@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-28"
 decided_by: "agent:claude"
 accepted_by: "chat 2026-10-28: «acepta D20 y D21»"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: "2026-10-28-aceptar-rechazar-y-sustituir-son-del-usuario"
 superseded_by: ""
 links:

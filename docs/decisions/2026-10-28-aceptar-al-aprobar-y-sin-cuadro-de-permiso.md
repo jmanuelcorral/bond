@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-28"
 decided_by: "agent:claude"
 accepted_by: "chat 2026-10-28: «quita el cuadro y acepta al aprobar»"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: "2026-10-28-cuadro-de-permiso-de-claude-code-para-aceptar-decisiones"
 superseded_by: ""
 links:

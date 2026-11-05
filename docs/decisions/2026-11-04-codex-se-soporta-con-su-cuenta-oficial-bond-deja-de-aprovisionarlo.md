@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-04"
 decided_by: "agent:pi/gru"
 accepted_by: "1. Cerrar #74 y #79 como NOT_PLANNED y abrir issue https://github.com/jmanuelcorral/bond/issues/80 (alcance). 2. Limpiar automáticamente el bloque huérfano con backup. 3. Aprobado el alcance en https://github.com/jmanuelcorral/bond/issues/80 (#74 y #79 cerrados como NOT_PLANNED)."
-accepted_via: "agent:pi/gru"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

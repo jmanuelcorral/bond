@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-05"
 decided_by: "agent:pi"
 accepted_by: "B (respondiendo a «Dime B y lo dejo fijado en #82 como decisión tomada, o si prefieres A a secas te lo ajusto»)"
-accepted_via: "agent:pi"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

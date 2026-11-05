@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-04"
 decided_by: "agent:pi/gru"
 accepted_by: "strata lee imagenes como input, por eso pone imagenes a true, y lo que digo de soportar strata es para configurarlo como proveedor tal y como hacemos con cualquier otra api compatible con openai"
-accepted_via: "agent:pi/gru"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

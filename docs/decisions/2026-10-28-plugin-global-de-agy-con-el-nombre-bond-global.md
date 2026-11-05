@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-28"
 decided_by: "agent:claude/kevin"
 accepted_by: "chat 2026-10-28: «acepta las tres, integra P2 y P3, arregla check y haz la prueba real»"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

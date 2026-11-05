@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-02"
 decided_by: "agent:pi/gru"
 accepted_by: "creo que hemos de hacerlo mas simple, para el idioma solo quiero que \"traduzcas\" los comandos de la shell de bond. Si el usuario le habla en castellano al agente es problema del agente [...] P3 incluido en esta PR."
-accepted_via: "agent:pi/gru"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

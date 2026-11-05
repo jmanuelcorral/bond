@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-11-03"
 decided_by: "agent:pi/kevin"
 accepted_by: "Apruebo la decision hub-bump-comando-nuevo: bond hub bump como subcomando nuevo."
-accepted_via: "agent:pi/gru"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:

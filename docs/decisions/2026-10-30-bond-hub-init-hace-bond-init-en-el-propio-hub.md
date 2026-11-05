@@ -5,7 +5,7 @@ status: "accepted"
 date: "2026-10-30"
 decided_by: "agent:claude"
 accepted_by: "Podriamos detectar si hay init hecho o no, y si no lanzar el init antes?"
-accepted_via: "agent:claude"
+accepted_via: "user"
 supersedes: ""
 superseded_by: ""
 links:
