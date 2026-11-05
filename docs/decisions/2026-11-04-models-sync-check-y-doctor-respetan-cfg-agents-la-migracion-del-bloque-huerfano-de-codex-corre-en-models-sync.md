@@ -31,4 +31,4 @@ Que `--check`/`doctor` siguieran auditando todos los agentes instalados: genera 
 
 ## Consequences
 
-Efecto colateral sin resolver: `bond doctor` pasa `agents` explícitos a `syncAgents`, así que la ruta de limpieza/comprobación del huérfano no se dispara desde doctor; solo `bond models sync --check` la reporta. Y `bond models sync --agent codex` muere con «agente sin generador de modelos» en vez de limpiar el bloque. Ambos se pueden cerrar después si molestan.
+Resuelto en 13c13e0 lo que esto dejaba sin cerrar: `bond doctor` pasaba `agents` explícitos a `syncAgents` y no veía el huérfano, y `bond models sync --agent codex` moría con «agente sin generador de modelos». Ahora la limpieza del huérfano corre en todo `syncAgents`, con o sin `--agent`, `doctor` saca su propia fila de aviso mientras el bloque exista, y `--agent codex` se acepta como limpieza exclusiva (avisa si no hay nada que limpiar).

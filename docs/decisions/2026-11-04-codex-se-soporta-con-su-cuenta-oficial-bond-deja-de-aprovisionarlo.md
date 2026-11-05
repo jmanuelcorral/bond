@@ -32,3 +32,5 @@ Exportar BOND_KEY_<ID> desde preparePane: descartado porque la clave se teclea a
 ## Consequences
 
 #74 y #79 se cierran como NOT_PLANNED: ambos existían solo porque bond aprovisiona Codex. El cambio de alcance va en #80. En bond models list Codex deja de aparecer como aprovisionable y pasa a explicarse su situación, en vez de desaparecer en silencio como agy. El bloque MCP que bond escribe en .codex/config.toml a nivel de repo no se ve afectado: no es aprovisionamiento de modelos.
+
+Dos cabos sueltos de la primera versión (651a1a6) quedaron cerrados en 13c13e0: `bond doctor` pasaba su propia lista de agentes a `syncAgents` y por eso no veía el huérfano — ahora la limpieza corre en cada `syncAgents` y `doctor` tiene fila propia (`codexOrphanCheck`) mientras el bloque esté en disco; y `bond models sync --agent codex` moría con «agente sin generador de modelos» — `codex` se acepta de nuevo en `--agent` como limpieza exclusiva, y avisa si no hay nada que limpiar.
