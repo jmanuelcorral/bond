@@ -25,6 +25,14 @@ const bond = (args: string[], cwd = repo) =>
 		stdio: ["ignore", "pipe", "pipe"],
 	});
 
+const bondWith = (args: string[], env: Record<string, string>, cwd = repo) =>
+	spawnSync(process.execPath, [MAIN, ...args], {
+		cwd,
+		env: { ...process.env, NO_COLOR: "1", HERDR_ENV: "", HERDR_PANE_ID: "", ...env },
+		encoding: "utf8",
+		stdio: ["ignore", "pipe", "pipe"],
+	});
+
 beforeEach(() => {
 	repo = realpathSync(mkdtempSync(join(tmpdir(), "bond-dec-")));
 	spawnSync("git", ["init", "-q"], { cwd: repo });
@@ -238,14 +246,6 @@ describe("autoría fijada a mano (override, D12)", () => {
 	const cfgFile = "config.toml";
 	afterEach(() => delete process.env.BOND_DECISION_AGENT);
 
-	const bondWith = (args: string[], env: Record<string, string>) =>
-		spawnSync(process.execPath, [MAIN, ...args], {
-			cwd: repo,
-			env: { ...process.env, NO_COLOR: "1", HERDR_ENV: "", HERDR_PANE_ID: "", ...env },
-			encoding: "utf8",
-			stdio: ["ignore", "pipe", "pipe"],
-		});
-
 	/**
 	 * Config global con [decisions] author en una BOND_HOME propia, y add dentro. En proceso no
 	 * se puede probar: BOND_HOME en cli/runtime.mts queda fijada por el primer fichero de
@@ -314,7 +314,7 @@ describe("autoría fijada a mano (override, D12)", () => {
 		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
 	});
 
-	test("accept con el override deja la identidad fijada en accepted_via", () => {
+	test("accept con el override y --confirmed-by deja accepted_via en user (B1 de #82)", () => {
 		enableMemory();
 		const { id } = add();
 		const r = bondWith(["decisions", "accept", id, "--confirmed-by", "vale, adelante"], {
@@ -323,7 +323,7 @@ describe("autoría fijada a mano (override, D12)", () => {
 		expect(r.status).toBe(0);
 		const d = loadDecisions(repo, "docs/decisions").find((x) => x.id === id);
 		expect(d?.status).toBe("accepted");
-		expect(d?.accepted_via).toBe("agent:pi/gru");
+		expect(d?.accepted_via).toBe("user");
 	});
 
 	test("por la orden, un override inválido sale con 1 y no toca la decisión", () => {
@@ -647,6 +647,99 @@ describe("accept/reject/supersede desde la conversación (D20)", () => {
 		write("docs/decisions/2026-01-04-via-malo.md", `---\nid: "2026-01-04-via-malo"\ntitle: "t"\nstatus: "accepted"\ndate: "2026-01-04"\ndecided_by: "user"\naccepted_via: "gpt-99"\n---\n`);
 		const errs = checkDecisions(repo, "docs/decisions").errors;
 		expect(errs.some((e) => e.includes("accepted_via") && e.includes("2026-01-04-via-malo"))).toBe(true);
+	});
+});
+
+describe("bloqueo por identidad y detección de auto-aceptación (issue #82 / B1)", () => {
+	test("add --confirmed-by deja accepted_via en user incluso si lo ejecuta un agente", () => {
+		enableMemory();
+		const r = bondWith(["decisions", "add", "--title", "Decisión con confirmed", "--decision", "Hacerlo así", "--confirmed-by", "el usuario dijo que sí"], {
+			BOND_DECISION_AGENT: "agent:pi/gru",
+		});
+		expect(r.status).toBe(0);
+		const d = loadDecisions(repo, "docs/decisions")[0];
+		expect(d.status).toBe("accepted");
+		expect(d.decided_by).toBe("agent:pi/gru");
+		expect(d.accepted_by).toBe("el usuario dijo que sí");
+		expect(d.accepted_via).toBe("user");
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+	});
+
+	test("decided_by user se acepta normal desde un agente con --confirmed-by", () => {
+		enableMemory();
+		const { id } = add(); // decided_by: "user"
+		const r = bondWith(["decisions", "accept", id, "--confirmed-by", "adelante con ello"], {
+			BOND_DECISION_AGENT: "agent:pi/gru",
+		});
+		expect(r.status).toBe(0);
+		const d = loadDecisions(repo, "docs/decisions").find((x) => x.id === id);
+		expect(d?.status).toBe("accepted");
+		expect(d?.decided_by).toBe("user");
+		expect(d?.accepted_via).toBe("user");
+		expect(checkDecisions(repo, "docs/decisions").errors).toEqual([]);
+	});
+
+	test("accept desde el mismo agente que decided_by falla y el fichero queda intacto", () => {
+		enableMemory();
+		bondWith(["decisions", "add", "--title", "Decisión propuesta", "--decision", "Una decisión propuesta"], {
+			BOND_DECISION_AGENT: "agent:pi/stuart",
+		});
+		const d = loadDecisions(repo, "docs/decisions")[0];
+		expect(d.decided_by).toBe("agent:pi/stuart");
+		const before = read(d.rel);
+		const r = bondWith(["decisions", "accept", d.id, "--confirmed-by", "auto aceptación"], {
+			BOND_DECISION_AGENT: "agent:pi/stuart",
+		});
+		expect(r.status).toBe(1);
+		expect(r.stderr).toContain("la registró agent:pi/stuart");
+		expect(r.stderr).toContain("solo el usuario puede aceptarla");
+		expect(read(d.rel)).toBe(before);
+	});
+
+	test("reject y supersede con el mismo agente que decided_by también fallan", () => {
+		enableMemory();
+		bondWith(["decisions", "add", "--title", "Para rechazar", "--decision", "Se va a rechazar"], {
+			BOND_DECISION_AGENT: "agent:pi/stuart",
+		});
+		const dReject = loadDecisions(repo, "docs/decisions")[0];
+		const beforeReject = read(dReject.rel);
+		const rReject = bondWith(["decisions", "reject", dReject.id, "--confirmed-by", "auto rechazo"], {
+			BOND_DECISION_AGENT: "agent:pi/stuart",
+		});
+		expect(rReject.status).toBe(1);
+		expect(rReject.stderr).toContain("la registró agent:pi/stuart");
+		expect(read(dReject.rel)).toBe(beforeReject);
+
+		bondWith(["decisions", "add", "--title", "Vieja", "--decision", "Vieja decisión"], {
+			BOND_DECISION_AGENT: "agent:pi/stuart",
+		});
+		bondWith(["decisions", "add", "--title", "Nueva", "--decision", "Nueva decisión"], {
+			BOND_DECISION_AGENT: "agent:pi/stuart",
+		});
+		const ds = loadDecisions(repo, "docs/decisions");
+		const dOld = ds.find((x) => x.title === "Vieja")!;
+		const dNew = ds.find((x) => x.title === "Nueva")!;
+		const beforeOld = read(dOld.rel);
+		const beforeNew = read(dNew.rel);
+		const rSupersede = bondWith(["decisions", "supersede", dOld.id, "--by", dNew.id, "--confirmed-by", "auto sustitución"], {
+			BOND_DECISION_AGENT: "agent:pi/stuart",
+		});
+		expect(rSupersede.status).toBe(1);
+		expect(rSupersede.stderr).toContain("la registró agent:pi/stuart");
+		expect(read(dOld.rel)).toBe(beforeOld);
+		expect(read(dNew.rel)).toBe(beforeNew);
+	});
+
+	test("checkDecisions marca una decisión accepted con decided_by == accepted_via y no marca una con accepted_via user y decided_by agent", () => {
+		enableMemory();
+		// Auto-aceptada histórica (error)
+		write("docs/decisions/2026-01-01-auto-aceptada.md", `---\nid: "2026-01-01-auto-aceptada"\ntitle: "t"\nstatus: "accepted"\ndate: "2026-01-01"\ndecided_by: "agent:pi/stuart"\naccepted_via: "agent:pi/stuart"\n---\n`);
+		// Legítima B1 (decided_by: agent, accepted_via: user)
+		write("docs/decisions/2026-01-02-legitima.md", `---\nid: "2026-01-02-legitima"\ntitle: "t"\nstatus: "accepted"\ndate: "2026-01-02"\ndecided_by: "agent:pi/stuart"\naccepted_via: "user"\n---\n`);
+
+		const rep = checkDecisions(repo, "docs/decisions");
+		expect(rep.errors.some((e) => e.includes("2026-01-01-auto-aceptada") && (e.includes("auto-aceptada") || e.includes("decided_by")))).toBe(true);
+		expect(rep.errors.some((e) => e.includes("2026-01-02-legitima"))).toBe(false);
 	});
 });
 

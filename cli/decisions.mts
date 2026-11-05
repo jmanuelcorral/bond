@@ -223,7 +223,7 @@ export function addDecision(root: string, dirRel: string, in_: AddInput): { id: 
 		date: utcToday(),
 		decided_by,
 		accepted_by: confirmed ?? "",
-		accepted_via: confirmed ? decided_by : "",
+		accepted_via: confirmed ? "user" : "",
 		supersedes: "",
 		superseded_by: "",
 		// Sin repetidos: el agente a veces pasa la rama que bond añade de todos modos.
@@ -335,16 +335,23 @@ async function changeStatus(root: string, dirRel: string, req: ChangeRequest): P
 			failed = true;
 			continue;
 		}
+		const author = resolveAuthor();
+		const decidedBy = p.scalars.decided_by ?? "";
+		if (author !== "user" && author === decidedBy) {
+			console.error(`${bad("✗")} ${t("decisions.err_same_author", { id, author, verb })}`);
+			failed = true;
+			continue;
+		}
 		if (!confirmedBy && !(await confirm(t("decisions.confirm_prompt", { verb, id })))) {
 			console.log(dim(t("decisions.cancelled", { id })));
 			continue;
 		}
 		const patch: Partial<Pick<Decision, "status" | "accepted_by" | "accepted_via" | "supersedes" | "superseded_by">> = {};
-		// Con --confirmed-by: la referencia es lo que dijo el usuario y accepted_via quien
-		// lo ejecutó (D20). En interactivo, accepted_by queda con --ref si se dio.
+		// Con --confirmed-by: la referencia es lo que dijo el usuario y accepted_via quién
+		// aceptó ("user", B1 de #82). En interactivo, accepted_by queda con --ref si se dio.
 		if (confirmedBy) {
 			patch.accepted_by = confirmedBy;
-			patch.accepted_via = resolveAuthor();
+			patch.accepted_via = "user";
 		} else if (req.ref) {
 			patch.accepted_by = req.ref;
 		}
@@ -424,6 +431,9 @@ export function checkDecisions(root: string, dirRel: string): DecisionsReport {
 		const via = p.scalars.accepted_via;
 		if (via && !/^(user|agent:[a-z0-9._-]+(\/[A-Za-z0-9._-]+)?)$/.test(via)) {
 			errors.push(t("decisions.check_bad_accepted_via", { file: rel, via }));
+		}
+		if (p.scalars.status === "accepted" && via && via !== "user" && via === p.scalars.decided_by) {
+			errors.push(t("decisions.check_same_accepted_via", { file: rel, author: via }));
 		}
 	}
 	for (const tTrailer of decisionTrailers(root)) {
