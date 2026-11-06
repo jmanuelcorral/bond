@@ -365,7 +365,7 @@ maxTokensField = "max_tokens"
 |---|---|
 | `bond models init` | Crea `config.toml`. Si hay un `models.json` de pi, importa sus proveedores (y los modelos comentados con `//`, como `enabled = false`) |
 | `bond models list` | Proveedores, modelos, APIs y qué agentes pueden usar cada uno |
-| `bond models probe [id]` | Pregunta a la pasarela qué sirve: lista de modelos y las APIs `chat`, `responses` y `messages` (una petición tras otra; las pasarelas locales no atienden varias a la vez). Lo guarda en `~/.bond/state.json` |
+| `bond models probe [id]` | Pregunta a la pasarela qué sirve: lista de modelos y las APIs `chat`, `responses` y `messages` (una petición tras otra; las pasarelas locales no atienden varias a la vez). Inspecciona el cuerpo de cada respuesta: `✓` contenido utilizable, `!` viva pero vacía por presupuesto de razonamiento (sugiere declarar `reasoning = true`), `✗` caída (#76). Lo guarda en `~/.bond/state.json` |
 | `bond models sync` | Escribe la config de modelos de cada agente instalado. `--agent x`, `--dry-run` (enseña el diff), `--check` (sale con 1 si hay algo desfasado) |
 | `bond run copilot` | Lanza Copilot CLI contra un modelo del registro (ver abajo) |
 

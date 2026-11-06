@@ -42,6 +42,15 @@ export function configExists(): boolean {
 /** APIs que puede servir una pasarela. */
 export type Api = "chat" | "responses" | "messages";
 
+/**
+ * Resultado de probar una API en `bond models probe` (#76):
+ * - `ok`: responde con contenido utilizable.
+ * - `empty_reasoning`: 200 pero sin contenido util (típico de modelos razonadores
+ *   cuyo presupuesto de tokens se va entero en `reasoning`).
+ * - `fail`: fallo de transporte o HTTP != 2xx.
+ */
+export type ProbeApiStatus = "ok" | "empty_reasoning" | "fail";
+
 export interface Model {
 	id: string;
 	name?: string;
@@ -106,7 +115,7 @@ export interface UpdateState {
 }
 
 export interface State {
-	probes: Record<string, { apis: Api[]; served: string[]; at: string }>;
+	probes: Record<string, { apis: Api[]; served: string[]; at: string; status?: Partial<Record<Api, ProbeApiStatus>> }>;
 	/** Por agente: ids de proveedor que bond escribió la última vez. */
 	managed: Record<string, string[]>;
 	/** Ficheros de los que ya se guardó copia antes de tocarlos por primera vez. */

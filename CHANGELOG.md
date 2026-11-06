@@ -1,5 +1,17 @@
 # Cambios
 
+## Sin publicar
+
+- `bond models probe` inspecciona el cuerpo de la respuesta, no solo el status HTTP (#76).
+  Antes un modelo razonador al que el `max_tokens` del probe no le deja margen respondía
+  200 con la respuesta vacía (todo el presupuesto en `reasoning`) y el probe lo marcaba
+  `✓ chat`, que el usuario leía como «este modelo funciona». Ahora hay tres estados por
+  API: `✓` responde con contenido utilizable, `!` vivo pero vacío por presupuesto de
+  razonamiento (avisa de que hay que declarar `reasoning = true` en el modelo) y `✗`
+  caído. Se mantiene el `max_tokens` pequeño del probe para no castigar el arranque en
+  frío de pasarelas locales (#75). El estado guardado en `~/.bond/state.json` distingue
+  por API `ok` / `empty_reasoning` / `fail`, que consumirá el handoff de #84.
+
 ## 1.13.1
 
 Publicación en npm con identidad propia: trusted publishing por OIDC y tarball firmado con

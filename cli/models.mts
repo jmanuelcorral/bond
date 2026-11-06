@@ -5,7 +5,7 @@ import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { inspect } from "node:util";
-import { activeProviders, type Api, CONFIG_DIR, CONFIG_FILE, initialConfig, loadConfig, loadState, providerApis, saveState, type State } from "./config.mts";
+import { activeProviders, type Api, CONFIG_DIR, CONFIG_FILE, initialConfig, loadConfig, loadState, providerApis, saveState, type ProbeApiStatus, type State } from "./config.mts";
 import { BEGIN, codexConfigFile, INCOMPATIBLE, readCurrent, hasComments, TARGETS, withoutBlock } from "./agents.mts";
 import { t } from "./messages.mts";
 import { act, AGENT_DIR, bad, caution, die, dim, isDryRun, log, ok, REPO_DIR, run, STAMP, warn, which } from "./util.mts";
@@ -94,7 +94,40 @@ function list(): void {
 
 // --- probe --------------------------------------------------------------------------------
 
-async function post(url: string, body: unknown, headers: Record<string, string>): Promise<boolean> {
+/**
+ * Clasifica la respuesta de un probe (#76). Puro a propósito: se puede probar con
+ * cuerpos stub sin red. Reglas (aprobadas en el refinamiento de #76):
+ * - HTTP != 2xx o cuerpo no parseable → `fail` (endpoint caído o roto).
+ * - 2xx con contenido utilizable (`content`/`output_text`/bloque `text` no vacío) → `ok`.
+ * - 2xx sin contenido util → `empty_reasoning`: sea por presupuesto de razonamiento
+ *   (`reasoning_content` presente, `finish_reason: "length"`, `incomplete_details.reason:
+ *   "max_output_tokens"`, solo bloques `thinking`) o porque no hay nada que mostrar;
+ *   en cualquier caso el usuario necesita saberlo.
+ */
+export function classifyProbe(api: Api, status: number, json: unknown): ProbeApiStatus {
+	if (status < 200 || status >= 300 || json === null || typeof json !== "object") return "fail";
+	const j = json as Record<string, any>;
+	const nonEmpty = (s: unknown): boolean => typeof s === "string" && s.trim().length > 0;
+	if (api === "chat") {
+		const msg = (j.choices?.[0]?.message ?? {}) as Record<string, any>;
+		if (nonEmpty(msg.content)) return "ok";
+		return "empty_reasoning";
+	}
+	if (api === "responses") {
+		if (nonEmpty(j.output_text)) return "ok";
+		const texts = Array.isArray(j.output)
+			? j.output.flatMap((item: any) => (Array.isArray(item?.content) ? item.content : []))
+			: [];
+		if (texts.some((b: any) => (b?.type === "output_text" || b?.type === "text") && nonEmpty(b.text))) return "ok";
+		return "empty_reasoning";
+	}
+	// messages (Anthropic)
+	const blocks = Array.isArray(j.content) ? j.content : [];
+	if (blocks.some((b: any) => b?.type === "text" && nonEmpty(b.text))) return "ok";
+	return "empty_reasoning";
+}
+
+async function postProbe(api: Api, url: string, body: unknown, headers: Record<string, string>): Promise<ProbeApiStatus> {
 	try {
 		const res = await fetch(url, {
 			method: "POST",
@@ -102,10 +135,15 @@ async function post(url: string, body: unknown, headers: Record<string, string>)
 			body: JSON.stringify(body),
 			signal: AbortSignal.timeout(120_000), // la primera petición puede cargar el modelo en RAM
 		});
-		await res.text();
-		return res.ok;
+		let json: unknown = null;
+		try {
+			json = await res.json();
+		} catch {
+			json = null;
+		}
+		return classifyProbe(api, res.status, json);
 	} catch {
-		return false;
+		return "fail";
 	}
 }
 
@@ -133,23 +171,28 @@ async function probe(ids: string[]): Promise<void> {
 			continue;
 		}
 		// Una detrás de otra: las pasarelas locales no suelen atender varias a la vez (429).
-		const checks: Array<[Api, () => Promise<boolean>]> = [
-			["chat", () => post(`${base}/chat/completions`, { model, messages: [{ role: "user", content: "ok" }], max_tokens: 8 }, auth)],
-			["responses", () => post(`${base}/responses`, { model, input: "ok", max_output_tokens: 16 }, auth)],
-			["messages", () => post(`${base}/messages`, { model, max_tokens: 8, messages: [{ role: "user", content: "ok" }] }, { ...auth, "anthropic-version": "2023-06-01" })],
+		const checks: Array<[Api, () => Promise<ProbeApiStatus>]> = [
+			["chat", () => postProbe("chat", `${base}/chat/completions`, { model, messages: [{ role: "user", content: "ok" }], max_tokens: 8 }, auth)],
+			["responses", () => postProbe("responses", `${base}/responses`, { model, input: "ok", max_output_tokens: 16 }, auth)],
+			["messages", () => postProbe("messages", `${base}/messages`, { model, max_tokens: 8, messages: [{ role: "user", content: "ok" }] }, { ...auth, "anthropic-version": "2023-06-01" })],
 		];
 		const apis: Api[] = [];
+		const apiStatus: Partial<Record<Api, ProbeApiStatus>> = {};
 		for (const [api, check] of checks) {
-			const good = await check();
-			if (good) apis.push(api);
-			console.log(`  ${good ? ok("✓") : bad("✗")} ${api}`);
+			const res = await check();
+			apiStatus[api] = res;
+			// La API la sirve aunque la respuesta salga vacía: el endpoint está vivo (#76).
+			if (res !== "fail") apis.push(api);
+			const mark = res === "ok" ? ok("✓") : res === "empty_reasoning" ? caution("!") : bad("✗");
+			const note = res === "empty_reasoning" ? `  ${t("models.probe_empty_reasoning", { api })}` : "";
+			console.log(`  ${mark} ${api}${note}`);
 		}
 		const declared = p.models.filter((m) => m.enabled !== false).map((m) => m.id);
 		const missing = declared.filter((m) => served.length && !served.includes(m));
 		const status = served.length ? t("models.probe_models_serves", { count: served.length }) : t("models.probe_models_unavailable");
 		const missingStr = missing.length ? t("models.probe_models_missing", { missing: missing.join(", ") }) : "";
 		console.log(`  ${missing.length ? caution("!") : ok("✓")} ` + t("models.probe_models_summary", { status, missing: missingStr }));
-		state.probes[p.id] = { apis, served, at: new Date().toISOString() };
+		state.probes[p.id] = { apis, served, at: new Date().toISOString(), status: apiStatus };
 	}
 	saveState(state);
 	if (targets.some((p) => p.apis)) console.log(dim(t("models.probe_apis_note")));
