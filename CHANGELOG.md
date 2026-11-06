@@ -11,13 +11,17 @@
   que usa agy (su settings y el plugin global de bond) no se tocan: son la home de
   configuración de agy.
 - Nuevo `bond budget`: estado de presupuesto de tus agentes (epic #84). `bond sync`
-  instala un hook de presupuesto en Codex (`Stop`) y Claude Code (`Stop`,
-  `Notification`, `PreCompact`) que registra eventos en `~/.bond/events/`
-  (append-only, se purga a los 7 días); el hook es fail-open: nunca bloquea al
-  agente ni pisa entradas ajenas (las de herdr, por ejemplo). `bond budget` agrega
-  los eventos: Codex muestra los números exactos (ventana, % usado, reset) desde su
-  transcript local — decisión de no tocar endpoints; los demás agentes quedan en
-  `unknown` hasta que su adaptador entre.
+  instala un hook de presupuesto en Codex (`Stop`), Claude Code (`Stop`,
+  `Notification`, `PreCompact`) y Antigravity (`PostInvocation`, `Notification`,
+  `SessionEnd`) que registra eventos en `~/.bond/events/` (append-only, se purga a
+  los 7 días); el hook es fail-open: nunca bloquea al agente ni pisa entradas ajenas
+  (las de herdr, por ejemplo). En agy el destino es `~/.gemini/config/hooks.json`,
+  que va indexado por fuente: bond escribe la suya (`bond`) y no toca las demás.
+  `bond budget` agrega los eventos: Codex muestra los números exactos (ventana,
+  % usado, reset) desde su transcript local — decisión de no tocar endpoints; los
+  demás agentes quedan en `unknown` hasta que su adaptador entre. Queda pendiente de
+  implementarse el adaptador de opencode (plugin con `session.idle`/`session.error`)
+  y el de pi (extensión de eventos de presupuesto).
 - `bond models probe` inspecciona el cuerpo de la respuesta, no solo el status HTTP (#76).
   Antes un modelo razonador al que el `max_tokens` del probe no le deja margen respondía
   200 con la respuesta vacía (todo el presupuesto en `reasoning`) y el probe lo marcaba

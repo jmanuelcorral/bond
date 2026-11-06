@@ -160,8 +160,16 @@ describe("mergeAgentHooks: la nuestra se identifica por marker, lo ajeno intacto
 		const doc = JSON.parse(readFileSync(join(home, ".codex", "hooks.json"), "utf8"));
 		expect(JSON.stringify(doc)).toContain("budget-hook codex");
 		expect(ensureBudgetHooks(["codex"], { home })).toEqual([]);
-		// agentes sin destino (pi, agy en esta capa) no generan nada
-		expect(ensureBudgetHooks(["pi", "agy", "copilot"], { home })).toEqual([]);
+		// agentes sin destino de hook JSON (pi se alimenta por su extensión, crush/copilot no tienen)
+		expect(ensureBudgetHooks(["pi", "copilot"], { home })).toEqual([]);
+		// agy tiene su propio formato (fuente bond en ~/.gemini/config/hooks.json)
+		const agy = ensureBudgetHooks(["agy"], { home });
+		expect(agy.length).toBe(1);
+		agy[0].apply!();
+		const agyDoc = JSON.parse(readFileSync(join(home, ".gemini", "config", "hooks.json"), "utf8"));
+		expect(JSON.stringify(agyDoc.bond)).toContain("budget-hook agy");
+		expect(agyDoc.bond.PostInvocation.length).toBe(1);
+		expect(ensureBudgetHooks(["agy"], { home })).toEqual([]);
 	});
 });
 

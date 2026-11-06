@@ -300,6 +300,27 @@ export function mergeAgentHooks(existing: unknown, events: string[], cmd: string
 	return { doc: base, changed };
 }
 
+/**
+ * Fusiona el grupo de bond en un JSON de hooks de agy, que va indexado por fuente:
+ * {<fuente>: {<Evento>: [{command, timeout, type}]}}. Bond usa la fuente "bond" y no
+ * toca las demás (la de herdr, por ejemplo). Converge en una pasada y es estable.
+ */
+export function mergeAgyHooks(existing: unknown, events: string[], cmd: string): { doc: Record<string, unknown>; changed: boolean } {
+	const base = existing && typeof existing === "object" && !Array.isArray(existing) ? structuredClone(existing as Record<string, unknown>) : {};
+	const ours = (base.bond && typeof base.bond === "object" && !Array.isArray(base.bond) ? base.bond : {}) as Record<string, unknown[]>;
+	base.bond = ours;
+	let changed = false;
+	for (const ev of events) {
+		const cur = Array.isArray(ours[ev]) ? ours[ev] : [];
+		const next = [{ command: cmd, timeout: 5, type: "command" }];
+		if (JSON.stringify(cur) !== JSON.stringify(next)) {
+			ours[ev] = next;
+			changed = true;
+		}
+	}
+	return { doc: base, changed };
+}
+
 export interface HookInstall {
 	path: string;
 	needed: boolean;
@@ -329,10 +350,35 @@ function installJsonHooks(path: string, events: string[], cmd: string, marker: s
 	};
 }
 
+/** Igual que installJsonHooks pero con la forma indexada por fuente de agy. */
+function installAgyHooks(path: string, events: string[], cmd: string): HookInstall {
+	let existing: unknown = {};
+	if (existsSync(path)) {
+		try {
+			existing = JSON.parse(readFileSync(path, "utf8"));
+		} catch {
+			return { path, needed: true }; // JSON ajeno ilegible: no lo tocamos, solo avisamos.
+		}
+	}
+	const { doc, changed } = mergeAgyHooks(existing, events, cmd);
+	if (!changed) return { path, needed: false };
+	return {
+		path,
+		needed: true,
+		apply: () => {
+			mkdirSync(join(path, ".."), { recursive: true });
+			const tmp = `${path}.bond-tmp`;
+			writeFileSync(tmp, `${JSON.stringify(doc, null, 2)}\n`);
+			renameSync(tmp, path);
+		},
+	};
+}
+
 /** Hooks que bond gestiona por agente: eventos y fichero de destino (relativo al home). */
-export const HOOK_TARGETS: Record<string, { subpath: string[]; events: string[] }> = {
+export const HOOK_TARGETS: Record<string, { subpath: string[]; events: string[]; format?: "agy" }> = {
 	codex: { subpath: [".codex", "hooks.json"], events: ["Stop"] },
 	claude: { subpath: [".claude", "settings.json"], events: ["Stop", "Notification", "PreCompact"] },
+	agy: { subpath: [".gemini", "config", "hooks.json"], events: ["PostInvocation", "Notification", "SessionEnd"], format: "agy" },
 };
 
 /** Acciones de instalación de hooks para los agentes dados (los que tengan destino). */
@@ -345,7 +391,7 @@ export function ensureBudgetHooks(agents: string[], opts: { check?: boolean; hom
 		const path = join(home, ...target.subpath);
 		const cmd = bondHookCommand(a);
 		const marker = `budget-hook ${a}`;
-		const inst = installJsonHooks(path, target.events, cmd, marker);
+		const inst = target.format === "agy" ? installAgyHooks(path, target.events, cmd) : installJsonHooks(path, target.events, cmd, marker);
 		if (opts.check) installs.push({ path, needed: inst.needed });
 		else installs.push(inst);
 	}
