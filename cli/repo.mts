@@ -15,6 +15,7 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSy
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parse } from "smol-toml";
 import { parseJsonc } from "./agents.mts";
+import { ensureBudgetHooks } from "./budget.mts";
 import { agentInstalled } from "./catalog-agents.mts";
 import { catalogSlug, count, type McpServer, readCommandNames, readMcps, validateCatalog } from "./catalog.mts";
 import { ensureFetched, gitKey, type Lock, readLock, repoRelative } from "./catalog-git.mts";
@@ -897,6 +898,12 @@ export function syncRepo(opts: { check?: boolean; force?: boolean; quiet?: boole
 	const cfg = loadRepoConfig(root);
 	const prev = loadManifest(root);
 	const { actions, next, langRewritten } = diffActions(root, plan(root, cfg, prev), prev, !!opts.force);
+	// Hooks de presupuesto (epic #84): son de la máquina, no del repo, pero sync los mantiene
+	// instalados para los agentes declarados; `--check` los reporta como pendiente.
+	for (const h of ensureBudgetHooks(cfg.agents)) {
+		if (!h.apply) actions.push({ sign: "!", path: h.path, why: t("budget.hook_unreadable", { path: h.path }) });
+		else actions.push({ sign: existsSync(h.path) ? "~" : "+", path: h.path, why: t("budget.hook_installed", { path: h.path }), apply: h.apply });
+	}
 	const say = (s: string) => !opts.quiet && console.log(s);
 	// G2: el cambio de idioma se dice antes de la lista, no diluido en ella.
 	if (langRewritten) say(dim(t("gen.lang_rewritten", { lang: lang(), count: langRewritten })));

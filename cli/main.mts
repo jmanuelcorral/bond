@@ -79,6 +79,13 @@ async function main(argv: string[]): Promise<void> {
 			const m = await import("./models.mts");
 			return wantsHelp ? printHelp(m.MODELS_HELP) : m.models(rest);
 		}
+		case "budget": {
+			const b = await import("./budget.mts");
+			return wantsHelp ? printHelp(b.BUDGET_HELP) : b.budget(rest);
+		}
+		// Lo invocan los hooks de los agentes (fail-open: siempre sale 0).
+		case "budget-hook":
+			return (await import("./budget.mts")).budgetHook(rest);
 		case "run": {
 			const r = await import("./run.mts");
 			return wantsHelp && rest.length <= 1 ? printHelp(r.RUN_HELP) : r.runAgent(rest);

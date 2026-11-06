@@ -6,4 +6,4 @@
 # cambiaría los iconos de las tablas que se comprueban. Cada preload deja ganar a lo que ya
 # venga puesto fuera.
 [test]
-preload = ["./test/lang-pinned.mts", "./test/icons-pinned.mts"]
+preload = ["./test/lang-pinned.mts", "./test/icons-pinned.mts", "./test/hook-home-pinned.mts"]
