@@ -224,7 +224,6 @@ export const TARGETS: Target[] = [pi, opencode, crush];
 /** Agentes que no pueden usar una pasarela compatible con OpenAI, y por qué (para `models list`). */
 export const INCOMPATIBLE: Record<string, string> = {
 	claude: "Claude Code solo habla la API de Anthropic (/v1/messages)",
-	gemini: "Gemini CLI solo habla la API de Gemini",
 };
 
 /** Lee el fichero actual siguiendo symlinks (el models.json de pi era un symlink al repo). */

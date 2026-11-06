@@ -173,8 +173,8 @@ bond models sync --dry-run # what it would write to each agent
 
 Each agent speaks a different dialect. Codex needs the gateway to serve the Responses API,
 while pi, opencode and Crush use the chat one. `bond models probe` tells you what your gateway
-serves. Claude Code and Gemini, for their part, can't use OpenAI-compatible gateways, so
-there's nothing to be done with them here.
+serves. Claude Code, for its part, can't use OpenAI-compatible gateways, so
+there's nothing to be done with it here.
 
 There's one specific case with Crush. If you've defined a provider by hand in your `crushrc`
 with the same id, bond leaves it alone and warns you about it in `sync`. Remove it from your

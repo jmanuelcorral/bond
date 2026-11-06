@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+- Retirado el soporte del agente **Gemini CLI** (#85). Google lo ha descontinuado y su
+  cliente oficial es Antigravity (`agy`), que bond ya soporta. Bond deja de detectarlo,
+  de generar su config del repo (`.gemini/settings.json`, `.gemini/commands/*.toml`,
+  `GEMINI.md`), de ofrecerlo en `bond init`/`setup`/`launch` y de mencionarlo en la
+  ayuda. Sin migración: una config con `gemini` en `agents` simplemente deja de
+  producir nada (el cliente nunca llegó a probarse con bond). Las rutas `~/.gemini/*`
+  que usa agy (su settings y el plugin global de bond) no se tocan: son la home de
+  configuración de agy.
 - `bond models probe` inspecciona el cuerpo de la respuesta, no solo el status HTTP (#76).
   Antes un modelo razonador al que el `max_tokens` del probe no le deja margen respondía
   200 con la respuesta vacía (todo el presupuesto en `reasoning`) y el probe lo marcaba

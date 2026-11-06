@@ -4,7 +4,7 @@ layout: home
 hero:
   name: bond
   text: Your coding agents, working together
-  tagline: pi, Claude Code, Codex, Copilot, opencode, Crush or Gemini. Use whichever you like, configure them once per repo and open them in Herdr. Licence to code.
+  tagline: pi, Claude Code, Codex, Copilot, opencode, Crush or Antigravity. Use whichever you like, configure them once per repo and open them in Herdr. Licence to code.
   image:
     src: /hero-terminal.webp
     alt: Herdr and bond running an agent team in fluzo

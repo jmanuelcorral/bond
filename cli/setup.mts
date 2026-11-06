@@ -208,7 +208,7 @@ function contextTools(): void {
 export const globalSkillsDir = () => assetsPath("global", "skills");
 
 /**
- * Destinos de los skills globales: ~/.agents/skills (pi, Codex, Copilot, opencode, Crush, Gemini),
+ * Destinos de los skills globales: ~/.agents/skills (pi, Codex, Copilot, opencode y Crush),
  * ~/.claude/skills (Claude Code) y, si agy es uno de tus agentes (su plugin global existe), las
  * skills del plugin.
  */

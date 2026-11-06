@@ -22,7 +22,7 @@ configuración de cada agente que pueda usarlos.
   path              Ruta de config.toml
 
 Agentes: pi, opencode y Crush usan la API de chat; Copilot se lanza con \`bond run copilot\`.
-Codex usa su cuenta oficial (bond no lo aprovisiona). Claude Code y Gemini no pueden usar
+Codex usa su cuenta oficial (bond no lo aprovisiona). Claude Code no puede usar
 pasarelas compatibles con OpenAI.`,
 	"models.unknown_sub": "subcomando desconocido: models {sub} (bond models --help)",
 	"models.init_exists": "ya existe {file} (--force para recrearlo; se guarda copia)",
@@ -83,8 +83,8 @@ configuration for each agent that can use them.
   path              Path of config.toml
 
 Agents: pi, opencode, and Crush use the chat API; Copilot is launched with \`bond run copilot\`.
-Codex uses its official account (bond does not provision it). Claude Code and Gemini
-cannot use OpenAI-compatible gateways.`,
+Codex uses its official account (bond does not provision it). Claude Code cannot use
+OpenAI-compatible gateways.`,
 	"models.unknown_sub": "unknown subcommand: models {sub} (bond models --help)",
 	"models.init_exists": "{file} already exists (--force to recreate; a backup is saved)",
 	"models.init_created_imported": "created {file} (imported from {source})",

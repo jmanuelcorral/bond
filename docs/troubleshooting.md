@@ -170,8 +170,8 @@ bond models sync --dry-run # qué escribiría en cada agente
 
 Cada agente habla un dialecto distinto. Codex necesita que la pasarela sirva la API Responses,
 mientras que pi, opencode y Crush usan la de chat. `bond models probe` te dice qué sirve tu
-pasarela. Claude Code y Gemini, por su parte, no pueden usar pasarelas compatibles con OpenAI,
-así que con ellos no hay nada que hacer aquí.
+pasarela. Claude Code, por su parte, no puede usar pasarelas compatibles con OpenAI,
+así que con él no hay nada que hacer aquí.
 
 Con Crush hay un caso concreto. Si en tu `crushrc` tienes definido a mano un proveedor con el
 mismo id, bond no lo toca y te lo avisa en `sync`. Bórralo de tu `crushrc` para que pase a

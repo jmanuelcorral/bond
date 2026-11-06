@@ -71,7 +71,7 @@ los repos sin bond, pi funciona sin ellas.
 
 Lo que es del proyecto (instrucciones, servidores MCP, skills, comandos) se declara en
 `.bond/bond.toml` y `bond sync` genera lo que lee cada agente: pi, Claude Code, Copilot CLI,
-Codex, opencode, Crush, Gemini CLI y Antigravity (`agy`).
+Codex, opencode, Crush y Antigravity (`agy`).
 
 ```bash
 cd ~/gitrepos/mi-proyecto
@@ -141,11 +141,10 @@ registrar decisiones y runs. Sin la sección, nada cambia. Un `dir` que salga de
 ya tuvieras se conserva aunque desmarques la skill (se quita a mano).
 
 **Instrucciones y skills.** `AGENTS.md` (lo crea `init` si falta; es tuyo) y `.agents/skills/`
-los leen directamente pi, Copilot, Codex, opencode, Crush, Gemini y Antigravity. Las excepciones:
+los leen directamente pi, Copilot, Codex, opencode, Crush y Antigravity. Las excepciones:
 
 - Claude Code: `CLAUDE.md` con un bloque `@AGENTS.md` y un symlink por skill en
   `.claude/skills/`.
-- Gemini: `context.fileName = ["AGENTS.md", "GEMINI.md"]` en `.gemini/settings.json`.
 
 **MCP y comandos:**
 
@@ -157,13 +156,12 @@ los leen directamente pi, Copilot, Codex, opencode, Crush, Gemini y Antigravity.
 | opencode v2 | `opencode.json` → `mcp.servers` | `.opencode/commands/` | sí (MCP) |
 | Crush | `.crush.json` → `mcp` | no se generan (ver abajo) | sí (MCP) |
 | Codex | bloque en `.codex/config.toml` (`[mcp_servers.x]`) | no tiene comandos de proyecto | no instalado |
-| Gemini CLI | `.gemini/settings.json` → `mcpServers` (`httpUrl` para HTTP) | `.gemini/commands/*.toml` (`{{args}}`) | no instalado |
 | Antigravity (`agy`) | plugin de bond: `.agents/plugins/bond/mcp_config.json` | skills del plugin: `.agents/plugins/bond/skills/<comando>/SKILL.md` | sí (`agy` 1.4.9) |
 
 Comprobado con los agentes instalados: pi carga el skill y el comando propio y conecta los
 MCP; Claude Code lee `AGENTS.md` a través de `CLAUDE.md`, ve los skills enlazados y ejecuta
 comandos; Copilot lista los servidores del `.mcp.json` y los comandos de `.claude/commands`;
-opencode y Crush conectan sus servidores. Codex y Gemini: ficheros generados según su
+opencode y Crush conectan sus servidores. Codex: ficheros generados según su
 documentación y validados (TOML), pero sin probar con el agente.
 
 Detalles por agente:
@@ -382,7 +380,6 @@ maxTokensField = "max_tokens"
 | Codex | — | Usa su cuenta oficial; bond no le aprovisiona modelos | — |
 | Copilot CLI | (nada) | `bond run copilot` pone `COPILOT_PROVIDER_BASE_URL`, `COPILOT_MODEL`, límites y API | chat o Responses |
 | Claude Code | — | No puede: solo habla la API de Anthropic (`/v1/messages`) | — |
-| Gemini CLI | — | No puede: solo habla la API de Gemini | — |
 
 Reglas para no pisar lo ajeno:
 
@@ -553,7 +550,7 @@ que hace posible `/delegate`.
 
 La delegación y los equipos son **skills globales** (`global/skills/`), porque dependen de
 Herdr, una herramienta de la máquina, igual que el skill `herdr`. `bond setup` los enlaza en
-`~/.agents/skills/` (lo leen pi, Codex, Copilot, opencode, Crush y Gemini) y en
+`~/.agents/skills/` (lo leen pi, Codex, Copilot, opencode y Crush) y en
 `~/.claude/skills/` (Claude Code), y para Antigravity en su plugin global de bond
 (`~/.gemini/config/plugins/bond/skills/`), así que cualquier agente puede orquestar a cualquier otro:
 
@@ -640,8 +637,8 @@ lo limita la pasarela; con proveedores en la nube, la cuota.
    (como `halo`): URL, clave si la pide y nombre. Lee sus modelos (con contexto y salida máxima
    si la pasarela los publica), deja elegir cuáles registrar y prueba qué APIs sirve (chat,
    responses) y si el modelo razona.
-4. **Agentes.** Detecta los instalados (pi, Claude Code, Codex, Copilot CLI, opencode, Crush,
-   Gemini CLI, Antigravity). Ninguno es obligatorio, pero hace falta al menos uno: si no hay ninguno, enseña
+4. **Agentes.** Detecta los instalados (pi, Claude Code, Codex, Copilot CLI, opencode, Crush
+   y Antigravity). Ninguno es obligatorio, pero hace falta al menos uno: si no hay ninguno, enseña
    cómo instalar cada uno y para. Eliges con cuáles trabajar y cuál es el de por defecto.
 5. **Sugerencias de prompt (pi).** Se proponen activas si el registro de bond tiene un modelo
    barato para pi; si no hay ninguno, salen apagadas con un aviso. El modelo propuesto se ve en
@@ -664,7 +661,7 @@ lo limita la pasarela; con proveedores en la nube, la cuota.
 - tus instrucciones (`~/.bond/AGENTS.md`) y las reglas de bond, en un bloque del fichero de
   instrucciones global de cada agente (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
   `~/.copilot/copilot-instructions.md`, `~/.config/opencode/AGENTS.md`, `~/.config/crush/CRUSH.md`,
-  `~/.gemini/GEMINI.md`, `~/.pi/agent/AGENTS.md`). Lo de fuera del bloque no se toca. Para
+  `~/.pi/agent/AGENTS.md`). Lo de fuera del bloque no se toca. Para
   cambiarlas: edita `~/.bond/AGENTS.md` y repite `bond setup`;
 - para Antigravity (`agy`), que no ve `~/.agents/skills` ni tiene un fichero de instrucciones
   global propio, un plugin global de bond en `~/.gemini/config/plugins/bond/`: `plugin.json`

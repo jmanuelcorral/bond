@@ -22,7 +22,7 @@
 </p>
 
 **bond** is a CLI for working with several coding agents at once: pi, Claude Code, Codex,
-Copilot CLI, opencode, Crush, Gemini CLI and Antigravity, coordinated with
+Copilot CLI, opencode, Crush y Antigravity, coordinated with
 **[Herdr](https://herdr.dev)**. None of them is required: one is enough.
 
 <p align="center">

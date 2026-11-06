@@ -9,7 +9,7 @@ code in hand, let's begin.
 
 The first thing you get is a CLI, `bond`, which takes care of configuring your coding agents and
 opening them in **Herdr**. Any of these will do: pi, Claude Code, Codex, Copilot CLI, opencode,
-Crush or Gemini CLI. You don't need all of them; one is enough, and bond works with whichever
+Crush or Antigravity. You don't need all of them; one is enough, and bond works with whichever
 ones you have.
 
 The second is Herdr, the terminal multiplexer where your agents live. The nice thing about Herdr
@@ -27,7 +27,7 @@ You don't need much. This table helps you check that you have everything:
 
 | Tool | What for | Check |
 |---|---|---|
-| At least one agent | pi, Claude Code, Codex, Copilot CLI, opencode, Crush or Gemini CLI | `bond setup` tells you how to install each one |
+| At least one agent | pi, Claude Code, Codex, Copilot CLI, opencode, Crush or Antigravity | `bond setup` tells you how to install each one |
 | `herdr` | open the workstation | `herdr --version` |
 
 If you don't have any agent installed yet, relax: `bond setup` explains how to install each one
@@ -226,7 +226,7 @@ closes all panes, so don't do it if you have work in progress.
 ## 7. Commands that come with bond
 
 bond comes with a handful of commands ready to use. You have them in every repo initialized with
-Claude Code, opencode and Gemini (Copilot reads them as skills), and also in pi with the Bond
+Claude Code and opencode (Copilot reads them as skills), and also in pi with the Bond
 Extensions:
 
 | Command | Use |

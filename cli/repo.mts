@@ -1,6 +1,6 @@
 // `bond init` y `bond sync`: configuración de agentes de un repo, declarada una vez en
-// .bond/bond.toml y generada para cada agente (pi, Claude Code, Copilot, Codex, opencode, Crush,
-// Gemini y Antigravity).
+// .bond/bond.toml y generada para cada agente (pi, Claude Code, Copilot, Codex, opencode, Crush
+// y Antigravity).
 //
 // Lo que bond escribe queda apuntado en .bond/manifest.json:
 // - ficheros propios (skills copiados, comandos): con su hash. Si alguien los edita a mano,
@@ -24,7 +24,7 @@ import { assetsPath, ensureBondLink } from "./runtime.mts";
 import { bad, catchingDie, catchDie, caution, die, dim, isDryRun, log, ok, run, STAMP, warn } from "./util.mts";
 import { hubSession, type HubSession } from "./hub.mts";
 
-export const SUPPORTED_AGENTS = ["pi", "claude", "copilot", "codex", "opencode", "crush", "gemini", "agy"];
+export const SUPPORTED_AGENTS = ["pi", "claude", "copilot", "codex", "opencode", "crush", "agy"];
 /** Catálogo: carpeta del repo o extraída del binario. */
 const catalogPath = (...p: string[]) => assetsPath("catalog", ...p);
 
@@ -432,17 +432,6 @@ const tomlInline = (o: Record<string, string>) => `{ ${Object.entries(o).map(([k
 /** Reglas `ask` que la 1.8.0 dejaba en .claude/settings.json (D21, ya sustituida): sync las quita. */
 export const OLD_BOND_ASK_RULES = ["Bash(bond decisions accept:*)", "Bash(bond decisions reject:*)", "Bash(bond decisions supersede:*)"];
 
-/** Comando en Markdown (frontmatter + cuerpo con $ARGUMENTS) a comando TOML de Gemini ({{args}}). */
-function geminiCommand(md: string): string {
-	const m = /^---\n([\s\S]*?)\n---\n?/.exec(md);
-	const body = (m ? md.slice(m[0].length) : md).replace(/\$ARGUMENTS|\$@|\$[1-9]/g, "{{args}}").trim();
-	const desc = describe(md);
-	// Cadena literal multilínea de TOML (''' ... '''): no interpreta escapes ni comillas.
-	const q = "'''";
-	const prompt = body.includes(q) ? JSON.stringify(body) : `${q}\n${body}\n${q}`;
-	return `${desc ? `description = ${JSON.stringify(desc)}\n` : ""}prompt = ${prompt}\n`;
-}
-
 /**
  * Comando en Markdown a skill de Antigravity (/nombre): frontmatter con name y description, y
  * $ARGUMENTS, $@ y $1... cambiados por una indicación de usar el texto que sigue al comando.
@@ -611,26 +600,6 @@ function plan(root: string, cfg: RepoConfig, prev: Manifest): Output[] {
 			]),
 		);
 		out.push({ kind: "json", path: ".crush.json", parent: "mcp", entries: cr });
-	}
-
-	if (agents.has("gemini")) {
-		const settings = repoPath(".gemini", "settings.json");
-		// Gemini lee GEMINI.md por defecto: se le añade AGENTS.md.
-		out.push({ kind: "json", path: settings, parent: "context", entries: { fileName: ["AGENTS.md", "GEMINI.md"] } });
-		const gm = Object.fromEntries(
-			Object.entries(servers).map(([n, s]) => [
-				n,
-				s.url
-					? { httpUrl: s.url, ...(s.headers ? { headers: s.headers } : {}) }
-					: { command: s.command, args: s.args ?? [], ...(s.env ? { env: s.env } : {}) },
-			]),
-		);
-		out.push({ kind: "json", path: settings, parent: "mcpServers", entries: gm });
-		const commands = [
-			...cfg.tools.commands.map((t) => [t.name, commandText(t)] as const),
-			...ownCommands.map((f) => [f.slice(0, -3), readFileSync(join(ownDir, f), "utf8")] as const),
-		];
-		for (const [name, md] of commands) out.push({ kind: "file", path: repoPath(".gemini", "commands", `${name}.toml`), content: geminiCommand(md) });
 	}
 
 	if (agents.has("agy")) {
@@ -1117,7 +1086,7 @@ export function updateBondToml(text: string, cfg: Selection): string {
 	return t;
 }
 
-const AGENT_NAMES: Record<string, string> = { pi: "pi", claude: "Claude Code", copilot: "Copilot CLI", codex: "Codex", opencode: "opencode", crush: "Crush", gemini: "Gemini CLI", agy: "Antigravity" };
+const AGENT_NAMES: Record<string, string> = { pi: "pi", claude: "Claude Code", copilot: "Copilot CLI", codex: "Codex", opencode: "opencode", crush: "Crush", agy: "Antigravity" };
 
 /** Preguntas de init: agentes (de los instalados), agente por defecto y herramientas del catálogo. */
 async function askSelection(current: Selection, installed: string[], catalogs: Catalog[]): Promise<Selection | undefined> {
@@ -1278,7 +1247,6 @@ export async function init(args: string[], opts: { quiet?: boolean; extraSkills?
 		copilot: t("repo.trust_copilot"),
 		codex: t("repo.trust_codex"),
 		opencode: t("repo.trust_opencode"),
-		gemini: t("repo.trust_gemini"),
 	};
 	// Sin ningún agente que pregunte (p. ej. solo agy), el paso de la confianza no sale.
 	const asks = sel.agents.filter((a) => trust[a]).map((a) => `     - ${trust[a]}`);

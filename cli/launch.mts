@@ -155,7 +155,7 @@ export async function chooseAgent(asked: string | undefined, repoDefault: string
 			// Sin config global.
 		}
 	}
-	agent ??= ["pi", "claude", "codex", "copilot", "opencode", "crush", "gemini"].find((a) => which(a));
+	agent ??= ["pi", "claude", "codex", "copilot", "opencode", "crush"].find((a) => which(a));
 	if (!agent) die(t("launch.no_agents_installed"));
 	const kinds = supportedKinds();
 	if (kinds.length && !kinds.includes(agent)) die(t("launch.agent_not_supported", { agent, kinds: kinds.join(", ") }));

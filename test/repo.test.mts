@@ -286,7 +286,7 @@ describe("agyCommand", () => {
 
 describe("syncRepo", () => {
 	test("genera la config de cada agente y una segunda pasada no cambia nada", () => {
-		bondToml({ agents: ["pi", "claude", "codex", "opencode", "gemini"] });
+		bondToml({ agents: ["pi", "claude", "codex", "opencode"] });
 		sync();
 		expect(read(".agents/skills/code-context/SKILL.md")).toBe(readFileSync(join(origCwd, "catalog/skills/code-context/SKILL.md"), "utf8"));
 		expect(Object.keys(json(".mcp.json").mcpServers).sort()).toEqual(["context7", "duckduckgo"]);
@@ -294,8 +294,6 @@ describe("syncRepo", () => {
 		expect(read("CLAUDE.md")).toContain("@AGENTS.md");
 		expect(read(".codex/config.toml")).toContain("[mcp_servers.context7]");
 		expect(json("opencode.json").mcp.servers.duckduckgo.type).toBe("local");
-		expect(json(".gemini/settings.json").context.fileName).toEqual(["AGENTS.md", "GEMINI.md"]);
-		expect(read(".gemini/commands/review.toml")).toContain("prompt = ");
 		if (process.platform !== "win32") expect(lstatSync(at(".claude/skills/code-context")).isSymbolicLink()).toBe(true);
 		expect(sync({ check: true })).toEqual([]);
 		expect(sync()).toEqual([]);

@@ -63,9 +63,9 @@ afterEach(() => {
 });
 
 describe("catálogo del equipo con path", () => {
-	test("sus skills, comandos y MCP llegan a los 7 agentes; una segunda pasada no cambia nada", () => {
+	test("sus skills, comandos y MCP llegan a los 6 agentes; una segunda pasada no cambia nada", () => {
 		teamCatalog("catalogo");
-		bondToml({ agents: ["pi", "claude", "copilot", "codex", "opencode", "crush", "gemini"], mcp: ["context7", "db"], skills: ["code-context", "revisar"], commands: ["review", "notas"] });
+		bondToml({ agents: ["pi", "claude", "copilot", "codex", "opencode", "crush"], mcp: ["context7", "db"], skills: ["code-context", "revisar"], commands: ["review", "notas"] });
 		syncRepo({ quiet: true });
 
 		expect(read(".agents/skills/revisar/SKILL.md")).toContain("Revisar migraciones del equipo");
@@ -78,7 +78,6 @@ describe("catálogo del equipo con path", () => {
 		expect(read(".pi/prompts/notas.md")).toContain("Notas de $1");
 		expect(existsSync(at(".pi/prompts/review.md"))).toBe(false);
 		for (const p of [".claude/commands/notas.md", ".claude/commands/review.md", ".opencode/commands/notas.md"]) expect(existsSync(at(p))).toBe(true);
-		expect(read(".gemini/commands/notas.toml")).toContain("{{args}}");
 
 		const db = { command: "npx", args: ["-y", "srv@1.0.0", "${DATABASE_URL}"] };
 		expect(json(".mcp.json").mcpServers.db).toEqual(db);
@@ -86,7 +85,6 @@ describe("catálogo del equipo con path", () => {
 		expect(json(".pi/mcp.json").mcpServers.db).toMatchObject(db);
 		expect(json("opencode.json").mcp.servers.db).toEqual({ type: "local", command: ["npx", "-y", "srv@1.0.0", "${DATABASE_URL}"] });
 		expect(json(".crush.json").mcp.db).toMatchObject({ type: "stdio", command: "npx" });
-		expect(json(".gemini/settings.json").mcpServers.db).toEqual(db);
 		expect(read(".codex/config.toml")).toContain("[mcp_servers.db]");
 
 		expect(syncRepo({ check: true, quiet: true })).toEqual([]);
