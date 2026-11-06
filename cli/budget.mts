@@ -211,6 +211,60 @@ export function codexStatus(now: Date = new Date()): BudgetStatus {
 	return { agent: "codex", state: stateFromCodex(b), windows, source: "hook", checkedAt: now.toISOString(), detail: b.reachedType ?? undefined };
 }
 
+// ---- adaptador Claude: headers anthropic-ratelimit-* (documentados) --------------------
+
+/**
+ * Parsea los headers de rate limit de Anthropic (documentados en toda respuesta).
+ * Cada familia (requests, input_tokens, output_tokens, tokens) con limit y remaining
+ * forma una ventana. Puro: sin red.
+ */
+export function parseAnthropicRateHeaders(headers: Record<string, string | undefined>): { windows: BudgetWindow[]; state: BudgetState } {
+	const get = (name: string) => headers[`anthropic-ratelimit-${name}`] ?? headers[`anthropic-ratelimit-${name}`.toLowerCase()];
+	const num = (v: string | undefined) => (v !== undefined && v !== "" && !Number.isNaN(Number(v)) ? Number(v) : undefined);
+	const windows: BudgetWindow[] = [];
+	let state: BudgetState = "unknown";
+	for (const kind of ["requests", "input_tokens", "output_tokens", "tokens"] as const) {
+		const remaining = num(get(`${kind}-remaining`));
+		const limit = num(get(`${kind}-limit`));
+		if (remaining === undefined || limit === undefined || limit <= 0) continue;
+		const resetIso = get(`${kind}-reset`);
+		const resetMs = resetIso ? Date.parse(resetIso) : NaN;
+		const usedPct = Math.max(0, Math.min(100, ((limit - remaining) / limit) * 100));
+		windows.push({ kind, usedPct, resetAt: Number.isNaN(resetMs) ? undefined : Math.floor(resetMs / 1000), windowMinutes: undefined });
+		if (remaining <= 0) state = "exhausted";
+		else if (usedPct >= LOW_PCT && state !== "exhausted") state = "low";
+		else if (state === "unknown") state = "ok";
+	}
+	return { windows, state };
+}
+
+/**
+ * Estado de Claude Code: una llamada mínima a api.anthropic.com con la clave de
+ * ~/.bond/keys/anthropic; los headers de la respuesta (llegue 200 o 4xx) traen el
+ * estado de límites. Sin clave o sin red → unknown, sin insistir.
+ */
+export async function claudeStatus(now: Date = new Date(), fetchImpl: typeof fetch = fetch): Promise<BudgetStatus> {
+	const unknown: BudgetStatus = { agent: "claude", state: "unknown", windows: [], source: "headers", checkedAt: now.toISOString() };
+	const { readKey } = await import("./keys.mts");
+	const key = readKey("anthropic");
+	if (!key) return unknown;
+	try {
+		const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
+			method: "POST",
+			headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+			body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1, messages: [{ role: "user", content: "ping" }] }),
+			signal: AbortSignal.timeout(8000),
+		});
+		const h: Record<string, string | undefined> = {};
+		res.headers.forEach((v, k) => (h[k] = v));
+		const { windows, state } = parseAnthropicRateHeaders(h);
+		if (!windows.length) return unknown;
+		return { agent: "claude", state, windows, source: "headers", checkedAt: now.toISOString() };
+	} catch {
+		return unknown;
+	}
+}
+
 // ---- instalador de hooks (los que hay hasta esta rebanada) ------------------------------
 
 /** Dónde está el ejecutable de bond para el comando del hook: BOND_BIN, el del PATH o el de los assets. */
@@ -328,7 +382,12 @@ export async function budget(args: string[]): Promise<void> {
 		// sin config global: se intuye abajo
 	}
 	if (!agents.length) agents = ["codex"];
-	const statuses = agents.map((a) => (a === "codex" ? codexStatus() : { agent: a, state: "unknown" as BudgetState, windows: [], source: "hook" as BudgetSource, checkedAt: new Date().toISOString() }));
+	const statuses: BudgetStatus[] = [];
+	for (const a of agents) {
+		if (a === "codex") statuses.push(codexStatus());
+		else if (a === "claude") statuses.push(await claudeStatus());
+		else statuses.push({ agent: a, state: "unknown", windows: [], source: "hook", checkedAt: new Date().toISOString() });
+	}
 	console.log(t("budget.title", { days: KEEP_DAYS }));
 	const width = Math.max(...statuses.map((s) => s.agent.length), 6);
 	for (const s of statuses) {

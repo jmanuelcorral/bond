@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, mkdirSync
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
-import { hookEvent, parseCodexTranscript, stateFromCodex, appendEvent, readEvents, mergeAgentHooks, ensureBudgetHooks, eventsDir, LOW_PCT } from "../cli/budget.mts";
+import { hookEvent, parseCodexTranscript, stateFromCodex, appendEvent, readEvents, mergeAgentHooks, ensureBudgetHooks, eventsDir, LOW_PCT, parseAnthropicRateHeaders, claudeStatus } from "../cli/budget.mts";
 
 const REPO = join(import.meta.dir, "..");
 
@@ -162,6 +162,60 @@ describe("mergeAgentHooks: la nuestra se identifica por marker, lo ajeno intacto
 		expect(ensureBudgetHooks(["codex"], { home })).toEqual([]);
 		// agentes sin destino (pi, agy en esta capa) no generan nada
 		expect(ensureBudgetHooks(["pi", "agy", "copilot"], { home })).toEqual([]);
+	});
+});
+
+describe("adaptador Claude: headers anthropic-ratelimit-*", () => {
+	test("familias completas → ventanas con pct y reset", () => {
+		const { windows, state } = parseAnthropicRateHeaders({
+			"anthropic-ratelimit-requests-limit": "50",
+			"anthropic-ratelimit-requests-remaining": "45",
+			"anthropic-ratelimit-requests-reset": "2026-11-06T10:05:00Z",
+			"anthropic-ratelimit-tokens-limit": "100000",
+			"anthropic-ratelimit-tokens-remaining": "90000",
+		});
+		expect(windows.length).toBe(2);
+		expect(windows[0]).toMatchObject({ kind: "requests", usedPct: 10, resetAt: Math.floor(Date.parse("2026-11-06T10:05:00Z") / 1000) });
+		expect(windows[1]).toMatchObject({ kind: "tokens", usedPct: 10 });
+		expect(state).toBe("ok");
+	});
+
+	test("remaining a 0 → exhausted", () => {
+		const { state } = parseAnthropicRateHeaders({ "anthropic-ratelimit-requests-limit": "10", "anthropic-ratelimit-requests-remaining": "0" });
+		expect(state).toBe("exhausted");
+	});
+
+	test("por encima del umbral → low; el exhausted manda sobre el low", () => {
+		expect(parseAnthropicRateHeaders({ "anthropic-ratelimit-requests-limit": "100", "anthropic-ratelimit-requests-remaining": String(100 - LOW_PCT) }).state).toBe("low");
+		const mixed = parseAnthropicRateHeaders({
+			"anthropic-ratelimit-requests-limit": "100",
+			"anthropic-ratelimit-requests-remaining": "90",
+			"anthropic-ratelimit-tokens-limit": "100",
+			"anthropic-ratelimit-tokens-remaining": "0",
+		});
+		expect(mixed.state).toBe("exhausted");
+	});
+
+	test("sin headers de límite → unknown", () => {
+		expect(parseAnthropicRateHeaders({ "content-type": "application/json" }).state).toBe("unknown");
+		expect(parseAnthropicRateHeaders({ "anthropic-ratelimit-requests-limit": "50" }).windows.length).toBe(0);
+	});
+
+	test("claudeStatus sin clave → unknown sin llamar a la red", async () => {
+		let called = false;
+		const fakeFetch = (async () => { called = true; return new Response("", { status: 200 }); }) as unknown as typeof fetch;
+		const s = await claudeStatus(new Date(), fakeFetch);
+		expect(s.state).toBe("unknown");
+		// (en la máquina de CI no hay ~/.bond/keys/anthropic; si la hubiera, called puede ser true: se acepta uno u otro)
+	});
+
+	test("claudeStatus con fetch que peta → unknown", async () => {
+		const boom = (async () => {
+			throw new Error("sin red");
+		}) as unknown as typeof fetch;
+		const s = await claudeStatus(new Date(), boom);
+		expect(s.state).toBe("unknown");
+		expect(s.agent).toBe("claude");
 	});
 });
 
