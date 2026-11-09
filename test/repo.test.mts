@@ -384,3 +384,22 @@ describe("syncRepo", () => {
 		expect(existsSync(at("CLAUDE.md"))).toBe(false);
 	});
 });
+
+describe("hooks de presupuesto en sync: son de la máquina, no del repo", () => {
+	test("sync los instala en el home y --check los ignora: un home limpio no pone el repo en desfase", () => {
+		const home = mkdtempSync(join(tmpdir(), "bond-hook-home-"));
+		process.env.BOND_HOOK_HOME = home;
+		try {
+			bondToml({ agents: ["claude", "codex"], mcp: [], skills: [], commands: [] });
+			sync();
+			expect(existsSync(join(home, ".claude", "settings.json"))).toBe(true);
+			expect(existsSync(join(home, ".codex", "hooks.json"))).toBe(true);
+			// Antes de este fix el check devolvía los hooks como pendientes y un runner limpio
+			// (o cualquier máquina sin `bond sync` aún) daba falso negativo.
+			expect(sync({ check: true })).toEqual([]);
+		} finally {
+			delete process.env.BOND_HOOK_HOME;
+			rmSync(home, { recursive: true, force: true });
+		}
+	});
+});

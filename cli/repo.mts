@@ -898,13 +898,18 @@ export function syncRepo(opts: { check?: boolean; force?: boolean; quiet?: boole
 	const cfg = loadRepoConfig(root);
 	const prev = loadManifest(root);
 	const { actions, next, langRewritten } = diffActions(root, plan(root, cfg, prev), prev, !!opts.force);
-	// Hooks de presupuesto (epic #84): son de la máquina, no del repo, pero sync los mantiene
-	// instalados para los agentes declarados; `--check` los reporta como pendiente.
-	for (const h of ensureBudgetHooks(cfg.agents)) {
-		if (!h.apply) actions.push({ sign: "!", path: h.path, why: t("budget.hook_unreadable", { path: h.path }) });
-		else actions.push({ sign: existsSync(h.path) ? "~" : "+", path: h.path, why: t("budget.hook_installed", { path: h.path }), apply: h.apply });
-	}
 	const say = (s: string) => !opts.quiet && console.log(s);
+	// Hooks de presupuesto (epic #84): son de la máquina, no del repo. `sync` los mantiene
+	// instalados junto con los agentes declarados, pero `--check` solo los informa: si contaran
+	// para el veredicto, un runner limpio que nunca corrió `bond sync` daría falso negativo
+	// (así se cayó el CI propio tras la primera rebanada de budget).
+	const hookActions: Action[] = [];
+	for (const h of ensureBudgetHooks(cfg.agents)) {
+		if (!h.apply) hookActions.push({ sign: "!", path: h.path, why: t("budget.hook_unreadable", { path: h.path }) });
+		else hookActions.push({ sign: existsSync(h.path) ? "~" : "+", path: h.path, why: t("budget.hook_installed", { path: h.path }), apply: h.apply });
+	}
+	if (opts.check || isDryRun()) for (const h of hookActions) say(dim(`i ${h.path}${dim(`  ${h.why} · ${t("budget.hook_machine")}`)}`));
+	else actions.push(...hookActions);
 	// G2: el cambio de idioma se dice antes de la lista, no diluido en ella.
 	if (langRewritten) say(dim(t("gen.lang_rewritten", { lang: lang(), count: langRewritten })));
 	if (opts.check && langRewritten)

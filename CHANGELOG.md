@@ -25,6 +25,9 @@
   `anthropic-ratelimit-*`; pi deriva ventanas y % cuando las respuestas traen cabeceras
   de límite (o 429 para `exhausted`) y degrada a `ok` cuando hay actividad normal sin
   cabeceras de ventana. `opencode` queda fuera del alcance de budget (#86).
+  `bond sync --check` no cuenta los hooks de presupuesto para el veredicto: son de la máquina
+  (su home), no del repo — `sync` los instala y el check solo los informa; así un runner limpio
+  que nunca corrió `bond sync` (como CI) no da falso negativo.
 - `bond models probe` inspecciona el cuerpo de la respuesta, no solo el status HTTP (#76).
   Antes un modelo razonador al que el `max_tokens` del probe no le deja margen respondía
   200 con la respuesta vacía (todo el presupuesto en `reasoning`) y el probe lo marcaba

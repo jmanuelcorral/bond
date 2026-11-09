@@ -23,6 +23,7 @@ lo decides tú.`,
 	"budget.hook_pending": "hook de presupuesto sin instalar: {path} (bond sync)",
 	"budget.hook_installed": "hook de presupuesto: {path}",
 	"budget.hook_unreadable": "no se puede tocar {path}: el JSON no se lee (hook de presupuesto sin instalar)",
+	"budget.hook_machine": "hook de la máquina: `bond sync` lo instala, `--check` no lo cuenta",
 };
 
 export const en: Record<keyof typeof es, string> = {
@@ -42,4 +43,5 @@ Handing off between agents (bond handoff) relies on this: it is proposed, you de
 	"budget.hook_pending": "budget hook not installed: {path} (bond sync)",
 	"budget.hook_installed": "budget hook: {path}",
 	"budget.hook_unreadable": "can't touch {path}: JSON doesn't parse (budget hook not installed)",
+	"budget.hook_machine": "machine hook: `bond sync` installs it, `--check` does not count it",
 };
