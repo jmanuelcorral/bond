@@ -17,6 +17,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 | `bond team` | Un agente por rama, cada uno en su worktree (en Herdr, 4 en tu pestaña y el resto en pestañas nuevas, o lo que elijas); `status` (`--watch`: tabla en vivo que se cierra sola sin trabajo pendiente; fuera del hub se agrupa por estado y en el hub por rama vertical, que es lo que la deja ver entera; `bond team status <rama>` saca esa fila entera, sin truncar, cuando la tabla no da ancho; la tabla lleva rejilla de trazos Unicode y sus iconos de estado salen del estilo elegido en `bond setup` (`[ui] icons`: `nerd`, `unicode` o `emoji`, o `BOND_ICONS`); en un hub, todos los repos de la sesión en un único panel `tabla · <hub>`), `prompt` (con `[decisions]` guarda el encargo en un run; `--no-record` para no guardarlo), `collect` (guarda en el run la última respuesta del agente: de su sesión, o del panel recortado), `clean` (al quitar el último, cierra también la tabla). En un hub, una rama vertical: un agente por repo de la sesión, `--repos`/`--repo` ([puesto.md](puesto.md#bond-team)) |
 | `bond status` | Agentes vivos en Herdr |
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
+| `bond budget` | Estado de presupuesto de tus agentes (eventos de los últimos 7 días) |
 | `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
 | `bond hub` | En un hub: enseña la sesión de trabajo declarada en `hub.toml` (repos, ruta, base, modo de enlace, rama) y el estado en vivo de cada repo (cambios sin commitear, delante/detrás de su remoto) ([abajo](#bond-hub)) |
 | `bond decisions` | Memoria de decisiones del repo: lista, `add`, `accept`, `show`, `runs`, `check`, `migrate` ([abajo](#bond-decisions)) |
@@ -44,6 +45,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 | `runtime/<versión>/` | Ficheros que lleva dentro el binario, extraídos; solo se queda la versión en uso |
 | `catalogs/<host>/<repo>/<commit>/` | Catálogos del equipo por git, uno por commit; `bond catalog clean` los poda |
 | `pi` | Enlace a las Bond Extensions de la versión instalada |
+| `events/` | Registro de eventos de presupuesto (`YYYY-MM-DD.jsonl`, append-only, se purga a los 7 días) |
 
 **En la config de cada agente** (siempre solo lo de bond; el resto del fichero no se toca):
 
@@ -61,8 +63,9 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 ## Bond Extensions (pi)
 
 El repo de bond es también un paquete de pi (`package.json` → `"pi"`): las extensiones
-`status-line.ts` (pie de estado), `bond-header.ts` (cabecera), `repo-map.ts` (tool `repo_map`)
-y `record-decision.ts` (tool `record_decision`), y los comandos `/delegate`, `/team`
+`status-line.ts` (pie de estado), `bond-header.ts` (cabecera), `repo-map.ts` (tool `repo_map`),
+`record-decision.ts` (tool `record_decision`) y `budget.ts` (eventos de presupuesto para `bond budget`),
+y los comandos `/delegate`, `/team`
 (`prompts/`) y `/review`, `/commit`, `/handoff`, `/accept` (`catalog/commands/`). Se cargan **por repo**:
 `bond init` añade `"packages": ["~/.bond/pi"]` a `.pi/settings.json` cuando el repo usa pi. En
 los repos sin bond, pi funciona sin ellas.

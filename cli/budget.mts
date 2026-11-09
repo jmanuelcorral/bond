@@ -41,10 +41,12 @@ export interface BudgetEvent {
 	transcript_path?: string;
 	cwd?: string;
 	status?: number;
+	headers?: Record<string, string | undefined>;
+	detail?: string;
 }
 
 /** Agentes cuyo hook alimenta el event log (pi lo alimenta vía su extensión, mismo canal). */
-export const HOOKED_AGENTS = ["codex", "claude", "agy", "opencode", "pi"];
+export const HOOKED_AGENTS = ["codex", "claude", "agy", "pi"];
 
 // ---- event log (~/.bond/events) ---------------------------------------------------------
 
@@ -106,8 +108,9 @@ export function hookEvent(agent: string, raw: string, ts: string): BudgetEvent {
 		if (d && typeof d === "object") {
 			const name = typeof d.hook_event_name === "string" ? d.hook_event_name : typeof d.event === "string" ? d.event : undefined;
 			if (name) ev.event = EVENT_MAP[name.toLowerCase()] ?? name.toLowerCase();
-			for (const k of ["session_id", "transcript_path", "cwd"] as const) if (typeof d[k] === "string") ev[k] = d[k];
+			for (const k of ["session_id", "transcript_path", "cwd", "detail"] as const) if (typeof d[k] === "string") ev[k] = d[k];
 			if (typeof d.status === "number") ev.status = d.status;
+			if (d.headers && typeof d.headers === "object") ev.headers = d.headers as Record<string, string | undefined>;
 		}
 	} catch {
 		// stdin que no es JSON: se guarda como raw, que también es señal de vida.
@@ -263,6 +266,51 @@ export async function claudeStatus(now: Date = new Date(), fetchImpl: typeof fet
 	} catch {
 		return unknown;
 	}
+}
+
+// ---- adaptador Pi: extensión Bond Extensions (epic #84, issue #86) --------------------
+
+/**
+ * Calcula el estado de presupuesto de pi a partir de los eventos acumulados en ~/.bond/events/.
+ * Si hay cabeceras de límite (p. ej. Anthropic) se derivan ventanas y %. Si hay 429
+ * o similar se marca exhausted. Si solo hay eventos de actividad normal (200, stop,
+ * session_start) el estado es ok con ventanas vacías, degradando con honestidad
+ * (la API de extensiones de pi no expone límites de suscripción ni resets si no vienen en cabeceras).
+ */
+export function statusFromPiEvents(events: BudgetEvent[], now: Date = new Date()): BudgetStatus {
+	const unknown: BudgetStatus = { agent: "pi", state: "unknown", windows: [], source: "hook", checkedAt: now.toISOString() };
+	if (!events.length) return unknown;
+
+	let windows: BudgetWindow[] = [];
+	let state: BudgetState = "ok";
+	let detail: string | undefined;
+
+	// Si hay cabeceras con límites de rate limit (Anthropic u otras), las parseamos
+	const withHeaders = events.slice().reverse().find((e) => e.headers && Object.keys(e.headers).length > 0);
+	if (withHeaders?.headers) {
+		const parsed = parseAnthropicRateHeaders(withHeaders.headers);
+		if (parsed.windows.length > 0) {
+			windows = parsed.windows;
+			state = parsed.state;
+		}
+	}
+
+	// El estado HTTP más reciente de una respuesta de proveedor
+	const withStatus = events.slice().reverse().find((e) => typeof e.status === "number");
+	if (withStatus?.status === 429) {
+		state = "exhausted";
+		detail = "HTTP 429";
+	} else if (withStatus?.status === 402) {
+		state = "exhausted";
+		detail = "HTTP 402";
+	}
+
+	return { agent: "pi", state, windows, source: "hook", checkedAt: now.toISOString(), detail };
+}
+
+export function piStatus(now: Date = new Date()): BudgetStatus {
+	const events = readEvents(now).filter((e) => e.agent === "pi");
+	return statusFromPiEvents(events, now);
 }
 
 // ---- instalador de hooks (los que hay hasta esta rebanada) ------------------------------
@@ -432,6 +480,7 @@ export async function budget(args: string[]): Promise<void> {
 	for (const a of agents) {
 		if (a === "codex") statuses.push(codexStatus());
 		else if (a === "claude") statuses.push(await claudeStatus());
+		else if (a === "pi") statuses.push(piStatus());
 		else statuses.push({ agent: a, state: "unknown", windows: [], source: "hook", checkedAt: new Date().toISOString() });
 	}
 	console.log(t("budget.title", { days: KEEP_DAYS }));

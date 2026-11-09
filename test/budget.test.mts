@@ -7,7 +7,8 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, mkdirSync
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
-import { hookEvent, parseCodexTranscript, stateFromCodex, appendEvent, readEvents, mergeAgentHooks, ensureBudgetHooks, eventsDir, LOW_PCT, parseAnthropicRateHeaders, claudeStatus } from "../cli/budget.mts";
+import { hookEvent, parseCodexTranscript, stateFromCodex, appendEvent, readEvents, mergeAgentHooks, ensureBudgetHooks, eventsDir, LOW_PCT, parseAnthropicRateHeaders, claudeStatus, statusFromPiEvents, piStatus, HOOKED_AGENTS } from "../cli/budget.mts";
+import { budgetExtension, appendPiEvent } from "../extensions/budget.ts";
 
 const REPO = join(import.meta.dir, "..");
 
@@ -244,9 +245,174 @@ describe("bond budget-hook: fail-open", () => {
 		expect(r.status).toBe(0);
 	});
 
+	test("opencode fuera de budget: hook lo ignora", () => {
+		expect(HOOKED_AGENTS).not.toContain("opencode");
+		expect(HOOKED_AGENTS).toContain("pi");
+		const r = runHook(["opencode"], "{}");
+		expect(r.status).toBe(0);
+		expect(readEvents().filter((e) => e.agent === "opencode")).toEqual([]);
+	});
+
 	test("Stop real de codex → evento stop con transcript", () => {
 		const r = runHook(["codex"], JSON.stringify({ hook_event_name: "Stop", transcript_path: "/x/y.jsonl", session_id: "s" }));
 		expect(r.status).toBe(0);
 		expect(readEvents()[0]).toMatchObject({ agent: "codex", event: "stop", transcript_path: "/x/y.jsonl" });
+	});
+});
+
+describe("adaptador pi: statusFromPiEvents y piStatus", () => {
+	const now = new Date("2026-11-09T16:00:00.000Z");
+
+	test("sin eventos → unknown", () => {
+		expect(statusFromPiEvents([], now)).toMatchObject({ agent: "pi", state: "unknown", windows: [] });
+		expect(piStatus(now)).toMatchObject({ agent: "pi", state: "unknown", windows: [] });
+	});
+
+	test("eventos de ciclo de vida sin errores → ok con ventanas vacías (degradación honesta)", () => {
+		const status = statusFromPiEvents([
+			{ ts: "2026-11-09T15:00:00.000Z", agent: "pi", event: "session_start", session_id: "s1" },
+			{ ts: "2026-11-09T15:10:00.000Z", agent: "pi", event: "stop", session_id: "s1" },
+		], now);
+		expect(status).toMatchObject({ agent: "pi", state: "ok", windows: [], source: "hook" });
+	});
+
+	test("respuesta HTTP 200 con cabeceras de rate limit de Anthropic → extrae ventanas", () => {
+		const status = statusFromPiEvents([
+			{ ts: "2026-11-09T15:00:00.000Z", agent: "pi", event: "session_start" },
+			{
+				ts: "2026-11-09T15:05:00.000Z",
+				agent: "pi",
+				event: "provider_response",
+				status: 200,
+				headers: {
+					"anthropic-ratelimit-requests-limit": "100",
+					"anthropic-ratelimit-requests-remaining": "90",
+					"anthropic-ratelimit-tokens-limit": "100000",
+					"anthropic-ratelimit-tokens-remaining": "85000",
+				},
+			},
+		], now);
+		expect(status.state).toBe("ok");
+		expect(status.windows.length).toBe(2);
+		expect(status.windows[0]).toMatchObject({ kind: "requests", usedPct: 10 });
+		expect(status.windows[1]).toMatchObject({ kind: "tokens", usedPct: 15 });
+	});
+
+	test("respuesta HTTP 200 con cabeceras >80% de uso → low", () => {
+		const status = statusFromPiEvents([
+			{
+				ts: "2026-11-09T15:05:00.000Z",
+				agent: "pi",
+				event: "provider_response",
+				status: 200,
+				headers: {
+					"anthropic-ratelimit-requests-limit": "100",
+					"anthropic-ratelimit-requests-remaining": "10",
+				},
+			},
+		], now);
+		expect(status.state).toBe("low");
+		expect(status.windows[0]?.usedPct).toBe(90);
+	});
+
+	test("respuesta HTTP 200 con tokens agotados (remaining 0) → exhausted", () => {
+		const status = statusFromPiEvents([
+			{
+				ts: "2026-11-09T15:05:00.000Z",
+				agent: "pi",
+				event: "provider_response",
+				status: 200,
+				headers: {
+					"anthropic-ratelimit-tokens-limit": "100000",
+					"anthropic-ratelimit-tokens-remaining": "0",
+				},
+			},
+		], now);
+		expect(status.state).toBe("exhausted");
+	});
+
+	test("respuesta HTTP 429 → exhausted con detail HTTP 429", () => {
+		const status = statusFromPiEvents([
+			{
+				ts: "2026-11-09T15:05:00.000Z",
+				agent: "pi",
+				event: "provider_response",
+				status: 429,
+			},
+		], now);
+		expect(status.state).toBe("exhausted");
+		expect(status.detail).toBe("HTTP 429");
+	});
+
+	test("prioridad temporal: 429 recuperado con 200 posterior → ok", () => {
+		const status = statusFromPiEvents([
+			{ ts: "2026-11-09T15:00:00.000Z", agent: "pi", event: "provider_response", status: 429 },
+			{ ts: "2026-11-09T15:10:00.000Z", agent: "pi", event: "provider_response", status: 200 },
+		], now);
+		expect(status.state).toBe("ok");
+	});
+
+	test("prioridad temporal: respuesta con headers seguida de stop conserva ventanas", () => {
+		const status = statusFromPiEvents([
+			{
+				ts: "2026-11-09T15:05:00.000Z",
+				agent: "pi",
+				event: "provider_response",
+				status: 200,
+				headers: { "anthropic-ratelimit-requests-limit": "10", "anthropic-ratelimit-requests-remaining": "9" },
+			},
+			{ ts: "2026-11-09T15:06:00.000Z", agent: "pi", event: "stop" },
+		], now);
+		expect(status.state).toBe("ok");
+		expect(status.windows.length).toBe(1);
+	});
+});
+
+describe("extensión pi: extensions/budget.ts", () => {
+	test("appendPiEvent escribe en BOND_EVENTS_DIR con agent: pi", () => {
+		appendPiEvent({ event: "session_start", session_id: "pi-test-1", ts: "2026-11-09T12:00:00.000Z" });
+		const evs = readEvents(new Date("2026-11-09T12:00:00.000Z"));
+		expect(evs.length).toBe(1);
+		expect(evs[0]).toMatchObject({ agent: "pi", event: "session_start", session_id: "pi-test-1" });
+	});
+
+	test("budgetExtension suscribe eventos de ciclo de vida y respuestas HTTP", () => {
+		const handlers: Record<string, Function> = {};
+		const mockPi: any = {
+			on: (name: string, fn: Function) => {
+				handlers[name] = fn;
+			},
+		};
+
+		budgetExtension(mockPi);
+		expect(Object.keys(handlers)).toEqual(
+			expect.arrayContaining(["session_start", "session_shutdown", "session_before_compact", "session_compact", "agent_end", "after_provider_response"])
+		);
+
+		const mockCtx = {
+			sessionManager: {
+				getSessionId: () => "sess-42",
+				getSessionFile: () => "/tmp/sess-42.jsonl",
+			},
+			cwd: "/work/project",
+		};
+
+		// Ejecutar handlers
+		handlers.session_start({}, mockCtx);
+		handlers.after_provider_response({ status: 200, headers: { "anthropic-ratelimit-tokens-limit": "100", "anthropic-ratelimit-tokens-remaining": "50" } }, mockCtx);
+		handlers.agent_end({}, mockCtx);
+
+		const evs = readEvents(new Date());
+		expect(evs.length).toBe(3);
+		expect(evs[0]).toMatchObject({ agent: "pi", event: "session_start", session_id: "sess-42", cwd: "/work/project" });
+		expect(evs[1]).toMatchObject({ agent: "pi", event: "provider_response", status: 200 });
+		expect(evs[2]).toMatchObject({ agent: "pi", event: "stop", session_id: "sess-42" });
+
+		// piStatus refleja los eventos producidos por la extensión
+		const s = piStatus(new Date());
+		expect(s.agent).toBe("pi");
+		expect(s.state).toBe("ok");
+		expect(s.windows.length).toBe(1);
+		expect(s.windows[0]).toMatchObject({ kind: "tokens", usedPct: 50 });
 	});
 });
