@@ -56,7 +56,20 @@ jobs:
       - name: Crear la release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "bond $GITHUB_REF_NAME" --notes-file notes.md dist/bond-* dist/*.tgz dist/SHA256SUMS
+        # Idempotente (#83): si la release ya existe (rerun tras un fallo aguas abajo, p.ej.
+        # el publish de npm), se edita y se sobrescriben los assets con --clobber en vez de
+        # fallar. Asi un reintento no se lleva por delante lo que viene detras ni obliga a
+        # borrar la release y su tag para poder reintentar.
+        run: |
+          assets=(dist/bond-* dist/*.tgz dist/SHA256SUMS)
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --title "bond $GITHUB_REF_NAME" --notes-file notes.md
+            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --title "bond $GITHUB_REF_NAME" --notes-file notes.md "${assets[@]}"
+          fi
       # npm: se publica el MISMO .tgz que se adjunta a la release, no un pack nuevo.
       # La autentificacion va por OIDC (trusted publishing): npm detecta el entorno GitHub
       # Actions y usa el OIDC token antes de mirar tokens tradicionales. El NPM_TOKEN se

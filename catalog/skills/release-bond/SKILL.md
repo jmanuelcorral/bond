@@ -135,8 +135,8 @@ has its own history, its own CI (`brew.yml`) and its own mistakes.
 | Situation | Do |
 | --- | --- |
 | Tag pushed, `release.yml` red | Fix and `gh run rerun <id>`; the tag may stay. Do not run step 3. |
-| Tag pushed, release never created, need to redo | Delete the tag both sides (`git tag -d "$tag"`, `git push origin :refs/tags/"$tag"`) and redo step 1. Never reuse a tag that produced a partial release. |
-| Release created with missing assets | Do not run `packaging.mts`. Rerun the job, or `gh release delete "$tag" --cleanup-tag -y` and redo. Never upload assets by hand to patch it. |
+| Tag pushed, release never created, need to redo | Just `gh run rerun <id>`: the create step is idempotent (#83), so the tag stays and the rerun builds and uploads everything. Only delete the tag both sides (`git tag -d "$tag"`, `git push origin :refs/tags/"$tag"`) and redo step 1 if the tag itself is wrong. |
+| Release created with missing assets | Do not run `packaging.mts`. `gh run rerun <id>` re-uploads every asset with `--clobber` - do not delete the release or upload assets by hand to patch it. |
 | `packaging/` generated from a stale or wrong `SHA256SUMS` | Re-run `bun scripts/packaging.mts` after the release is correct and commit the fix. Never edit the generated files. |
 | Tap pushed with a wrong formula | `git revert` the tap commit (never force-push), fix, redo step 4. A bad formula breaks `brew upgrade` for everyone. |
 | npm publish failed but the release is fine | The GitHub release stands on its own. Fix the cause and rerun the job; npm rejects a re-publish of an existing version, so if a broken tarball got published, `npm deprecate @jmanuelcorral/bond@X.Y.Z "<reason>"` and ship a patch. |
@@ -166,10 +166,11 @@ has its own history, its own CI (`brew.yml`) and its own mistakes.
 - **`NPM_TOKEN` has to be an automation token.** A granular "Read and write" token on an account
   with 2FA publishes nothing: npm answers `EOTP` and asks for a one-time password that CI cannot
   produce. The token type must be Automation, the one that bypasses 2FA for CI.
-- **`gh release create` is not idempotent.** Rerunning the release job once the release exists
-  dies on that step, so a downstream failure can only be retried by deleting the release with
-  `--cleanup-tag` and re-pushing the tag - which rebuilds the binaries and changes every hash.
-  Generate the packaging and the tap only after the run you are keeping has finished.
+- **The release step is idempotent (#83).** `release.yml` checks `gh release view` first: an
+  existing release is edited and its assets re-uploaded with `--clobber` instead of failing,
+  so a downstream failure (npm EOTP, for instance) is retried with `gh run rerun --failed`
+  without touching the tag. A rerun still rebuilds the binaries, so `SHA256SUMS` changes:
+  generate the packaging and the tap only after the run you are keeping has finished.
 
 ## Guided next step
 
