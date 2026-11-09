@@ -100,6 +100,7 @@ has_completed_all_phases: false
 | P2 | implemented | passed | pending | none yet |
 
 - `last_implementation_at`: 2026-11-09T17:25:00Z — P2 sobre el árbol de trabajo (P1 ya commiteada en `25d63a5`): subcomando `bond summary` (`cli/main.mts`, `cli/summary.mts`), ayuda bilingüe y claves nuevas, lista de `bond --help` (también se añadió `budget`, que faltaba desde #86), `docs/reference.md` (tabla + sección), CHANGELOG, 4 pruebas CLI con spawn (home y cwd temporales, reescritura segura de rutas en Windows). Pruebas reales: `npm run typecheck` limpio; `NO_COLOR=1 bun test` → 720 pass / 0 fail / 38 ficheros. Verificación manual: `bin/bond summary --tail 2` sobre la sesión real de pi (modelo y git en vivo); `bin/bond --help` lista budget y summary. Limitación: la detección sin argumento es por presencia de sesión en el cwd (orden pi→claude→codex→agy), no por agentes vivos de Herdr.
+- 2026-11-09T17:40:00Z — CI de `ad01abe`: ubuntu y windows verdes; macOS falló las dos pruebas CLI de detección porque `mkdtemp` cae bajo `/var` (symlink de `/private/var`) y el proceso hijo ve su cwd ya resuelto. Fix de test: `realpathSync` en el tmpdir del describe CLI.
 
 ## Próximo paso
 

@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findSessionFile, renderSessionSummary, summarizeSession } from "../cli/summary.mts";
@@ -157,8 +157,10 @@ describe("bond summary (CLI)", () => {
 			env: { ...process.env, HOME: home, USERPROFILE: home },
 		});
 	// El fixture de pi declara "cwd":"/repo-test": se reescribe al directorio real del test.
+	// realpathSync: en macOS mkdtemp cae bajo /var (symlink de /private/var) y el proceso hijo
+	// ve su cwd ya resuelto; sin canónizar, la comparación con el fixture no cuadra.
 	const mkHome = (cwd: string) => {
-		const home = mkdtempSync(join(tmpdir(), "bond-summary-cli-"));
+		const home = realpathSync(mkdtempSync(join(tmpdir(), "bond-summary-cli-")));
 		mkdirSync(join(home, ".pi/agent/sessions/proj"), { recursive: true });
 		const text = readFileSync(join(FIX, "pi.jsonl"), "utf8").replaceAll('"/repo-test"', JSON.stringify(cwd));
 		writeFileSync(join(home, ".pi/agent/sessions/proj/s.jsonl"), text);
@@ -166,7 +168,7 @@ describe("bond summary (CLI)", () => {
 	};
 
 	test("sin argumentos: detecta el agente y saca el Markdown", () => {
-		const cwd = mkdtempSync(join(tmpdir(), "bond-summary-cwd-"));
+		const cwd = realpathSync(mkdtempSync(join(tmpdir(), "bond-summary-cwd-")));
 		const home = mkHome(cwd);
 		try {
 			const r = run(cwd, home, []);
@@ -179,7 +181,7 @@ describe("bond summary (CLI)", () => {
 		}
 	});
 	test("agente y --tail N", () => {
-		const cwd = mkdtempSync(join(tmpdir(), "bond-summary-cwd-"));
+		const cwd = realpathSync(mkdtempSync(join(tmpdir(), "bond-summary-cwd-")));
 		const home = mkHome(cwd);
 		try {
 			const r = run(cwd, home, ["pi", "--tail", "2"]);
@@ -192,7 +194,7 @@ describe("bond summary (CLI)", () => {
 		}
 	});
 	test("agente no soportado: mensaje claro y salida distinta de cero", () => {
-		const cwd = mkdtempSync(join(tmpdir(), "bond-summary-cwd-"));
+		const cwd = realpathSync(mkdtempSync(join(tmpdir(), "bond-summary-cwd-")));
 		const home = mkHome(cwd);
 		try {
 			const r = run(cwd, home, ["opencode"]);
@@ -205,7 +207,7 @@ describe("bond summary (CLI)", () => {
 		}
 	});
 	test("--help sale 0", () => {
-		const cwd = mkdtempSync(join(tmpdir(), "bond-summary-cwd-"));
+		const cwd = realpathSync(mkdtempSync(join(tmpdir(), "bond-summary-cwd-")));
 		const home = mkHome(cwd);
 		try {
 			const r = run(cwd, home, ["--help"]);
