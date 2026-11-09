@@ -1,0 +1,6 @@
+{"type":"queue-operation","operation":"enqueue","timestamp":"2026-11-09T10:00:00.000Z","sessionId":"s1"}
+{"parentUuid":null,"isSidechain":false,"type":"user","cwd":"/repo-test","message":{"role":"user","content":"hola claude"},"timestamp":"2026-11-09T10:00:01.000Z"}
+{"parentUuid":"u1","isSidechain":false,"type":"assistant","cwd":"/repo-test","message":{"role":"assistant","model":"claude-test","content":[{"type":"thinking","thinking":"rumia"},{"type":"text","text":"primera respuesta claude"}]},"timestamp":"2026-11-09T10:00:02.000Z"}
+{"parentUuid":"a1","isSidechain":true,"type":"user","cwd":"/repo-test","message":{"role":"user","content":"sidechain ajena"},"timestamp":"2026-11-09T10:00:03.000Z"}
+{"parentUuid":"a1","isSidechain":false,"type":"user","cwd":"/repo-test","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"salida"}]},"timestamp":"2026-11-09T10:00:04.000Z"}
+{"parentUuid":"a2","isSidechain":false,"type":"assistant","cwd":"/repo-test","message":{"role":"assistant","model":"claude-test","content":[{"type":"text","text":"respuesta final claude"}]},"timestamp":"2026-11-09T10:00:05.000Z"}

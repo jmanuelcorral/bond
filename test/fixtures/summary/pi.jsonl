@@ -1,0 +1,9 @@
+{"type":"session","id":"a1b2c3d4","timestamp":"2026-11-09T10:00:00.000Z","cwd":"/repo-test","version":"0.99.0"}
+{"type":"session_info","name":"sesion de prueba"}
+{"type":"message","id":"m1","parentId":"a1b2c3d4","timestamp":"2026-11-09T10:00:01.000Z","message":{"role":"user","content":[{"type":"text","text":"hola pi"}],"timestamp":1794231668024}}
+{"type":"message","id":"m2","parentId":"m1","timestamp":"2026-11-09T10:00:02.000Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"pienso"}],"model":"test-model","usage":{"cost":{"total":0.01}}}}
+{"type":"message","id":"m3","parentId":"m2","timestamp":"2026-11-09T10:00:03.000Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"pienso mas"},{"type":"text","text":"primera respuesta pi"}],"model":"test-model","usage":{"cost":{"total":0.02}}}}
+{"type":"message","id":"m4","parentId":"m3","timestamp":"2026-11-09T10:00:04.000Z","message":{"role":"user","content":[{"type":"toolResult","toolCallId":"t1","content":"salida"}]}}
+{"tipo de linea corrupto a medias
+{"type":"message","id":"m5","parentId":"m4","timestamp":"2026-11-09T10:00:05.000Z","message":{"role":"user","content":[{"type":"text","text":"segunda pregunta"}]}}
+{"type":"message","id":"m6","parentId":"m5","timestamp":"2026-11-09T10:00:06.000Z","message":{"role":"assistant","content":[{"type":"text","text":"respuesta final pi"}],"model":"test-model","usage":{"cost":{"total":0.03}}}}

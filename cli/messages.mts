@@ -20,6 +20,7 @@ import { es as hubEs, en as hubEn } from "./messages/hub.mts";
 import { es as catalogEs, en as catalogEn } from "./messages/catalog.mts";
 import { es as modelsEs, en as modelsEn } from "./messages/models.mts";
 import { es as budgetEs, en as budgetEn } from "./messages/budget.mts";
+import { es as summaryEs, en as summaryEn } from "./messages/summary.mts";
 import { es as keysEs, en as keysEn } from "./messages/keys.mts";
 import { es as decisionsEs, en as decisionsEn } from "./messages/decisions.mts";
 import { es as decisionsMigrateEs, en as decisionsMigrateEn } from "./messages/decisions-migrate.mts";
@@ -190,6 +191,7 @@ Configura bond en esta máquina (una vez; se puede repetir para cambiar algo):
 	...catalogEs,
 	...modelsEs,
 	...budgetEs,
+	...summaryEs,
 	...keysEs,
 	...decisionsEs,
 	...decisionsMigrateEs,
@@ -363,6 +365,7 @@ Sets bond up on this machine (once; rerun it to change anything):
 	...catalogEn,
 	...modelsEn,
 	...budgetEn,
+	...summaryEn,
 	...keysEn,
 	...decisionsEn,
 	...decisionsMigrateEn,
