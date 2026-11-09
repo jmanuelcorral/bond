@@ -2,7 +2,7 @@
 name: "2026-11-09-session-summary-determinista"
 description: "Generador de resumen de sesión determinista (sin LLM) por agente, apto para pegar como contexto en otro agente (#87)"
 created_at: "2026-11-09T16:50:18Z"
-has_completed_all_phases: false
+has_completed_all_phases: true
 ---
 
 # Resumen de sesión determinista desde los ficheros de sesión de cada agente (#87)
@@ -96,15 +96,16 @@ has_completed_all_phases: false
 
 | Fase | Implementación | Verificación | Revisión | Evidencia |
 | --- | --- | --- | --- | --- |
-| P1 | implemented | passed | pending | none yet |
-| P2 | implemented | passed | pending | none yet |
+| P1 | implemented | passed | accepted | none yet |
+| P2 | implemented | passed | accepted | none yet |
 
 - `last_implementation_at`: 2026-11-09T17:25:00Z — P2 sobre el árbol de trabajo (P1 ya commiteada en `25d63a5`): subcomando `bond summary` (`cli/main.mts`, `cli/summary.mts`), ayuda bilingüe y claves nuevas, lista de `bond --help` (también se añadió `budget`, que faltaba desde #86), `docs/reference.md` (tabla + sección), CHANGELOG, 4 pruebas CLI con spawn (home y cwd temporales, reescritura segura de rutas en Windows). Pruebas reales: `npm run typecheck` limpio; `NO_COLOR=1 bun test` → 720 pass / 0 fail / 38 ficheros. Verificación manual: `bin/bond summary --tail 2` sobre la sesión real de pi (modelo y git en vivo); `bin/bond --help` lista budget y summary. Limitación: la detección sin argumento es por presencia de sesión en el cwd (orden pi→claude→codex→agy), no por agentes vivos de Herdr.
+- Aceptación: el usuario delegó la vigilancia de CI («prefiero que la vigiles tú») con cierre de #87 al verde; CI verde en `c69d9ec` (run 42669093257) y #87 cerrada el 2026-11-09 con ese criterio.
 - 2026-11-09T17:40:00Z — CI de `ad01abe`: ubuntu y windows verdes; macOS falló las dos pruebas CLI de detección porque `mkdtemp` cae bajo `/var` (symlink de `/private/var`) y el proceso hijo ve su cwd ya resuelto. Fix de test: `realpathSync` en el tmpdir del describe CLI.
 
 ## Próximo paso
 
-Revisar la evidencia de **P2** y elegir uno de los tres mensajes de commit propuestos para su alcance (`cli/main.mts`, `cli/summary.mts`, `cli/messages/summary.mts`, `cli/messages/main.mts`, `docs/reference.md`, `CHANGELOG.md`, `test/summary.test.mts`, plan). Puerta pendiente: aceptación de P1 y P2 por el usuario; con las dos aceptadas se puede cerrar #87 y plantear #88.
+Plan completado: P1 y P2 implementadas, verificadas y aceptadas; #87 cerrada. Lo que sigue en el epic #84 es **#88** (`bond handoff`, que consumirá `summarizeSession` + `bond budget`), o las sueltas #83/#78 que el usuario quiso mirar.
 
 ## Evidencia y seguimiento
 
