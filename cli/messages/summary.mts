@@ -21,6 +21,20 @@ export const es = {
 	"summary.exchanges": "Intercambios",
 	"summary.role_user": "Usuario",
 	"summary.role_assistant": "Asistente",
+	"summary.command_help": `Uso: bond summary [agente] [opciones]
+
+Resume la última sesión de un agente (pi, claude, codex o agy) de forma determinista:
+los últimos intercambios user/assistant, el estado del repo y metadatos trazables,
+en Markdown listo para pegar como contexto en otro agente. Lee los ficheros de
+sesión de cada agente directamente: sin red y sin LLM.
+
+Sin agente, coge el primero que tenga sesión en el directorio actual.
+
+  -n, --tail N   últimos N intercambios (por defecto: 10)
+
+Es la materia prima de la que se servirá \`bond handoff\` (#88).`,
+	"summary.bad_tail": "--tail no válido: {value}",
+	"summary.bad_arg": "argumento no reconocido: {arg}",
 };
 
 export const en: Record<keyof typeof es, string> = {
@@ -39,4 +53,18 @@ export const en: Record<keyof typeof es, string> = {
 	"summary.exchanges": "Exchanges",
 	"summary.role_user": "User",
 	"summary.role_assistant": "Assistant",
+	"summary.command_help": `Usage: bond summary [agent] [options]
+
+Deterministically summarizes an agent's latest session (pi, claude, codex or agy):
+the last user/assistant exchanges, repo status and traceable metadata, as Markdown
+ready to paste as context into another agent. It reads each agent's session files
+directly: no network, no LLM.
+
+With no agent, picks the first one with a session in the current directory.
+
+  -n, --tail N   keep the last N exchanges (default: 10)
+
+This is the raw material \`bond handoff\` (#88) will use.`,
+	"summary.bad_tail": "invalid --tail: {value}",
+	"summary.bad_arg": "unrecognized argument: {arg}",
 };

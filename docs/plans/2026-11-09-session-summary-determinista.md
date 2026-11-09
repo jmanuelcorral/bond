@@ -85,10 +85,10 @@ has_completed_all_phases: false
 - Contratos afectados: subcomando nuevo en `cli/main.mts`; claves nuevas en `cli/messages/summary.mts` (es+en); tabla de comandos en `docs/reference.md`; CHANGELOG «Sin publicar».
 - Criterios de aceptación: `bond summary` sin argumentos resume la sesión del agente vivo detectable (o error claro si no hay); `--tail` cambia N; agente concreto por argumento; formato desconocido → mensaje claro sin stack.
 - Acciones:
-  - [ ] Alta del subcomando y opciones, con ayuda bilingüe.
-  - [ ] `docs/reference.md` y CHANGELOG.
-  - [ ] Pruebas de CLI en `test/summary.test.mts` (spawn con HOME/BOND_HOOK_HOME temporal como en `repo.test.mts`).
-  - [ ] Ejecutar typecheck + bun test y registrar evidencia; presentar para revisión.
+  - [x] Alta del subcomando y opciones, con ayuda bilingüe.
+  - [x] `docs/reference.md` y CHANGELOG.
+  - [x] Pruebas de CLI en `test/summary.test.mts` (spawn con HOME/USERPROFILE temporales como en `repo.test.mts`).
+  - [x] Ejecutar typecheck + bun test y registrar evidencia; presentar para revisión.
 - Verificación: `bin/bond summary` real en esta sesión de pi (debe producir Markdown), además de `npm run typecheck && bun test`.
 - Riesgos y recuperación: si la detección de "agente vivo" molesta, P2 admite degenerar a "agente obligatorio por argumento" sin romper P1.
 
@@ -97,13 +97,13 @@ has_completed_all_phases: false
 | Fase | Implementación | Verificación | Revisión | Evidencia |
 | --- | --- | --- | --- | --- |
 | P1 | implemented | passed | pending | none yet |
-| P2 | pending | not_run | pending | none yet |
+| P2 | implemented | passed | pending | none yet |
 
-- `last_implementation_at`: 2026-11-09T17:03:00Z — P1 sobre el árbol de trabajo de `main` en `60ce9da` (cambios sin commitear): `cli/summary.mts`, `cli/messages/summary.mts`, `test/summary.test.mts`, 5 fixtures en `test/fixtures/summary/`. Pruebas reales: `npm run typecheck` limpio; `NO_COLOR=1 bun test` → 716 pass / 0 fail / 38 ficheros (12 nuevas). Verificación manual con la sesión real de pi de esta máquina: detecta el transcript por cwd, modelo `flash-halogen`, `git status` en vivo. Limitación: los fixtures son recortes sintéticos de los formatos reales (verificados contra sesiones reales de pi/Claude/Codex/agy el 2026-11-09); no se usaron transcripciones reales por privacidad.
+- `last_implementation_at`: 2026-11-09T17:25:00Z — P2 sobre el árbol de trabajo (P1 ya commiteada en `25d63a5`): subcomando `bond summary` (`cli/main.mts`, `cli/summary.mts`), ayuda bilingüe y claves nuevas, lista de `bond --help` (también se añadió `budget`, que faltaba desde #86), `docs/reference.md` (tabla + sección), CHANGELOG, 4 pruebas CLI con spawn (home y cwd temporales, reescritura segura de rutas en Windows). Pruebas reales: `npm run typecheck` limpio; `NO_COLOR=1 bun test` → 720 pass / 0 fail / 38 ficheros. Verificación manual: `bin/bond summary --tail 2` sobre la sesión real de pi (modelo y git en vivo); `bin/bond --help` lista budget y summary. Limitación: la detección sin argumento es por presencia de sesión en el cwd (orden pi→claude→codex→agy), no por agentes vivos de Herdr.
 
 ## Próximo paso
 
-Revisar la evidencia de **P1** y elegir uno de los tres mensajes de commit propuestos para su alcance (`cli/summary.mts`, `cli/messages/summary.mts`, `test/summary.test.mts`, fixtures). Puerta pendiente: aceptación de P1 por el usuario antes de ejecutar **P2** (`bond summary`).
+Revisar la evidencia de **P2** y elegir uno de los tres mensajes de commit propuestos para su alcance (`cli/main.mts`, `cli/summary.mts`, `cli/messages/summary.mts`, `cli/messages/main.mts`, `docs/reference.md`, `CHANGELOG.md`, `test/summary.test.mts`, plan). Puerta pendiente: aceptación de P1 y P2 por el usuario; con las dos aceptadas se puede cerrar #87 y plantear #88.
 
 ## Evidencia y seguimiento
 

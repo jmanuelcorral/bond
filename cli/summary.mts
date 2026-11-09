@@ -24,7 +24,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { t } from "./messages.mts";
-import { AGENT_DIR } from "./util.mts";
+import { AGENT_DIR, die } from "./util.mts";
 
 export const SUMMARY_AGENTS = ["pi", "claude", "codex", "agy"] as const;
 export type SummaryAgent = (typeof SUMMARY_AGENTS)[number];
@@ -301,4 +301,35 @@ export function renderSessionSummary(s: SessionSummary): string {
 	out.push(`## ${t("summary.exchanges")}`, "");
 	for (const x of s.exchanges) out.push(`**${x.role === "user" ? t("summary.role_user") : t("summary.role_assistant")}:**`, "", x.text, "");
 	return out.join("\n").trim() + "\n";
+}
+
+export const SUMMARY_HELP = () => t("summary.command_help");
+
+/** El primer agente con sesión en el directorio dado (pi primero: es el puesto de bond por defecto). */
+export function detectSessionAgent(opts: { cwd?: string; home?: string } = {}): SummaryAgent | undefined {
+	for (const a of SUMMARY_AGENTS) if (findSessionFile(a, opts)) return a;
+	return undefined;
+}
+
+/** `bond summary [agente] [-n N]`: el resumen en Markdown por la consola (preview del handoff). */
+export function summary(args: string[]): void {
+	let n = DEFAULT_TAIL;
+	let agent: string | undefined;
+	for (let i = 0; i < args.length; i++) {
+		const a = args[i];
+		if (a === "-h" || a === "--help") return console.log(SUMMARY_HELP());
+		if (a === "-n" || a === "--tail") {
+			const v = Number(args[++i]);
+			if (!Number.isInteger(v) || v < 1) die(t("summary.bad_tail", { value: String(args[i]) }));
+			n = v;
+		} else if (!agent) agent = a;
+		else die(t("summary.bad_arg", { arg: a }));
+	}
+	if (!agent) agent = detectSessionAgent();
+	if (!agent) die(t("summary.no_session", { agent: SUMMARY_AGENTS.join(", "), cwd: process.cwd() }));
+	try {
+		console.log(renderSessionSummary(summarizeSession(agent, { n })));
+	} catch (e) {
+		die((e as Error).message); // mensajes claros del library, sin stack
+	}
 }

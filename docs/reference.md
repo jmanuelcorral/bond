@@ -18,6 +18,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 | `bond status` | Agentes vivos en Herdr |
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
 | `bond budget` | Estado de presupuesto de tus agentes (eventos de los últimos 7 días) |
+| `bond summary` | Resumen determinista de la última sesión de un agente, pegable como contexto ([abajo](#bond-summary)) |
 | `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
 | `bond hub` | En un hub: enseña la sesión de trabajo declarada en `hub.toml` (repos, ruta, base, modo de enlace, rama) y el estado en vivo de cada repo (cambios sin commitear, delante/detrás de su remoto) ([abajo](#bond-hub)) |
 | `bond decisions` | Memoria de decisiones del repo: lista, `add`, `accept`, `show`, `runs`, `check`, `migrate` ([abajo](#bond-decisions)) |
@@ -1269,6 +1270,21 @@ sesiones del mismo minuto comparten los primeros caracteres.
 
 Las sesiones cuyo directorio ya no existe (un worktree borrado) salen atenuadas y marcadas
 `(no existe)`.
+
+## `bond summary`
+
+```bash
+bond summary                 # el primer agente con sesión en el directorio actual
+bond summary codex           # agente concreto: pi · claude · codex · agy
+bond summary pi --tail 20    # los últimos 20 intercambios
+```
+
+Lee los ficheros de sesión de cada agente (pi, Claude Code, Codex y agy) y saca Markdown:
+los últimos N intercambios user/assistant, `git status` y `git diff --stat`, y cabecera
+trazable (fichero de sesión, modelo, momento de generación). Sin red y sin LLM: lo que
+sale es literalmente lo que hay en el transcript. `opencode` queda fuera del alcance
+(decisión 2026-11-09). Es la materia prima que `bond handoff` (#88) pegará en el agente
+de destino.
 
 ## Herdr CLI de uso frecuente
 

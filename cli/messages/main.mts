@@ -29,6 +29,8 @@ Trabajo diario (Herdr)
   team           Un agente por rama, cada uno en su worktree (status, prompt, clean)
   status         Agentes vivos en Herdr
   sessions       Sesiones de pi y cómo retomarlas
+  budget         Estado de presupuesto de tus agentes
+  summary        Resumen de sesión determinista y pegable
 
 Otros
   logo         El logo de BOND
@@ -61,6 +63,8 @@ Daily work (Herdr)
   team           One agent per branch, each in its own worktree (status, prompt, clean)
   status         Live agents in Herdr
   sessions       pi sessions and how to resume them
+  budget         Budget status for your agents
+  summary        Pasteable deterministic session summary
 
 Other
   logo         The BOND logo

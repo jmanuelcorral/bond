@@ -86,6 +86,10 @@ async function main(argv: string[]): Promise<void> {
 		// Lo invocan los hooks de los agentes (fail-open: siempre sale 0).
 		case "budget-hook":
 			return (await import("./budget.mts")).budgetHook(rest);
+		case "summary": {
+			const s = await import("./summary.mts");
+			return wantsHelp ? printHelp(s.SUMMARY_HELP) : s.summary(rest);
+		}
 		case "run": {
 			const r = await import("./run.mts");
 			return wantsHelp && rest.length <= 1 ? printHelp(r.RUN_HELP) : r.runAgent(rest);

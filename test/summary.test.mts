@@ -3,7 +3,7 @@
 // home falso, estado de repo con git y render pegable. Sin red y sin LLM por construcción.
 
 import { describe, expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -143,5 +143,77 @@ describe("estado del repo y render", () => {
 		expect(md).toContain("**Usuario:**");
 		expect(md).toContain("respuesta final pi");
 		expect(md).not.toContain("## Estado del repo");
+	});
+});
+
+describe("bond summary (CLI)", () => {
+	const REPO = join(import.meta.dir, "..");
+	const run = (cwd: string, home: string, args: string[]) =>
+		spawnSync(process.execPath, [join(REPO, "cli/main.mts"), "summary", ...args], {
+			cwd,
+			encoding: "utf8",
+			timeout: 30_000,
+			// HOME y USERPROFILE: os.homedir() mira uno u otro según el SO.
+			env: { ...process.env, HOME: home, USERPROFILE: home },
+		});
+	// El fixture de pi declara "cwd":"/repo-test": se reescribe al directorio real del test.
+	const mkHome = (cwd: string) => {
+		const home = mkdtempSync(join(tmpdir(), "bond-summary-cli-"));
+		mkdirSync(join(home, ".pi/agent/sessions/proj"), { recursive: true });
+		const text = readFileSync(join(FIX, "pi.jsonl"), "utf8").replaceAll('"/repo-test"', JSON.stringify(cwd));
+		writeFileSync(join(home, ".pi/agent/sessions/proj/s.jsonl"), text);
+		return home;
+	};
+
+	test("sin argumentos: detecta el agente y saca el Markdown", () => {
+		const cwd = mkdtempSync(join(tmpdir(), "bond-summary-cwd-"));
+		const home = mkHome(cwd);
+		try {
+			const r = run(cwd, home, []);
+			expect(r.status).toBe(0);
+			expect(r.stdout).toContain("— pi");
+			expect(r.stdout).toContain("respuesta final pi");
+		} finally {
+			rmSync(home, { recursive: true, force: true });
+			rmSync(cwd, { recursive: true, force: true });
+		}
+	});
+	test("agente y --tail N", () => {
+		const cwd = mkdtempSync(join(tmpdir(), "bond-summary-cwd-"));
+		const home = mkHome(cwd);
+		try {
+			const r = run(cwd, home, ["pi", "--tail", "2"]);
+			expect(r.status).toBe(0);
+			expect(r.stdout).toContain("segunda pregunta");
+			expect(r.stdout).not.toContain("hola pi");
+		} finally {
+			rmSync(home, { recursive: true, force: true });
+			rmSync(cwd, { recursive: true, force: true });
+		}
+	});
+	test("agente no soportado: mensaje claro y salida distinta de cero", () => {
+		const cwd = mkdtempSync(join(tmpdir(), "bond-summary-cwd-"));
+		const home = mkHome(cwd);
+		try {
+			const r = run(cwd, home, ["opencode"]);
+			expect(r.status).not.toBe(0);
+			expect(r.stderr).toContain("opencode");
+			expect(r.stderr).not.toContain("at "); // sin stack
+		} finally {
+			rmSync(home, { recursive: true, force: true });
+			rmSync(cwd, { recursive: true, force: true });
+		}
+	});
+	test("--help sale 0", () => {
+		const cwd = mkdtempSync(join(tmpdir(), "bond-summary-cwd-"));
+		const home = mkHome(cwd);
+		try {
+			const r = run(cwd, home, ["--help"]);
+			expect(r.status).toBe(0);
+			expect(r.stdout).toContain("bond summary");
+		} finally {
+			rmSync(home, { recursive: true, force: true });
+			rmSync(cwd, { recursive: true, force: true });
+		}
 	});
 });

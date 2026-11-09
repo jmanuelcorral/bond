@@ -28,6 +28,12 @@
   `bond sync --check` no cuenta los hooks de presupuesto para el veredicto: son de la máquina
   (su home), no del repo — `sync` los instala y el check solo los informa; así un runner limpio
   que nunca corrió `bond sync` (como CI) no da falso negativo.
+- Nuevo `bond summary`: resumen determinista de la última sesión de un agente (epic #84,
+  #87). Sin red y sin LLM, lee los ficheros de sesión de pi, Claude Code, Codex o agy y saca
+  Markdown pegable como contexto en otro agente: los últimos N intercambios user/assistant
+  (`--tail`), `git status` y `git diff --stat` y cabecera trazable (fichero, modelo, momento).
+  Sin argumento, coge el primer agente con sesión en el directorio actual. Es la materia prima
+  de `bond handoff` (#88). `opencode` fuera del alcance, como en budget.
 - `bond models probe` inspecciona el cuerpo de la respuesta, no solo el status HTTP (#76).
   Antes un modelo razonador al que el `max_tokens` del probe no le deja margen respondía
   200 con la respuesta vacía (todo el presupuesto en `reasoning`) y el probe lo marcaba
