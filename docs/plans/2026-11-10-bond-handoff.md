@@ -2,6 +2,7 @@
 name: "2026-11-10-bond-handoff"
 description: "bond handoff: propuesta de traspaso con presupuesto + resumen; el usuario decide siempre (#88)"
 created_at: "2026-11-10T06:44:21Z"
+last_implementation_at: "2026-11-10T07:11:47Z"
 has_completed_all_phases: false
 ---
 
@@ -63,11 +64,11 @@ has_completed_all_phases: false
   export function renderHandoff(p: HandoffProposal): string; // Markdown
   ```
 - Acciones:
-  - [ ] Extraer `statusFor` de `budget()` (misma salida de `bond budget`, refactor verificado por sus pruebas).
-  - [ ] `cli/handoff.mts`: detección de origen por pane, orden D1, comandos por agente (ruta del resumen, D3), escritura del resumen con mkdir, render Markdown con tabla `agente · state · ventanas · fuente`.
-  - [ ] Claves bilingües en `cli/messages/handoff.mts` (título, tabla, sin-herdr, sin-candidatos, todos-unknown).
-  - [ ] Pruebas en `test/handoff.test.mts` con fixtures de `summary` y `BOND_EVENTS_DIR` sintéticos: orden por `state`, todos-`unknown` sigue útil (resumen + comandos), **ningún camino de código invoca al agente destino** (stub en PATH que dejaría una marca; asserting marca ausente), `currentPaneAgent` con panes ficticios.
-  - [ ] Ejecutar typecheck + bun test y registrar evidencia; presentar para revisión.
+  - [x] Extraer `statusFor` de `budget()` (misma salida de `bond budget`, refactor verificado por sus pruebas).
+  - [x] `cli/handoff.mts`: detección de origen por pane, orden D1, comandos por agente (ruta del resumen, D3), escritura del resumen con mkdir, render Markdown con tabla `agente · state · ventanas · fuente`.
+  - [x] Claves bilingües en `cli/messages/handoff.mts` (título, tabla, sin-herdr, sin-candidatos, todos-unknown).
+  - [x] Pruebas en `test/handoff.test.mts` con fixtures de `summary` y `BOND_EVENTS_DIR` sintéticos: orden por `state`, todos-`unknown` sigue útil (resumen + comandos), **ningún camino de código invoca al agente destino** (stub en PATH que dejaría una marca; asserting marca ausente), `currentPaneAgent` con panes ficticios.
+  - [x] Ejecutar typecheck + bun test y registrar evidencia; presentar para revisión.
 - Criterios de aceptación: los del issue verificables a nivel librería (detección de origen, orden por `state`, nunca ejecuta, todos-`unknown` útil).
 
 ### P2: CLI `bond handoff`
@@ -86,9 +87,9 @@ has_completed_all_phases: false
 
 | Fase | Implementación | Verificación | Revisión | Evidencia |
 | --- | --- | --- | --- | --- |
-| P1 | pending | not_run | pending | none yet |
+| P1 | implemented | passed | accepted | Aceptada por el usuario el 2026-11-10 («Acepto P1») sobre la evidencia: `npm run typecheck` limpio y `bun test` 732 pass / 0 fail (39 ficheros, +10 en test/handoff.test.mts) el 2026-11-10T07:11Z, cambios sobre `107a68c`. Implementación: cli/handoff.mts (currentPaneAgent, handoffCandidates orden D1, buildHandoff con resumen por ruta D3, renderHandoff), refactor statusFor en cli/budget.mts, claves bilingües en cli/messages/handoff.mts, 10 pruebas en test/handoff.test.mts. Decisión menor de implementación: `fetchImpl` inyectable en `statusFor`/`buildHandoff` (los tests no tocan red); sin cambio de comportamiento en producción. |
 | P2 | pending | not_run | pending | none yet |
 
 ## Próximo paso
 
-Ejecutar P1 en el checkout actual: P2 depende de la librería de P1 para poder ni compilarse, así que el plan no es paralelizable entre worktrees.
+P1 aceptada: ejecutar P2 (CLI `bond handoff [--from ag] [--tail N]` en `cli/main.mts`, `docs/reference.md` y CHANGELOG) en este checkout — P2 depende de la librería de P1, ya disponible.

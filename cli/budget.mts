@@ -308,6 +308,18 @@ export function statusFromPiEvents(events: BudgetEvent[], now: Date = new Date()
 	return { agent: "pi", state, windows, source: "hook", checkedAt: now.toISOString(), detail };
 }
 
+/** Estado de presupuesto de cualquier agente: el dispatch que hace `bond budget`, extraído
+ * para que `bond handoff` (#88) lo reutilice sin cambiar de comportamiento. Sin adaptador
+ * propio (o sin señal) → `unknown`, y claude degrada a `unknown` si la red falla (fail-open).
+ */
+export async function statusFor(agent: string, now: Date = new Date(), fetchImpl: typeof fetch = fetch): Promise<BudgetStatus> {
+	if (agent === "codex") return codexStatus(now);
+	if (agent === "claude") return await claudeStatus(now, fetchImpl);
+	if (agent === "pi") return piStatus(now);
+	return { agent, state: "unknown", windows: [], source: "hook", checkedAt: now.toISOString() };
+}
+
+/** Estado según los eventos de pi acumulados en el log. */
 export function piStatus(now: Date = new Date()): BudgetStatus {
 	const events = readEvents(now).filter((e) => e.agent === "pi");
 	return statusFromPiEvents(events, now);
@@ -452,7 +464,7 @@ const stateIcon = (s: BudgetState) => (s === "ok" ? "✓" : s === "low" ? "!" : 
 
 const fmtReset = (epoch?: number) => (typeof epoch === "number" ? new Date(epoch * 1000).toISOString().slice(0, 16).replace("T", " ") : undefined);
 
-function fmtWindows(ws: BudgetWindow[]): string {
+export function fmtWindows(ws: BudgetWindow[]): string {
 	if (!ws.length) return "";
 	return ws
 		.map((w) => {
@@ -477,12 +489,7 @@ export async function budget(args: string[]): Promise<void> {
 	}
 	if (!agents.length) agents = ["codex"];
 	const statuses: BudgetStatus[] = [];
-	for (const a of agents) {
-		if (a === "codex") statuses.push(codexStatus());
-		else if (a === "claude") statuses.push(await claudeStatus());
-		else if (a === "pi") statuses.push(piStatus());
-		else statuses.push({ agent: a, state: "unknown", windows: [], source: "hook", checkedAt: new Date().toISOString() });
-	}
+	for (const a of agents) statuses.push(await statusFor(a));
 	console.log(t("budget.title", { days: KEEP_DAYS }));
 	const width = Math.max(...statuses.map((s) => s.agent.length), 6);
 	for (const s of statuses) {
