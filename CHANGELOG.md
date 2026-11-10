@@ -1,5 +1,14 @@
 # Cambios
 
+## Sin publicar
+
+- Aclaración sobre un comportamiento existente de `bond doctor`, que no se había documentado
+  nunca: si encuentra la config global en la ubicación antigua (`~/.config/bond`, previa a
+  1.11.0), la mueve al destino de `BOND_HOME` (`~/.bond` por defecto) y deja la antigua como
+  copia («configuración global movida de … a …»). `doctor` lo hace solo, sin esperar a
+  `bond migrate`. No es un cambio de esta versión: existe desde la migración de
+  configuración de 1.11.0.
+
 ## 1.14.0
 
 Presupuesto y traspaso (epic #84): `bond budget` registra el estado de presupuesto de tus
