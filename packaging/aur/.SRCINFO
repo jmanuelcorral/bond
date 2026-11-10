@@ -1,6 +1,6 @@
 pkgbase = bond-bin
 	pkgdesc = CLI para trabajar con varios agentes de código (pi, Claude Code, Codex, Copilot...) en Herdr
-	pkgver = 1.13.1
+	pkgver = 1.14.0
 	pkgrel = 1
 	url = https://github.com/jmanuelcorral/bond
 	arch = x86_64
@@ -10,11 +10,11 @@ pkgbase = bond-bin
 	conflicts = bond
 	options = !strip
 	options = !debug
-	source = LICENSE-1.13.1::https://raw.githubusercontent.com/jmanuelcorral/bond/v1.13.1/LICENSE
+	source = LICENSE-1.14.0::https://raw.githubusercontent.com/jmanuelcorral/bond/v1.14.0/LICENSE
 	sha256sums = 561f047ecd1e4a2b06c8acb98db5b37f826dd9d8739163c76485aa0c5de21d66
-	source_x86_64 = bond-1.13.1-x86_64::https://github.com/jmanuelcorral/bond/releases/download/v1.13.1/bond-linux-x64
-	sha256sums_x86_64 = ffcd129bf45b7791e2d094d504ceb8d9a796b67fbbdddafeeabfdc56bcd55063
-	source_aarch64 = bond-1.13.1-aarch64::https://github.com/jmanuelcorral/bond/releases/download/v1.13.1/bond-linux-arm64
-	sha256sums_aarch64 = b74443c6bc28ad1aada94778624e5e582b840b64994b0369da02072b0789e193
+	source_x86_64 = bond-1.14.0-x86_64::https://github.com/jmanuelcorral/bond/releases/download/v1.14.0/bond-linux-x64
+	sha256sums_x86_64 = 373c64b4a8f1a0725fe5ec9afd296ef3531e79fca09324e2fb6daaa62e364439
+	source_aarch64 = bond-1.14.0-aarch64::https://github.com/jmanuelcorral/bond/releases/download/v1.14.0/bond-linux-arm64
+	sha256sums_aarch64 = 6d16f028f1e9cf6a32a653ac5dd09c629a36318d077ddb764b572f91bdbbdadc
 
 pkgname = bond-bin
