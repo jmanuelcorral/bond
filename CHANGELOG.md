@@ -1,6 +1,13 @@
 # Cambios
 
-## Sin publicar
+## 1.14.0
+
+Presupuesto y traspaso (epic #84): `bond budget` registra el estado de presupuesto de tus
+agentes vía hooks event-driven, `bond summary` saca un resumen determinista y pegable de la
+última sesión, y `bond handoff` prepara el traspaso a otro agente con ese resumen y el
+comando exacto —bond nunca lo ejecuta; decide el usuario—. Además `bond models probe` ya no
+confunde un 200 vacío de razonamiento con un modelo sano (#76), `bond models list` pinta el
+selector completo (#78) y se retira el soporte de Gemini CLI (#85).
 
 - Retirado el soporte del agente **Gemini CLI** (#85). Google lo ha descontinuado y su
   cliente oficial es Antigravity (`agy`), que bond ya soporta. Bond deja de detectarlo,
