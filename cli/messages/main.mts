@@ -31,6 +31,7 @@ Trabajo diario (Herdr)
   sessions       Sesiones de pi y cómo retomarlas
   budget         Estado de presupuesto de tus agentes
   summary        Resumen de sesión determinista y pegable
+  handoff        Propuesta de traspaso al quedarte sin presupuesto: candidatos y comando (lo lanzas tú)
 
 Otros
   logo         El logo de BOND
@@ -65,6 +66,7 @@ Daily work (Herdr)
   sessions       pi sessions and how to resume them
   budget         Budget status for your agents
   summary        Pasteable deterministic session summary
+  handoff        Handoff proposal when out of budget: candidates and command (you launch it)
 
 Other
   logo         The BOND logo

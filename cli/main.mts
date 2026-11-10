@@ -90,6 +90,10 @@ async function main(argv: string[]): Promise<void> {
 			const s = await import("./summary.mts");
 			return wantsHelp ? printHelp(s.SUMMARY_HELP) : s.summary(rest);
 		}
+		case "handoff": {
+			const h = await import("./handoff.mts");
+			return wantsHelp ? printHelp(h.HANDOFF_HELP) : h.handoff(rest);
+		}
 		case "run": {
 			const r = await import("./run.mts");
 			return wantsHelp && rest.length <= 1 ? printHelp(r.RUN_HELP) : r.runAgent(rest);

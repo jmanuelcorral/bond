@@ -9,11 +9,13 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { BudgetState, BudgetStatus, fmtWindows, statusFor } from "./budget.mts";
-import { agents, defaultAgentArgs, type HerdrAgent } from "./herdr.mts";
+import { fmtWindows, statusFor } from "./budget.mts";
+import type { BudgetState, BudgetStatus } from "./budget.mts";
+import { agents, defaultAgentArgs, insideHerdr, type HerdrAgent } from "./herdr.mts";
 import { BOND_HOME } from "./runtime.mts";
 import { renderSessionSummary, summarizeSession, SUMMARY_AGENTS } from "./summary.mts";
 import { t } from "./messages.mts";
+import { die } from "./util.mts";
 
 export interface HandoffCandidate {
 	agent: string;
@@ -145,3 +147,25 @@ export function renderHandoff(p: HandoffProposal): string {
 	if (!p.candidates.length) out.push(t("handoff.prompt_nofile"));
 	return out.join("\n").trim() + "\n";
 }
+
+/** `bond handoff [--from ag] [--tail N]`: imprime la propuesta; no lanza nada. */
+export async function handoff(args: string[]): Promise<void> {
+	let from: string | undefined;
+	let tail: number | undefined;
+	for (let i = 0; i < args.length; i++) {
+		const a = args[i];
+		if (a === "-h" || a === "--help") return console.log(HANDOFF_HELP());
+		else if (a === "--from") from = args[++i] ?? die(t("handoff.needs_value", { opt: "--from" }));
+		else if (a === "--tail" || a === "-n") {
+			const v = Number(args[++i]);
+			if (!Number.isInteger(v) || v < 1) die(t("handoff.bad_tail", { value: String(args[i]) }));
+			tail = v;
+		}
+		else die(t("handoff.bad_arg", { arg: a }));
+	}
+	if (!from && insideHerdr()) from = currentPaneAgent();
+	if (!from) die(t("handoff.no_herdr"));
+	console.log(renderHandoff(await buildHandoff({ from, tail })));
+}
+
+export const HANDOFF_HELP = () => t("handoff.help");

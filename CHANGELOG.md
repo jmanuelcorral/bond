@@ -48,6 +48,17 @@
   frío de pasarelas locales (#75). El estado guardado en `~/.bond/state.json` distingue
   por API `ok` / `empty_reasoning` / `fail`, que consumirá el handoff de #84.
 
+- Nuevo `bond handoff`: propuesta de traspaso cuando un agente se queda sin presupuesto
+  (epic #84, #88). Bond **prepara y nunca ejecuta** el traspaso: presenta los candidatos
+  (`pi`, `claude`, `codex`, `agy`) ordenados por estado de presupuesto
+  (`ok → low → unknown → exhausted`), escribe el resumen de `bond summary` en
+  `~/.bond/handoff/<utc>-<agente>.md` e imprime el comando exacto de cada candidato para
+  que lo lances tú en el panel que elijas. El origen es el agente del panel de Herdr
+  actual o `--from <agente>` (obligatorio fuera de Herdr); `--tail N` recorta el resumen.
+  Sin sesión legible o con todos los candidatos en `unknown` la propuesta sigue sirviendo.
+  `opencode` fuera del alcance, como en budget (#86). Aceptada la decisión 2026-11-10
+  (orden D1, sin abrir paneles en v1, resumen por ruta).
+
 ## 1.13.1
 
 Publicación en npm con identidad propia: trusted publishing por OIDC y tarball firmado con

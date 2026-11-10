@@ -19,6 +19,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
 | `bond budget` | Estado de presupuesto de tus agentes (eventos de los últimos 7 días) |
 | `bond summary` | Resumen determinista de la última sesión de un agente, pegable como contexto ([abajo](#bond-summary)) |
+| `bond handoff` | Propuesta de traspaso cuando un agente se queda sin presupuesto: candidatos ordenados, resumen y el comando exacto — bond nunca lo ejecuta ([abajo](#bond-handoff)) |
 | `bond sync` | Regenera la config de los agentes del repo desde `.bond/bond.toml` |
 | `bond hub` | En un hub: enseña la sesión de trabajo declarada en `hub.toml` (repos, ruta, base, modo de enlace, rama) y el estado en vivo de cada repo (cambios sin commitear, delante/detrás de su remoto) ([abajo](#bond-hub)) |
 | `bond decisions` | Memoria de decisiones del repo: lista, `add`, `accept`, `show`, `runs`, `check`, `migrate` ([abajo](#bond-decisions)) |
@@ -1285,6 +1286,26 @@ trazable (fichero de sesión, modelo, momento de generación). Sin red y sin LLM
 sale es literalmente lo que hay en el transcript. `opencode` queda fuera del alcance
 (decisión 2026-11-09). Es la materia prima que `bond handoff` (#88) pegará en el agente
 de destino.
+
+## `bond handoff`
+
+```bash
+bond handoff                 # dentro de un panel de Herdr: el origen es el agente del panel
+bond handoff --from pi       # origen explícito (fuera de Herdr es obligatorio)
+bond handoff --from pi --tail 20
+```
+
+Cuando el agente de tu panel se queda sin presupuesto, bond **prepara** el traspaso a
+otro agente y **nunca lo ejecuta** (decisión 1 del epic #84): imprime los candidatos
+que configureron su presupuesto (`pi`, `claude`, `codex`, `agy`; `opencode` fuera,
+como en budget) ordenados por estado `ok → low → unknown → exhausted` —el exhaustido al
+final porque es lo que motiva el traspaso, `unknown` antes porque puede valer—, escribe
+el resumen de `bond summary` en `~/.bond/handoff/<utc>-<agente>.md` para que el comando
+viaje en una línea sin comillas multi-línea, e imprime el comando exacto de cada
+candidato (`agy --dangerously-skip-permissions ...`, `claude ...`) listo para que lo
+lances tú en el panel que elijas. Si no hay sesión legible o todos los candidatos están
+en `unknown`, la propuesta sigue imprimiéndose: resumen (si lo hay) y comandos.
+Aceptada la decisión 2026-11-10 (orden D1, sin abrir paneles en v1, resumen por ruta).
 
 ## Herdr CLI de uso frecuente
 

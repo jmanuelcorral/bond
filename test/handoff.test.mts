@@ -5,7 +5,8 @@
 // invocara). Sin Herdr real y sin red: el fetch de claude es inyectable y siempre falla.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildHandoff, currentPaneAgent, handoffCandidates, renderHandoff } from "../cli/handoff.mts";
@@ -147,6 +148,118 @@ describe("nunca ejecuta el traspaso (contrato del epic #84)", () => {
 			}
 		} finally {
 			process.env.PATH = savedPath;
+		}
+	});
+});
+
+describe("bond handoff (CLI)", () => {
+	const REPO = join(import.meta.dir, "..");
+	const run = (cwd: string, home: string, args: string[]) =>
+		spawnSync(process.execPath, [join(REPO, "cli/main.mts"), "handoff", ...args], {
+			cwd,
+			encoding: "utf8",
+			timeout: 30_000,
+			env: {
+				...process.env,
+				// HOME y USERPROFILE: os.homedir() mira uno u otro según el SO; BOND_HOME, por si el entorno lo fija.
+				HOME: home,
+				USERPROFILE: home,
+				BOND_HOME: join(home, ".bond"),
+				// Fuera de Herdr aunque los tests corran dentro de un panel, y sin red: sin clave de Claude.
+				HERDR_ENV: "",
+				HERDR_PANE_ID: "",
+				ANTHROPIC_API_KEY: "",
+				PI_CODING_AGENT_SESSION_DIR: "",
+			},
+		});
+	// El fixture de pi declara "cwd":"/repo-test": se reescribe al directorio real (realpathSync por macOS).
+	const mkHome = (cwd: string) => {
+		const home = realpathSync(mkdtempSync(join(tmpdir(), "bond-handoff-cli-")));
+		mkdirSync(join(home, ".pi/agent/sessions/proj"), { recursive: true });
+		const text = readFileSync(join(import.meta.dir, "fixtures", "summary", "pi.jsonl"), "utf8").replaceAll('"/repo-test"', JSON.stringify(cwd));
+		writeFileSync(join(home, ".pi/agent/sessions/proj/s.jsonl"), text);
+		return home;
+	};
+
+	test("--from pi: propuesta completa, resumen escrito y comandos; no lanza agentes", () => {
+		const cwd = realpathSync(mkdtempSync(join(tmpdir(), "bond-handoff-cwd-")));
+		const home = mkHome(cwd);
+		// Prueba de spawn: stubs en el PATH que dejarían una marca si bond invocara a alguien.
+		const bin = join(home, "bin");
+		mkdirSync(bin, { recursive: true });
+		for (const n of ["pi", "claude", "codex", "agy", "copilot", "gemini", "opencode"]) {
+			writeFileSync(join(bin, n), `#!/bin/sh\ntouch "${home}/spawned-${n}"\n`);
+			chmodSync(join(bin, n), 0o511);
+		}
+		const savedPath = process.env.PATH;
+		process.env.PATH = bin + ":" + process.env.PATH;
+		try {
+			const r = run(cwd, home, ["--from", "pi"]);
+			expect(r.status).toBe(0);
+			expect(r.stdout).toContain("Propuesta de traspaso desde pi");
+			// Todos unknown sin eventos: la propuesta sigue siendo útil (criterio de #88).
+			expect(r.stdout).toContain("están en `unknown`");
+			// El resumen viaja escrito a fichero (D3) y también inline.
+			expect(r.stdout).toContain(join(".bond", "handoff"));
+			expect(r.stdout).toContain("respuesta final pi");
+			expect(r.stdout).toContain('codex "Retoma el trabajo');
+			for (const n of ["pi", "claude", "codex", "agy", "copilot", "gemini", "opencode"]) {
+				expect(existsSync(join(home, `spawned-${n}`)), `${n} no debió lanzarse`).toBe(false);
+			}
+			// El resumen quedó realmente en el fichero anunciado.
+			expect(existsSync(join(home, ".bond", "handoff"))).toBe(true);
+		} finally {
+			process.env.PATH = savedPath;
+			rmSync(home, { recursive: true, force: true });
+			rmSync(cwd, { recursive: true, force: true });
+		}
+	});
+	test("--tail N pasa al resumen", () => {
+		const cwd = realpathSync(mkdtempSync(join(tmpdir(), "bond-handoff-cwd-")));
+		const home = mkHome(cwd);
+		try {
+			const r = run(cwd, home, ["--from", "pi", "--tail", "1"]);
+			expect(r.status).toBe(0);
+			expect(r.stdout).toContain("respuesta final pi");
+			expect(r.stdout).not.toContain("hola pi");
+		} finally {
+			rmSync(home, { recursive: true, force: true });
+			rmSync(cwd, { recursive: true, force: true });
+		}
+	});
+	test("fuera de Herdr sin --from: error claro", () => {
+		const cwd = realpathSync(mkdtempSync(join(tmpdir(), "bond-handoff-cwd-")));
+		const home = mkHome(cwd);
+		try {
+			const r = run(cwd, home, []);
+			expect(r.status).not.toBe(0);
+			expect(r.stderr).toContain("--from");
+		} finally {
+			rmSync(home, { recursive: true, force: true });
+			rmSync(cwd, { recursive: true, force: true });
+		}
+	});
+	test("opciones malas: --tail no numérico y argumento desconocido", () => {
+		const cwd = realpathSync(mkdtempSync(join(tmpdir(), "bond-handoff-cwd-")));
+		const home = mkHome(cwd);
+		try {
+			expect(run(cwd, home, ["--from", "pi", "--tail", "x"]).status).not.toBe(0);
+			expect(run(cwd, home, ["--nope"]).status).not.toBe(0);
+		} finally {
+			rmSync(home, { recursive: true, force: true });
+			rmSync(cwd, { recursive: true, force: true });
+		}
+	});
+	test("--help", () => {
+		const cwd = realpathSync(mkdtempSync(join(tmpdir(), "bond-handoff-cwd-")));
+		const home = mkHome(cwd);
+		try {
+			const r = run(cwd, home, ["--help"]);
+			expect(r.status).toBe(0);
+			expect(r.stdout).toContain("Uso: bond handoff");
+		} finally {
+			rmSync(home, { recursive: true, force: true });
+			rmSync(cwd, { recursive: true, force: true });
 		}
 	});
 });

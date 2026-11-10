@@ -2,8 +2,8 @@
 name: "2026-11-10-bond-handoff"
 description: "bond handoff: propuesta de traspaso con presupuesto + resumen; el usuario decide siempre (#88)"
 created_at: "2026-11-10T06:44:21Z"
-last_implementation_at: "2026-11-10T07:11:47Z"
-has_completed_all_phases: false
+last_implementation_at: "2026-11-10T07:27:55Z"
+has_completed_all_phases: true
 ---
 
 # `bond handoff`: traspaso propuesto con presupuesto + resumen (#88)
@@ -77,10 +77,11 @@ has_completed_all_phases: false
 - Dependencias: P1 aceptada.
 - Contratos afectados: alta en `cli/main.mts`, `HANDOFF_HELP`, claves de ayuda/error, tabla y sección en `docs/reference.md`, `CHANGELOG.md`.
 - Acciones:
-  - [ ] Subcomando y opciones con ayuda bilingüe; sin Herdr ni `--from`, mensaje claro.
-  - [ ] `docs/reference.md` (tabla + sección) y CHANGELOG; `handoff` en la ayuda principal.
-  - [ ] Pruebas CLI con spawn (fixtures de sesión y eventos, `PATH` con stubs que dejarían marca) en `test/handoff.test.mts`.
-  - [ ] Ejecutar typecheck + bun test y registrar evidencia; presentar para revisión.
+  - [x] Subcomando y opciones con ayuda bilingüe; sin Herdr ni `--from`, mensaje claro.
+  - [x] `docs/reference.md` (tabla + sección) y CHANGELOG; `handoff` en la ayuda principal.
+  - [x] Pruebas CLI con spawn (fixtures de sesión y eventos, `PATH` con stubs que dejarían marca) en `test/handoff.test.mts`.
+  - [x] Ejecutar typecheck + bun test y registrar evidencia; presentar para revisión.
+  - [x] Corregido al probar con `bin/bond` (Node): `cli/handoff.mts` importaba los tipos `BudgetState`/`BudgetStatus` sin `import type`, invisible bajo bun pero roto en tiempo de ejecución con Node. Separamento a `import type`.
 - Criterios de aceptación: `bond handoff` sin argumentos imprime la propuesta (o error claro pidiendo `--from`); `--tail` se pasa al resumen; salida verificada en prueba.
 
 ## Progreso
@@ -88,8 +89,8 @@ has_completed_all_phases: false
 | Fase | Implementación | Verificación | Revisión | Evidencia |
 | --- | --- | --- | --- | --- |
 | P1 | implemented | passed | accepted | Aceptada por el usuario el 2026-11-10 («Acepto P1») sobre la evidencia: `npm run typecheck` limpio y `bun test` 732 pass / 0 fail (39 ficheros, +10 en test/handoff.test.mts) el 2026-11-10T07:11Z, cambios sobre `107a68c`. Implementación: cli/handoff.mts (currentPaneAgent, handoffCandidates orden D1, buildHandoff con resumen por ruta D3, renderHandoff), refactor statusFor en cli/budget.mts, claves bilingües en cli/messages/handoff.mts, 10 pruebas en test/handoff.test.mts. Decisión menor de implementación: `fetchImpl` inyectable en `statusFor`/`buildHandoff` (los tests no tocan red); sin cambio de comportamiento en producción. |
-| P2 | pending | not_run | pending | none yet |
+| P2 | implemented | passed | accepted | Aceptada por el usuario el 2026-11-10 («Acepto P2») sobre la evidencia: `npm run typecheck` limpio y `bun test` 737 pass / 0 fail (39 ficheros; 5 pruebas CLI nuevas por spawn sobre home/cwd temporales con `PATH` de stubs) el 2026-11-10T07:27:55Z, sobre `d40a240`. Evidencia real extra: `bin/bond handoff` dentro del panel de pi de Herdr — origen detectado por pane, estado `ok` desde eventos reales, resumen escrito en `~/.bond/handoff/` y comandos impresos. Esa prueba destapó un bug de P1 con Node (import de tipos sin `import type`, invisible bajo bun) corregido aquí. Cambios: cli/handoff.mts, cli/main.mts, cli/messages/handoff.mts, cli/messages/main.mts, test/handoff.test.mts, docs/reference.md, CHANGELOG.md y este plan. |
 
 ## Próximo paso
 
-P1 aceptada: ejecutar P2 (CLI `bond handoff [--from ag] [--tail N]` en `cli/main.mts`, `docs/reference.md` y CHANGELOG) en este checkout — P2 depende de la librería de P1, ya disponible.
+Plan completo (P1 `d40a240` y P2 aceptadas). Falta: cerrar el issue #88 comprobando sus cinco criterios de aceptación, y el push a `origin/main` (3 commits locales) cuando el usuario lo apruebe explícitamente.

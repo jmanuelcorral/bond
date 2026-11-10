@@ -20,6 +20,22 @@ export const es = {
 	"handoff.command_row": "- {agent}: `{command}`",
 	"handoff.prompt": "Retoma el trabajo de la sesión anterior: el resumen completo está en {file}. Empieza leyéndolo.",
 	"handoff.prompt_nofile": "La sesión anterior se quedó sin presupuesto. Pregúntame qué estábamos haciendo y seguimos desde ahí.",
+	"handoff.help": `Uso: bond handoff [opciones]
+
+Cuando el agente de este panel se queda sin presupuesto, bond prepara el traspaso a
+otro —nunca lo ejecuta—: presenta los candidatos ordenados por estado de presupuesto
+(ok → low → unknown → exhausted), escribe el resumen determinista de la sesión en
+~/.bond/handoff/ e imprime el comando exacto para continuar en cada candidato. Lo
+lanzas tú cuando quieras.
+
+Sin --from, el agente origen es el del panel actual de Herdr; fuera de Herdr,
+--from es obligatorio.
+
+  --from <agente>   agente origen (pi, claude, codex o agy)
+  --tail N          últimos N intercambios del resumen (por defecto: 10)`,
+	"handoff.bad_tail": "--tail no válido: {value}",
+	"handoff.bad_arg": "argumento no reconocido: {arg}",
+	"handoff.needs_value": "falta valor para {opt}",
 };
 
 export const en: Record<keyof typeof es, string> = {
@@ -37,4 +53,20 @@ export const en: Record<keyof typeof es, string> = {
 	"handoff.command_row": "- {agent}: `{command}`",
 	"handoff.prompt": "Pick up the previous session's work: the full summary is at {file}. Start by reading it.",
 	"handoff.prompt_nofile": "The previous session ran out of budget. Ask me what we were doing and continue from there.",
+	"handoff.help": `Usage: bond handoff [options]
+
+When this pane's agent runs out of budget, bond prepares the handoff to another
+one —it never runs it—: it presents the candidates ordered by budget state
+(ok → low → unknown → exhausted), writes the deterministic session summary to
+~/.bond/handoff/ and prints the exact command to continue in each candidate.
+You launch it whenever you want.
+
+Without --from the source agent is the current Herdr pane's; outside Herdr,
+--from is required.
+
+  --from <agent>   source agent (pi, claude, codex or agy)
+  --tail N         keep the last N exchanges in the summary (default: 10)`,
+	"handoff.bad_tail": "invalid --tail: {value}",
+	"handoff.bad_arg": "unrecognized argument: {arg}",
+	"handoff.needs_value": "missing value for {opt}",
 };
