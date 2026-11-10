@@ -520,3 +520,50 @@ describe("Issue #77: rechazar la forma [[providers]] y nombres de proveedor num�
 		expect(r.stdout).not.toContain("halo");
 	});
 });
+
+describe("Issue #78: el selector proveedor/modelo copiable y el error de --model sugerente", () => {
+	// Registro con dos modelos, uno desactivado: la fila debe pintar el selector completo.
+	const twoModels = () => {
+		mkdirSync(join(home, ".bond"), { recursive: true });
+		writeFileSync(
+			join(home, ".bond", "config.toml"),
+			[
+				'agents = ["pi"]',
+				"[providers.prov-test]",
+				'base_url = "http://127.0.0.1:8080/v1"',
+				'apis = ["chat"]',
+				"[[providers.prov-test.models]]",
+				'id = "test-model"',
+				"context = 131072",
+				"max_output = 8192",
+				"[[providers.prov-test.models]]",
+				'id = "off-test"',
+				"enabled = false",
+			].join("\n"),
+		);
+	};
+
+	test("bond models list pinta el selector proveedor/modelo tal cual se escribe", () => {
+		twoModels();
+		const r = runBond(["models", "list"]);
+		expect(r.status).toBe(0);
+		expect(r.stdout).toContain("• prov-test/test-model");
+		expect(r.stdout).toContain("prov-test/off-test");
+		expect(r.stdout).toContain("(desactivado)");
+		// Antes el modelo aparecía solo con su id: sin el prefijo no se podía copiar el selector.
+		expect(r.stdout).not.toMatch(/^• test-model/m);
+	});
+
+	test("run --model sin prefijo falla con la forma correcta y un ejemplo del registro", () => {
+		twoModels();
+		const fakeBin = join(home, "bin-copilot");
+		mkdirSync(fakeBin, { recursive: true });
+		// El stub solo tiene que existir: el die llega antes de lanzar nada.
+		writeFileSync(join(fakeBin, "copilot"), "#!/bin/sh\n");
+		writeFileSync(join(fakeBin, "copilot.cmd"), "@echo off\n");
+		const r = runBond(["run", "copilot", "--model", "test-model"], { PATH: fakeBin });
+		expect(r.status).not.toBe(0);
+		expect(r.stderr).toContain("proveedor/modelo");
+		expect(r.stderr).toContain("prov-test/test-model");
+	});
+});

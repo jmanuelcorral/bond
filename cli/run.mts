@@ -33,7 +33,13 @@ export function runAgent(args: string[]): void {
 	});
 	const pairs = providers.flatMap((p) => p.models.filter((m) => !m.agents || m.agents.includes("copilot")).map((m) => ({ p, m })));
 	const pick = wanted ? pairs.find(({ p, m }) => `${p.id}/${m.id}` === wanted) : pairs[0];
-	if (!pick) die(wanted ? t("run.no_model_named", { model: wanted }) : t("run.no_models"));
+	if (!pick) {
+		if (!wanted) die(t("run.no_models"));
+		// Sin match, enseña la forma correcta con un ejemplo real del registro (#78):
+		// el error seco no aclaraba que faltaba el prefijo del proveedor.
+		const ex = pairs[0];
+		die(ex ? t("run.no_model_named_hint", { model: wanted, example: `${ex.p.id}/${ex.m.id}` }) : t("run.no_model_named", { model: wanted }));
+	}
 
 	const { p, m } = pick;
 	const apis = providerApis(p, state);

@@ -34,6 +34,10 @@
   (`--tail`), `git status` y `git diff --stat` y cabecera trazable (fichero, modelo, momento).
   Sin argumento, coge el primer agente con sesión en el directorio actual. Es la materia prima
   de `bond handoff` (#88). `opencode` fuera del alcance, como en budget.
+- `bond models list` pinta ahora el selector `proveedor/modelo` completo y alineado en cada
+  modelo (#78): es la forma que consumen `bond run --model` y `crush model add`, y hasta ahora
+  había que adivinar la concatenación. Además, si `--model` no matchea con nada, el error de
+  `bond run` enseña la forma correcta con un ejemplo del propio registro.
 - `bond models probe` inspecciona el cuerpo de la respuesta, no solo el status HTTP (#76).
   Antes un modelo razonador al que el `max_tokens` del probe no le deja margen respondía
   200 con la respuesta vacía (todo el presupuesto en `reasoning`) y el probe lo marcaba

@@ -73,10 +73,15 @@ function list(): void {
 				? t("models.list_apis_probe", { date: probed.at.slice(0, 16).replace("T", " ") })
 				: t("models.list_apis_assumed");
 		console.log(dim(`  APIs: ${apis.join(", ")}${apisDetail}`));
+		// El selector `proveedor/modelo` tal cual lo consumen `bond run --model` y crush (#78):
+		// copiable de un arrastre, alineado para que las columnas de límites se correspondan.
+		const width = Math.max(0, ...p.models.map((m) => `${p.id}/${m.id}`.length));
 		for (const m of p.models) {
+			const off = m.enabled === false;
+			const sel = `${p.id}/${m.id}`.padEnd(width);
 			const served = probed ? (probed.served.includes(m.id) ? "" : caution(t("models.list_not_served"))) : "";
 			const limits = [m.context && `ctx ${m.context}`, m.max_output && `out ${m.max_output}`].filter(Boolean).join(", ");
-			console.log(`  ${m.enabled === false ? dim(t("models.list_model_disabled", { id: m.id })) : `• ${m.id}`}  ${dim(limits)}${served}`);
+			console.log(`  ${off ? dim(`· ${sel}`) : `• ${sel}`}  ${dim(limits)}${off ? ` ${caution(t("models.list_disabled_tag"))}` : ""}${served}`);
 		}
 		const agents = [
 			...TARGETS.map((t) => [t.agent, apis.includes(t.needs) ? ok("✓") : bad("✗")] as const),

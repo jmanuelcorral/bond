@@ -25,6 +25,7 @@ Ejemplos:
 	"run.not_in_path": "copilot no está en el PATH",
 	"run.model_needs_arg": "--model necesita proveedor/modelo",
 	"run.no_model_named": "no hay modelo {model} usable por Copilot (bond models list)",
+	"run.no_model_named_hint": "no hay modelo {model} usable por Copilot; la forma es proveedor/modelo, p. ej. {example} (bond models list)",
 	"run.no_models": "no hay modelos usables por Copilot (bond models list)",
 
 	// ---- sessions (cli/sessions.mts) ----
@@ -239,6 +240,7 @@ Examples:
 	"run.not_in_path": "copilot is not in PATH",
 	"run.model_needs_arg": "--model requires provider/model",
 	"run.no_model_named": "no {model} model usable by Copilot (bond models list)",
+	"run.no_model_named_hint": "no {model} model usable by Copilot; the form is provider/model, e.g. {example} (bond models list)",
 	"run.no_models": "no models usable by Copilot (bond models list)",
 
 	// ---- sessions (cli/sessions.mts) ----
