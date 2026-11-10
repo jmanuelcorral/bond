@@ -760,7 +760,10 @@ configs quedan escritos y se puede repetir `bond setup` más tarde.
 ## `bond doctor`
 
 `cli/doctor.mts`. Comprueba en unos segundos lo que deja `bond setup` y lo que depende de
-fuera, y sale con 1 si algo falla:
+fuera, y sale con 1 si algo falla. Además completa solo, sin esperar a `bond migrate`, la
+migración heredada de la config global: si la encuentra en la ubicación antigua
+(`~/.config/bond`, previa a 1.11.0), la mueve al destino de `BOND_HOME` (`~/.bond` por
+defecto) y deja la antigua como copia, avisándolo («configuración global movida de … a …»).
 
 | Comprobación | Fallo típico y arreglo |
 |---|---|
