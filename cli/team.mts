@@ -10,7 +10,7 @@ import { basename, dirname, join, resolve, sep } from "node:path";
 import { loadDecisions, parseFm, type Parsed, resolveAuthor, slugify } from "./decisions.mts";
 import { type HubRepo, type HubSession, hubRoot, hubSession, warnedInvalidHub } from "./hub.mts";
 import { chooseAgent, gitRoot, openWorkspace } from "./launch.mts";
-import { agents, defaultAgentArgs, ensureServer, firstFreeName, herdr, type HerdrAgent, insideHerdr, preparePane, questionIn, requireHerdr, serverRunning, startedBlocked, startupNoticeIn, visibleScreen, workspaces } from "./herdr.mts";
+import { agents, defaultAgentArgs, ensureServer, firstFreeName, focusAgent, herdr, type HerdrAgent, insideHerdr, preparePane, questionIn, requireHerdr, serverRunning, startedBlocked, startupNoticeIn, visibleScreen, workspaces } from "./herdr.mts";
 import { repoDecisions } from "./repo.mts";
 import { iconStyle, type IconStyle } from "../lib/status-bar.mts";
 import { inheritTrust, TRUST_KINDS, trusts } from "./trust.mts";
@@ -36,6 +36,8 @@ export interface TeamArgs {
 	yes: boolean;
 	/** En paneles: el worktree hereda la confianza del checkout principal (pi, Claude, agy). */
 	inheritTrust: boolean;
+	/** No abrir el panel con la tabla en vivo (--no-table o BOND_TEAM_NO_TABLE=1). */
+	noTable: boolean;
 	specs: Array<{ branch: string; agent?: string }>;
 	agentArgs: string[];
 	/** En un hub: solo estos repos de la sesión (--repos). */
@@ -46,8 +48,8 @@ export interface TeamArgs {
  * Argumentos de bond team. El primero es el repo solo si es una carpeta que existe; si no, es
  * ya una rama (bond team feat/a feat/b:claude, dentro del repo).
  */
-export function parseTeam(args: string[], isDir: (p: string) => boolean = existsSync): TeamArgs {
-	const o: TeamArgs = { trust: false, yes: false, inheritTrust: true, specs: [], agentArgs: [] };
+export function parseTeam(args: string[], isDir: (p: string) => boolean = existsSync, env: Record<string, string | undefined> = process.env): TeamArgs {
+	const o: TeamArgs = { trust: false, yes: false, inheritTrust: true, noTable: env.BOND_TEAM_NO_TABLE === "1", specs: [], agentArgs: [] };
 	const pick = (flag: string, layout: Layout) => {
 		if (o.layout && o.layout !== layout) die(t("team.err_flag_conflict", { flag, layout: o.layout }));
 		o.layout = layout;
@@ -65,6 +67,7 @@ export function parseTeam(args: string[], isDir: (p: string) => boolean = exists
 		else if (a === "-y" || a === "--yes") o.yes = true;
 		else if (a === "--no-trust") o.inheritTrust = false;
 		else if (a === "--repos") o.repos = val().split(",").map((x) => x.trim()).filter(Boolean);
+		else if (a === "--no-table") o.noTable = true;
 		else if (a === "--") {
 			o.agentArgs = args.slice(i + 1);
 			break;
@@ -118,13 +121,15 @@ async function create(args: string[]): Promise<void> {
 		// Antes de crear nada: si no caben en la pestaña, se elige dónde van.
 		const hub = hubRoot(root);
 		const repo = hub ? basename(hub) : basename(root);
-		const tab = callerTab(root, anchor);
+		const tab = callerTab(root, anchor, o.noTable);
 		const pending = pendingInTab(root, plan);
 		let layout = o.layout ?? "tabs";
 		if (!o.layout && pending.todo.length > tab.room && !o.yes && process.stdin.isTTY && process.stdout.isTTY) layout = await askLayout(pending.todo.length, tab.room, repo);
-		if (layout === "workspaces") openWorkspaces(root, plan, o);
-		else openInTab(root, anchor, tab, layout === "same-tab" ? Number.POSITIVE_INFINITY : tab.room, pending, o);
-		openWatch(root, anchor, o.base);
+		const first = layout === "workspaces" ? openWorkspaces(root, plan, o) : openInTab(root, anchor, tab, layout === "same-tab" ? Number.POSITIVE_INFINITY : tab.room, pending, o);
+		if (o.noTable) {
+			const target = first?.name ?? first?.pane;
+			if (target) focusAgent(target);
+		} else openWatch(root, anchor, o.base);
 	} else openWorkspaces(root, plan, o);
 	const { renderSmall } = await import("../lib/bond-logo.mts");
 	const hub = hubRoot(root);
@@ -135,7 +140,8 @@ async function create(args: string[]): Promise<void> {
 }
 
 /** Un workspace por rama con herdr worktree (fuera de Herdr, o con --workspaces). */
-function openWorkspaces(root: string, plan: PlanItem[], o: TeamArgs): void {
+function openWorkspaces(root: string, plan: PlanItem[], o: TeamArgs): { pane?: string; name?: string } | undefined {
+	let first: { pane?: string; name?: string } | undefined;
 	for (const item of plan) {
 		const { branch, agent } = item;
 		try {
@@ -143,6 +149,7 @@ function openWorkspaces(root: string, plan: PlanItem[], o: TeamArgs): void {
 			if (r.agentPane && r.agentName && !r.reused) {
 				run("herdr", ["pane", "rename", r.agentPane, `${r.agentName} · ${itemLabel(item)}`]);
 			}
+			if (!first && (r.agentPane || r.agentName)) first = { pane: r.agentPane, name: r.agentName };
 			const detail = r.reused
 				? dim(t("team.ws_already_open", { ws: r.ws }))
 				: `${t("team.agent_in_pane", { name: r.agentName ?? "", agent, pane: r.agentPane ?? "" })}${r.blocked ? caution(t("team.awaits_reply")) : ""}`;
@@ -151,6 +158,7 @@ function openWorkspaces(root: string, plan: PlanItem[], o: TeamArgs): void {
 			warn(`${itemLabel(item)}: ${(e as Error).message}`);
 		}
 	}
+	return first;
 }
 
 // --- equipo en la pestaña -------------------------------------------------------------------
@@ -174,15 +182,15 @@ interface CallerTab {
 }
 
 /** La pestaña del que llama y cuántos minions le caben; si Herdr no responde, los 4 de una pestaña con solo el tuyo. */
-export function callerTab(root: string, anchor: string): CallerTab {
+export function callerTab(root: string, anchor: string, noTable = false): CallerTab {
 	try {
 		const me = herdr<{ pane?: HerdrPane }>(["pane", "get", anchor]).pane;
 		const panes = (herdr<{ panes?: HerdrPane[] }>(["pane", "list", ...(me?.workspace_id ? ["--workspace", me.workspace_id] : [])]).panes ?? []).filter((p) => p.tab_id === me?.tab_id);
 		const hub = hubRoot(root);
 		const repo = hub ? basename(hub) : basename(root);
-		return { workspace: me?.workspace_id, room: tabRoom(panes.length, !!findWatchPane(panes, me?.tab_id, repo)) };
+		return { workspace: me?.workspace_id, room: tabRoom(panes.length, noTable || !!findWatchPane(panes, me?.tab_id, repo)) };
 	} catch {
-		return { room: tabRoom(1, false) };
+		return { room: tabRoom(1, noTable) };
 	}
 }
 
@@ -320,7 +328,7 @@ interface Pending {
 	/** Ramas sin agente en marcha, con su worktree si ya existe. */
 	todo: Array<PlanItem & { path?: string }>;
 	/** Ramas que ya tienen agente, con la carpeta de su worktree. */
-	skipped: Array<{ branch: string; sub?: string; path: string }>;
+	skipped: Array<{ branch: string; sub?: string; path: string; pane?: string; name?: string }>;
 	/** Nombres de agente en uso en Herdr. */
 	live: Set<string>;
 }
@@ -334,7 +342,8 @@ function pendingInTab(root: string, plan: PlanItem[]): Pending {
 		const at = item.root ?? root;
 		if (!existing.has(at)) existing.set(at, gitWorktrees(at));
 		const wt = existing.get(at)?.find((w) => w.branch === item.branch);
-		if (wt && running.some((a) => a.agent && within(canonical(a.cwd ?? a.foreground_cwd ?? "/"), wt.path))) out.skipped.push({ branch: item.branch, sub: item.sub, path: wt.path });
+		const agent = wt && running.find((a) => a.agent && within(canonical(a.cwd ?? a.foreground_cwd ?? "/"), wt.path));
+		if (wt && agent) out.skipped.push({ branch: item.branch, sub: item.sub, path: wt.path, pane: agent.pane_id, name: agent.name });
 		else out.todo.push({ ...item, path: wt?.path });
 	}
 	return out;
@@ -350,7 +359,7 @@ function trustingOrchestrator(root: string, anchor: string): string | undefined 
 }
 
 /** Un worktree, un panel y un minion por rama: en la pestaña del que llama hasta `room`, el resto en pestañas nuevas. */
-function openInTab(root: string, anchor: string, here: CallerTab, room: number, pending: Pending, o: TeamArgs): void {
+function openInTab(root: string, anchor: string, here: CallerTab, room: number, pending: Pending, o: TeamArgs): { pane?: string; name?: string } | undefined {
 	const { live } = pending;
 	const orchestrator = o.inheritTrust ? trustingOrchestrator(canonical(root), anchor) : undefined;
 	for (const s of pending.skipped) console.log(`${ok("✓")} ${itemLabel(s)}  ${dim(t("team.already_has_agent", { path: s.path }))}`);
@@ -375,6 +384,8 @@ function openInTab(root: string, anchor: string, here: CallerTab, room: number, 
 	const panes: Array<string | undefined> = [];
 	/** Panel con el que nació cada pestaña nueva. */
 	const roots: Array<string | undefined> = [];
+	let firstName: string | undefined;
+	let firstPane: string | undefined;
 	tabLayout(todo.length, room).forEach((split, i) => {
 		const { branch, agent, path } = todo[i];
 		const label = itemLabel(todo[i]);
@@ -390,6 +401,10 @@ function openInTab(root: string, anchor: string, here: CallerTab, room: number, 
 			panes.push(pane);
 			const name = minionName(live);
 			live.add(name);
+			if (!firstPane) {
+				firstPane = pane;
+				firstName = name;
+			}
 			run("herdr", ["pane", "rename", pane, `${name} · ${label}`]);
 			let trusted = false;
 			if (o.inheritTrust && TRUST_KINDS.includes(agent)) {
@@ -421,6 +436,11 @@ function openInTab(root: string, anchor: string, here: CallerTab, room: number, 
 			warn(`${label}: ${(e as Error).message}`);
 		}
 	});
+	if (!firstPane && pending.skipped.length) {
+		firstPane = pending.skipped[0].pane;
+		firstName = pending.skipped[0].name;
+	}
+	return { pane: firstPane, name: firstName };
 }
 
 // --- estado de cada rama ------------------------------------------------------------------
@@ -2176,13 +2196,15 @@ async function createInHub(s: HubSession, o: TeamArgs): Promise<void> {
 	if (!insideHerdr()) await ensureServer();
 	const anchor = insideHerdr() ? process.env.HERDR_PANE_ID : undefined;
 	if (anchor) {
-		const tab = callerTab(s.root, anchor);
+		const tab = callerTab(s.root, anchor, o.noTable);
 		const pending = pendingInTab(s.root, plan);
 		let layout = o.layout ?? "tabs";
 		if (!o.layout && pending.todo.length > tab.room && !o.yes && process.stdin.isTTY && process.stdout.isTTY) layout = await askLayout(pending.todo.length, tab.room, s.name);
-		if (layout === "workspaces") openWorkspaces(s.root, plan, o);
-		else openInTab(s.root, anchor, tab, layout === "same-tab" ? Number.POSITIVE_INFINITY : tab.room, pending, o);
-		openWatch(s.root, anchor);
+		const first = layout === "workspaces" ? openWorkspaces(s.root, plan, o) : openInTab(s.root, anchor, tab, layout === "same-tab" ? Number.POSITIVE_INFINITY : tab.room, pending, o);
+		if (o.noTable) {
+			const target = first?.name ?? first?.pane;
+			if (target) focusAgent(target);
+		} else openWatch(s.root, anchor);
 	} else openWorkspaces(s.root, plan, o);
 	const { renderSmall } = await import("../lib/bond-logo.mts");
 	console.log(`\n  ${renderSmall(60, t("team.logo_branch_in_hub", { branch, name: s.name }))}\n`);

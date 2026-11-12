@@ -55,6 +55,13 @@ else if (x === "agent" && y === "start") {
 	const pane = st.panes.find((p) => p.pane_id === opt("--pane"));
 	st.agents.push({ name: a[2], agent: opt("--kind"), agent_status: "idle", cwd: pane.cwd, pane_id: pane.pane_id, workspace_id: "w1" });
 	out({});
+} else if (x === "agent" && y === "focus") {
+	const target = a[2];
+	const ag = st.agents.find((g) => g.name === target || g.pane_id === target);
+	const targetPaneId = ag ? ag.pane_id : target;
+	for (const p of st.panes) p.focused = (p.pane_id === targetPaneId);
+	for (const g of st.agents) g.focused = (g.name === target || g.pane_id === targetPaneId);
+	out({});
 } else if (x === "agent" && y === "list") out({ agents: st.agents });
 else if (x === "agent" && y === "get") out({ agent: st.agents.find((g) => g.name === a[2]) });
 else if (x === "agent" && y === "read") process.stdout.write(a.includes("recent-unwrapped") ? "informe de " + a[2] + "\\n" : "");
@@ -124,15 +131,15 @@ const repo = (name: string, files: Record<string, string> = {}) => {
 	g(dir, "commit", "-qm", "init");
 	return dir;
 };
-const bond = (args: string[], cwd = hub) =>
+const bond = (args: string[], cwd = hub, extraEnv: Record<string, string> = {}) =>
 	spawnSync(process.execPath, [MAIN, ...args], {
 		cwd,
-		env: { ...process.env, HOME: home, USERPROFILE: home, PATH: `${bin}${delimiter}${process.env.PATH}`, NO_COLOR: "1", BOND_NO_UPDATE: "1", HERDR_ENV: "1", HERDR_PANE_ID: "p0", FAKE_HERDR_STATE: state },
+		env: { ...process.env, HOME: home, USERPROFILE: home, PATH: `${bin}${delimiter}${process.env.PATH}`, NO_COLOR: "1", BOND_NO_UPDATE: "1", HERDR_ENV: "1", HERDR_PANE_ID: "p0", FAKE_HERDR_STATE: state, ...extraEnv },
 		encoding: "utf8",
 		stdio: ["ignore", "pipe", "pipe"],
 	});
 const herdrState = () => ({
-	...(JSON.parse(readFileSync(state, "utf8")) as { agents: Array<{ name: string; agent: string; cwd: string }>; panes: Array<{ pane_id: string; label?: string }> }),
+	...(JSON.parse(readFileSync(state, "utf8")) as { agents: Array<{ name: string; agent: string; cwd: string; pane_id: string; focused?: boolean }>; panes: Array<{ pane_id: string; label?: string; focused?: boolean }>; calls: string[][] }),
 	prompts: existsSync(`${state}.prompts`) ? readFileSync(`${state}.prompts`, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { name: string; task: string }) : [],
 });
 const worktrees = (dir: string) => g(dir, "worktree", "list", "--porcelain").split("\n").filter((l) => l.startsWith("worktree ")).length;
@@ -177,9 +184,45 @@ describe("bond team en un hub", () => {
 		}
 		// Una sola tabla, la del hub.
 		expect(st.panes.filter((p) => p.label?.startsWith("tabla · ")).map((p) => p.label)).toEqual(["tabla · hub"]);
+		// Por defecto el foco se queda en la shell lanzadora p0.
+		expect(st.panes.find((p) => p.pane_id === "p0")?.focused).toBe(true);
 		// Repetirlo no abre nada nuevo.
 		expect(bond(["team", "fix/x"]).status).toBe(0);
 		expect(herdrState().agents.length).toBe(2);
+	});
+
+	test("con --no-table no abre la tabla en vivo y enfoca el primer agente", () => {
+		const r = bond(["team", "fix/x", "--no-table"]);
+		expect(r.stderr).not.toContain("error");
+		expect(r.status).toBe(0);
+		const st = herdrState();
+		expect(st.panes.some((p) => p.label?.startsWith("tabla · "))).toBe(false);
+		expect(st.panes.find((p) => p.pane_id === "p0")?.focused).toBe(false);
+		const firstAgent = st.agents[0];
+		expect(st.panes.find((p) => p.pane_id === firstAgent.pane_id)?.focused).toBe(true);
+		expect(st.calls.some((c) => c[0] === "agent" && c[1] === "focus")).toBe(true);
+	});
+
+	test("con BOND_TEAM_NO_TABLE=1 no abre la tabla en vivo y enfoca el primer agente", () => {
+		const r = bond(["team", "fix/x"], hub, { BOND_TEAM_NO_TABLE: "1" });
+		expect(r.stderr).not.toContain("error");
+		expect(r.status).toBe(0);
+		const st = herdrState();
+		expect(st.panes.some((p) => p.label?.startsWith("tabla · "))).toBe(false);
+		expect(st.panes.find((p) => p.pane_id === "p0")?.focused).toBe(false);
+		const firstAgent = st.agents[0];
+		expect(st.panes.find((p) => p.pane_id === firstAgent.pane_id)?.focused).toBe(true);
+	});
+
+	test("en un repo normal con --no-table no abre la tabla y enfoca el agente", () => {
+		const r = bond(["team", "feat/solo", "--no-table"], join(hub, "front"));
+		expect(r.stderr).not.toContain("error");
+		expect(r.status).toBe(0);
+		const st = herdrState();
+		expect(st.panes.some((p) => p.label?.startsWith("tabla · "))).toBe(false);
+		expect(st.panes.find((p) => p.pane_id === "p0")?.focused).toBe(false);
+		const agent = st.agents.find((a) => a.cwd === tabWorktreePath(home, join(hub, "front"), "feat/solo"))!;
+		expect(st.panes.find((p) => p.pane_id === agent.pane_id)?.focused).toBe(true);
 	});
 
 	test("--repos abre solo esos; una segunda rama vertical se niega sin crear nada (D10)", () => {

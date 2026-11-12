@@ -42,6 +42,14 @@ describe("parseTeam", () => {
 		expect(parseTeam(["feat/a"], dirs()).inheritTrust).toBe(true);
 		expect(parseTeam(["feat/a", "--no-trust"], dirs()).inheritTrust).toBe(false);
 	});
+
+	test("--no-table y BOND_TEAM_NO_TABLE: desactiva la tabla en vivo (por defecto no)", () => {
+		expect(parseTeam(["feat/a"], dirs(), {}).noTable).toBe(false);
+		expect(parseTeam(["feat/a", "--no-table"], dirs(), {}).noTable).toBe(true);
+		expect(parseTeam(["feat/a"], dirs(), { BOND_TEAM_NO_TABLE: "1" }).noTable).toBe(true);
+		expect(parseTeam(["feat/a"], dirs(), { BOND_TEAM_NO_TABLE: "0" }).noTable).toBe(false);
+		expect(parseTeam(["feat/a"], dirs(), { BOND_TEAM_NO_TABLE: "" }).noTable).toBe(false);
+	});
 });
 
 // --- estado de las ramas (solo git) ---------------------------------------------------------

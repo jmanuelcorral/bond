@@ -146,6 +146,14 @@ export function focusWorkspace(id: string): void {
 	herdr(["workspace", "focus", id]);
 }
 
+export function focusAgent(target: string): void {
+	try {
+		herdr(["agent", "focus", target]);
+	} catch {
+		// el foco es conveniente; no debe romper bond team si falla
+	}
+}
+
 /** Engancha la interfaz de Herdr a esta terminal (sustituye a bond hasta que salgas). */
 export function attach(): never {
 	const r = spawnSync("herdr", [], { stdio: "inherit" });

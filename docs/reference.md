@@ -1078,7 +1078,7 @@ vertical ([puesto.md](puesto.md#una-rama-vertical-en-un-hub)):
 
 | Orden | En un hub |
 |---|---|
-| `bond team <rama>[:agente] [--repos a,b]` | Crea la rama en el hub (sin worktree ni agente) y abre un worktree y un agente en cada repo de la sesión (o en los de `--repos`), desde su base de `hub.toml`, con el agente de `:agente`, `--agent` o el del `bond.toml` del repo. Una sola rama; sin `--base` |
+| `bond team <rama>[:agente] [--repos a,b] [--no-table]` | Crea la rama en el hub (sin worktree ni agente) y abre un worktree y un agente en cada repo de la sesión (o en los de `--repos`), desde su base de `hub.toml`, con el agente de `:agente`, `--agent` o el del `bond.toml` del repo. Una sola rama; sin `--base`. Con `--no-table` o `BOND_TEAM_NO_TABLE=1`, no abre la tabla en vivo y deja el foco en el primer agente |
 | `bond team prompt <rama> "…" [--repo <r>]` | A todos los agentes de la rama, con una nota que nombra a los demás y su repo; `--repo`, a uno. Si alguno está bloqueado, no manda nada |
 | `bond team collect <rama> [--repo <r>] [--agent <a>]` | El informe del agente de la rama; `--repo` o `--agent` si está en varios repos |
 | `bond team clean [rama...] [--repo <r>] [--delete-branch]` | Quita los worktrees de todos los repos (o del de `--repo`); las ramas se quedan, también la del hub. Con `--delete-branch`, borra las integradas y la del hub si está integrada en su base y no le queda worktree en ningún repo |

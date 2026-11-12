@@ -110,7 +110,7 @@ Aquí es donde bond se pone interesante. Con `bond team` abres un worktree y un 
 rama que le pidas, y tienes a la vista cómo va cada una. Estos son sus cuatro modos:
 
 ```bash
-bond team [repo] <rama[:agente]>... [--agent <a>] [--base <ref>] [--tabs | --same-tab | --workspaces] [--yes] [--no-trust] [-- args de los agentes]
+bond team [repo] <rama[:agente]>... [--agent <a>] [--base <ref>] [--tabs | --same-tab | --workspaces] [--yes] [--no-trust] [--no-table] [-- args de los agentes]
 bond team status [repo] [--base <ref>] [--json | --watch [--keep-open]]
 bond team prompt <rama> "la tarea" [--repo <repo>] [--wait] [--timeout <ms>]
 bond team clean [repo] [rama...] [--repo <repo>] [--force] [--delete-branch] [--keep-table] [--dry-run]
@@ -154,6 +154,10 @@ estaba abierta de antes, bond la reutiliza en vez de abrir otra. En un hub (sesi
 `hub.toml`), el panel se llama `tabla · <hub>` tanto si se lanza desde el hub como desde uno de
 sus repos, muestra una sola tabla con las filas de toda la sesión y solo se cierra cuando no queda
 trabajo pendiente en ningún repo.
+
+Si no quieres abrir la tabla en vivo, puedes desactivarla con `--no-table` o suministrando la
+variable de entorno `BOND_TEAM_NO_TABLE=1`. En ese caso no se crea el panel de la tabla y el foco
+queda en el primer agente en lugar de en la shell lanzadora.
 
 Si lanzas `bond team` fuera de Herdr, el comportamiento es el de siempre: un workspace por rama
 con `herdr worktree`.

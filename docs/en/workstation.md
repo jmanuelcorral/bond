@@ -106,7 +106,7 @@ This is where bond gets interesting. With `bond team` you open one worktree and 
 each branch you ask for, and you can see how each one is doing. These are its four modes:
 
 ```bash
-bond team [repo] <rama[:agente]>... [--agent <a>] [--base <ref>] [--tabs | --same-tab | --workspaces] [--yes] [--no-trust] [-- args de los agentes]
+bond team [repo] <rama[:agente]>... [--agent <a>] [--base <ref>] [--tabs | --same-tab | --workspaces] [--yes] [--no-trust] [--no-table] [-- args de los agentes]
 bond team status [repo] [--base <ref>] [--json | --watch [--keep-open]]
 bond team prompt <rama> "la tarea" [--wait] [--timeout <ms>]
 bond team clean [repo] [rama...] [--force] [--delete-branch] [--keep-table] [--dry-run]
@@ -151,6 +151,10 @@ was already open from before, bond reuses it instead of opening another one. In 
 declared in `hub.toml`), the pane is called `tabla · <hub>` whether it is launched from the hub or
 from one of its repos, it shows a single table with the rows of the whole session, and it only
 closes when no repo has pending work.
+
+If you do not want to open the live table, you can disable it with `--no-table` or by setting the
+`BOND_TEAM_NO_TABLE=1` environment variable. In that case the table pane is not created and focus
+remains on the first agent instead of the launching shell.
 
 If you run `bond team` outside Herdr, it behaves as it always has: one workspace per branch with
 `herdr worktree`.

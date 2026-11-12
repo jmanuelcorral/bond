@@ -2,6 +2,10 @@
 
 ## Sin publicar
 
+- `bond team` añade la opción `--no-table` y la variable de entorno equivalente `BOND_TEAM_NO_TABLE=1`
+  para no abrir el panel con la tabla en vivo (`bond team status --watch`). Al desactivar la tabla, el
+  foco pasa al panel del primer agente en lugar de quedarse en la shell lanzadora. Sin la opción ni la
+  variable, el comportamiento no cambia.
 - Aclaración sobre un comportamiento existente de `bond doctor`, que no se había documentado
   nunca: si encuentra la config global en la ubicación antigua (`~/.config/bond`, previa a
   1.11.0), la mueve al destino de `BOND_HOME` (`~/.bond` por defecto) y deja la antigua como

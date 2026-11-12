@@ -24,7 +24,8 @@ pestaña. Si no caben, bond team pregunta antes de crear nada: 1) pestañas nuev
 defecto), 2) todo en tu pestaña (filas de 4, aunque se apriete) o 3) un workspace por rama.
 --tabs, --same-tab y --workspaces eligen sin preguntar; sin terminal o con --yes, la 1. Fuera
 de Herdr, un workspace por rama. Dentro, además, un panel estrecho a la derecha del tuyo con la
-tabla en vivo de todas las ramas (bond team status --watch), o el que ya haya.
+tabla en vivo de todas las ramas (bond team status --watch), o el que ya haya, salvo con
+--no-table o BOND_TEAM_NO_TABLE=1 (en ese caso el foco queda en el primer agente).
 
 En paneles, si el orquestador (pi, Claude Code o agy en el panel desde el que lanzas el equipo)
 confía en el checkout principal, todos los agentes del equipo confían en su worktree; si no, cada
@@ -45,6 +46,7 @@ carpeta al PATH de la shell del panel antes de lanzarlo.
   --no-trust             En paneles: no heredar la confianza del checkout principal
   --trust-repository     Con --workspaces: se pasa a herdr worktree (solo en repos revisados)
   --repos <a,b>          En un hub: solo esos repos de la sesión (ruta o nombre)
+  --no-table             No abrir el panel con la tabla en vivo (también BOND_TEAM_NO_TABLE=1)
 
 En un hub (un repo con hub.toml), bond team <rama> abre
 una rama vertical: la crea en el hub, sin worktree ni agente, y abre un worktree y un agente
@@ -267,7 +269,8 @@ tab. If they do not fit, bond team asks before creating anything: 1) new tabs (d
 2) all on your tab (rows of 4, even if cramped), or 3) one workspace per branch.
 --tabs, --same-tab, and --workspaces select without prompting; without a TTY or with --yes, option 1. Outside
 Herdr, one workspace per branch. Inside, additionally, a narrow pane to the right of yours with the
-live table of all branches (bond team status --watch), or whichever is already open.
+live table of all branches (bond team status --watch), or whichever is already open, unless
+disabled with --no-table or BOND_TEAM_NO_TABLE=1 (which leaves focus on the first agent).
 
 In panes, if the orchestrator (pi, Claude Code, or agy in the pane from which you launch the team)
 trusts the main checkout, all team agents trust their worktree; otherwise, each
@@ -288,6 +291,7 @@ folder to the pane's shell PATH before launching it.
   --no-trust             In panes: do not inherit trust from the main checkout
   --trust-repository     With --workspaces: passed to herdr worktree (only in reviewed repos)
   --repos <a,b>          In a hub: only those repos from the session (path or name)
+  --no-table             Do not open the live table pane (also BOND_TEAM_NO_TABLE=1)
 
 In a hub (a repo with hub.toml), bond team <branch> opens
 a vertical branch: creates it in the hub without worktree or agent, and opens a worktree and an agent
