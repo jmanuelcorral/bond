@@ -940,7 +940,7 @@ function repoLabel(r: Row, hubName: string): string {
 }
 
 /** Valor de una celda. */
-function cellValue(r: Row, key: string, hubName: string): string {
+function cellValue(r: Row, key: string, hubName: string, color = true): string {
 	switch (key) {
 		case "minion":
 			return r.agent?.name ?? "-";
@@ -953,7 +953,7 @@ function cellValue(r: Row, key: string, hubName: string): string {
 		case "files":
 			return r.files.length ? String(r.files.length) : "-";
 		case "where":
-			return r.workspace ?? (r.agent?.pane ? t("team.status_panel", { pane: r.agent.pane }) : dim(t("team.status_closed")));
+			return r.workspace ?? (r.agent?.pane ? t("team.status_panel", { pane: r.agent.pane }) : (color ? dim(t("team.status_closed")) : t("team.status_closed")));
 	}
 	return "-";
 }
@@ -1030,7 +1030,7 @@ export function tableBody(
 	const style = tableIconStyle();
 	const cellsOf = (cs: typeof cols) =>
 		rows.map((r) =>
-			cs.map((c) => (c.key === "minion" ? `${paintState(r.state, stateIcon(r.state, style), o.color)} ${cellValue(r, c.key, o.hubName)}` : cellValue(r, c.key, o.hubName))),
+			cs.map((c) => (c.key === "minion" ? `${paintState(r.state, stateIcon(r.state, style), o.color)} ${cellValue(r, c.key, o.hubName, o.color)}` : cellValue(r, c.key, o.hubName, o.color))),
 		);
 	const widthsOf = (cs: typeof cols, cells: string[][]) => cs.map((c, i) => Math.max(textWidth(c.header), ...cells.map((x) => textWidth(x[i] ?? ""))));
 	let cells = cellsOf(cols);
