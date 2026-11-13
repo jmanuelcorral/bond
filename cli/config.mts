@@ -88,6 +88,8 @@ export interface Config {
 	agents: string[];
 	/** Agente que se propone por defecto en `bond init`. */
 	default_agent?: string;
+	/** Subcomando por defecto al ejecutar bond a secas: "app" o "dev". */
+	default_command?: "app" | "dev";
 	providers: Provider[];
 	/** [update] auto = false: bond no pregunta al arrancar si hay versión nueva. */
 	update?: { auto?: boolean };
@@ -152,6 +154,7 @@ export function loadConfig(): Config {
 	return {
 		agents: Array.isArray(raw.agents) ? (raw.agents as string[]) : [],
 		default_agent: typeof raw.default_agent === "string" ? raw.default_agent : undefined,
+		default_command: raw.default_command === "app" || raw.default_command === "dev" ? raw.default_command : undefined,
 		providers,
 		suggestions: readSuggestions(raw),
 		ui: readUi(raw),
@@ -204,6 +207,7 @@ export function saveConfig(cfg: Config): void {
 	const providers = Object.fromEntries(cfg.providers.map(({ id, ...rest }) => [id, rest]));
 	const data: Record<string, unknown> = { agents: cfg.agents };
 	if (cfg.default_agent) data.default_agent = cfg.default_agent;
+	if (cfg.default_command) data.default_command = cfg.default_command;
 	data.providers = providers;
 	if (cfg.update) data.update = cfg.update;
 	if (cfg.suggestions) data.suggestions = cfg.suggestions;
@@ -243,6 +247,24 @@ export function updateAuto(): boolean {
 	} catch {
 		// Un config.toml roto lo señalan los comandos que lo usan; el arranque no se para aquí.
 		return true;
+	}
+}
+
+/**
+ * Subcomando por defecto al ejecutar `bond` a secas:
+ * - Si config.toml define `default_command`: ese valor ("app" o "dev").
+ * - Si no hay config.toml (instalación nueva sin configurar): "app".
+ * - Si hay config.toml pero no define `default_command` (instalación existente): "dev".
+ */
+export function defaultCommand(): "app" | "dev" {
+	const file = join(process.env.BOND_HOME || CONFIG_DIR, "config.toml");
+	if (!existsSync(file)) return "app";
+	try {
+		const raw = parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+		if (raw.default_command === "app" || raw.default_command === "dev") return raw.default_command;
+		return "dev";
+	} catch {
+		return "dev";
 	}
 }
 

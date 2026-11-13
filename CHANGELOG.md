@@ -2,6 +2,20 @@
 
 ## Sin publicar
 
+- `bond app`: nuevo subcomando que comprueba que el binario `bond-app` esté en `PATH` (o explica
+  cómo instalarlo con `npm install -g bond-app`), sincroniza componentes en herdr-app (`bond-app install`),
+  abre la ventana con el layout bond (`bond-app open`) y arranca el orquestador en primer plano
+  (`bond-app start`). La interrupción con Ctrl+C (SIGINT/SIGTERM) detiene el proceso de forma limpia
+  y sale con código 0.
+- Nueva opción `default_command` en `~/.bond/config.toml` (`"app"` o `"dev"`). Define el comportamiento
+  al ejecutar `bond` sin subcomandos: `"app"` lanza `bond app` y `"dev"` mantiene el comportamiento
+  habitual de puesto de trabajo. Las instalaciones nuevas configuran `"app"` por defecto, mientras
+  que las instalaciones existentes conservan `"dev"`.
+- `bond setup`: nueva pregunta interactiva para elegir el comando por defecto (`app` o `dev`) y opción
+  de instalar `bond-app` mediante npm si no está presente en `PATH`. Con `--yes`, solo se fija
+  `default_command = "app"` si se trata de una instalación nueva.
+- `bond dev`: comando explícito sin cambios para abrir el puesto de trabajo en Herdr.
+
 - `bond team` añade la opción `--no-table` y la variable de entorno equivalente `BOND_TEAM_NO_TABLE=1`
   para no abrir el panel con la tabla en vivo (`bond team status --watch`). Al desactivar la tabla, el
   foco pasa al panel del primer agente en lugar de quedarse en la shell lanzadora. Sin la opción ni la

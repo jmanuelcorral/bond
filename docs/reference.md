@@ -12,8 +12,9 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 |---|---|
 | `bond setup` | Una vez por máquina: Herdr, endpoints de modelos, agentes; aplica modelos, integraciones, skills e instrucciones ([abajo](#bond-setup)) |
 | `bond init` | Una vez por repo: agentes, agente por defecto y herramientas; genera la config de cada agente ([abajo](#configuración-por-repo-bond-init-y-bond-sync)) |
-| `bond` | Dentro de un repo: abre su puesto de trabajo en Herdr; si ya estás en él, el agente por defecto en tu panel ([puesto.md](puesto.md)) |
-| `bond dev <dir>` | Lo mismo para otro directorio |
+| `bond` | Sin subcomando: abre `bond app` si `default_command = "app"` (por defecto en instalaciones nuevas), o el puesto de trabajo en Herdr si es `"dev"` ([abajo](#bond-app) y [puesto.md](puesto.md)) |
+| `bond app` | Comprueba `bond-app` en PATH, instala componentes en herdr-app, abre la ventana con el layout bond y arranca el orquestador en primer plano ([abajo](#bond-app)) |
+| `bond dev <dir>` | Abre el puesto de trabajo en Herdr para el directorio indicado (o el actual si no se pasa) |
 | `bond team` | Un agente por rama, cada uno en su worktree (en Herdr, 4 en tu pestaña y el resto en pestañas nuevas, o lo que elijas); `status` (`--watch`: tabla en vivo que se cierra sola sin trabajo pendiente; fuera del hub se agrupa por estado y en el hub por rama vertical, que es lo que la deja ver entera; `bond team status <rama>` saca esa fila entera, sin truncar, cuando la tabla no da ancho; la tabla lleva rejilla de trazos Unicode y sus iconos de estado salen del estilo elegido en `bond setup` (`[ui] icons`: `nerd`, `unicode` o `emoji`, o `BOND_ICONS`); en un hub, todos los repos de la sesión en un único panel `tabla · <hub>`), `prompt` (con `[decisions]` guarda el encargo en un run; `--no-record` para no guardarlo), `collect` (guarda en el run la última respuesta del agente: de su sesión, o del panel recortado), `clean` (al quitar el último, cierra también la tabla). En un hub, una rama vertical: un agente por repo de la sesión, `--repos`/`--repo` ([puesto.md](puesto.md#bond-team)) |
 | `bond status` | Agentes vivos en Herdr |
 | `bond sessions` | Sesiones de pi y cómo retomarlas |
@@ -39,7 +40,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 
 | Ruta | Qué |
 |---|---|
-| `config.toml` | Agentes elegidos, agente por defecto, endpoints y modelos; `[update] auto` |
+| `config.toml` | Agentes elegidos, agente por defecto, endpoints y modelos; `default_command`; `[update] auto` |
 | `keys/<endpoint>` | Claves, una por fichero, permisos 600 |
 | `AGENTS.md` | Tus instrucciones para todos los agentes |
 | `state.json` | Lo que detectó la sonda, lo que bond gestiona en cada agente y la última comprobación de versión |
@@ -653,6 +654,12 @@ lo limita la pasarela; con proveedores en la nube, la cuota.
    [pie de estado](#pie-de-estado-extensionsstatus-linets): tu terminal tiene que usar esa fuente,
    o verías cuadrados. Si no hay ninguna, o dices que no, el pie usa emojis. Se guarda en
    `[ui] icons` (`"nerd"`, `"emoji"` o, a mano, `"unicode"`).
+7. **Comportamiento por defecto (`bond`).** Pregunta si al invocar `bond` a secas debe arrancar
+   `bond app` (la interfaz visual de bond en Herdr) o el puesto de trabajo (`dev`). En instalaciones
+   nuevas se preselecciona `app`; si `bond-app` no está en PATH, ofrece instalarlo con npm o avisa de
+   cómo instalarlo manualmente. En instalaciones ya existentes se respeta el valor previamente
+   configurado (o `dev` si no estaba definido). Con `--yes`, una instalación nueva fija
+   `default_command = "app"`; en una existente no se altera la configuración previa.
 
 **Después aplica**, solo para los agentes elegidos:
 
@@ -756,6 +763,25 @@ de pi (`~/.pi/agent/extensions`); los paquetes npm de terceros no se inspecciona
 
 **Red y fallos.** Si `pi install` falla (sin red, paquete caído) `bond setup` avisa y sigue: los
 configs quedan escritos y se puede repetir `bond setup` más tarde.
+
+## `bond app`
+
+`cli/app.mts`. Lanza el entorno de bond con la aplicación de escritorio Herdr:
+
+1. Comprueba si el binario ejecutable `bond-app` está disponible en el `PATH`. Si no lo está,
+   explica con claridad cómo instalarlo mediante `npm install -g bond-app` y sale con código 1.
+2. Ejecuta `bond-app install` para sincronizar el layout, mods y temas específicos de bond en
+   `herdr-app`. Si este paso falla, propaga el código de salida.
+3. Ejecuta `bond-app open` para levantar la ventana de `herdr-app` (si no estuviera en marcha)
+   y cambiar de forma atómica al layout `bond`. Si este paso falla, propaga el código de salida.
+4. Arranca `bond-app start` en primer plano (conectado a la salida estándar / terminal).
+5. Captura las señales de parada (SIGINT / Ctrl+C, SIGTERM) para detener el proceso limpiamente
+   y salir con código 0.
+
+Cuando en `~/.bond/config.toml` se establece `default_command = "app"` (el valor por defecto para
+instalaciones nuevas), ejecutar `bond` a secas equivale a invocar `bond app`. Para entrar
+directamente al puesto de trabajo en terminal sin alterar dicha preferencia, se puede invocar
+`bond dev`.
 
 ## `bond doctor`
 

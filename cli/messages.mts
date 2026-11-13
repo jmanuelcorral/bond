@@ -184,6 +184,25 @@ Configura bond en esta máquina (una vez; se puede repetir para cambiar algo):
 	"wizard.herdr_continue": "¿Seguir sin Herdr? (lo demás se configura igual)",
 	"wizard.herdr_install_first": "Instala Herdr y vuelve a lanzar bond setup",
 	"wizard.agent_install_first": "Instala un agente y vuelve a lanzar bond setup",
+	"wizard.default_command_question": "¿Qué debe hacer bond al arrancar sin subcomando?",
+	"wizard.default_command_app": "Abrir bond-app (orquestador y herdr-app)",
+	"wizard.default_command_dev": "Abrir el puesto de trabajo del repo (comportamiento actual)",
+	"wizard.default_command_app_hint": "orquestador en primer plano",
+	"wizard.default_command_dev_hint": "antiguo por defecto",
+	"wizard.default_command_state": "Comportamiento por defecto: {cmd}",
+	"wizard.bond_app_installed": "bond-app instalado",
+	"wizard.bond_app_missing": "bond-app no está instalado (hace falta para 'bond app')",
+	"wizard.bond_app_install_ask": "¿Instalar bond-app ahora con npm?",
+	"wizard.bond_app_install_success": "bond-app instalado correctamente",
+	"wizard.bond_app_install_failed": "no se pudo instalar bond-app: {err}",
+	"wizard.bond_app_not_installed": "bond-app no está instalado; instálalo con: npm install -g bond-app",
+	"app.help": `Uso: bond app [opciones]
+
+Arranca bond-app: instala layout y mods en herdr-app, abre herdr-app con el layout bond y ejecuta el orquestador en primer plano.
+
+Opciones:
+  -h, --help    Esta ayuda`,
+	"app.missing": "bond-app no está instalado o no está en el PATH.\n  Instálalo con: npm install -g bond-app",
 
 	// ---- áreas (P2/P3): lo que aportan los ficheros de cli/messages/ ----
 	...repoEs,
@@ -359,6 +378,25 @@ Sets bond up on this machine (once; rerun it to change anything):
 	"wizard.herdr_continue": "Continue without Herdr? (everything else still gets configured)",
 	"wizard.herdr_install_first": "Install Herdr and run bond setup again",
 	"wizard.agent_install_first": "Install an agent and run bond setup again",
+	"wizard.default_command_question": "What should bond do when started without a subcommand?",
+	"wizard.default_command_app": "Open bond-app (orchestrator and herdr-app)",
+	"wizard.default_command_dev": "Open repo workstation (current behaviour)",
+	"wizard.default_command_app_hint": "foreground orchestrator",
+	"wizard.default_command_dev_hint": "legacy default",
+	"wizard.default_command_state": "Default command: {cmd}",
+	"wizard.bond_app_installed": "bond-app installed",
+	"wizard.bond_app_missing": "bond-app is not installed (required for 'bond app')",
+	"wizard.bond_app_install_ask": "Install bond-app now with npm?",
+	"wizard.bond_app_install_success": "bond-app installed successfully",
+	"wizard.bond_app_install_failed": "could not install bond-app: {err}",
+	"wizard.bond_app_not_installed": "bond-app is not installed; install it with: npm install -g bond-app",
+	"app.help": `Usage: bond app [options]
+
+Starts bond-app: installs layout and mods into herdr-app, opens herdr-app with the bond layout and runs the orchestrator in the foreground.
+
+Options:
+  -h, --help    This help`,
+	"app.missing": "bond-app is not installed or not in PATH.\n  Install it with: npm install -g bond-app",
 
 	// ---- areas (P2/P3): contributed by the cli/messages/ files ----
 	...repoEn,

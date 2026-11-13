@@ -47,8 +47,16 @@ async function main(argv: string[]): Promise<void> {
 	// Desde el binario, los ficheros de bond se extraen la primera vez (salvo para la ayuda).
 	if (cmd && !["help", "-h", "--help", "version", "--version", "-v", "logo"].includes(cmd)) await prepare({ offer: workstation });
 
-	// `bond` a secas dentro de un repo: abre su puesto de trabajo (fuera de un repo, la ayuda).
+	// `bond` a secas: ejecuta el comando por defecto (por defecto "app" en nuevas instalaciones, "dev" en existentes).
 	if (cmd === undefined || (cmd.startsWith("-") && !["-h", "--help", "-v", "--version"].includes(cmd))) {
+		const { defaultCommand } = await import("./config.mts");
+		const defCmd = defaultCommand();
+		if (defCmd === "app") {
+			if (argv.includes("-h") || argv.includes("--help")) return help();
+			await prepare({ offer: false });
+			const a = await import("./app.mts");
+			return a.app(argv);
+		}
 		const inRepo = run("git", ["rev-parse", "--show-toplevel"]).status === 0 || existsSync(".bond/bond.toml");
 		if (!inRepo && cmd === undefined) return help();
 		await prepare({ offer: !argv.includes("-h") && !argv.includes("--help") });
@@ -57,6 +65,10 @@ async function main(argv: string[]): Promise<void> {
 	}
 
 	switch (cmd) {
+		case "app": {
+			const a = await import("./app.mts");
+			return wantsHelp ? printHelp(a.APP_HELP) : a.app(rest);
+		}
 		case "help":
 		case "-h":
 		case "--help":

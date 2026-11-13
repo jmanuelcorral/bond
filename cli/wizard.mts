@@ -7,13 +7,13 @@
 import * as p from "@clack/prompts";
 import { type Lang, parseLang } from "../lib/lang.mts";
 import { herdrInstallHelp, installedAgents, AGENTS } from "./catalog-agents.mts";
-import { type Config, type Provider, loadConfigOrEmpty, loadState, saveState } from "./config.mts";
+import { type Config, type Provider, configExists, loadConfigOrEmpty, loadState, saveState } from "./config.mts";
 import { LOCAL_ENDPOINTS, listModels, probeApis, type EndpointModel } from "./endpoints.mts";
 import { detectNerdFonts } from "./fonts.mts";
 import { saveKey } from "./keys.mts";
 import { lang, setLang, t } from "./messages.mts";
 import { pickSuggestionModel } from "./suggestions.mts";
-import { which } from "./util.mts";
+import { run, which } from "./util.mts";
 
 export interface WizardResult {
 	cfg: Config;
@@ -261,8 +261,67 @@ export async function iconsStep(cfg: Config, interactive: boolean, detect: () =>
 	p.log.message(t("wizard.icons_state", { label: nerd ? t("setup.icon.nerd") : t("setup.icon.emoji") }));
 }
 
-export async function runWizard(opts: { interactive: boolean; logo: string; noSuggestions?: boolean; lang?: Lang }): Promise<WizardResult | undefined> {
+/**
+ * Subcomando por defecto al ejecutar bond sin subcomando (D21) e instalación de bond-app.
+ * - Instalaciones nuevas: "app" por defecto.
+ * - Instalaciones existentes: conserva "dev" (o lo que esté configurado) si se usa --yes.
+ */
+export async function defaultCommandStep(cfg: Config, interactive: boolean, isNew: boolean): Promise<void> {
+	const initial = cfg.default_command ?? (isNew ? "app" : "dev");
+	if (interactive) {
+		const chosen = await ask(
+			p.select<"app" | "dev">({
+				message: t("wizard.default_command_question"),
+				options: [
+					{ value: "app", label: t("wizard.default_command_app"), hint: t("wizard.default_command_app_hint") },
+					{ value: "dev", label: t("wizard.default_command_dev"), hint: t("wizard.default_command_dev_hint") },
+				],
+				initialValue: initial,
+			}),
+		);
+		cfg.default_command = chosen;
+		p.log.message(t("wizard.default_command_state", { cmd: chosen }));
+
+		const hasBondApp = !!which("bond-app");
+		if (hasBondApp) {
+			p.log.success(t("wizard.bond_app_installed"));
+		} else {
+			const wantInstall = await ask(
+				p.confirm({
+					message: t("wizard.bond_app_install_ask"),
+					initialValue: true,
+				}),
+			);
+			if (wantInstall) {
+				const s = p.spinner();
+				s.start("npm install -g bond-app");
+				const res = run("npm", ["install", "-g", "bond-app"]);
+				if (res.status === 0) {
+					s.stop(t("wizard.bond_app_install_success"));
+				} else {
+					s.stop(t("wizard.bond_app_install_failed", { err: res.stderr.trim() || res.stdout.trim() }));
+					p.note(t("wizard.bond_app_not_installed"), t("wizard.bond_app_missing"));
+				}
+			} else {
+				p.note(t("wizard.bond_app_not_installed"), t("wizard.bond_app_missing"));
+			}
+		}
+	} else {
+		// Modo no interactivo / --yes:
+		// "3. bond setup pregunta por el comportamiento por defecto y lo guarda; --yes usa app en instalaciones nuevas y no cambia una configuración existente."
+		if (isNew) {
+			cfg.default_command = "app";
+		}
+		const hasBondApp = !!which("bond-app");
+		if (!hasBondApp) {
+			p.log.message(t("wizard.bond_app_not_installed"));
+		}
+	}
+}
+
+export async function runWizard(opts: { interactive: boolean; logo: string; noSuggestions?: boolean; lang?: Lang; isNew?: boolean }): Promise<WizardResult | undefined> {
 	p.intro(opts.logo);
+	const isNew = opts.isNew ?? !configExists();
 	const cfg = loadConfigOrEmpty();
 
 	// 1. Idioma de la consola: se resuelve primero para preguntar lo demás ya en ese idioma.
@@ -293,6 +352,9 @@ export async function runWizard(opts: { interactive: boolean; logo: string; noSu
 
 	// 6. Iconos del pie de pi (Nerd Font o emojis)
 	await iconsStep(cfg, opts.interactive);
+
+	// 7. Subcomando por defecto y bond-app
+	await defaultCommandStep(cfg, opts.interactive, isNew);
 
 	return { cfg, herdr };
 }

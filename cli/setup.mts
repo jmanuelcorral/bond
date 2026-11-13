@@ -58,11 +58,12 @@ export async function setup(args: string[]): Promise<void> {
 	const { runWizard } = await import("./wizard.mts");
 	const { saveConfig, configExists } = await import("./config.mts");
 	const { init: importLegacyModels } = await import("./models.mts");
+	const isNew = !configExists();
 	// Instalación anterior desde el repo: sus modelos de pi pasan al registro global.
-	if (FROM_SOURCE && !configExists()) importLegacyModels();
+	if (FROM_SOURCE && isNew) importLegacyModels();
 
 	const interactive = !yes && process.stdin.isTTY === true;
-	const result = await runWizard({ interactive, logo: renderSmall(56, "setup"), noSuggestions, lang: langArg });
+	const result = await runWizard({ interactive, logo: renderSmall(56, "setup"), noSuggestions, lang: langArg, isNew });
 	if (!result) {
 		process.exitCode = 1;
 		return;
