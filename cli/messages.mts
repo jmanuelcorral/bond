@@ -192,17 +192,30 @@ Configura bond en esta máquina (una vez; se puede repetir para cambiar algo):
 	"wizard.default_command_state": "Comportamiento por defecto: {cmd}",
 	"wizard.bond_app_installed": "bond-app instalado",
 	"wizard.bond_app_missing": "bond-app no está instalado (hace falta para 'bond app')",
-	"wizard.bond_app_install_ask": "¿Instalar bond-app ahora con npm?",
+	"wizard.bond_app_install_local_note": "bond-app no está en PATH. Al ser un paquete local privado, debe instalarse desde el clon o paquete local (.tgz): npm install -g <ruta>",
+	"wizard.bond_app_install_path_prompt": "Ruta al clon o paquete (.tgz) de bond-app (vacío para omitir):",
+	"wizard.bond_app_install_path_placeholder": "~/gitrepos/bond-app o ruta/a/bond-app-0.1.0.tgz",
+	"wizard.bond_app_path_not_found": "La ruta '{path}' no existe",
+	"wizard.bond_app_install_confirm": "¿Instalar bond-app globalmente desde '{path}'?",
 	"wizard.bond_app_install_success": "bond-app instalado correctamente",
 	"wizard.bond_app_install_failed": "no se pudo instalar bond-app: {err}",
-	"wizard.bond_app_not_installed": "bond-app no está instalado; instálalo con: npm install -g bond-app",
+	"wizard.bond_app_not_installed": "bond-app no está instalado; puedes instalarlo más tarde desde su paquete local o clon",
+	"wizard.bond_app_kept_dev": "bond-app no está en PATH; se mantiene 'dev' como comando por defecto hasta que esté disponible",
 	"app.help": `Uso: bond app [opciones]
 
 Arranca bond-app: instala layout y mods en herdr-app, abre herdr-app con el layout bond y ejecuta el orquestador en primer plano.
 
 Opciones:
-  -h, --help    Esta ayuda`,
-	"app.missing": "bond-app no está instalado o no está en el PATH.\n  Instálalo con: npm install -g bond-app",
+  --port <puerto>      Puerto del orquestador (por defecto: 3000)
+  --host <host>        Host del orquestador (por defecto: 127.0.0.1)
+  --data-dir <ruta>    Directorio de datos de bond-app (por defecto: ~/.bond-app)
+  --home <ruta>        Directorio de configuración de herdr-app
+  --token-file <ruta>  Ruta al fichero de token
+  -h, --help           Muestra esta ayuda`,
+	"app.missing": "bond-app no está instalado o no está en el PATH.\n  Instálalo desde el clon o paquete local de bond-app (por ejemplo: npm install -g <ruta-al-repo-o-tgz>).",
+	"app.option_needs_value": "La opción {option} requiere un valor.",
+	"app.unknown_option": "Opción desconocida para bond app: {option}",
+	"app.spawn_error": "Error al ejecutar bond-app: {error}",
 
 	// ---- áreas (P2/P3): lo que aportan los ficheros de cli/messages/ ----
 	...repoEs,
@@ -386,17 +399,30 @@ Sets bond up on this machine (once; rerun it to change anything):
 	"wizard.default_command_state": "Default command: {cmd}",
 	"wizard.bond_app_installed": "bond-app installed",
 	"wizard.bond_app_missing": "bond-app is not installed (required for 'bond app')",
-	"wizard.bond_app_install_ask": "Install bond-app now with npm?",
+	"wizard.bond_app_install_local_note": "bond-app is not on PATH. Being a private local package, it must be installed from the local clone or package (.tgz): npm install -g <path>",
+	"wizard.bond_app_install_path_prompt": "Path to bond-app clone or package (.tgz) (empty to skip):",
+	"wizard.bond_app_install_path_placeholder": "~/gitrepos/bond-app or path/to/bond-app-0.1.0.tgz",
+	"wizard.bond_app_path_not_found": "Path '{path}' does not exist",
+	"wizard.bond_app_install_confirm": "Install bond-app globally from '{path}'?",
 	"wizard.bond_app_install_success": "bond-app installed successfully",
 	"wizard.bond_app_install_failed": "could not install bond-app: {err}",
-	"wizard.bond_app_not_installed": "bond-app is not installed; install it with: npm install -g bond-app",
+	"wizard.bond_app_not_installed": "bond-app is not installed; you can install it later from its local package or clone",
+	"wizard.bond_app_kept_dev": "bond-app is not on PATH; keeping 'dev' as default command until available",
 	"app.help": `Usage: bond app [options]
 
 Starts bond-app: installs layout and mods into herdr-app, opens herdr-app with the bond layout and runs the orchestrator in the foreground.
 
 Options:
-  -h, --help    This help`,
-	"app.missing": "bond-app is not installed or not in PATH.\n  Install it with: npm install -g bond-app",
+  --port <port>        Orchestrator port (default: 3000)
+  --host <host>        Orchestrator host (default: 127.0.0.1)
+  --data-dir <path>    bond-app data directory (default: ~/.bond-app)
+  --home <path>        herdr-app config directory
+  --token-file <path>  Path to token file
+  -h, --help           Show this help`,
+	"app.missing": "bond-app is not installed or not in PATH.\n  Install it from the local bond-app package or clone (for example: npm install -g <path-to-repo-or-tgz>).",
+	"app.option_needs_value": "Option {option} requires a value.",
+	"app.unknown_option": "Unknown option for bond app: {option}",
+	"app.spawn_error": "Failed to execute bond-app: {error}",
 
 	// ---- areas (P2/P3): contributed by the cli/messages/ files ----
 	...repoEn,

@@ -4,10 +4,12 @@
 // lo hace setup.mts.
 // Sin terminal interactiva o con --yes, usa lo detectado sin preguntar.
 
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import * as p from "@clack/prompts";
 import { type Lang, parseLang } from "../lib/lang.mts";
 import { herdrInstallHelp, installedAgents, AGENTS } from "./catalog-agents.mts";
-import { type Config, type Provider, configExists, loadConfigOrEmpty, loadState, saveState } from "./config.mts";
+import { type Config, type Provider, configExists, hasExistingInstallEvidence, loadConfigOrEmpty, loadState, saveState } from "./config.mts";
 import { LOCAL_ENDPOINTS, listModels, probeApis, type EndpointModel } from "./endpoints.mts";
 import { detectNerdFonts } from "./fonts.mts";
 import { saveKey } from "./keys.mts";
@@ -266,11 +268,11 @@ export async function iconsStep(cfg: Config, interactive: boolean, detect: () =>
  * - Instalaciones nuevas: "app" por defecto.
  * - Instalaciones existentes: conserva "dev" (o lo que esté configurado) si se usa --yes.
  */
-export async function defaultCommandStep(cfg: Config, interactive: boolean, isNew: boolean): Promise<void> {
+export async function defaultCommandStep(cfg: Config, interactive: boolean, isNew: boolean, prompts = p): Promise<void> {
 	const initial = cfg.default_command ?? (isNew ? "app" : "dev");
 	if (interactive) {
 		const chosen = await ask(
-			p.select<"app" | "dev">({
+			prompts.select<"app" | "dev">({
 				message: t("wizard.default_command_question"),
 				options: [
 					{ value: "app", label: t("wizard.default_command_app"), hint: t("wizard.default_command_app_hint") },
@@ -280,30 +282,49 @@ export async function defaultCommandStep(cfg: Config, interactive: boolean, isNe
 			}),
 		);
 		cfg.default_command = chosen;
-		p.log.message(t("wizard.default_command_state", { cmd: chosen }));
+		prompts.log.message(t("wizard.default_command_state", { cmd: chosen }));
 
 		const hasBondApp = !!which("bond-app");
 		if (hasBondApp) {
-			p.log.success(t("wizard.bond_app_installed"));
+			prompts.log.success(t("wizard.bond_app_installed"));
 		} else {
-			const wantInstall = await ask(
-				p.confirm({
-					message: t("wizard.bond_app_install_ask"),
-					initialValue: true,
+			prompts.note(t("wizard.bond_app_install_local_note"), t("wizard.bond_app_missing"));
+			const targetPath = await ask(
+				prompts.text({
+					message: t("wizard.bond_app_install_path_prompt"),
+					placeholder: t("wizard.bond_app_install_path_placeholder"),
+					validate: (val) => {
+						if (!val || !val.trim()) return;
+						const r = resolve(val.trim());
+						if (!existsSync(r)) return t("wizard.bond_app_path_not_found", { path: r });
+					},
 				}),
 			);
-			if (wantInstall) {
-				const s = p.spinner();
-				s.start("npm install -g bond-app");
-				const res = run("npm", ["install", "-g", "bond-app"]);
-				if (res.status === 0) {
-					s.stop(t("wizard.bond_app_install_success"));
-				} else {
-					s.stop(t("wizard.bond_app_install_failed", { err: res.stderr.trim() || res.stdout.trim() }));
-					p.note(t("wizard.bond_app_not_installed"), t("wizard.bond_app_missing"));
+			const trimmedPath = typeof targetPath === "string" ? targetPath.trim() : "";
+			if (trimmedPath && existsSync(resolve(trimmedPath))) {
+				const resolved = resolve(trimmedPath);
+				const confirm = await ask(
+					prompts.confirm({
+						message: t("wizard.bond_app_install_confirm", { path: resolved }),
+						initialValue: true,
+					}),
+				);
+				if (confirm) {
+					const s = prompts.spinner();
+					s.start(`npm install -g ${resolved}`);
+					const res = run("npm", ["install", "-g", resolved]);
+					if (res.status === 0 && which("bond-app")) {
+						s.stop(t("wizard.bond_app_install_success"));
+					} else {
+						s.stop(t("wizard.bond_app_install_failed", { err: res.stderr.trim() || res.stdout.trim() }));
+					}
 				}
-			} else {
-				p.note(t("wizard.bond_app_not_installed"), t("wizard.bond_app_missing"));
+			}
+
+			// L3: si bond-app sigue sin estar en el PATH tras el paso, advertir y mantener "dev"
+			if (cfg.default_command === "app" && !which("bond-app")) {
+				prompts.log.warn(t("wizard.bond_app_kept_dev"));
+				cfg.default_command = "dev";
 			}
 		}
 	} else {
@@ -314,14 +335,14 @@ export async function defaultCommandStep(cfg: Config, interactive: boolean, isNe
 		}
 		const hasBondApp = !!which("bond-app");
 		if (!hasBondApp) {
-			p.log.message(t("wizard.bond_app_not_installed"));
+			prompts.log.message(t("wizard.bond_app_not_installed"));
 		}
 	}
 }
 
 export async function runWizard(opts: { interactive: boolean; logo: string; noSuggestions?: boolean; lang?: Lang; isNew?: boolean }): Promise<WizardResult | undefined> {
 	p.intro(opts.logo);
-	const isNew = opts.isNew ?? !configExists();
+	const isNew = opts.isNew ?? !hasExistingInstallEvidence();
 	const cfg = loadConfigOrEmpty();
 
 	// 1. Idioma de la consola: se resuelve primero para preguntar lo demás ya en ese idioma.

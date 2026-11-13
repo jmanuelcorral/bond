@@ -56,11 +56,11 @@ export async function setup(args: string[]): Promise<void> {
 	// Desde el repo, las dependencias (prompts, TOML) se instalan antes de cargar el asistente.
 	if (FROM_SOURCE) installDeps();
 	const { runWizard } = await import("./wizard.mts");
-	const { saveConfig, configExists } = await import("./config.mts");
+	const { saveConfig, configExists, hasExistingInstallEvidence } = await import("./config.mts");
 	const { init: importLegacyModels } = await import("./models.mts");
-	const isNew = !configExists();
+	const isNew = !hasExistingInstallEvidence();
 	// Instalación anterior desde el repo: sus modelos de pi pasan al registro global.
-	if (FROM_SOURCE && isNew) importLegacyModels();
+	if (FROM_SOURCE && !configExists()) importLegacyModels();
 
 	const interactive = !yes && process.stdin.isTTY === true;
 	const result = await runWizard({ interactive, logo: renderSmall(56, "setup"), noSuggestions, lang: langArg, isNew });

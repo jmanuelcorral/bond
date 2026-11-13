@@ -6,7 +6,7 @@
 // sirve cada pasarela (bond models probe) y qué claves gestiona en la config de cada agente,
 // para poder quitar lo que ya no está sin tocar lo que no es suyo.
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse, stringify } from "smol-toml";
 import { ICON_STYLES, type IconStyle } from "../lib/status-bar.mts";
@@ -19,18 +19,22 @@ export const CONFIG_DIR = BOND_HOME;
 export const CONFIG_FILE = join(CONFIG_DIR, "config.toml");
 const STATE_FILE = join(CONFIG_DIR, "state.json");
 /** Ubicación de bond 0.3-0.7: se migra sola a ~/.bond la primera vez. */
-const LEGACY_DIR = join(process.env.XDG_CONFIG_HOME || join(HOME, ".config"), "bond");
+function legacyDir(): string {
+	return join(process.env.XDG_CONFIG_HOME || join(HOME, ".config"), "bond");
+}
 
 let migrated = false;
 function migrateLegacy(): void {
 	if (migrated) return;
 	migrated = true;
-	if (existsSync(CONFIG_FILE) || !existsSync(join(LEGACY_DIR, "config.toml"))) return;
-	mkdirSync(CONFIG_DIR, { recursive: true });
+	const leg = legacyDir();
+	const home = process.env.BOND_HOME || CONFIG_DIR;
+	if (existsSync(join(home, "config.toml")) || !existsSync(join(leg, "config.toml"))) return;
+	mkdirSync(home, { recursive: true });
 	for (const f of ["config.toml", "state.json"]) {
-		if (existsSync(join(LEGACY_DIR, f))) copyFileSync(join(LEGACY_DIR, f), join(CONFIG_DIR, f));
+		if (existsSync(join(leg, f))) copyFileSync(join(leg, f), join(home, f));
 	}
-	log(t("config.migrated", { from: LEGACY_DIR, to: CONFIG_DIR }));
+	log(t("config.migrated", { from: leg, to: home }));
 }
 
 /** ¿Hay configuración global? */
@@ -251,21 +255,53 @@ export function updateAuto(): boolean {
 }
 
 /**
+ * Comprueba si hay indicios de una instalación previa de bond,
+ * aunque no exista config.toml (por ejemplo si nunca se ejecutó bond setup
+ * pero existen state.json, keys, events, catalogs, AGENTS.md, hubs.toml,
+ * o la carpeta de configuración heredada previa a 1.11.0).
+ */
+export function hasExistingInstallEvidence(): boolean {
+	migrateLegacy();
+	const home = process.env.BOND_HOME || CONFIG_DIR;
+	if (existsSync(join(home, "config.toml"))) return true;
+	if (existsSync(join(home, "state.json"))) return true;
+	if (existsSync(join(home, "AGENTS.md"))) return true;
+	if (existsSync(join(home, "hubs.toml"))) return true;
+	for (const sub of ["keys", "events", "catalogs"]) {
+		const p = join(home, sub);
+		if (existsSync(p)) {
+			try {
+				if (readdirSync(p).length > 0) return true;
+			} catch {
+				return true;
+			}
+		}
+	}
+	const leg = legacyDir();
+	if (existsSync(join(leg, "config.toml")) || existsSync(join(leg, "state.json"))) return true;
+	return false;
+}
+
+/**
  * Subcomando por defecto al ejecutar `bond` a secas:
  * - Si config.toml define `default_command`: ese valor ("app" o "dev").
- * - Si no hay config.toml (instalación nueva sin configurar): "app".
- * - Si hay config.toml pero no define `default_command` (instalación existente): "dev".
+ * - Si hay config.toml pero no define `default_command`: "dev" (instalación existente).
+ * - Si no hay config.toml pero hay evidencia de instalación existente: "dev".
+ * - Si es una instalación totalmente nueva (sin rastro previo de bond): "app".
  */
 export function defaultCommand(): "app" | "dev" {
 	const file = join(process.env.BOND_HOME || CONFIG_DIR, "config.toml");
-	if (!existsSync(file)) return "app";
-	try {
-		const raw = parse(readFileSync(file, "utf8")) as Record<string, unknown>;
-		if (raw.default_command === "app" || raw.default_command === "dev") return raw.default_command;
-		return "dev";
-	} catch {
-		return "dev";
+	if (existsSync(file)) {
+		try {
+			const raw = parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+			if (raw.default_command === "app" || raw.default_command === "dev") return raw.default_command;
+			return "dev";
+		} catch {
+			return "dev";
+		}
 	}
+	if (hasExistingInstallEvidence()) return "dev";
+	return "app";
 }
 
 /**

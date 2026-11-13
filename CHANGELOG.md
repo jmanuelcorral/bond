@@ -3,16 +3,19 @@
 ## Sin publicar
 
 - `bond app`: nuevo subcomando que comprueba que el binario `bond-app` esté en `PATH` (o explica
-  cómo instalarlo con `npm install -g bond-app`), sincroniza componentes en herdr-app (`bond-app install`),
-  abre la ventana con el layout bond (`bond-app open`) y arranca el orquestador en primer plano
-  (`bond-app start`). La interrupción con Ctrl+C (SIGINT/SIGTERM) detiene el proceso de forma limpia
-  y sale con código 0.
+  cómo instalarlo desde el paquete local o clon de `bond-app`), sincroniza componentes en herdr-app
+  (`bond-app install`), abre la ventana con el layout bond (`bond-app open`) y arranca el orquestador
+  en primer plano (`bond-app start`). Admite opciones como `--port`, `--host`, `--data-dir`, `--home`
+  y `--token-file`, propagando la URL de la API a `install` de forma consistente y rechazando opciones
+  desconocidas. La interrupción con Ctrl+C (SIGINT/SIGTERM) detiene el proceso de forma limpia y sale con código 0.
 - Nueva opción `default_command` en `~/.bond/config.toml` (`"app"` o `"dev"`). Define el comportamiento
   al ejecutar `bond` sin subcomandos: `"app"` lanza `bond app` y `"dev"` mantiene el comportamiento
-  habitual de puesto de trabajo. Las instalaciones nuevas configuran `"app"` por defecto, mientras
-  que las instalaciones existentes conservan `"dev"`.
+  habitual de puesto de trabajo. Las instalaciones totalmente limpias configuran `"app"` por defecto,
+  mientras que las instalaciones existentes (identificadas por `config.toml`, `state.json`, claves, eventos
+  o catálogos bajo `~/.bond`) conservan `"dev"`.
 - `bond setup`: nueva pregunta interactiva para elegir el comando por defecto (`app` o `dev`) y opción
-  de instalar `bond-app` mediante npm si no está presente en `PATH`. Con `--yes`, solo se fija
+  de instalar `bond-app` desde un clon o paquete local si no está presente en `PATH` (manteniendo `dev`
+  con advertencia si sigue sin estar disponible tras el paso). Con `--yes`, solo se fija
   `default_command = "app"` si se trata de una instalación nueva.
 - `bond dev`: comando explícito sin cambios para abrir el puesto de trabajo en Herdr.
 

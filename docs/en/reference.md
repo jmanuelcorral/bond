@@ -12,8 +12,9 @@ you see? Open an [issue on GitHub](https://github.com/jmanuelcorral/bond/issues)
 |---|---|
 | `bond setup` | Once per machine: Herdr, model endpoints, agents; applies models, integrations, skills and instructions ([below](#bond-setup)) |
 | `bond init` | Once per repo: agents, default agent and tools; generates each agent's config ([below](#per-repo-configuration-bond-init-and-bond-sync)) |
-| `bond` | Inside a repo: opens its workstation in Herdr ([workstation.md](workstation.md)) |
-| `bond dev <dir>` | The same for another directory |
+| `bond` | Without subcommand: opens `bond app` if `default_command = "app"` (default on fresh installs), or the workstation in Herdr if `"dev"` ([below](#bond-app) and [workstation.md](workstation.md)) |
+| `bond app` | Verifies `bond-app` is on PATH, installs components in herdr-app, opens the window with the bond layout and runs the orchestrator in the foreground ([below](#bond-app)) |
+| `bond dev <dir>` | Opens the workstation in Herdr for the specified directory (or current directory if omitted) |
 | `bond team` | One agent per branch, each in its own worktree (in Herdr, 4 in your tab and the rest in new tabs, or whatever you choose); `status` (`--watch`: live table that closes on its own when no work is pending; grouped by state outside the hub and by vertical branch inside it, which is what makes a vertical readable; `bond team status <branch>` prints that row in full, untruncated, when the table runs out of width; the table is drawn with a Unicode box-drawing grid, and its state icons come from the style picked by `bond setup` (`[ui] icons`: `nerd`, `unicode` or `emoji`, or `BOND_ICONS`)), `prompt` (with `[decisions]` it records the request in a run; `--no-record` skips it), `collect` (stores the agent's last answer into the run: from its session file, or from the trimmed pane), `clean` (removing the last one also closes the table) ([workstation.md](workstation.md#bond-team)) |
 | `bond status` | Live agents in Herdr |
 | `bond sessions` | pi sessions and how to resume them |
@@ -36,7 +37,7 @@ you see? Open an [issue on GitHub](https://github.com/jmanuelcorral/bond/issues)
 
 | Path | What |
 |---|---|
-| `config.toml` | Chosen agents, default agent, endpoints and models; `[update] auto` |
+| `config.toml` | Chosen agents, default agent, endpoints and models; `default_command`; `[update] auto` |
 | `keys/<endpoint>` | Keys, one per file, permissions 600 |
 | `AGENTS.md` | Your instructions for all agents |
 | `state.json` | What the probe detected, what bond manages in each agent and the last version check |
@@ -650,6 +651,11 @@ is limited by the gateway; with cloud providers, by the quota.
    [status footer](#status-footer-extensionsstatus-linets): your terminal has to use that font, or
    you'd see boxes. If there is none, or you say no, the footer uses emojis. It is saved in
    `[ui] icons` (`"nerd"`, `"emoji"` or, by hand, `"unicode"`).
+7. **Default command (`bond`).** Asks whether running `bond` without arguments should launch
+   `bond app` (bond's visual desktop interface in Herdr) or the workstation (`dev`). Fresh installs
+   preselect `app`; if `bond-app` is not on PATH, it explains how to install it from the local package
+   or clone. Existing installations preserve their configured choice (or `dev` if unset). With
+   `--yes`, a fresh install sets `default_command = "app"`; existing setups remain unchanged.
 
 **Then it applies**, only for the chosen agents:
 
@@ -753,6 +759,23 @@ last wins. `bond doctor` lists the others that use that API from pi's extensions
 
 **Network and failures.** If `pi install` fails (no network, package down) `bond setup` warns and continues: the
 configs remain written and you can run `bond setup` again later.
+
+## `bond app`
+
+`cli/app.mts`. Launches the bond environment with the Herdr desktop application:
+
+1. Checks whether the `bond-app` executable is available on `PATH`. If missing, explains how to
+   install it from the local package or clone, and exits with code 1.
+2. Runs `bond-app install` to sync bond's layout, mods, and themes into `herdr-app`. If this step
+   fails, propagates its exit code.
+3. Runs `bond-app open` to launch the `herdr-app` window (if not already running) and switch to the
+   `bond` layout. If this step fails, propagates its exit code.
+4. Starts `bond-app start` in the foreground (attached to stdout/stderr).
+5. Handles stop signals (SIGINT / Ctrl+C, SIGTERM) to terminate cleanly and exit with code 0.
+
+When `~/.bond/config.toml` defines `default_command = "app"` (the default for fresh installs), running
+`bond` without arguments is equivalent to invoking `bond app`. To open the terminal workstation
+directly without changing that preference, run `bond dev`.
 
 ## `bond doctor`
 
@@ -1358,8 +1381,8 @@ since 1.13.0).
 version moves `~/.bond/pi` and the global skills that pointed to another version's files over to its own, and
 deletes old versions from `~/.bond/runtime/`.
 
-When opening the workstation (`bond`, `bond dev`, `bond team`; not their subcommands or the
-help), bond checks for a new release once every 24 h (the timestamp goes in `~/.bond/state.json`).
+When opening the workstation (`bond dev`, `bond team`, or `bond` when opening the workstation;
+not their subcommands or the help), bond checks for a new release once every 24 h (the timestamp goes in `~/.bond/state.json`).
 The query has a cap of ~2 s: with no network or no response, startup continues silently.
 If there is a new version, it asks:
 

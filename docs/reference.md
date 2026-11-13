@@ -656,8 +656,8 @@ lo limita la pasarela; con proveedores en la nube, la cuota.
    `[ui] icons` (`"nerd"`, `"emoji"` o, a mano, `"unicode"`).
 7. **Comportamiento por defecto (`bond`).** Pregunta si al invocar `bond` a secas debe arrancar
    `bond app` (la interfaz visual de bond en Herdr) o el puesto de trabajo (`dev`). En instalaciones
-   nuevas se preselecciona `app`; si `bond-app` no está en PATH, ofrece instalarlo con npm o avisa de
-   cómo instalarlo manualmente. En instalaciones ya existentes se respeta el valor previamente
+   nuevas se preselecciona `app`; si `bond-app` no está en PATH, explica cómo instalarlo desde el
+   paquete local o clon de `bond-app`. En instalaciones ya existentes se respeta el valor previamente
    configurado (o `dev` si no estaba definido). Con `--yes`, una instalación nueva fija
    `default_command = "app"`; en una existente no se altera la configuración previa.
 
@@ -769,7 +769,8 @@ configs quedan escritos y se puede repetir `bond setup` más tarde.
 `cli/app.mts`. Lanza el entorno de bond con la aplicación de escritorio Herdr:
 
 1. Comprueba si el binario ejecutable `bond-app` está disponible en el `PATH`. Si no lo está,
-   explica con claridad cómo instalarlo mediante `npm install -g bond-app` y sale con código 1.
+   explica con claridad cómo instalarlo desde el paquete local o clon de `bond-app` (por ejemplo
+   `npm install -g <ruta>`) y sale con código 1.
 2. Ejecuta `bond-app install` para sincronizar el layout, mods y temas específicos de bond en
    `herdr-app`. Si este paso falla, propaga el código de salida.
 3. Ejecuta `bond-app open` para levantar la ventana de `herdr-app` (si no estuviera en marcha)
@@ -1379,8 +1380,8 @@ desde la 1.13.0).
 nueva pasa a sus ficheros `~/.bond/pi` y los skills globales que apuntaban a los de otra, y
 borra las versiones viejas de `~/.bond/runtime/`.
 
-Al abrir el puesto de trabajo (`bond`, `bond dev`, `bond team`; no sus subcomandos ni la
-ayuda), bond mira si hay release nueva una vez cada 24 h (la marca va en `~/.bond/state.json`).
+Al abrir el puesto de trabajo (`bond dev`, `bond team`, o `bond` cuando abre el puesto;
+no sus subcomandos ni la ayuda), bond mira si hay release nueva una vez cada 24 h (la marca va en `~/.bond/state.json`).
 La consulta tiene un tope de ~2 s: sin red o sin respuesta, el arranque sigue sin decir nada.
 Si hay versión nueva, pregunta:
 
