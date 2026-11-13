@@ -1,6 +1,6 @@
 # Cambios
 
-## Sin publicar
+## 1.15.0
 
 - `bond app`: nuevo subcomando que comprueba que el binario `bond-app` esté en `PATH` (o explica
   cómo instalarlo desde el paquete local o clon de `bond-app`), sincroniza componentes en herdr-app
