@@ -1118,6 +1118,12 @@ vertical ([puesto.md](puesto.md#una-rama-vertical-en-un-hub)):
   y cómo cerrarla.
 - Runs: en `<dir>/runs/` del hub si tiene `[decisions]`; si no, en el del repo. La nota de
   la memoria de decisiones solo va a los agentes cuyo repo tiene `[decisions]`.
+- Motor `hc` (`herdr-core`): con `--engine hc` o `BOND_TEAM_ENGINE=hc`, los agentes arrancan como
+  terminales en segundo plano (`hc run`) en lugar de paneles/workspaces de Herdr. Los subcomandos
+  `status`, `prompt`, `collect` y `clean` admiten `--engine` para operar sobre `hc`. Admite además
+  `--label <k=v>` y `BOND_TEAM_LABELS="k1=v1,k2=v2"` para etiquetar las terminales arrancadas (por
+  ejemplo para asociarlas a un espacio de herdr-app con `herdr.space=<id>` y `herdr.tab=<id>`).
+  Por defecto, el motor se mantiene en `herdr` (`BOND_TEAM_ENGINE=herdr`).
 - Qué repos abre la fase: el sitio donde se dice es el campo `- Repos: front, back` del bloque de
   fase del plan (`docs/plans/`), junto a `Affected contracts`. Son rutas o nombres de carpeta de
   los declarados en `hub.toml`; `plan-create` los valida contra la sesión al escribir el plan

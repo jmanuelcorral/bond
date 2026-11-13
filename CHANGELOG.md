@@ -23,6 +23,12 @@
   para no abrir el panel con la tabla en vivo (`bond team status --watch`). Al desactivar la tabla, el
   foco pasa al panel del primer agente en lugar de quedarse en la shell lanzadora. Sin la opción ni la
   variable, el comportamiento no cambia.
+- `bond team`: soporte para el motor nativo `hc` (`herdr-core`) mediante `--engine hc` o la variable de
+  entorno `BOND_TEAM_ENGINE=hc`. Cada agente se ejecuta como una terminal en segundo plano (`hc run`)
+  en su worktree, con etiquetas configurables (`--label` / `BOND_TEAM_LABELS`), permitiendo que `herdr-app`
+  los presente como paneles nativos en el espacio asignado. Los subcomandos `status`, `prompt`, `collect`
+  y `clean` admiten `--engine` para consultar estado, enviar tareas, recoger informes o limpiar
+  terminales y worktrees. El motor por defecto sigue siendo `herdr` (`BOND_TEAM_ENGINE=herdr`).
 - Aclaración sobre un comportamiento existente de `bond doctor`, que no se había documentado
   nunca: si encuentra la config global en la ubicación antigua (`~/.config/bond`, previa a
   1.11.0), la mueve al destino de `BOND_HOME` (`~/.bond` por defecto) y deja la antigua como

@@ -47,6 +47,7 @@ carpeta al PATH de la shell del panel antes de lanzarlo.
   --trust-repository     Con --workspaces: se pasa a herdr worktree (solo en repos revisados)
   --repos <a,b>          En un hub: solo esos repos de la sesión (ruta o nombre)
   --no-table             No abrir el panel con la tabla en vivo (también BOND_TEAM_NO_TABLE=1)
+  --engine <motor>       Motor de terminales: herdr (por defecto) o hc (también BOND_TEAM_ENGINE=hc)
 
 En un hub (un repo con hub.toml), bond team <rama> abre
 una rama vertical: la crea en el hub, sin worktree ni agente, y abre un worktree y un agente
@@ -106,6 +107,9 @@ clean    Quita worktrees (carpeta, workspace y agente); las ramas se quedan. Sin
 	"team.footer_hints": "\n  Repartir trabajo: bond team prompt <rama> \"la tarea\"\n  Cómo va: bond team status · Al acabar: bond team clean",
 	"team.ws_already_open": "ya abierto ({ws})",
 	"team.agent_in_pane": "{name} ({agent}) en {pane}",
+	"team.agent_in_terminal": "{name} ({agent}) en {terminal}",
+	"team.err_hc_not_installed": "hc (herdr-core) no está instalado: instálalo para usar el motor hc",
+	"team.err_unknown_engine": "motor desconocido: {engine} (valores válidos: herdr, hc)",
 	"team.awaits_reply": " · espera una respuesta tuya",
 	"team.trust_inherited": " · confianza heredada",
 	"team.tab_label": "equipo · {repo}",
@@ -292,6 +296,7 @@ folder to the pane's shell PATH before launching it.
   --trust-repository     With --workspaces: passed to herdr worktree (only in reviewed repos)
   --repos <a,b>          In a hub: only those repos from the session (path or name)
   --no-table             Do not open the live table pane (also BOND_TEAM_NO_TABLE=1)
+  --engine <engine>      Terminal engine: herdr (default) or hc (also BOND_TEAM_ENGINE=hc)
 
 In a hub (a repo with hub.toml), bond team <branch> opens
 a vertical branch: creates it in the hub without worktree or agent, and opens a worktree and an agent
@@ -351,6 +356,9 @@ clean    Removes worktrees (folder, workspace, and agent); branches remain. With
 	"team.footer_hints": "\n  Assign work: bond team prompt <branch> \"the task\"\n  Check progress: bond team status · When finished: bond team clean",
 	"team.ws_already_open": "already open ({ws})",
 	"team.agent_in_pane": "{name} ({agent}) in {pane}",
+	"team.agent_in_terminal": "{name} ({agent}) in {terminal}",
+	"team.err_hc_not_installed": "hc (herdr-core) is not installed: install it to use the hc engine",
+	"team.err_unknown_engine": "unknown engine: {engine} (valid values: herdr, hc)",
 	"team.awaits_reply": " · waiting for your reply",
 	"team.trust_inherited": " · inherited trust",
 	"team.tab_label": "team · {repo}",
