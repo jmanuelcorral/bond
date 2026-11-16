@@ -1,5 +1,9 @@
 # Cambios
 
+## Sin publicar
+
+- La release deja el paquete en el staging de npm con `npm stage publish` (staged publishing) en lugar de publicarlo: sin 2FA y con cualquier token (`NPM_TOKEN`) u OIDC; un mantenedor lo aprueba con 2FA (`npm stage approve <stage-id>` o la pestaña *Staged Packages* de npmjs.com). El stage-id se escribe en el resumen del job.
+
 ## 1.16.2
 
 - La release publica en npm con `NPM_TOKEN` si existe y, si no, por trusted publishing (OIDC); log detallado del publish.

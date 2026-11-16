@@ -33,7 +33,10 @@ bun scripts/build.mts --targets linux-x64 --no-npm   # un binario en dist/ para 
 - **Release**: con `release-prepare-github`. Versión en `package.json` y `package-lock.json`
   (`npm version X.Y.Z --no-git-tag-version`), `## Sin publicar` pasa a `## X.Y.Z`, commit
   `Release X.Y.Z` y tag anotado `vX.Y.Z` ("bond X.Y.Z"). Empujar el tag publica: `release.yml`
-  compila, crea la release y sube los binarios, el `.tgz` y `SHA256SUMS`. Después,
+  compila, crea la release y sube los binarios, el `.tgz` y `SHA256SUMS`. En npm deja el paquete
+  en el staging (`npm stage publish`, sin 2FA): un mantenedor lo revisa y lo aprueba con 2FA
+  (`npm stage approve <stage-id>` o la pestaña *Staged Packages* de npmjs.com; el stage-id
+  figura en el resumen del job). Después,
   `bun scripts/packaging.mts`, commit `Regenerate packaging for X.Y.Z`, copiar
   `packaging/homebrew/bond.rb` al tap `jmanuelcorral/homebrew-tap` y lanzar `brew.yml`.
 
