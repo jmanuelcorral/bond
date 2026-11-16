@@ -1,6 +1,6 @@
 # Cambios
 
-## Sin publicar
+## 1.16.2
 
 - La release publica en npm con `NPM_TOKEN` si existe y, si no, por trusted publishing (OIDC); log detallado del publish.
 
