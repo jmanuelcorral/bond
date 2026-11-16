@@ -1,6 +1,6 @@
 # Cambios
 
-## Sin publicar
+## 1.16.1
 
 - La release publica en npm por trusted publishing (OIDC), sin token: `release.yml` ya no lee el
   secret `NPM_TOKEN` ni escribe credenciales en `~/.npmrc`. El token hacia que npm lo prefiriera
