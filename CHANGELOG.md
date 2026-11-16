@@ -1,6 +1,6 @@
 # Cambios
 
-## Sin publicar
+## 1.16.0
 
 - `@jmanuelcorral/bond` pasa a depender de `@jmanuelcorral/bond-app` e instala su binario
   `bond-app`: al instalar `bond` desde npm (`npm i -g @jmanuelcorral/bond`) queda instalado todo
