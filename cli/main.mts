@@ -128,6 +128,7 @@ async function main(argv: string[]): Promise<void> {
 			const c = await import("./catalog.mts");
 			return wantsHelp ? printHelp(c.CATALOG_HELP) : c.catalogCommand(rest);
 		}
+		case "tui":
 		case "dev":
 		case "team":
 		case "status": {
@@ -137,7 +138,7 @@ async function main(argv: string[]): Promise<void> {
 				return wantsHelp ? printHelp(t.TEAM_HELP) : t.team(rest);
 			}
 			if (wantsHelp) return printHelp(cmd === "status" ? t("main.status_help") : l.LAUNCH_HELP);
-			if (cmd === "dev") return l.launch(rest, { dev: true });
+			if (cmd === "dev" || cmd === "tui") return l.launch(rest, { dev: true });
 			return l.status(rest);
 		}
 		case "sessions":

@@ -58,11 +58,11 @@ describe("default_command setting in config.toml (D21)", () => {
 		expect(defaultCommand()).toBe("app");
 	});
 
-	test("instalación existente sin default_command: defaultCommand devuelve 'dev' (conserva comportamiento)", () => {
+	test("instalación existente sin default_command: defaultCommand devuelve 'tui' (conserva comportamiento)", () => {
 		const cfgFile = join(home, "config.toml");
 		writeFileSync(cfgFile, stringify({ agents: ["pi"], providers: {} }));
 		expect(hasExistingInstallEvidence()).toBe(true);
-		expect(defaultCommand()).toBe("dev");
+		expect(defaultCommand()).toBe("tui");
 	});
 
 	test("default_command = 'app' en config.toml devuelve 'app'", () => {
@@ -71,7 +71,13 @@ describe("default_command setting in config.toml (D21)", () => {
 		expect(defaultCommand()).toBe("app");
 	});
 
-	test("default_command = 'dev' en config.toml devuelve 'dev'", () => {
+	test("default_command = 'tui' en config.toml devuelve 'tui'", () => {
+		const cfgFile = join(home, "config.toml");
+		writeFileSync(cfgFile, stringify({ agents: ["pi"], default_command: "tui", providers: {} }));
+		expect(defaultCommand()).toBe("tui");
+	});
+
+	test("default_command = 'dev' en config.toml devuelve 'dev' (retrocompatibilidad)", () => {
 		const cfgFile = join(home, "config.toml");
 		writeFileSync(cfgFile, stringify({ agents: ["pi"], default_command: "dev", providers: {} }));
 		expect(defaultCommand()).toBe("dev");
@@ -79,32 +85,32 @@ describe("default_command setting in config.toml (D21)", () => {
 });
 
 describe("evidencia de instalación previa sin config.toml (M2)", () => {
-	test("state.json sin config.toml cuenta como instalación existente: defaultCommand devuelve 'dev'", () => {
+	test("state.json sin config.toml cuenta como instalación existente: defaultCommand devuelve 'tui'", () => {
 		writeFileSync(join(home, "state.json"), JSON.stringify({ version: "1.14.0" }));
 		expect(hasExistingInstallEvidence()).toBe(true);
-		expect(defaultCommand()).toBe("dev");
+		expect(defaultCommand()).toBe("tui");
 	});
 
-	test("AGENTS.md sin config.toml cuenta como instalación existente: defaultCommand devuelve 'dev'", () => {
+	test("AGENTS.md sin config.toml cuenta como instalación existente: defaultCommand devuelve 'tui'", () => {
 		writeFileSync(join(home, "AGENTS.md"), "# Mis instrucciones\n");
 		expect(hasExistingInstallEvidence()).toBe(true);
-		expect(defaultCommand()).toBe("dev");
+		expect(defaultCommand()).toBe("tui");
 	});
 
-	test("keys/ con ficheros sin config.toml cuenta como instalación existente: defaultCommand devuelve 'dev'", () => {
+	test("keys/ con ficheros sin config.toml cuenta como instalación existente: defaultCommand devuelve 'tui'", () => {
 		const keysDir = join(home, "keys");
 		mkdirSync(keysDir, { recursive: true });
 		writeFileSync(join(keysDir, "openai"), "sk-test-key");
 		expect(hasExistingInstallEvidence()).toBe(true);
-		expect(defaultCommand()).toBe("dev");
+		expect(defaultCommand()).toBe("tui");
 	});
 
-	test("events/ con ficheros sin config.toml cuenta como instalación existente: defaultCommand devuelve 'dev'", () => {
+	test("events/ con ficheros sin config.toml cuenta como instalación existente: defaultCommand devuelve 'tui'", () => {
 		const eventsDir = join(home, "events");
 		mkdirSync(eventsDir, { recursive: true });
 		writeFileSync(join(eventsDir, "2026-11-13.jsonl"), "{}\n");
 		expect(hasExistingInstallEvidence()).toBe(true);
-		expect(defaultCommand()).toBe("dev");
+		expect(defaultCommand()).toBe("tui");
 	});
 
 	test("instalación existente solo con state.json: --yes no fuerza 'app'", () => {
@@ -115,7 +121,7 @@ describe("evidencia de instalación previa sin config.toml (M2)", () => {
 		const cfgFile = join(home, "config.toml");
 		const raw = parse(readFileSync(cfgFile, "utf8")) as Record<string, unknown>;
 		expect(raw.default_command).toBeUndefined();
-		expect(defaultCommand()).toBe("dev");
+		expect(defaultCommand()).toBe("tui");
 	});
 });
 
@@ -132,12 +138,11 @@ describe("bond app", () => {
 		expect(r2.out).toContain("Starts bond-app");
 	});
 
-	test("sin bond-app en el PATH falla con código 1 y explica instalación local (M3, criterio 4)", () => {
+	test("sin bond-app en el PATH falla con código 1 y explica instalación (M3, criterio 4)", () => {
 		const r = bond(["app"], { PATH: "/nonexistent-path-for-bond-test", BOND_LANG: "es" });
 		expect(r.status).toBe(1);
 		expect(r.out).toContain("bond-app no está instalado");
-		expect(r.out).toContain("clon o paquete local");
-		expect(r.out).not.toContain("npm install -g bond-app\n");
+		expect(r.out).toContain("npm install -g @jmanuelcorral/bond-app");
 	});
 
 	test("rechaza opciones desconocidas con código 1 (L2)", () => {
@@ -263,9 +268,9 @@ process.exit(0);
 		expect(calls).toEqual(["install", "open", "start"]);
 	});
 
-	test("con default_command = 'dev', bond a secas hace lo de hoy (criterio 2)", () => {
+	test("con default_command = 'tui', bond a secas hace lo de hoy (criterio 2)", () => {
 		const cfgFile = join(home, "config.toml");
-		writeFileSync(cfgFile, stringify({ agents: ["pi"], default_command: "dev", providers: {} }));
+		writeFileSync(cfgFile, stringify({ agents: ["pi"], default_command: "tui", providers: {} }));
 
 		// Fuera de un repo, bond sin subcomando enseña la ayuda
 		const r = bond([], {}, home);
@@ -273,14 +278,18 @@ process.exit(0);
 		expect(r.out).toContain("Uso: bond [comando]");
 	});
 
-	test("bond dev no cambia incluso con default_command = 'app'", () => {
+	test("bond tui y bond dev ejecutan el puesto de trabajo incluso con default_command = 'app'", () => {
 		const cfgFile = join(home, "config.toml");
 		writeFileSync(cfgFile, stringify({ agents: ["pi"], default_command: "app", providers: {} }));
 
-		// bond dev --help da la ayuda de launch (puesto de trabajo)
-		const r = bond(["dev", "--help"]);
-		expect(r.status).toBe(0);
-		expect(r.out).toContain("puesto de trabajo");
+		// bond tui --help y bond dev --help dan la ayuda de launch (puesto de trabajo)
+		const rTui = bond(["tui", "--help"]);
+		expect(rTui.status).toBe(0);
+		expect(rTui.out).toContain("puesto de trabajo");
+
+		const rDev = bond(["dev", "--help"]);
+		expect(rDev.status).toBe(0);
+		expect(rDev.out).toContain("puesto de trabajo");
 	});
 });
 
@@ -318,7 +327,18 @@ describe("bond setup y regla --yes (criterio 3)", () => {
 		// Lee el fichero raw para comprobar que no se ha añadido default_command = "app"
 		const text = readFileSync(cfgFile, "utf8");
 		expect(text).not.toContain('default_command = "app"');
-		expect(defaultCommand()).toBe("dev");
+		expect(defaultCommand()).toBe("tui");
+	});
+
+	test("instalación existente con default_command = 'tui': --yes lo conserva", () => {
+		const cfgFile = join(home, "config.toml");
+		writeFileSync(cfgFile, stringify({ agents: ["pi"], default_command: "tui", providers: {} }));
+
+		const r = bond(["setup", "--yes"]);
+		expect(r.status).toBe(0);
+
+		const raw = parse(readFileSync(cfgFile, "utf8")) as Record<string, unknown>;
+		expect(raw.default_command).toBe("tui");
 	});
 
 	test("instalación existente con default_command = 'dev': --yes lo conserva", () => {
@@ -333,64 +353,30 @@ describe("bond setup y regla --yes (criterio 3)", () => {
 	});
 });
 
-describe("L3 y M3: asistente interactivo para default_command", () => {
-	test("L3: si el usuario elige 'app' pero bond-app no está en PATH y se omite la instalación, mantiene 'dev'", async () => {
+describe("asistente interactivo para default_command", () => {
+	test("usuario elige 'app': fija 'app' en configuración", async () => {
 		const { defaultCommandStep } = await import("../cli/wizard.mts");
 		const cfg: Config = { agents: ["pi"], providers: [] };
 
 		const mockPrompts = {
 			...p,
 			select: async () => "app",
-			text: async () => "",
 		};
 
 		await defaultCommandStep(cfg, true, true, mockPrompts as any);
-		// Al no estar bond-app en PATH, debe mantenerse/revertirse a "dev"
-		expect(cfg.default_command).toBe("dev");
+		expect(cfg.default_command).toBe("app");
 	});
 
-	test("M3: si se introduce una ruta local válida y se confirma, instala desde esa ruta local", async () => {
+	test("usuario elige 'tui': fija 'tui' en configuración", async () => {
 		const { defaultCommandStep } = await import("../cli/wizard.mts");
 		const cfg: Config = { agents: ["pi"], providers: [] };
 
-		// Creamos paquete local simulado
-		const localPkgDir = mkdtempSync(join(tmpdir(), "mock-pkg-"));
-		const npmLog = join(home, "mock-npm.log");
-		const mockNpm = join(binDir, "npm");
-		const mockBondApp = join(binDir, "bond-app");
-
-		// mock npm registra sus argumentos y crea el ejecutable bond-app en binDir simulando la instalación global
-		const mockNpmScript = `#!/usr/bin/env node
-const fs = require('node:fs');
-fs.appendFileSync(${JSON.stringify(npmLog)}, process.argv.slice(2).join(' ') + '\\n');
-fs.writeFileSync(${JSON.stringify(mockBondApp)}, '#!/bin/sh\\nexit 0\\n');
-fs.chmodSync(${JSON.stringify(mockBondApp)}, 0o755);
-process.exit(0);
-`;
-		writeFileSync(mockNpm, mockNpmScript);
-		chmodSync(mockNpm, 0o755);
-
-		const origPath = process.env.PATH;
-		process.env.PATH = `${binDir}:${origPath}`;
-
 		const mockPrompts = {
 			...p,
-			select: async () => "app",
-			text: async () => localPkgDir,
-			confirm: async () => true,
+			select: async () => "tui",
 		};
 
-		try {
-			await defaultCommandStep(cfg, true, true, mockPrompts as any);
-			expect(existsSync(npmLog)).toBe(true);
-			const npmArgs = readFileSync(npmLog, "utf8").trim();
-			// Se ejecuta npm install -g <ruta-local>, NUNCA npm install -g bond-app sin ruta
-			expect(npmArgs).toBe(`install -g ${localPkgDir}`);
-			expect(npmArgs).not.toBe("install -g bond-app");
-			expect(cfg.default_command).toBe("app");
-		} finally {
-			process.env.PATH = origPath;
-			rmSync(localPkgDir, { recursive: true, force: true });
-		}
+		await defaultCommandStep(cfg, true, true, mockPrompts as any);
+		expect(cfg.default_command).toBe("tui");
 	});
 });

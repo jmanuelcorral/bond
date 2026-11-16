@@ -264,78 +264,30 @@ export async function iconsStep(cfg: Config, interactive: boolean, detect: () =>
 }
 
 /**
- * Subcomando por defecto al ejecutar bond sin subcomando (D21) e instalación de bond-app.
+ * Subcomando por defecto al ejecutar bond sin subcomando (D21, D22).
+ * - Modos: "app" (interfaz gráfica con bond-app y herdr-app) o "tui" (puesto en terminal).
  * - Instalaciones nuevas: "app" por defecto.
- * - Instalaciones existentes: conserva "dev" (o lo que esté configurado) si se usa --yes.
+ * - Instalaciones existentes: conserva "tui" / "dev" (o lo que esté configurado) si se usa --yes.
  */
 export async function defaultCommandStep(cfg: Config, interactive: boolean, isNew: boolean, prompts = p): Promise<void> {
-	const initial = cfg.default_command ?? (isNew ? "app" : "dev");
+	const initial = (cfg.default_command === "dev" ? "tui" : cfg.default_command) ?? (isNew ? "app" : "tui");
 	if (interactive) {
 		const chosen = await ask(
-			prompts.select<"app" | "dev">({
+			prompts.select<"app" | "tui">({
 				message: t("wizard.default_command_question"),
 				options: [
 					{ value: "app", label: t("wizard.default_command_app"), hint: t("wizard.default_command_app_hint") },
-					{ value: "dev", label: t("wizard.default_command_dev"), hint: t("wizard.default_command_dev_hint") },
+					{ value: "tui", label: t("wizard.default_command_tui"), hint: t("wizard.default_command_tui_hint") },
 				],
 				initialValue: initial,
 			}),
 		);
 		cfg.default_command = chosen;
 		prompts.log.message(t("wizard.default_command_state", { cmd: chosen }));
-
-		const hasBondApp = !!which("bond-app");
-		if (hasBondApp) {
-			prompts.log.success(t("wizard.bond_app_installed"));
-		} else {
-			prompts.note(t("wizard.bond_app_install_local_note"), t("wizard.bond_app_missing"));
-			const targetPath = await ask(
-				prompts.text({
-					message: t("wizard.bond_app_install_path_prompt"),
-					placeholder: t("wizard.bond_app_install_path_placeholder"),
-					validate: (val) => {
-						if (!val || !val.trim()) return;
-						const r = resolve(val.trim());
-						if (!existsSync(r)) return t("wizard.bond_app_path_not_found", { path: r });
-					},
-				}),
-			);
-			const trimmedPath = typeof targetPath === "string" ? targetPath.trim() : "";
-			if (trimmedPath && existsSync(resolve(trimmedPath))) {
-				const resolved = resolve(trimmedPath);
-				const confirm = await ask(
-					prompts.confirm({
-						message: t("wizard.bond_app_install_confirm", { path: resolved }),
-						initialValue: true,
-					}),
-				);
-				if (confirm) {
-					const s = prompts.spinner();
-					s.start(`npm install -g ${resolved}`);
-					const res = run("npm", ["install", "-g", resolved]);
-					if (res.status === 0 && which("bond-app")) {
-						s.stop(t("wizard.bond_app_install_success"));
-					} else {
-						s.stop(t("wizard.bond_app_install_failed", { err: res.stderr.trim() || res.stdout.trim() }));
-					}
-				}
-			}
-
-			// L3: si bond-app sigue sin estar en el PATH tras el paso, advertir y mantener "dev"
-			if (cfg.default_command === "app" && !which("bond-app")) {
-				prompts.log.warn(t("wizard.bond_app_kept_dev"));
-				cfg.default_command = "dev";
-			}
-		}
 	} else {
 		// Modo no interactivo / --yes:
-		// "3. bond setup pregunta por el comportamiento por defecto y lo guarda; --yes usa app en instalaciones nuevas y no cambia una configuración existente."
 		if (isNew) {
 			cfg.default_command = "app";
-		}
-		const hasBondApp = !!which("bond-app");
-		if (!hasBondApp) {
-			prompts.log.message(t("wizard.bond_app_not_installed"));
 		}
 	}
 }

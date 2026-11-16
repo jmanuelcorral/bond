@@ -92,8 +92,8 @@ export interface Config {
 	agents: string[];
 	/** Agente que se propone por defecto en `bond init`. */
 	default_agent?: string;
-	/** Subcomando por defecto al ejecutar bond a secas: "app" o "dev". */
-	default_command?: "app" | "dev";
+	/** Subcomando por defecto al ejecutar bond a secas: "app", "tui" o "dev". */
+	default_command?: "app" | "tui" | "dev";
 	providers: Provider[];
 	/** [update] auto = false: bond no pregunta al arrancar si hay versión nueva. */
 	update?: { auto?: boolean };
@@ -158,7 +158,7 @@ export function loadConfig(): Config {
 	return {
 		agents: Array.isArray(raw.agents) ? (raw.agents as string[]) : [],
 		default_agent: typeof raw.default_agent === "string" ? raw.default_agent : undefined,
-		default_command: raw.default_command === "app" || raw.default_command === "dev" ? raw.default_command : undefined,
+		default_command: raw.default_command === "app" || raw.default_command === "tui" || raw.default_command === "dev" ? raw.default_command : undefined,
 		providers,
 		suggestions: readSuggestions(raw),
 		ui: readUi(raw),
@@ -284,23 +284,23 @@ export function hasExistingInstallEvidence(): boolean {
 
 /**
  * Subcomando por defecto al ejecutar `bond` a secas:
- * - Si config.toml define `default_command`: ese valor ("app" o "dev").
- * - Si hay config.toml pero no define `default_command`: "dev" (instalación existente).
- * - Si no hay config.toml pero hay evidencia de instalación existente: "dev".
+ * - Si config.toml define `default_command`: ese valor ("app", "tui" o "dev").
+ * - Si hay config.toml pero no define `default_command`: "tui" (instalación existente).
+ * - Si no hay config.toml pero hay evidencia de instalación existente: "tui".
  * - Si es una instalación totalmente nueva (sin rastro previo de bond): "app".
  */
-export function defaultCommand(): "app" | "dev" {
+export function defaultCommand(): "app" | "tui" | "dev" {
 	const file = join(process.env.BOND_HOME || CONFIG_DIR, "config.toml");
 	if (existsSync(file)) {
 		try {
 			const raw = parse(readFileSync(file, "utf8")) as Record<string, unknown>;
-			if (raw.default_command === "app" || raw.default_command === "dev") return raw.default_command;
-			return "dev";
+			if (raw.default_command === "app" || raw.default_command === "tui" || raw.default_command === "dev") return raw.default_command;
+			return "tui";
 		} catch {
-			return "dev";
+			return "tui";
 		}
 	}
-	if (hasExistingInstallEvidence()) return "dev";
+	if (hasExistingInstallEvidence()) return "tui";
 	return "app";
 }
 

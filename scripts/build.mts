@@ -69,6 +69,7 @@ if (!args.includes("--no-npm")) {
 	mkdirSync(join(npm, "bin"), { recursive: true });
 	await run(["bun", "build", "--target=node", "--format=esm", "cli/main.mts", "--outfile", join(npm, "bond.mjs")]);
 	writeFileSync(join(npm, "bin", "bond.mjs"), `#!/usr/bin/env node\nimport "../bond.mjs";\n`);
+	copyFileSync(join(ROOT, "bin", "bond-app.mjs"), join(npm, "bin", "bond-app.mjs"));
 	const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
 	writeFileSync(
 		join(npm, "package.json"),
@@ -79,9 +80,12 @@ if (!args.includes("--no-npm")) {
 				description: pkg.description,
 				license: pkg.license,
 				type: "module",
-				bin: { bond: "bin/bond.mjs" },
+				bin: { bond: "bin/bond.mjs", "bond-app": "bin/bond-app.mjs" },
 				engines: { node: ">=22" },
 				repository: { type: "git", url: "https://github.com/jmanuelcorral/bond.git" },
+				dependencies: {
+					"@jmanuelcorral/bond-app": pkg.dependencies?.["@jmanuelcorral/bond-app"] ?? "^0.1.1",
+				},
 				files: ["bond.mjs", "bin"],
 			},
 			null,

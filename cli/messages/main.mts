@@ -25,8 +25,9 @@ Repo
 
 Trabajo diario (Herdr)
   app            Abre bond-app (orquestador en primer plano y herdr-app)
+  tui [dir]      Puesto de trabajo en terminal Herdr (--agent, --worktree…)
   (sin comando)  Comportamiento por defecto (bond app o puesto de trabajo)
-  dev [dir]      Lo mismo para otro directorio (--agent, --worktree…)
+  dev [dir]      Alias de tui
   team           Un agente por rama, cada uno en su worktree (status, prompt, clean)
   status         Agentes vivos en Herdr
   sessions       Sesiones de pi y cómo retomarlas
@@ -61,8 +62,9 @@ Repo
 
 Daily work (Herdr)
   app            Opens bond-app (foreground orchestrator and herdr-app)
+  tui [dir]      Terminal workstation in Herdr (--agent, --worktree…)
   (no command)   Default command (bond app or repo workstation)
-  dev [dir]      The same for another directory (--agent, --worktree…)
+  dev [dir]      Alias for tui
   team           One agent per branch, each in its own worktree (status, prompt, clean)
   status         Live agents in Herdr
   sessions       pi sessions and how to resume them

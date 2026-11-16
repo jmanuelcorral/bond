@@ -61,6 +61,7 @@ del directorio actual; por eso el comando hace cd antes.`,
 
 	// ---- launch (cli/launch.mts) ----
 	"launch.help": `Uso: bond [opciones] [-- argumentos del agente]
+       bond tui [directorio] [opciones] [-- argumentos del agente]
        bond dev [directorio] [opciones] [-- argumentos del agente]
 
 Dentro de un repo, abre su puesto de trabajo en Herdr: el agente por defecto del repo
@@ -276,6 +277,7 @@ sessions of the current directory; that is why the command cds first.`,
 
 	// ---- launch (cli/launch.mts) ----
 	"launch.help": `Usage: bond [options] [-- agent arguments]
+       bond tui [directory] [options] [-- agent arguments]
        bond dev [directory] [options] [-- agent arguments]
 
 Inside a repo, opens its Herdr workstation: the repo's default agent
