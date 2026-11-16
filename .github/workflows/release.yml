@@ -1,8 +1,8 @@
 # Al subir un tag vX.Y.Z: compila bond para todas las plataformas, genera SHA256SUMS y crea la
 # release de GitHub con las notas de esa versión del CHANGELOG. Los instaladores (install.sh,
 # install.ps1) y la fórmula de Homebrew descargan de aquí. Además publica en npm el mismo .tgz
-# que se adjunta a la release, autenticando por OIDC (trusted publishing); el secret NPM_TOKEN
-# se mantiene como red de seguridad.
+# que se adjunta a la release, autenticando SOLO por OIDC (trusted publishing): no se usa ningún
+# NPM_TOKEN.
 name: release
 
 on:
@@ -71,28 +71,16 @@ jobs:
               --title "bond $GITHUB_REF_NAME" --notes-file notes.md "${assets[@]}"
           fi
       # npm: se publica el MISMO .tgz que se adjunta a la release, no un pack nuevo.
-      # La autentificacion va por OIDC (trusted publishing): npm detecta el entorno GitHub
-      # Actions y usa el OIDC token antes de mirar tokens tradicionales. El NPM_TOKEN se
-      # mantiene como red de seguridad, no como lo que autoriza el publish.
-      - name: ¿Hay NPM_TOKEN?
-        id: npm
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -n "${NPM_TOKEN:-}" ]; then
-            echo enabled=true >> "$GITHUB_OUTPUT"
-          else
-            echo enabled=false >> "$GITHUB_OUTPUT"
-            echo "Sin el secret NPM_TOKEN: no se publica @jmanuelcorral/bond en npm. La release queda creada igual; añade el secret en Settings -> Secrets and variables -> Actions para publicar." >> "$GITHUB_STEP_SUMMARY"
-          fi
+      # La autentificacion va SOLO por OIDC (trusted publishing): el trusted publisher de
+      # npmjs (repo jmanuelcorral/bond, workflow release.yml) autoriza el publish. No se
+      # escribe ningun token: un NPM_TOKEN presente haria que npm lo prefiriera al OIDC y
+      # la politica de 2FA del paquete responderia EOTP/E403 (fallo de la 1.15.0).
       - name: Publicar en npm
-        if: steps.npm.outputs.enabled == 'true'
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          # Registry explicito: una config de scope rara (p.ej. el scope apuntando a
-          # npm.pkg.github.com) no debe desviar la publicacion.
-          printf '@jmanuelcorral:registry=https://registry.npmjs.org/\n//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$HOME/.npmrc"
+          # Registry explicito sin credenciales: una config de scope rara (p.ej. el scope
+          # apuntando a npm.pkg.github.com) no debe desviar la publicacion, y sin token en
+          # el .npmrc npm autentifica por el OIDC token del runner.
+          printf '@jmanuelcorral:registry=https://registry.npmjs.org/\n' > "$HOME/.npmrc"
           cd "$GITHUB_WORKSPACE/dist"
           tgz="$(ls ./*.tgz)"
           [ -f "$tgz" ] || { echo "esperaba un unico .tgz en dist/"; exit 1; }

@@ -22,7 +22,7 @@ are in Spanish; commits and this skill are in English.
   publishes: it triggers `release.yml`, which creates a public release.
 - Never `git push --force`, and never force anything in the tap repository. Never hand-edit
   `packaging/`, `cli/assets.gen.mts` or `dist/` - all generated.
-- Do not publish to AUR or npm by hand; npm publication runs in CI when the secret exists (step 2).
+- Do not publish to AUR or npm by hand; npm publication runs in CI through trusted publishing (OIDC), with no token (step 2).
 - If a step's gate fails, stop and report. Do not "continue and fix later" down the pipeline.
 
 ## The pipeline
@@ -30,7 +30,7 @@ are in Spanish; commits and this skill are in English.
 | # | Operation | Requires | Gate before starting |
 | --- | --- | --- | --- |
 | 1 | `npm version X.Y.Z --no-git-tag-version`, changelog, commit `Release X.Y.Z`, annotated tag `vX.Y.Z` | clean `main` | user approved the version and the changelog |
-| 2 | push `main` + push the tag; `release.yml` builds 3 platforms, packs npm, makes `SHA256SUMS`, creates the release, publishes npm if `NPM_TOKEN` exists | 1 | tag equals `package.json` |
+| 2 | push `main` + push the tag; `release.yml` builds 3 platforms, packs npm, makes `SHA256SUMS`, creates the release, publishes npm via OIDC trusted publishing | 1 | tag equals `package.json` |
 | 3 | `bun scripts/packaging.mts`, commit `Regenerate packaging for X.Y.Z`, push | **2 finished** | release is not a draft and every asset is there |
 | 4 | copy `packaging/homebrew/bond.rb` into the tap's `Formula/bond.rb`, push, run `brew.yml` | 3 | the `.rb` hashes equal the release's `SHA256SUMS` |
 
@@ -143,19 +143,20 @@ has its own history, its own CI (`brew.yml`) and its own mistakes.
 
 ## Follow-up work not covered by this run
 
-- **npm provenance is enabled since 1.13.1.** `release.yml` publishes with `--access public
+- **npm publishing is OIDC-only** (the token fallback was removed after the 1.15.0 `EOTP` failure).
+  `release.yml` publishes with `--access public
   --provenance` and holds `id-token: write` so GitHub can mint the OIDC token, and pins Node 24
   because trusted publishing needs npm >= 11.5.1 while `ubuntu-latest` ships 10.9.x. The trusted
   publisher on npmjs.com must name the workflow file `release.yml` (filename only) and allow the
   `npm publish` action. **An unvalidated trusted publisher config expires 48 hours after it is
-  created**, and it only becomes validated by a publish that actually goes through it: since
-  `NPM_TOKEN` is kept as a fallback, read the publish log and confirm it authenticated with OIDC.
-  A publish that silently used the token leaves the config unvalidated and it dies on the clock.
-- **The publish step pins the registry on purpose.** A scoped `@jmanuelcorral:registry` entry in
-  any `.npmrc` in effect (a developer machine pointing the scope at `npm.pkg.github.com`, for
-  instance) wins over `npm publish --registry=...`, so the workflow writes both the scoped line
-  and the `//registry.npmjs.org/:_authToken` line into `$HOME/.npmrc` before publishing. If a
-  release ever lands in GitHub Packages instead of npmjs.com, look there first.
+  created**, and it only becomes validated by a publish that actually goes through it: the first
+  OIDC publish after configuring it must happen within that window.
+- **Do not reintroduce an npm token.** The workflow writes only
+  `@jmanuelcorral:registry=https://registry.npmjs.org/` into `$HOME/.npmrc` - no auth line - so
+  npm authenticates with the runner's OIDC token. A scoped registry line is still required:
+  a stray `@jmanuelcorral:registry` entry pointing at `npm.pkg.github.com` would otherwise win
+  over `npm publish --registry=...`. If a release ever lands in GitHub Packages instead of
+  npmjs.com, look there first.
 - **`npm publish --dry-run` needs no credentials**: it prints the tarball contents and the target
   registry without authenticating, so it is safe to run anywhere to inspect what would ship.
 - **The "not published yet" messages were flipped after 1.13.0**, the first real npm publish:
@@ -163,9 +164,11 @@ has its own history, its own CI (`brew.yml`) and its own mistakes.
   `manualCommand` in `cli/update.mts` and the update sections of `docs/reference.md` and
   `docs/en/reference.md` now give `npm i -g @jmanuelcorral/bond@<version>`. If npm ever stops
   publishing, fix the publish - do not put the old wording back.
-- **`NPM_TOKEN` has to be an automation token.** A granular "Read and write" token on an account
-  with 2FA publishes nothing: npm answers `EOTP` and asks for a one-time password that CI cannot
-  produce. The token type must be Automation, the one that bypasses 2FA for CI.
+- **No `NPM_TOKEN` anymore.** The 1.15.0 publish failed with `EOTP`/`E403`: npm preferred the
+  token in `~/.npmrc` over OIDC, and the package's 2FA policy rejected it (a token that passes
+  2FA in CI would have to be an Automation token anyway). The secret and its gate were removed;
+  if you are tempted to add a token fallback back, remember that its mere presence makes npm
+  skip OIDC and leaves the trusted publisher config unvalidated.
 - **The release step is idempotent (#83).** `release.yml` checks `gh release view` first: an
   existing release is edited and its assets re-uploaded with `--clobber` instead of failing,
   so a downstream failure (npm EOTP, for instance) is retried with `gh run rerun --failed`

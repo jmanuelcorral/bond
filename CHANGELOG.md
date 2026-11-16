@@ -1,5 +1,11 @@
 # Cambios
 
+## Sin publicar
+
+- La release publica en npm por trusted publishing (OIDC), sin token: `release.yml` ya no lee el
+  secret `NPM_TOKEN` ni escribe credenciales en `~/.npmrc`. El token hacia que npm lo prefiriera
+  al OIDC y la politica de 2FA del paquete bloqueaba el publish (EOTP/E403 en la 1.15.0).
+
 ## 1.16.0
 
 - `@jmanuelcorral/bond` pasa a depender de `@jmanuelcorral/bond-app` e instala su binario
