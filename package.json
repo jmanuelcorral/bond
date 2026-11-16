@@ -17,7 +17,7 @@
   },
   "bin": {
     "bond": "bin/bond",
-    "bond-app": "bin/bond-app"
+    "bond-app": "bin/bond-app.mjs"
   },
   "dependencies": {
     "@clack/prompts": "1.8.0",

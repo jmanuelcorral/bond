@@ -1,5 +1,17 @@
 # Cambios
 
+## Sin publicar
+
+- `@jmanuelcorral/bond` pasa a depender de `@jmanuelcorral/bond-app` e instala su binario
+  `bond-app`: al instalar `bond` desde npm (`npm i -g @jmanuelcorral/bond`) queda instalado todo
+  el ecosistema de una vez, sin pasos adicionales.
+- `bond tui`: nuevo subcomando para abrir el puesto de trabajo del repo en terminal (equivalente
+  a `bond dev`, que se mantiene como alias). `default_command` en `~/.bond/config.toml` admite
+  ahora `"tui"`; los valores `"dev"` ya guardados siguen funcionando como alias.
+- `bond setup`: la pregunta del modo por defecto ofrece `app` o `tui`. El asistente ya no pide
+  rutas locales ni instala `bond-app` con `npm install -g <ruta>`: al venir como dependencia de
+  `bond`, basta con comprobar que está disponible.
+
 ## 1.15.0
 
 - `bond app`: nuevo subcomando que comprueba que el binario `bond-app` esté en `PATH` (o explica

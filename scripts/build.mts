@@ -81,7 +81,7 @@ if (!args.includes("--no-npm")) {
 				license: pkg.license,
 				type: "module",
 				bin: { bond: "bin/bond.mjs", "bond-app": "bin/bond-app.mjs" },
-				engines: { node: ">=22" },
+				engines: { node: ">=22.15.0" }, // bond-app usa type stripping de Node >=22.15
 				repository: { type: "git", url: "https://github.com/jmanuelcorral/bond.git" },
 				dependencies: {
 					"@jmanuelcorral/bond-app": pkg.dependencies?.["@jmanuelcorral/bond-app"] ?? "^0.1.1",
