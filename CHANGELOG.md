@@ -1,5 +1,9 @@
 # Cambios
 
+## Sin publicar
+
+- La release publica en npm con `NPM_TOKEN` si existe y, si no, por trusted publishing (OIDC); log detallado del publish.
+
 ## 1.16.1
 
 - La release publica en npm por trusted publishing (OIDC), sin token: `release.yml` ya no lee el

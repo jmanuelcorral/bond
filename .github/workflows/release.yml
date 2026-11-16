@@ -1,8 +1,8 @@
 # Al subir un tag vX.Y.Z: compila bond para todas las plataformas, genera SHA256SUMS y crea la
 # release de GitHub con las notas de esa versión del CHANGELOG. Los instaladores (install.sh,
 # install.ps1) y la fórmula de Homebrew descargan de aquí. Además publica en npm el mismo .tgz
-# que se adjunta a la release, autenticando SOLO por OIDC (trusted publishing): no se usa ningún
-# NPM_TOKEN.
+# que se adjunta a la release: con el secret NPM_TOKEN si está definido (token con bypass de 2FA)
+# y, si no, por OIDC (trusted publishing).
 name: release
 
 on:
@@ -24,8 +24,7 @@ jobs:
         with:
           bun-version: 1.4.3
       # Trusted publishing exige npm >= 11.5.1 y Node >= 22.14.0. ubuntu-latest trae
-      # npm 10.9.9, que no habla OIDC: sin este paso el publish se haria con token y la
-      # configuracion de trusted publisher de npm no llegaria a validarse nunca.
+      # npm 10.9.9, que no habla OIDC: sin este paso la ruta OIDC no podria validarse.
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
@@ -71,21 +70,31 @@ jobs:
               --title "bond $GITHUB_REF_NAME" --notes-file notes.md "${assets[@]}"
           fi
       # npm: se publica el MISMO .tgz que se adjunta a la release, no un pack nuevo.
-      # La autentificacion va SOLO por OIDC (trusted publishing): el trusted publisher de
-      # npmjs (repo jmanuelcorral/bond, workflow release.yml) autoriza el publish. No se
-      # escribe ningun token: un NPM_TOKEN presente haria que npm lo prefiriera al OIDC y
-      # la politica de 2FA del paquete responderia EOTP/E403 (fallo de la 1.15.0).
+      # Autentificacion en dos rutas: si el secret NPM_TOKEN esta definido, se escribe en
+      # ~/.npmrc (el token tiene el bypass de 2FA configurado en npmjs; sin el bypass la
+      # politica de 2FA del paquete responderia EOTP/E403). Si no, no se escribe ningun
+      # token y npm autentifica por OIDC (trusted publishing): el trusted publisher de
+      # npmjs (repo jmanuelcorral/bond, workflow release.yml) autoriza el publish.
+      # El token llega por variable de entorno y solo se redirige al .npmrc: nunca se
+      # imprime. Con --loglevel verbose el log muestra la ruta de autentificacion usada.
       - name: Publicar en npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          # Registry explicito sin credenciales: una config de scope rara (p.ej. el scope
-          # apuntando a npm.pkg.github.com) no debe desviar la publicacion, y sin token en
-          # el .npmrc npm autentifica por el OIDC token del runner.
+          # Registry explicito: una config de scope rara (p.ej. el scope apuntando a
+          # npm.pkg.github.com) no debe desviar la publicacion.
           printf '@jmanuelcorral:registry=https://registry.npmjs.org/\n' > "$HOME/.npmrc"
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "autenticacion npm: NPM_TOKEN (token con bypass de 2FA)"
+            printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" >> "$HOME/.npmrc"
+          else
+            echo "autenticacion npm: OIDC trusted publishing (sin token)"
+          fi
           cd "$GITHUB_WORKSPACE/dist"
           tgz="$(ls ./*.tgz)"
           [ -f "$tgz" ] || { echo "esperaba un unico .tgz en dist/"; exit 1; }
           grep -F " $(basename "$tgz")" SHA256SUMS | sha256sum -c -
-          npm publish "$tgz" --access public --provenance
+          npm publish "$tgz" --access public --provenance --loglevel verbose
           name="$(jq -r .name npm/package.json)"
           npm view "$name@$(jq -r .version ../package.json)" version \
             || echo "::warning::npm todavia no responde por $name; revisa https://www.npmjs.com/package/$name"
