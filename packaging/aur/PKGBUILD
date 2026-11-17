@@ -1,6 +1,6 @@
-# Generado por scripts/packaging.mts desde la release v1.14.0 de jmanuelcorral/bond.
+# Generado por scripts/packaging.mts desde la release v1.16.3 de jmanuelcorral/bond.
 pkgname=bond-bin
-pkgver=1.14.0
+pkgver=1.16.3
 pkgrel=1
 pkgdesc="CLI para trabajar con varios agentes de código (pi, Claude Code, Codex, Copilot...) en Herdr"
 arch=('x86_64' 'aarch64')
@@ -8,16 +8,19 @@ url="https://github.com/jmanuelcorral/bond"
 license=('MIT')
 provides=('bond')
 conflicts=('bond')
+optdepends=('npm: "bond app" necesita bond-app, que no se distribuye por AUR: npm install -g @jmanuelcorral/bond-app')
 # Los binarios de Bun llevan su contenido al final del ejecutable: strip los rompe.
 options=('!strip' '!debug')
 source_x86_64=("bond-${pkgver}-x86_64::https://github.com/jmanuelcorral/bond/releases/download/v${pkgver}/bond-linux-x64")
 source_aarch64=("bond-${pkgver}-aarch64::https://github.com/jmanuelcorral/bond/releases/download/v${pkgver}/bond-linux-arm64")
 source=("LICENSE-${pkgver}::https://raw.githubusercontent.com/jmanuelcorral/bond/v${pkgver}/LICENSE")
 sha256sums=('561f047ecd1e4a2b06c8acb98db5b37f826dd9d8739163c76485aa0c5de21d66')
-sha256sums_x86_64=('373c64b4a8f1a0725fe5ec9afd296ef3531e79fca09324e2fb6daaa62e364439')
-sha256sums_aarch64=('6d16f028f1e9cf6a32a653ac5dd09c629a36318d077ddb764b572f91bdbbdadc')
+sha256sums_x86_64=('c65bad2138987c1e8fe0d99d91506e6d75f63c07e63be2e1c4833a5bd4168fb7')
+sha256sums_aarch64=('3863d37e40e9467033b5e4177f6a58d5ca5e3e30f89ee7d81b58e08f28fd40ae')
 
 package() {
   install -Dm755 "${srcdir}/bond-${pkgver}-${CARCH}" "${pkgdir}/usr/bin/bond"
   install -Dm644 "${srcdir}/LICENSE-${pkgver}" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  echo "'bond app' necesita bond-app, que el binario independiente no incluye:"
+  echo "  npm install -g @jmanuelcorral/bond-app"
 }
