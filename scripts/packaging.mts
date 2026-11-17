@@ -65,6 +65,13 @@ class Bond < Formula
     bin.install Dir["bond-*"].first => "bond"
   end
 
+  def caveats
+    <<~EOS
+      "bond app" necesita bond-app, que el binario independiente no incluye:
+        npm install -g @jmanuelcorral/bond-app
+    EOS
+  end
+
   test do
     assert_match version.to_s, shell_output("#{bin}/bond --version")
   end
@@ -84,6 +91,7 @@ url="https://github.com/${REPO}"
 license=('MIT')
 provides=('bond')
 conflicts=('bond')
+optdepends=('npm: "bond app" necesita bond-app, que no se distribuye por AUR: npm install -g @jmanuelcorral/bond-app')
 # Los binarios de Bun llevan su contenido al final del ejecutable: strip los rompe.
 options=('!strip' '!debug')
 source_x86_64=("bond-\${pkgver}-x86_64::${url("bond-linux-x64").replace(version, "${pkgver}")}")
@@ -96,6 +104,8 @@ sha256sums_aarch64=('${sha("bond-linux-arm64")}')
 package() {
   install -Dm755 "\${srcdir}/bond-\${pkgver}-\${CARCH}" "\${pkgdir}/usr/bin/bond"
   install -Dm644 "\${srcdir}/LICENSE-\${pkgver}" "\${pkgdir}/usr/share/licenses/\${pkgname}/LICENSE"
+  echo "'bond app' necesita bond-app, que el binario independiente no incluye:"
+  echo "  npm install -g @jmanuelcorral/bond-app"
 }
 `;
 mkdirSync(join(ROOT, "packaging", "aur"), { recursive: true });
