@@ -128,12 +128,24 @@ export function parseTeam(args: string[], isDir: (p: string) => boolean = exists
 	return o;
 }
 
+export function extractEngine(args: string[], env: Record<string, string | undefined> = process.env): Engine {
+	const sepIdx = args.indexOf("--");
+	const limit = sepIdx === -1 ? args.length : sepIdx;
+	for (let i = 0; i < limit; i++) {
+		if (args[i] === "--engine") {
+			return resolveEngine(args[i + 1], env);
+		}
+	}
+	return resolveEngine(undefined, env);
+}
+
 const repoOf = (dir?: string) => gitRoot(resolve(dir ?? ".")) ?? die(t("team.err_not_git_repo", { path: resolve(dir ?? ".") }));
 
 async function create(args: string[]): Promise<void> {
-	const o = parseTeam(args);
-	if (o.engine === "herdr") requireHerdr();
+	const engine = extractEngine(args);
+	if (engine === "herdr") requireHerdr();
 	else requireHc();
+	const o = parseTeam(args);
 	const root = repoOf(o.dir);
 	const session = hubOf(root);
 	if (session) return createInHub(session, o);
@@ -488,10 +500,11 @@ function openInTab(root: string, anchor: string, here: CallerTab, room: number, 
 	return { pane: firstPane, name: firstName };
 }
 
-/** Arranca cada agente como una terminal de hc (--engine hc). */
-async function openHc(root: string, plan: PlanItem[], o: TeamArgs): Promise<void> {
+export function runHcPlan(root: string, plan: PlanItem[], o: TeamArgs): void {
 	const liveTerms = hcTerminals();
 	const liveNames = new Set(liveTerms.filter((t) => t.state === "live" && t.name).map((t) => t.name!));
+	const anchor = insideHerdr() ? process.env.HERDR_PANE_ID : undefined;
+	const orchestrator = o.inheritTrust && anchor ? trustingOrchestrator(canonical(root), anchor) : undefined;
 	for (const item of plan) {
 		const { branch, agent } = item;
 		const at = item.root ?? root;
@@ -511,7 +524,7 @@ async function openHc(root: string, plan: PlanItem[], o: TeamArgs): Promise<void
 		let trusted = false;
 		if (o.inheritTrust && TRUST_KINDS.includes(agent)) {
 			try {
-				trusted = inheritTrust(agent, canonical(item.root ?? root), canonical(path), undefined, true) === "heredada";
+				trusted = inheritTrust(agent, canonical(item.root ?? root), canonical(path), undefined, !!orchestrator) === "heredada";
 			} catch (e) {
 				warn(t("team.warn_trust_inherit_failed", { label: itemLabel(item), error: (e as Error).message, agent }));
 			}
@@ -536,6 +549,11 @@ async function openHc(root: string, plan: PlanItem[], o: TeamArgs): Promise<void
 			warn(`${itemLabel(item)}: ${(e as Error).message}`);
 		}
 	}
+}
+
+/** Arranca cada agente como una terminal de hc (--engine hc). */
+async function openHc(root: string, plan: PlanItem[], o: TeamArgs): Promise<void> {
+	runHcPlan(root, plan, o);
 	const { renderSmall } = await import("../lib/bond-logo.mts");
 	const hub = hubRoot(root);
 	const repo = hub ? basename(hub) : basename(root);
@@ -2441,52 +2459,7 @@ async function createInHub(s: HubSession, o: TeamArgs): Promise<void> {
 }
 
 async function openHcInHub(s: HubSession, branch: string, targets: HubRepo[], plan: PlanItem[], o: TeamArgs): Promise<void> {
-	const liveTerms = hcTerminals();
-	const liveNames = new Set(liveTerms.filter((t) => t.state === "live" && t.name).map((t) => t.name!));
-	for (const item of plan) {
-		const { agent } = item;
-		const at = item.root ?? s.root;
-		let path = item.path;
-		if (!path) {
-			path = tabWorktreePath(homedir(), s.root, branch, item.sub);
-			const isNew = git(at, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).status !== 0;
-			const args = isNew ? ["worktree", "add", "-b", branch, path, item.base ?? "HEAD"] : ["worktree", "add", path, branch];
-			const g = git(at, args);
-			if (g.status !== 0) {
-				warn(`${itemLabel(item)}: git ${args.join(" ")}: ${g.stderr.trim()}`);
-				continue;
-			}
-		}
-		const name = minionName(liveNames);
-		liveNames.add(name);
-		let trusted = false;
-		if (o.inheritTrust && TRUST_KINDS.includes(agent)) {
-			try {
-				trusted = inheritTrust(agent, canonical(item.root ?? s.root), canonical(path), undefined, true) === "heredada";
-			} catch (e) {
-				warn(t("team.warn_trust_inherit_failed", { label: itemLabel(item), error: (e as Error).message, agent }));
-			}
-		}
-		const termLabels: Record<string, string> = {
-			...(o.labels ?? {}),
-			"bond.branch": branch,
-			...(item.sub ? { "bond.repo": item.sub } : {}),
-		};
-		try {
-			const res = hcRun({
-				name,
-				cwd: path,
-				argv: [agent, ...defaultAgentArgs(agent, o.agentArgs)],
-				labels: termLabels,
-			});
-			const label = itemLabel(item);
-			const termText = t("team.agent_in_terminal", { name, agent, terminal: res.address });
-			const trustText = trusted ? dim(t("team.trust_inherited")) : "";
-			console.log(`${ok("✓")} ${label}  ${termText}${trustText}`);
-		} catch (e) {
-			warn(`${itemLabel(item)}: ${(e as Error).message}`);
-		}
-	}
+	runHcPlan(s.root, plan, o);
 	const { renderSmall } = await import("../lib/bond-logo.mts");
 	console.log(`\n  ${renderSmall(60, t("team.logo_branch_in_hub", { branch, name: s.name }))}\n`);
 	printStatus(subRows(s, targets, "hc").filter((r) => r.branch === branch), tableRepoName(s.root));

@@ -27,7 +27,7 @@ export function hc<T = unknown>(args: string[], timeout = 60_000): T {
 	const r = run("hc", args, { timeout });
 	let parsed: T | { error?: { kind?: string; message?: string } } | undefined;
 	try {
-		parsed = JSON.parse(r.stdout || r.stderr || "{}");
+		parsed = JSON.parse(r.status === 0 ? (r.stdout || "{}") : (r.stderr || r.stdout || "{}"));
 	} catch {
 		// No JSON
 	}

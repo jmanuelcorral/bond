@@ -1,5 +1,9 @@
 # Cambios
 
+## Sin publicar
+
+- `bond team`: en el motor `hc`, la confianza heredada solo avala el worktree si el orquestador confía en el repo (`!!orchestrator`); `hc()` no parsea stderr como JSON en ejecuciones con éxito; `requireHerdr` y `requireHc` se comprueban antes del parseo de ramas; unificación interna de `openHc` y `openHcInHub`.
+
 ## 1.16.3
 
 - La release deja el paquete en el staging de npm con `npm stage publish` (staged publishing) en lugar de publicarlo: sin 2FA y con cualquier token (`NPM_TOKEN`) u OIDC; un mantenedor lo aprueba con 2FA (`npm stage approve <stage-id>` o la pestaña *Staged Packages* de npmjs.com). El stage-id se escribe en el resumen del job.
