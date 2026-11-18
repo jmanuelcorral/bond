@@ -3,6 +3,7 @@
 ## Sin publicar
 
 - `bond team`: en el motor `hc`, la confianza heredada solo avala el worktree si el orquestador confía en el repo (`!!orchestrator`); `hc()` no parsea stderr como JSON en ejecuciones con éxito; `requireHerdr` y `requireHc` se comprueban antes del parseo de ramas; unificación interna de `openHc` y `openHcInHub`.
+- Configuración: se elimina el uso redundante de `process.env.BOND_HOME || CONFIG_DIR` en `cli/config.mts` en favor de `CONFIG_DIR` y `CONFIG_FILE`. Se documenta que con `default_command = "app"` los flags globales sueltos no reconocidos por `bond app` se rechazan como opciones desconocidas.
 
 ## 1.16.3
 

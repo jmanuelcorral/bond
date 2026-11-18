@@ -12,7 +12,7 @@ a consultar cosas concretas. ¿Echas algo en falta o algo no cuadra con lo que v
 |---|---|
 | `bond setup` | Una vez por máquina: Herdr, endpoints de modelos, agentes; aplica modelos, integraciones, skills e instrucciones ([abajo](#bond-setup)) |
 | `bond init` | Una vez por repo: agentes, agente por defecto y herramientas; genera la config de cada agente ([abajo](#configuración-por-repo-bond-init-y-bond-sync)) |
-| `bond` | Sin subcomando: abre `bond app` si `default_command = "app"` (por defecto en instalaciones nuevas), o el puesto de trabajo en Herdr si es `"dev"` ([abajo](#bond-app) y [puesto.md](puesto.md)) |
+| `bond` | Sin subcomando: abre `bond app` si `default_command = "app"` (por defecto en instalaciones nuevas; flags sueltos no reconocidos se rechazan), o el puesto de trabajo en Herdr si es `"dev"` o `"tui"` ([abajo](#bond-app) y [puesto.md](puesto.md)) |
 | `bond app` | Comprueba `bond-app` en PATH, instala componentes en herdr-app, abre la ventana con el layout bond y arranca el orquestador en primer plano ([abajo](#bond-app)) |
 | `bond dev <dir>` | Abre el puesto de trabajo en Herdr para el directorio indicado (o el actual si no se pasa) |
 | `bond team` | Un agente por rama, cada uno en su worktree (en Herdr, 4 en tu pestaña y el resto en pestañas nuevas, o lo que elijas); `status` (`--watch`: tabla en vivo que se cierra sola sin trabajo pendiente; fuera del hub se agrupa por estado y en el hub por rama vertical, que es lo que la deja ver entera; `bond team status <rama>` saca esa fila entera, sin truncar, cuando la tabla no da ancho; la tabla lleva rejilla de trazos Unicode y sus iconos de estado salen del estilo elegido en `bond setup` (`[ui] icons`: `nerd`, `unicode` o `emoji`, o `BOND_ICONS`); en un hub, todos los repos de la sesión en un único panel `tabla · <hub>`), `prompt` (con `[decisions]` guarda el encargo en un run; `--no-record` para no guardarlo), `collect` (guarda en el run la última respuesta del agente: de su sesión, o del panel recortado), `clean` (al quitar el último, cierra también la tabla). En un hub, una rama vertical: un agente por repo de la sesión, `--repos`/`--repo` ([puesto.md](puesto.md#bond-team)) |
@@ -780,9 +780,11 @@ configs quedan escritos y se puede repetir `bond setup` más tarde.
    y salir con código 0.
 
 Cuando en `~/.bond/config.toml` se establece `default_command = "app"` (el valor por defecto para
-instalaciones nuevas), ejecutar `bond` a secas equivale a invocar `bond app`. Para entrar
-directamente al puesto de trabajo en terminal sin alterar dicha preferencia, se puede invocar
-`bond dev`.
+instalaciones nuevas), ejecutar `bond` a secas equivale a invocar `bond app`. Si se pasan
+opciones sueltas o flags globales que no formen parte de las opciones reconocidas por `bond app`
+(por ejemplo `--dry-run` u otros argumentos generales), se delegan en `bond app` y este las
+rechaza como opciones desconocidas con código de salida 1. Para entrar directamente al puesto
+de trabajo en terminal sin alterar dicha preferencia, se puede invocar `bond dev` o `bond tui`.
 
 ## `bond doctor`
 

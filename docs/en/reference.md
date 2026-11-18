@@ -12,7 +12,7 @@ you see? Open an [issue on GitHub](https://github.com/jmanuelcorral/bond/issues)
 |---|---|
 | `bond setup` | Once per machine: Herdr, model endpoints, agents; applies models, integrations, skills and instructions ([below](#bond-setup)) |
 | `bond init` | Once per repo: agents, default agent and tools; generates each agent's config ([below](#per-repo-configuration-bond-init-and-bond-sync)) |
-| `bond` | Without subcommand: opens `bond app` if `default_command = "app"` (default on fresh installs), or the workstation in Herdr if `"dev"` ([below](#bond-app) and [workstation.md](workstation.md)) |
+| `bond` | Without subcommand: opens `bond app` if `default_command = "app"` (default on fresh installs; stray unrecognized flags are rejected), or the workstation in Herdr if `"dev"` or `"tui"` ([below](#bond-app) and [workstation.md](workstation.md)) |
 | `bond app` | Verifies `bond-app` is on PATH, installs components in herdr-app, opens the window with the bond layout and runs the orchestrator in the foreground ([below](#bond-app)) |
 | `bond dev <dir>` | Opens the workstation in Herdr for the specified directory (or current directory if omitted) |
 | `bond team` | One agent per branch, each in its own worktree (in Herdr, 4 in your tab and the rest in new tabs, or whatever you choose); `status` (`--watch`: live table that closes on its own when no work is pending; grouped by state outside the hub and by vertical branch inside it, which is what makes a vertical readable; `bond team status <branch>` prints that row in full, untruncated, when the table runs out of width; the table is drawn with a Unicode box-drawing grid, and its state icons come from the style picked by `bond setup` (`[ui] icons`: `nerd`, `unicode` or `emoji`, or `BOND_ICONS`)), `prompt` (with `[decisions]` it records the request in a run; `--no-record` skips it), `collect` (stores the agent's last answer into the run: from its session file, or from the trimmed pane), `clean` (removing the last one also closes the table) ([workstation.md](workstation.md#bond-team)) |
@@ -774,8 +774,10 @@ configs remain written and you can run `bond setup` again later.
 5. Handles stop signals (SIGINT / Ctrl+C, SIGTERM) to terminate cleanly and exit with code 0.
 
 When `~/.bond/config.toml` defines `default_command = "app"` (the default for fresh installs), running
-`bond` without arguments is equivalent to invoking `bond app`. To open the terminal workstation
-directly without changing that preference, run `bond dev`.
+`bond` without arguments is equivalent to invoking `bond app`. If stray global flags or options
+not recognized by `bond app` are passed (such as `--dry-run` or other general arguments), they
+are forwarded to `bond app` and rejected as unknown options with exit code 1. To open the terminal
+workstation directly without changing that preference, run `bond dev` or `bond tui`.
 
 ## `bond doctor`
 

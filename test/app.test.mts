@@ -1,34 +1,35 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse, stringify } from "smol-toml";
 import * as p from "@clack/prompts";
-import { defaultCommand, hasExistingInstallEvidence, type Config } from "../cli/config.mts";
+
+const home = mkdtempSync(join(tmpdir(), "bond-app-test-home-"));
+process.env.BOND_HOME = home;
+process.env.XDG_CONFIG_HOME = join(home, ".config");
+
+const { defaultCommand, hasExistingInstallEvidence } = await import("../cli/config.mts");
+type Config = import("../cli/config.mts").Config;
 
 const ROOT = join(import.meta.dir, "..");
 const MAIN = join(ROOT, "cli", "main.mts");
 
-let home: string;
 let binDir: string;
-const origBondHome = process.env.BOND_HOME;
-const origXdg = process.env.XDG_CONFIG_HOME;
 
 beforeEach(() => {
-	home = mkdtempSync(join(tmpdir(), "bond-app-test-home-"));
+	rmSync(home, { recursive: true, force: true });
+	mkdirSync(home, { recursive: true });
 	binDir = mkdtempSync(join(tmpdir(), "bond-app-test-bin-"));
-	process.env.BOND_HOME = home;
-	process.env.XDG_CONFIG_HOME = join(home, ".config");
 });
 
 afterEach(() => {
-	if (origBondHome !== undefined) process.env.BOND_HOME = origBondHome;
-	else delete process.env.BOND_HOME;
-	if (origXdg !== undefined) process.env.XDG_CONFIG_HOME = origXdg;
-	else delete process.env.XDG_CONFIG_HOME;
-	rmSync(home, { recursive: true, force: true });
 	rmSync(binDir, { recursive: true, force: true });
+});
+
+afterAll(() => {
+	rmSync(home, { recursive: true, force: true });
 });
 
 const env = (extra: Record<string, string> = {}) => ({
@@ -266,6 +267,15 @@ process.exit(0);
 		expect(existsSync(logFile)).toBe(true);
 		const calls = readFileSync(logFile, "utf8").trim().split("\n");
 		expect(calls).toEqual(["install", "open", "start"]);
+	});
+
+	test("con default_command = 'app', flags globales sueltos o desconocidos se delegan a bond app y se rechazan", () => {
+		const cfgFile = join(home, "config.toml");
+		writeFileSync(cfgFile, stringify({ agents: ["pi"], default_command: "app", providers: {} }));
+
+		const r = bond(["--dry-run"], { BOND_LANG: "es" });
+		expect(r.status).toBe(1);
+		expect(r.out).toContain("Opción desconocida para bond app: --dry-run");
 	});
 
 	test("con default_command = 'tui', bond a secas hace lo de hoy (criterio 2)", () => {

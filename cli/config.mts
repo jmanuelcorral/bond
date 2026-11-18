@@ -28,7 +28,7 @@ function migrateLegacy(): void {
 	if (migrated) return;
 	migrated = true;
 	const leg = legacyDir();
-	const home = process.env.BOND_HOME || CONFIG_DIR;
+	const home = CONFIG_DIR;
 	if (existsSync(join(home, "config.toml")) || !existsSync(join(leg, "config.toml"))) return;
 	mkdirSync(home, { recursive: true });
 	for (const f of ["config.toml", "state.json"]) {
@@ -262,7 +262,7 @@ export function updateAuto(): boolean {
  */
 export function hasExistingInstallEvidence(): boolean {
 	migrateLegacy();
-	const home = process.env.BOND_HOME || CONFIG_DIR;
+	const home = CONFIG_DIR;
 	if (existsSync(join(home, "config.toml"))) return true;
 	if (existsSync(join(home, "state.json"))) return true;
 	if (existsSync(join(home, "AGENTS.md"))) return true;
@@ -290,7 +290,7 @@ export function hasExistingInstallEvidence(): boolean {
  * - Si es una instalación totalmente nueva (sin rastro previo de bond): "app".
  */
 export function defaultCommand(): "app" | "tui" | "dev" {
-	const file = join(process.env.BOND_HOME || CONFIG_DIR, "config.toml");
+	const file = CONFIG_FILE;
 	if (existsSync(file)) {
 		try {
 			const raw = parse(readFileSync(file, "utf8")) as Record<string, unknown>;
