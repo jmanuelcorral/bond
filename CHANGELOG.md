@@ -1,6 +1,6 @@
 # Cambios
 
-## Sin publicar
+## 1.16.6
 
 - `bond tui` con `BOND_APP=1` (contenedor de bond-app) ya no levanta Herdr clásico: abre el
   agente en primer plano en la terminal hc en la que se ejecuta. Antes, dentro del run, el
