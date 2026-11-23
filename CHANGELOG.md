@@ -1,6 +1,6 @@
 # Cambios
 
-## Sin publicar
+## 1.16.7
 
 - `bond-delegate` (variantes clásica y hc) nombra al delegado con el primer minion libre,
   como `bond team` (kevin, stuart, bob…; `minion-<n>` si se agotan), y deja el rol aparte:
