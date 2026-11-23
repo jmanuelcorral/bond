@@ -4,9 +4,16 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname } from "node:path";
-import { agyLocalBin } from "./catalog-agents.mts";
+import { agentPath, agyLocalBin } from "./catalog-agents.mts";
+import { hcKill, hcRead, hcRm, hcRun, hcSend, hcWait, isBondApp } from "./hc.mts";
 import { t } from "./messages.mts";
 import { die, run, which } from "./util.mts";
+
+export { isBondApp };
+
+/** Selección de transporte: hc bajo BOND_APP=1 o herdr clásico por defecto. */
+export const delegateTransport = (env: Record<string, string | undefined> = process.env): "herdr" | "hc" =>
+	isBondApp(env) ? "hc" : "herdr";
 
 export interface HerdrAgent {
 	name?: string;
@@ -96,8 +103,15 @@ export const startupNoticeIn = (screen: string) => /esc to dismiss/.test(screen)
  */
 export const blockedOnStart = (screen: string, status?: string) => questionIn(screen) !== undefined || (status === "blocked" && !startupNoticeIn(screen));
 
-/** Lo que se ve en el panel del agente ("" si Herdr no lo da). */
+/** Lo que se ve en el panel del agente ("" si Herdr/hc no lo da). */
 export function visibleScreen(agent: string): string {
+	if (isBondApp()) {
+		try {
+			return hcRead(agent, 60);
+		} catch {
+			return "";
+		}
+	}
 	const r = run("herdr", ["agent", "read", agent, "--source", "visible", "--lines", "60"], { timeout: 5000 });
 	return r.status === 0 ? r.stdout : "";
 }
@@ -125,6 +139,7 @@ export function missingAgentDir(agent: string, find: (cmd: string) => string | u
  * PATH, antes se añade su carpeta al PATH de esa shell (sh, bash, zsh). En Windows no.
  */
 export function preparePane(pane: string, agent: string): void {
+	if (isBondApp()) return;
 	const dir = missingAgentDir(agent);
 	if (!dir || process.platform === "win32") return;
 	run("herdr", ["pane", "run", pane, `export PATH='${dir.replace(/'/g, "'\\''")}':"$PATH"`]);
@@ -135,6 +150,93 @@ export function preparePane(pane: string, agent: string): void {
  * sin ellos, agy sin pedir permiso por cada comando (A5: si no, se para en cada uno).
  */
 export const defaultAgentArgs = (agent: string, given: string[]) => (given.length ? given : agent === "agy" ? ["--dangerously-skip-permissions"] : []);
+
+export interface DelegateStartOpts {
+	name: string;
+	agent: string;
+	cwd?: string;
+	pane?: string;
+	args?: string[];
+	labels?: Record<string, string>;
+}
+
+export interface DelegatePromptOpts {
+	wait?: boolean;
+	timeout?: number;
+}
+
+export interface DelegateReadOpts {
+	lines?: number;
+	source?: string;
+}
+
+export interface DelegateWaitOpts {
+	timeout?: number;
+}
+
+/** Arranca un agente delegado vía hc (--engine hc / BOND_APP=1) o herdr clásico. */
+export function delegateStart(opts: DelegateStartOpts, env = process.env): { address?: string; name: string } {
+	if (delegateTransport(env) === "hc") {
+		const bin = agentPath(opts.agent) ?? opts.agent;
+		const argv = [bin, ...defaultAgentArgs(opts.agent, opts.args ?? [])];
+		const res = hcRun({
+			name: opts.name,
+			cwd: opts.cwd ?? process.cwd(),
+			argv,
+			labels: opts.labels,
+		});
+		return { address: res.address, name: res.name ?? opts.name };
+	}
+	if (opts.pane) preparePane(opts.pane, opts.agent);
+	const paneArgs = opts.pane ? ["--pane", opts.pane] : [];
+	const agentArgs = defaultAgentArgs(opts.agent, opts.args ?? []);
+	const extraArgs = agentArgs.length ? ["--", ...agentArgs] : [];
+	herdr(["agent", "start", opts.name, "--kind", opts.agent, ...paneArgs, "--timeout", "90000", ...extraArgs]);
+	return { name: opts.name };
+}
+
+/** Lee la pantalla o historial reciente de un agente delegado vía hc o herdr. */
+export function delegateRead(name: string, opts: DelegateReadOpts = {}, env = process.env): string {
+	if (delegateTransport(env) === "hc") {
+		return hcRead(name, opts.lines ?? 200);
+	}
+	const r = run("herdr", ["agent", "read", name, "--source", opts.source ?? "recent-unwrapped", "--lines", String(opts.lines ?? 200)], { timeout: 20_000 });
+	if (r.status !== 0) throw new Error((r.stderr || r.stdout).trim() || `herdr agent read ${name} falló`);
+	return r.stdout;
+}
+
+/** Envía un prompt/tarea a un agente delegado vía hc o herdr. */
+export function delegatePrompt(name: string, task: string, opts: DelegatePromptOpts = {}, env = process.env): { status?: string; turn?: number } {
+	if (delegateTransport(env) === "hc") {
+		return hcSend(name, task, { wait: opts.wait, timeout: opts.timeout });
+	}
+	const extra: string[] = [];
+	if (opts.wait) extra.push("--wait");
+	if (opts.timeout) extra.push("--timeout", String(opts.timeout));
+	return herdr<{ status?: string; turn?: number }>(["agent", "prompt", name, task, ...extra]);
+}
+
+/** Espera a que un agente delegado termine su turno/tarea vía hc o herdr. */
+export function delegateWait(name: string, opts: DelegateWaitOpts = {}, env = process.env): { status?: string; turn?: number; state?: string } {
+	if (delegateTransport(env) === "hc") {
+		return hcWait(name, { timeout: opts.timeout });
+	}
+	const extra: string[] = [];
+	if (opts.timeout) extra.push("--timeout", String(opts.timeout));
+	return herdr<{ status?: string; turn?: number; state?: string }>(["agent", "wait", name, ...extra]);
+}
+
+/** Finaliza el programa de un agente delegado vía hc o herdr. */
+export function delegateKill(name: string, env = process.env): void {
+	if (delegateTransport(env) === "hc") {
+		hcKill(name);
+		hcRm(name);
+		return;
+	}
+	try {
+		herdr(["agent", "kill", name]);
+	} catch {}
+}
 
 /** Kinds de agente que admite la versión instalada de Herdr. */
 export function supportedKinds(): string[] {
