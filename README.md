@@ -110,6 +110,8 @@ automatic merge, push or cleanup, and nobody answers an agent's questions for yo
 In the container of a [bond-app](https://github.com/jmanuelcorral/bond-app) run (its image sets
 `BOND_APP=1`), bond uses **hc** (herdr-core) instead of classic Herdr:
 
+- `bond tui --agent <x>` does not start Herdr: it opens the agent in the hc terminal it runs
+  in (the run's `t1`). With `--no-agent` or `--worktree` it still uses Herdr.
 - `bond team` starts each agent as an hc terminal (`hc run --bg`), as if you passed
   `--engine hc`; an explicit `--engine herdr` or `BOND_TEAM_ENGINE` still wins.
 - `bond setup` with `BOND_APP=1` installs the hc variant of `bond-delegate` and `bond-team`

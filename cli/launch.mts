@@ -5,7 +5,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { basename, delimiter, join, resolve } from "node:path";
-import { agents, attach, ensureServer, focusWorkspace, herdr, insideHerdr, missingAgentDir, preparePane, requireHerdr, slugify, startedBlocked, supportedKinds, uniqueAgentName, workspaceByLabel } from "./herdr.mts";
+import { agents, attach, ensureServer, focusWorkspace, herdr, insideHerdr, isBondApp, missingAgentDir, preparePane, requireHerdr, slugify, startedBlocked, supportedKinds, uniqueAgentName, workspaceByLabel } from "./herdr.mts";
 import { t } from "./messages.mts";
 import { caution, die, dim, log, ok, run, warn, which } from "./util.mts";
 
@@ -164,9 +164,18 @@ export async function chooseAgent(asked: string | undefined, repoDefault: string
 	return agent;
 }
 
+/**
+ * Dentro de bond-app (BOND_APP=1) la terminal ya es una terminal de hc del run: el agente se
+ * abre en primer plano en ella, sin levantar Herdr clásico (D-BB). Con --no-agent o
+ * --worktree se sigue el camino de Herdr.
+ */
+export const launchInPlace = (o: { noAgent: boolean; worktree?: string }, env: Record<string, string | undefined> = process.env): boolean =>
+	isBondApp(env) && !o.noAgent && !o.worktree;
+
 export async function launch(args: string[], opts: { dev: boolean }): Promise<void> {
-	requireHerdr();
 	const o = parseLaunch(args, opts.dev);
+	const inPlace = launchInPlace(o);
+	if (!inPlace) requireHerdr();
 	const root = gitRoot(o.dir) ?? o.dir;
 	const hasBond = existsSync(join(root, ".bond", "bond.toml"));
 
@@ -195,6 +204,7 @@ export async function launch(args: string[], opts: { dev: boolean }): Promise<vo
 		repoDefault = loadRepoDefault(root);
 	}
 	const agent = o.noAgent ? undefined : await chooseAgent(o.agent, repoDefault);
+	if (inPlace && agent) return runHere(agent, root, o.agentArgs);
 
 	const inside = insideHerdr();
 	// Dentro de su propio workspace no hay nada que enfocar: el agente se abre en este panel.

@@ -786,6 +786,10 @@ opciones sueltas o flags globales que no formen parte de las opciones reconocida
 rechaza como opciones desconocidas con código de salida 1. Para entrar directamente al puesto
 de trabajo en terminal sin alterar dicha preferencia, se puede invocar `bond dev` o `bond tui`.
 
+Con `BOND_APP=1` (el contenedor de un run de bond-app), `bond tui --agent <x>` no levanta Herdr:
+abre el agente en primer plano en la terminal hc en la que se ejecuta. Con `--no-agent` o
+`--worktree` sigue usando Herdr.
+
 ## `bond doctor`
 
 `cli/doctor.mts`. Comprueba en unos segundos lo que deja `bond setup` y lo que depende de

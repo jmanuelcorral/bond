@@ -110,6 +110,8 @@ un agente.
 En el contenedor de un run de [bond-app](https://github.com/jmanuelcorral/bond-app) (su imagen
 declara `BOND_APP=1`), bond usa **hc** (herdr-core) en vez de Herdr clásico:
 
+- `bond tui --agent <x>` no levanta Herdr: abre el agente en la terminal hc en la que se
+  ejecuta (la `t1` del run). Con `--no-agent` o `--worktree` sigue usando Herdr.
 - `bond team` arranca cada agente como una terminal de hc (`hc run --bg`), como si pasaras
   `--engine hc`; `--engine herdr` o `BOND_TEAM_ENGINE` siguen mandando si los pones.
 - `bond setup` con `BOND_APP=1` instala `bond-delegate` y `bond-team` en su variante hc

@@ -1,5 +1,13 @@
 # Cambios
 
+## Sin publicar
+
+- `bond tui` con `BOND_APP=1` (contenedor de bond-app) ya no levanta Herdr clásico: abre el
+  agente en primer plano en la terminal hc en la que se ejecuta. Antes, dentro del run, el
+  agente quedaba en un Herdr anidado (con su propia barra de pestañas) y delegaba en paneles de
+  Herdr invisibles para el panel Agentes. Con `--no-agent` o `--worktree`, y fuera de bond-app,
+  todo sigue igual.
+
 ## 1.16.5
 
 - Transporte `hc` con `BOND_APP=1`: con la variable en el entorno, `bond team` y la capa de delegación seleccionan el transporte `hc` (`run --bg`, `read`, `prompt`, `kill`); sin la variable, el comportamiento de Herdr clásico se conserva idéntico (C1).

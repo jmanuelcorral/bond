@@ -779,6 +779,10 @@ not recognized by `bond app` are passed (such as `--dry-run` or other general ar
 are forwarded to `bond app` and rejected as unknown options with exit code 1. To open the terminal
 workstation directly without changing that preference, run `bond dev` or `bond tui`.
 
+With `BOND_APP=1` (the container of a bond-app run), `bond tui --agent <x>` does not start Herdr:
+it opens the agent in the foreground in the hc terminal it runs in. With `--no-agent` or
+`--worktree` it still uses Herdr.
+
 ## `bond doctor`
 
 `cli/doctor.mts`. Checks in a few seconds what `bond setup` leaves in place and what depends on
