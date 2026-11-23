@@ -7,13 +7,14 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
+import { agentPath } from "./catalog-agents.mts";
 import { loadDecisions, parseFm, type Parsed, resolveAuthor, slugify } from "./decisions.mts";
 import { type HubRepo, type HubSession, hubRoot, hubSession, warnedInvalidHub } from "./hub.mts";
 import { chooseAgent, gitRoot, openWorkspace } from "./launch.mts";
 import { agents, defaultAgentArgs, ensureServer, firstFreeName, focusAgent, herdr, type HerdrAgent, insideHerdr, preparePane, questionIn, requireHerdr, serverRunning, startedBlocked, startupNoticeIn, visibleScreen, workspaces } from "./herdr.mts";
 import { repoDecisions } from "./repo.mts";
 import { iconStyle, type IconStyle } from "../lib/status-bar.mts";
-import { hcAgentStatus, hcGet, hcKill, hcRead, hcRm, hcRun, hcSend, hcTerminals, requireHc } from "./hc.mts";
+import { hcAgentStatus, hcGet, hcKill, hcRead, hcRm, hcRun, hcSend, hcTerminals, isBondApp, requireHc } from "./hc.mts";
 import { inheritTrust, TRUST_KINDS, trusts } from "./trust.mts";
 import { act, canonical, caution, catchDie, die, dim, isDryRun, ok, run, warn } from "./util.mts";
 import { t } from "./messages.mts";
@@ -30,7 +31,8 @@ export type Engine = "herdr" | "hc";
 export const DEFAULT_ENGINE: Engine = "herdr";
 
 export function resolveEngine(engine?: string, env: Record<string, string | undefined> = process.env): Engine {
-	const val = engine ?? env.BOND_TEAM_ENGINE ?? DEFAULT_ENGINE;
+	const defaultEngine: Engine = isBondApp(env) ? "hc" : DEFAULT_ENGINE;
+	const val = engine ?? env.BOND_TEAM_ENGINE ?? defaultEngine;
 	if (val !== "herdr" && val !== "hc") {
 		die(t("team.err_unknown_engine", { engine: val }));
 	}
@@ -538,7 +540,7 @@ export function runHcPlan(root: string, plan: PlanItem[], o: TeamArgs): void {
 			const res = hcRun({
 				name,
 				cwd: path,
-				argv: [agent, ...defaultAgentArgs(agent, o.agentArgs)],
+				argv: [agentPath(agent) ?? agent, ...defaultAgentArgs(agent, o.agentArgs)],
 				labels: termLabels,
 			});
 			const label = itemLabel(item);

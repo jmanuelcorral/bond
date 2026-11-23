@@ -46,6 +46,9 @@ export function requireHc(): void {
 	if (!which("hc")) die(t("team.err_hc_not_installed"));
 }
 
+/** Si el entorno selecciona el transporte de bond-app (hc). */
+export const isBondApp = (env: Record<string, string | undefined> = process.env): boolean => env.BOND_APP === "1";
+
 /** Lista terminales activas de hc. */
 export function hcTerminals(labels?: Record<string, string>): HcTerminal[] {
 	try {
@@ -92,6 +95,17 @@ export function hcSend(terminalOrName: string, text: string, opts: { force?: boo
 	if (opts.wait) extra.push("--wait");
 	if (opts.timeout) extra.push("--timeout", String(Math.max(1, Math.round(opts.timeout / 1000))));
 	const res = hc<{ status?: string; turn?: number }>(["send", "--json", ...extra, "--", terminalOrName, text], (opts.timeout ?? 30_000) + 10_000);
+	return res ?? {};
+}
+
+/** Alias semántico de hcSend para enviar un prompt/tarea a un agente. */
+export const hcPrompt = hcSend;
+
+/** Espera a que termine el turno o tarea de una terminal (`hc wait`). */
+export function hcWait(terminalOrName: string, opts: { timeout?: number } = {}): { status?: string; turn?: number; state?: string } {
+	const extra: string[] = [];
+	if (opts.timeout) extra.push("--timeout", String(Math.max(1, Math.round(opts.timeout / 1000))));
+	const res = hc<{ status?: string; turn?: number; state?: string }>(["wait", "--json", ...extra, terminalOrName], (opts.timeout ?? 180_000) + 10_000);
 	return res ?? {};
 }
 

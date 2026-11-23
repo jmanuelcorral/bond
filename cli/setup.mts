@@ -7,6 +7,7 @@ import { renderSmall } from "../lib/bond-logo.mts";
 import { parseLang, type Lang } from "../lib/lang.mts";
 import type { IconStyle } from "../lib/status-bar.mts";
 import { agentInstalled, agyPluginDir } from "./catalog-agents.mts";
+import { isBondApp } from "./hc.mts";
 import type { PropagateResult } from "./instructions.mts";
 import { type MessageKey, setLang, t } from "./messages.mts";
 import { assetsPath, ensureBondLink, FROM_SOURCE } from "./runtime.mts";
@@ -205,8 +206,9 @@ function contextTools(): void {
 	for (const [cmd, why] of missing) warn(t("setup.context_tool_missing", { cmd, why: t(why) }));
 }
 
-/** Skills globales (bond-delegate, bond-team): del repo o extraídos del binario. */
-export const globalSkillsDir = () => assetsPath("global", "skills");
+/** Skills globales (bond-delegate, bond-team): del repo o extraídos del binario. Variante hc si BOND_APP=1. */
+export const globalSkillsDir = (env: Record<string, string | undefined> = process.env) =>
+	assetsPath("global", isBondApp(env) ? "skills-hc" : "skills");
 
 /**
  * Destinos de los skills globales: ~/.agents/skills (pi, Codex, Copilot, opencode y Crush),
@@ -251,15 +253,16 @@ export function agyPlugin(): void {
 	(process.platform === "win32" ? copyPath : linkPath)(herdr, dest);
 }
 
-export function globalSkills(agy: boolean): void {
-	// bond-delegate y bond-team son de Herdr, una herramienta de la máquina: van a nivel de
+export function globalSkills(agy: boolean, env: Record<string, string | undefined> = process.env): void {
+	// bond-delegate y bond-team son de Herdr o hc, herramientas de la máquina: van a nivel de
 	// usuario, como el skill herdr, para cualquier agente y en cualquier repo.
 	log(t("setup.global_skills"));
-	for (const name of readdirSync(globalSkillsDir())) {
+	const srcDir = globalSkillsDir(env);
+	for (const name of readdirSync(srcDir)) {
 		for (const dest of globalSkillTargets(name, agy)) {
 			act(`mkdir -p ${dirname(dest)}`, () => mkdirSync(dirname(dest), { recursive: true }));
 			// En Windows, copia: los symlinks necesitan permisos especiales.
-			(process.platform === "win32" ? copyPath : linkPath)(join(globalSkillsDir(), name), dest);
+			(process.platform === "win32" ? copyPath : linkPath)(join(srcDir, name), dest);
 		}
 	}
 }
