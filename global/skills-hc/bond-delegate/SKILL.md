@@ -26,11 +26,13 @@ herramienta de shell: no hay tools de hc.
 1. `test "${BOND_APP:-}" = 1` o `command -v hc >/dev/null 2>&1`. Si falla, dilo y haz tú la tarea en esta sesión, sin hc.
 2. Comprueba el kind: su ejecutable tiene que estar en el PATH (`command -v <kind>`). Con `agy`
    vale también `~/.local/bin/agy` (donde lo deja su instalador). Si no, dilo y para.
-3. Nombre único: `<rol>-<n>` con el primer `n` (desde 1) que no esté en `hc ls --json`
-   (`.terminals[].name`). Solo `[a-z][a-z0-9_-]`, máximo 32 caracteres.
+3. Nombre: el primer minion libre, como en `bond team` (el orquestador es gru), en este orden:
+   kevin, stuart, bob, dave, jerry, carl, phil, tim, mark, jorge, otto, norbert, mel, tom, steve, donnie, lance, john, paul, mike.
+   Libre = no está en `hc ls --json` (`.terminals[].name`); si están todos, `minion-<n>` con
+   el primer `n` (desde 2) libre. El rol no va en el nombre: va en la etiqueta `role` (paso 5).
 4. En hc cada agente corre en su propia terminal (`hc run --bg`): no hay paneles hermanos ni división de pantalla.
 5. Arranca el agente en una terminal en segundo plano:
-   `hc run --bg --keep --no-parent --name <nombre> --cwd "$PWD" -- <ejecutable> [args]`.
+   `hc run --bg --keep --no-parent --name <nombre> --label role=<rol> --cwd "$PWD" -- <ejecutable> [args]`.
    Si el kind es `agy` y no está en el PATH sino en `~/.local/bin`, usa `"$HOME/.local/bin/agy"`; y sin
    otros argumentos del usuario, `--dangerously-skip-permissions`.
    Si el agente queda `blocked`, lee la terminal (`hc read <nombre> --lines 60`): suele ser una
@@ -58,7 +60,7 @@ herramienta de shell: no hay tools de hc.
    `hc read <nombre> --lines 200` y, si no se ve
    completa, pídele que la escriba en un fichero Markdown dentro de un directorio creado
    con `mktemp -d` (fuera del repo) y que responda solo con la ruta; lee ese fichero.
-9. Resume el resultado (con `fichero:línea` cuando aplique) y di el nombre, el kind y la
-   terminal del delegado.
+9. Resume el resultado (con `fichero:línea` cuando aplique) y di el nombre, el rol, el kind y
+   la terminal del delegado.
 
 No mates la terminal ni el agente al terminar; ciérralos solo si el usuario lo pide (`hc kill <nombre>`).

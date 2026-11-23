@@ -118,7 +118,9 @@ In the container of a [bond-app](https://github.com/jmanuelcorral/bond-app) run 
   (`hc run --bg`, `hc send`, `hc read`, `hc wait`, `hc kill`). Without the variable it
   installs the classic ones, unchanged.
 - hc has no sibling panes: the orchestrator and each delegate are terminals of the run's
-  machine (`t1`, `t2`…). herdr-app sees them and bond-app's Agents panel lists them.
+  machine (`t1`, `t2`…). herdr-app sees them and bond-app's Agents panel lists them. As in
+  the rest of bond, the orchestrator is gru and each delegate the first free minion (kevin,
+  stuart…), with its role in the `role` label.
 
 Outside that container (no `BOND_APP`, or any value other than `1`), everything works as
 before, with classic Herdr.

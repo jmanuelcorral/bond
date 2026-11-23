@@ -1,5 +1,12 @@
 # Cambios
 
+## Sin publicar
+
+- `bond-delegate` (variantes clásica y hc) nombra al delegado con el primer minion libre,
+  como `bond team` (kevin, stuart, bob…; `minion-<n>` si se agotan), y deja el rol aparte:
+  en Herdr clásico en el título del panel («kevin · reviewer») y en hc en la etiqueta
+  `role`. Antes los delegados se llamaban `<rol>-<n>`.
+
 ## 1.16.6
 
 - `bond tui` con `BOND_APP=1` (contenedor de bond-app) ya no levanta Herdr clásico: abre el

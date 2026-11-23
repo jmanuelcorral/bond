@@ -27,8 +27,11 @@ versión instalada. Ejecuta los comandos con tu herramienta de shell: no hay too
 2. Comprueba el kind: tiene que aparecer en `herdr agent start --help` (possible values) y
    su ejecutable en el PATH (`command -v <kind>`). Con `agy` vale también `~/.local/bin/agy`
    (donde lo deja su instalador). Si no, dilo y para.
-3. Nombre único: `<rol>-<n>` con el primer `n` (desde 1) que no esté en `herdr agent list`
-   (`.result.agents[].name`). Solo `[a-z][a-z0-9_-]`, máximo 32 caracteres.
+3. Nombre: el primer minion libre, como en `bond team` (el orquestador es gru), en este orden:
+   kevin, stuart, bob, dave, jerry, carl, phil, tim, mark, jorge, otto, norbert, mel, tom, steve, donnie, lance, john, paul, mike.
+   Libre = no está en `herdr agent list` (`.result.agents[].name`); si están todos,
+   `minion-<n>` con el primer `n` (desde 2) libre. El rol no va en el nombre: va en el título
+   del panel (paso 6).
 4. Dirección: en `herdr pane layout --pane "$HERDR_PANE_ID"`, busca tu panel en
    `.result.layout.panes[]`. Si `rect.width >= 120` y `rect.width >= 2 * rect.height`,
    `right`; si no, `down`.
@@ -37,7 +40,8 @@ versión instalada. Ejecuta los comandos con tu herramienta de shell: no hay too
 6. Si el kind es `agy` y no está en el PATH sino en `~/.local/bin`, antes:
    `herdr pane run <panel> 'export PATH="$HOME/.local/bin:$PATH"'` (Herdr escribe el
    ejecutable sin ruta en la shell del panel). Luego
-   `herdr agent start <nombre> --kind <kind> --pane <panel> --timeout 90000 [-- args]`.
+   `herdr agent start <nombre> --kind <kind> --pane <panel> --timeout 90000 [-- args]` y
+   `herdr pane rename <panel> "<nombre> · <rol>"`.
    Si devuelve `agent_not_ready` o el agente queda `blocked`, lee el panel
    (`herdr agent read <nombre> --source visible`): suele ser una pregunta del agente
    (confiar en la carpeta, aprobar algo). Enséñasela al usuario y espera su respuesta; no la
@@ -65,7 +69,7 @@ versión instalada. Ejecuta los comandos con tu herramienta de shell: no hay too
    `herdr agent read <nombre> --source recent-unwrapped --lines 200` y, si no se ve
    completa, pídele que la escriba en un fichero Markdown dentro de un directorio creado
    con `mktemp -d` (fuera del repo) y que responda solo con la ruta; lee ese fichero.
-10. Resume el resultado (con `fichero:línea` cuando aplique) y di el nombre, el kind y el
-    panel del delegado.
+10. Resume el resultado (con `fichero:línea` cuando aplique) y di el nombre, el rol, el kind
+    y el panel del delegado.
 
 No cierres el panel ni el agente al terminar; ciérralos solo si el usuario lo pide.

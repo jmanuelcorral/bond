@@ -118,7 +118,9 @@ declara `BOND_APP=1`), bond usa **hc** (herdr-core) en vez de Herdr clásico:
   (`hc run --bg`, `hc send`, `hc read`, `hc wait`, `hc kill`). Sin la variable, instala las
   clásicas sin cambios.
 - En hc no hay paneles hermanos: el orquestador y cada delegado son terminales de la máquina
-  del run (`t1`, `t2`…). herdr-app las ve y el panel Agentes de bond-app las muestra.
+  del run (`t1`, `t2`…). herdr-app las ve y el panel Agentes de bond-app las muestra. Como en
+  el resto de bond, el orquestador es gru y cada delegado, el primer minion libre (kevin,
+  stuart…), con su rol en la etiqueta `role`.
 
 Fuera de ese contenedor (sin `BOND_APP`, o con otro valor que no sea `1`), todo sigue igual
 que antes, con Herdr clásico.
