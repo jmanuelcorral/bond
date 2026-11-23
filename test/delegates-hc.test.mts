@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
 	delegateKill,
 	delegatePrompt,
@@ -14,6 +16,7 @@ import {
 	visibleScreen,
 } from "../cli/herdr.mts";
 import { hcPrompt, hcWait } from "../cli/hc.mts";
+import { globalSkills, globalSkillsDir } from "../cli/setup.mts";
 import { resolveEngine, DEFAULT_ENGINE } from "../cli/team.mts";
 
 describe("D-BB / C1 / C2: transporte hc en bond tras BOND_APP", () => {
@@ -240,6 +243,134 @@ describe("D-BB / C1 / C2: transporte hc en bond tras BOND_APP", () => {
 			delegateStart({ name: "agy-1", agent: "agy", cwd: "/tmp/work" }, { BOND_APP: "1" });
 			const hcCalls = readHcCalls();
 			expect(hcCalls[0]).toContain("--dangerously-skip-permissions");
+		});
+	});
+
+	describe("D-CC / C3: variantes hc de skills de delegación según BOND_APP en setup", () => {
+		let testHome: string;
+
+		beforeEach(() => {
+			testHome = realpathSync(mkdtempSync(join(tmpdir(), "bond-setup-home-")));
+		});
+
+		afterEach(() => {
+			rmSync(testHome, { recursive: true, force: true });
+		});
+
+		const runGlobalSkills = (customHome: string, envVars: Record<string, string> = {}) => {
+			const script = `
+				const { globalSkills } = await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, "..", "cli", "setup.mts")).href)});
+				globalSkills(false);
+			`;
+			const cleanEnv = { ...process.env };
+			delete cleanEnv.BOND_APP;
+			const r = spawnSync(process.execPath, ["-e", script], {
+				env: {
+					...cleanEnv,
+					...envVars,
+					HOME: customHome,
+					USERPROFILE: customHome,
+					BOND_HOME: join(customHome, ".bond"),
+					NO_COLOR: "1",
+				},
+				encoding: "utf8",
+			});
+			if (r.status !== 0) throw new Error(`setup falló: ${r.stderr || r.stdout}`);
+			return r;
+		};
+
+		test("globalSkillsDir selecciona variante según BOND_APP", () => {
+			expect(globalSkillsDir({})).toMatch(/[/\\]global[/\\]skills$/);
+			expect(globalSkillsDir({ BOND_APP: "1" })).toMatch(/[/\\]global[/\\]skills-hc$/);
+			expect(globalSkillsDir({ BOND_APP: "0" })).toMatch(/[/\\]global[/\\]skills$/);
+		});
+
+		test("sin BOND_APP: se instala la variante clásica byte a byte idéntica a global/skills (test de oro C3)", () => {
+			runGlobalSkills(testHome, {});
+
+			const delegateInstalled = join(testHome, ".agents", "skills", "bond-delegate", "SKILL.md");
+			const teamInstalled = join(testHome, ".agents", "skills", "bond-team", "SKILL.md");
+
+			expect(existsSync(delegateInstalled)).toBe(true);
+			expect(existsSync(teamInstalled)).toBe(true);
+
+			const delegateRef = readFileSync(join(import.meta.dirname, "..", "global", "skills", "bond-delegate", "SKILL.md"), "utf8");
+			const teamRef = readFileSync(join(import.meta.dirname, "..", "global", "skills", "bond-team", "SKILL.md"), "utf8");
+
+			expect(readFileSync(delegateInstalled, "utf8")).toBe(delegateRef);
+			expect(readFileSync(teamInstalled, "utf8")).toBe(teamRef);
+
+			// La clásica menciona herdr y no hc
+			expect(readFileSync(delegateInstalled, "utf8")).toContain("# Delegar en otro agente (Herdr)");
+			expect(readFileSync(delegateInstalled, "utf8")).not.toContain("# Delegar en otro agente (hc)");
+			expect(readFileSync(teamInstalled, "utf8")).toContain("# Equipo de agentes en worktrees (Herdr)");
+			expect(readFileSync(teamInstalled, "utf8")).not.toContain("# Equipo de agentes en worktrees (hc)");
+		});
+
+		test("con BOND_APP=1: se instala la variante hc que menciona hc y no herdr", () => {
+			runGlobalSkills(testHome, { BOND_APP: "1" });
+
+			const delegateInstalled = join(testHome, ".agents", "skills", "bond-delegate", "SKILL.md");
+			const teamInstalled = join(testHome, ".agents", "skills", "bond-team", "SKILL.md");
+
+			expect(existsSync(delegateInstalled)).toBe(true);
+			expect(existsSync(teamInstalled)).toBe(true);
+
+			const delegateHcRef = readFileSync(join(import.meta.dirname, "..", "global", "skills-hc", "bond-delegate", "SKILL.md"), "utf8");
+			const teamHcRef = readFileSync(join(import.meta.dirname, "..", "global", "skills-hc", "bond-team", "SKILL.md"), "utf8");
+
+			expect(readFileSync(delegateInstalled, "utf8")).toBe(delegateHcRef);
+			expect(readFileSync(teamInstalled, "utf8")).toBe(teamHcRef);
+
+			// La variante hc menciona hc y sus comandos y no herdr
+			const delegateContent = readFileSync(delegateInstalled, "utf8");
+			expect(delegateContent).toContain("# Delegar en otro agente (hc)");
+			expect(delegateContent).toContain("hc run --bg");
+			expect(delegateContent).toContain("hc send");
+			expect(delegateContent).toContain("hc read");
+			expect(delegateContent).toContain("hc kill");
+			expect(delegateContent).not.toContain("herdr agent start");
+			expect(delegateContent).not.toContain("herdr agent prompt");
+
+			const teamContent = readFileSync(teamInstalled, "utf8");
+			expect(teamContent).toContain("# Equipo de agentes en worktrees (hc)");
+			expect(teamContent).toContain("hc wait");
+			expect(teamContent).toContain("hc read");
+			expect(teamContent).not.toContain("herdr agent wait");
+		});
+
+		test("vigilancia de diferencias mínimas: solo difiere la sección de transporte", () => {
+			const delegateClassic = readFileSync(join(import.meta.dirname, "..", "global", "skills", "bond-delegate", "SKILL.md"), "utf8");
+			const delegateHc = readFileSync(join(import.meta.dirname, "..", "global", "skills-hc", "bond-delegate", "SKILL.md"), "utf8");
+
+			const extractSection = (content: string, header: string, nextHeader: string) => {
+				const start = content.indexOf(header);
+				const end = content.indexOf(nextHeader, start);
+				return (end !== -1 ? content.slice(start, end) : content.slice(start)).trim();
+			};
+
+			// Sección "## Entrada" debe ser exactamente idéntica
+			const entradaClassic = extractSection(delegateClassic, "## Entrada", "## Procedimiento");
+			const entradaHc = extractSection(delegateHc, "## Entrada", "## Procedimiento");
+			expect(entradaHc).toBe(entradaClassic);
+
+			// Memoria de decisiones y runs deben mencionarse en ambas variantes
+			expect(delegateHc).toContain("docs/decisions/runs/");
+			expect(delegateHc).toContain("bond decisions add");
+			expect(delegateHc).toContain("decision-record");
+
+			const teamClassic = readFileSync(join(import.meta.dirname, "..", "global", "skills", "bond-team", "SKILL.md"), "utf8");
+			const teamHc = readFileSync(join(import.meta.dirname, "..", "global", "skills-hc", "bond-team", "SKILL.md"), "utf8");
+
+			// Sección "## Entrada" y "## En un hub" en bond-team
+			const teamEntradaClassic = extractSection(teamClassic, "## Entrada", "## Procedimiento");
+			const teamEntradaHc = extractSection(teamHc, "## Entrada", "## Procedimiento");
+			expect(teamEntradaHc).toBe(teamEntradaClassic);
+
+			const hubClassic = teamClassic.slice(teamClassic.indexOf("## En un hub"));
+			const hubHc = teamHc.slice(teamHc.indexOf("## En un hub"));
+			// En hub solo cambia herdr agent wait por hc wait
+			expect(hubHc.replace(/hc wait/g, "herdr agent wait")).toBe(hubClassic);
 		});
 	});
 });
