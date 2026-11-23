@@ -1,6 +1,6 @@
 # Cambios
 
-## Sin publicar
+## 1.16.5
 
 - Transporte `hc` con `BOND_APP=1`: con la variable en el entorno, `bond team` y la capa de delegación seleccionan el transporte `hc` (`run --bg`, `read`, `prompt`, `kill`); sin la variable, el comportamiento de Herdr clásico se conserva idéntico (C1).
 - Variantes `hc` de skills globales (`bond-delegate`, `bond-team`): con `BOND_APP=1` presente durante `bond setup`, se instalan las variantes adaptadas a `hc` (comandos `hc run/read/send/wait`); sin la variable, se instalan las variantes clásicas idénticas byte a byte (C3).
