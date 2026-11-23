@@ -105,6 +105,22 @@ otro. Todo respeta las reglas del skill `herdr`: Herdr solo se usa cuando lo pid
 únicos, nada de merge, push ni limpieza automática, y nadie responde por ti a las preguntas de
 un agente.
 
+### Dentro de bond-app (`BOND_APP=1`)
+
+En el contenedor de un run de [bond-app](https://github.com/jmanuelcorral/bond-app) (su imagen
+declara `BOND_APP=1`), bond usa **hc** (herdr-core) en vez de Herdr clásico:
+
+- `bond team` arranca cada agente como una terminal de hc (`hc run --bg`), como si pasaras
+  `--engine hc`; `--engine herdr` o `BOND_TEAM_ENGINE` siguen mandando si los pones.
+- `bond setup` con `BOND_APP=1` instala `bond-delegate` y `bond-team` en su variante hc
+  (`hc run --bg`, `hc send`, `hc read`, `hc wait`, `hc kill`). Sin la variable, instala las
+  clásicas sin cambios.
+- En hc no hay paneles hermanos: el orquestador y cada delegado son terminales de la máquina
+  del run (`t1`, `t2`…). herdr-app las ve y el panel Agentes de bond-app las muestra.
+
+Fuera de ese contenedor (sin `BOND_APP`, o con otro valor que no sea `1`), todo sigue igual
+que antes, con Herdr clásico.
+
 ## Modo hub
 
 Un **hub** es un repo de operaciones que agrupa otros repos (como submódulos o como symlinks a

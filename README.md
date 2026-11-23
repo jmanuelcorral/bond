@@ -105,6 +105,22 @@ The CLI speaks Spanish for now (messages and help); the documentation is in both
 follows the rules of the `herdr` skill: Herdr is only used when you ask for it, unique names, no
 automatic merge, push or cleanup, and nobody answers an agent's questions for you.
 
+### Inside bond-app (`BOND_APP=1`)
+
+In the container of a [bond-app](https://github.com/jmanuelcorral/bond-app) run (its image sets
+`BOND_APP=1`), bond uses **hc** (herdr-core) instead of classic Herdr:
+
+- `bond team` starts each agent as an hc terminal (`hc run --bg`), as if you passed
+  `--engine hc`; an explicit `--engine herdr` or `BOND_TEAM_ENGINE` still wins.
+- `bond setup` with `BOND_APP=1` installs the hc variant of `bond-delegate` and `bond-team`
+  (`hc run --bg`, `hc send`, `hc read`, `hc wait`, `hc kill`). Without the variable it
+  installs the classic ones, unchanged.
+- hc has no sibling panes: the orchestrator and each delegate are terminals of the run's
+  machine (`t1`, `t2`…). herdr-app sees them and bond-app's Agents panel lists them.
+
+Outside that container (no `BOND_APP`, or any value other than `1`), everything works as
+before, with classic Herdr.
+
 ## Hub mode
 
 A **hub** is an operations repo that groups other repos (as submodules or as symlinks to your
