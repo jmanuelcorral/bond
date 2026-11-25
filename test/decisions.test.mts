@@ -235,8 +235,8 @@ describe("autoría según el entorno", () => {
 	});
 
 	test("fuera de Herdr usa la identidad de hc si es válida", () => {
-		process.env.BOND_AGENT = "codex/main";
-		expect(resolveAuthor()).toBe("agent:codex/main");
+		process.env.BOND_AGENT = "codex/gru";
+		expect(resolveAuthor()).toBe("agent:codex/gru");
 		process.env.BOND_AGENT = "codex/";
 		expect(resolveAuthor()).toBe("user");
 	});
@@ -244,7 +244,7 @@ describe("autoría según el entorno", () => {
 	test("la identidad manual tiene prioridad sobre hc", () => {
 		const original = process.env.BOND_DECISION_AGENT;
 		try {
-			process.env.BOND_AGENT = "codex/main";
+			process.env.BOND_AGENT = "codex/gru";
 			process.env.BOND_DECISION_AGENT = "pi/gru";
 			expect(resolveAuthor()).toBe("agent:pi/gru");
 		} finally {
@@ -259,7 +259,7 @@ describe("autoría según el entorno", () => {
 		write("herdr", `#!/bin/sh\nprintf '%s\\n' '${response}'\n`);
 		write("herdr.cmd", `@echo off\necho ${response}\n`);
 		chmodSync(at("herdr"), 0o755);
-		const env = { PATH: `${repo}${delimiter}${process.env.PATH}`, HERDR_ENV: "1", BOND_AGENT: "codex/main" };
+		const env = { PATH: `${repo}${delimiter}${process.env.PATH}`, HERDR_ENV: "1", BOND_AGENT: "codex/gru" };
 		const args = ["decisions", "add", "--title", "Autoría", "--decision", "Una propuesta", "--json"];
 		for (const [pane, author] of [["p1", "agent:pi/gru"], ["otro", "user"]]) {
 			const result = bondWith(args, { ...env, HERDR_PANE_ID: pane });

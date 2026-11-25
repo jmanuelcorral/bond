@@ -204,7 +204,8 @@ export async function launch(args: string[], opts: { dev: boolean }): Promise<vo
 		repoDefault = loadRepoDefault(root);
 	}
 	const agent = o.noAgent ? undefined : await chooseAgent(o.agent, repoDefault);
-	if (inPlace && agent) return runHere(agent, root, o.agentArgs, `${agent}/main`);
+	// bond-app llama `gru` a la terminal del agente principal del run: la misma identidad.
+	if (inPlace && agent) return runHere(agent, root, o.agentArgs, `${agent}/gru`);
 
 	const inside = insideHerdr();
 	// Dentro de su propio workspace no hay nada que enfocar: el agente se abre en este panel.

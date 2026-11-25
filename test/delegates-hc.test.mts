@@ -88,7 +88,7 @@ describe("D-BB / C1 / C2: transporte hc en bond tras BOND_APP", () => {
 			stdio: ["ignore", "pipe", "pipe"],
 		});
 		expect(result.status).toBe(0);
-		expect(result.stdout.trim()).toBe("pi/main");
+		expect(result.stdout.trim()).toBe("pi/gru");
 	});
 
 	describe("selección de transporte (isBondApp, delegateTransport, resolveEngine)", () => {

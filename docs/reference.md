@@ -843,7 +843,7 @@ sale con 0 explicando que no se usa la memoria.
 
 La autoría (`decided_by`) es `agent:<kind>/<nombre>` en Herdr y en los agentes que bond lanza
 en hc. En Herdr, bond consulta el agente del panel. Fuera de Herdr, lee `BOND_AGENT`, que bond
-exporta como `<kind>/main` para el agente en primer plano de bond-app y como `<kind>/<nombre>`
+exporta como `<kind>/gru` para el agente en primer plano de bond-app (su terminal se llama `gru`) y como `<kind>/<nombre>`
 para los delegados. Los procesos hijos, incluidas las shells, heredan esa identidad.
 Sin una identidad de agente aplicable, la autoría es `user`. La autoría manual tiene prioridad:
 `BOND_DECISION_AGENT` (la variable gana) o `[decisions] author` en `~/.bond/config.toml`.
