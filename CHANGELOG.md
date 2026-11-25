@@ -1,5 +1,10 @@
 # Cambios
 
+## Sin publicar
+
+- `plan-team` admite equipos en Herdr y en las terminales hc de bond-app. Los prompts
+  `/delegate` y `/team` cargan el skill instalado para el entorno.
+
 ## 1.16.7
 
 - `bond-delegate` (variantes clásica y hc) nombra al delegado con el primer minion libre,
