@@ -1,4 +1,4 @@
-// Instrucciones globales que bond lleva a cada agente: sus reglas (Herdr, delegación,
+// Instrucciones globales que bond lleva a cada agente: sus reglas (Herdr o hc, delegación,
 // privacidad) y las preferencias personales de ~/.bond/AGENTS.md. Van en un bloque entre marcas
 // del fichero de instrucciones global de cada agente; lo de fuera del bloque no se toca.
 // (Más adelante, `bond eject` las dejará como texto independiente.)
@@ -6,6 +6,7 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { agentInfo } from "./catalog-agents.mts";
+import { isBondApp } from "./hc.mts";
 import { withBlock } from "./repo.mts";
 import { t } from "./messages.mts";
 import { BOND_HOME } from "./runtime.mts";
@@ -18,7 +19,7 @@ export const PERSONAL_FILE = join(BOND_HOME, "AGENTS.md");
  * en mitad del proceso (el asistente de `bond setup` llama a `setLang` tras preguntar) y una
  * constante de módulo se quedaría con el idioma anterior a la pregunta.
  */
-const bondRules = () => t("gen.rules");
+const bondRules = () => t(isBondApp() ? "gen.rules_hc" : "gen.rules");
 
 /** Semilla de ~/.bond/AGENTS.md cuando no existe. */
 const personalTemplate = () => t("gen.personal_template");
@@ -59,8 +60,7 @@ export function blockCurrent(file: string): boolean {
 
 /**
  * Estado de un fichero de instrucciones. Son códigos, no texto: lo que se imprime se traduce en
- * el llamador (cli/setup.mts), que es consola de bond. Aquí no hay idioma porque lo que se
- * escribe en el fichero son las reglas, que no se traducen.
+ * el llamador (cli/setup.mts). El fichero recibe las reglas en el idioma activo.
  */
 export type PropagateResult = "updated" | "current" | "skipped";
 

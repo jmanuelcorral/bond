@@ -30,6 +30,16 @@ export const es = {
 - Si el repo tiene una sección \`[decisions]\` en \`.bond/bond.toml\` (memoria de decisiones),
   registra las decisiones no triviales con el skill \`decision-record\` y pon los trailers
   \`Agent:\` y \`Decision:\` en los commits.`,
+	"gen.rules_hc": `## Bond: hc y otros agentes
+
+- Estás en una terminal de hc del run de bond-app (\`BOND_APP=1\`).
+- Delega con el skill \`bond-delegate\` o reparte trabajo en worktrees con \`bond-team\` solo
+  cuando lo pida el usuario o un comando como /delegate o /team.
+- No cierres terminales de hc que no hayas creado tú.
+- No mandes código ni datos privados a búsquedas web: busca el mensaje de error, no el fichero.
+- Si el repo tiene una sección \`[decisions]\` en \`.bond/bond.toml\` (memoria de decisiones),
+  registra las decisiones no triviales con el skill \`decision-record\` y pon los trailers
+  \`Agent:\` y \`Decision:\` en los commits.`,
 
 	// ---- semilla de ~/.bond/AGENTS.md (solo se escribe si no existe; despues es del usuario) ----
 	"gen.personal_template": `# Mis instrucciones para todos los agentes
@@ -95,6 +105,16 @@ export const en: Record<keyof typeof es, string> = {
   \`bond-team\` skills.
 - Do not close workspaces, panes, agents or sessions you did not create. Do not run \`herdr\`
   without a subcommand.
+- Do not send code or private data to web searches: search the error message, not the file.
+- If the repo has a \`[decisions]\` section in \`.bond/bond.toml\` (decision memory), record
+  non-trivial decisions with the \`decision-record\` skill and add the \`Agent:\` and \`Decision:\`
+  trailers to commits.`,
+	"gen.rules_hc": `## Bond: hc and other agents
+
+- You are in an hc terminal in the bond-app run (\`BOND_APP=1\`).
+- Use the \`bond-delegate\` skill to delegate or \`bond-team\` to split work across worktrees
+  only when the user or a command such as /delegate or /team asks for it.
+- Do not close hc terminals you did not create.
 - Do not send code or private data to web searches: search the error message, not the file.
 - If the repo has a \`[decisions]\` section in \`.bond/bond.toml\` (decision memory), record
   non-trivial decisions with the \`decision-record\` skill and add the \`Agent:\` and \`Decision:\`

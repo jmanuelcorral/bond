@@ -224,9 +224,24 @@ describe("el espanol no cambia de lo que ya se escribia (regresion)", () => {
 	});
 });
 
+test.each([
+	["es", "## Bond: hc y otros agentes", "No cierres terminales de hc"],
+	["en", "## Bond: hc and other agents", "Do not close hc terminals"],
+] as const)("las reglas de hc en %s conservan las reglas comunes", (lang, heading, closeRule) => {
+	setLang(lang);
+	const rules = t("gen.rules_hc");
+	expect(rules).toStartWith(heading + "\n");
+	expect(rules).toContain(closeRule);
+	expect(rules).not.toMatch(/herdr/i);
+	for (const literal of ["BOND_APP=1", "bond-delegate", "bond-team", "/delegate", "/team"]) {
+		expect(rules).toContain(literal);
+	}
+	expect(rules.split("\n").slice(-4)).toEqual(t("gen.rules").split("\n").slice(-4));
+});
+
 describe("los dos catalogos dicen lo mismo", () => {
 	test("toda clave gen.* tiene traducción y no esta vacia", () => {
-		for (const key of ["gen.rules", "gen.personal_template", "gen.hub_title", "gen.hub_intro", "gen.hub_repos_title", "gen.hub_is_hub", "gen.hub_link_submodule", "gen.hub_col_repo", "gen.hub_col_path", "gen.hub_col_base", "gen.hub_col_link", "gen.hub_col_agent", "gen.hub_col_description", "gen.hub_rules_title", "gen.hub_rule_no_edit", "gen.hub_rule_coordinate", "gen.hub_rule_check", "gen.vertical_head", "gen.vertical_alone", "gen.vertical_others", "gen.vertical_other_entry", "gen.lang_rewritten", "gen.lang_check"]) {
+		for (const key of ["gen.rules", "gen.rules_hc", "gen.personal_template", "gen.hub_title", "gen.hub_intro", "gen.hub_repos_title", "gen.hub_is_hub", "gen.hub_link_submodule", "gen.hub_col_repo", "gen.hub_col_path", "gen.hub_col_base", "gen.hub_col_link", "gen.hub_col_agent", "gen.hub_col_description", "gen.hub_rules_title", "gen.hub_rule_no_edit", "gen.hub_rule_coordinate", "gen.hub_rule_check", "gen.vertical_head", "gen.vertical_alone", "gen.vertical_others", "gen.vertical_other_entry", "gen.lang_rewritten", "gen.lang_check"]) {
 			setLang("es");
 			const es = t(key as never);
 			setLang("en");

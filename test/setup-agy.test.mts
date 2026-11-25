@@ -21,7 +21,7 @@ afterEach(() => rmSync(home, { recursive: true, force: true }));
 const url = (f: string) => JSON.stringify(pathToFileURL(join(CLI, f)).href);
 
 /** Lo que hace bond setup con la lista de agentes: plugin de agy, skills globales y reglas. */
-function setup(agents: string[]): { status: number; stdout: string; stderr: string } {
+function setup(agents: string[], bondApp?: string): { status: number; stdout: string; stderr: string } {
 	return node(`
 const { agyPlugin, globalSkills } = await import(${url("setup.mts")});
 const { propagate } = await import(${url("instructions.mts")});
@@ -29,21 +29,21 @@ const agents = ${JSON.stringify(agents)};
 if (agents.includes("agy")) agyPlugin();
 globalSkills(agents.includes("agy"));
 propagate(agents);
-`);
+`, bondApp);
 }
 
 /** Si las reglas del plugin están al día (lo que mira bond doctor). */
-function rulesCurrent(): boolean {
+function rulesCurrent(bondApp?: string): boolean {
 	const r = node(`
 const { blockCurrent } = await import(${url("instructions.mts")});
 console.log(JSON.stringify(blockCurrent(${JSON.stringify(join(home, ".gemini", "config", "plugins", "bond", "rules", "AGENTS.md"))})));
-`);
+`, bondApp);
 	return JSON.parse(r.stdout.trim().split("\n").pop() ?? "null");
 }
 
-function node(script: string): { status: number; stdout: string; stderr: string } {
+function node(script: string, bondApp?: string): { status: number; stdout: string; stderr: string } {
 	const r = spawnSync(process.execPath, ["-e", script], {
-		env: { ...process.env, HOME: home, USERPROFILE: home, BOND_HOME: join(home, ".bond"), XDG_CONFIG_HOME: join(home, ".config"), NO_COLOR: "1" },
+		env: { ...process.env, BOND_APP: bondApp, HOME: home, USERPROFILE: home, BOND_HOME: join(home, ".bond"), XDG_CONFIG_HOME: join(home, ".config"), NO_COLOR: "1" },
 		encoding: "utf8",
 		stdio: ["ignore", "pipe", "pipe"],
 		timeout: 60_000,
@@ -112,6 +112,28 @@ describe("bond setup con agy", () => {
 		expect(rulesCurrent()).toBe(false);
 		setup(["agy"]);
 		expect(rulesCurrent()).toBe(true);
+	});
+
+	test("cambia el bloque de reglas entre Herdr y hc al repetir setup", () => {
+		const file = join(plugin(), "rules", "AGENTS.md");
+		mkdirSync(join(plugin(), "rules"), { recursive: true });
+		writeFileSync(file, "# Reglas propias\n");
+
+		expect(setup(["agy"]).status).toBe(0);
+		const classic = readFileSync(file, "utf8");
+		expect(classic).toContain("## Bond: Herdr y otros agentes");
+		expect(rulesCurrent("1")).toBe(false);
+
+		expect(setup(["agy"], "1").status).toBe(0);
+		const hc = readFileSync(file, "utf8");
+		expect(hc).toContain("# Reglas propias");
+		expect(hc).toContain("## Bond: hc y otros agentes");
+		expect(hc).not.toMatch(/herdr/i);
+		expect(rulesCurrent("1")).toBe(true);
+		expect(rulesCurrent()).toBe(false);
+
+		expect(setup(["agy"], "0").status).toBe(0);
+		expect(readFileSync(file, "utf8")).toBe(classic);
 	});
 
 	test("sin agy entre los agentes no crea nada en ~/.gemini", () => {

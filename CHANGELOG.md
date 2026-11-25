@@ -4,6 +4,8 @@
 
 - `plan-team` admite equipos en Herdr y en las terminales hc de bond-app. Los prompts
   `/delegate` y `/team` cargan el skill instalado para el entorno.
+- Con `BOND_APP=1`, `bond setup` escribe las reglas globales de los agentes para las
+  terminales de hc de bond-app. Fuera de bond-app aplica las reglas de Herdr.
 
 ## 1.16.7
 
