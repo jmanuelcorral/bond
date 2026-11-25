@@ -2,6 +2,7 @@
 name: "2026-11-25-skills-en-bond-app"
 description: "Que plan-team, los prompts /delegate y /team, las reglas globales y la autoría de las decisiones funcionen dentro de un run de bond-app (BOND_APP=1, hc) igual que en Herdr"
 created_at: "2026-11-25T07:40:19Z"
+last_implementation_at: "2026-11-25T10:40:00Z"
 has_completed_all_phases: false
 ---
 
@@ -109,14 +110,14 @@ Dentro de un run de bond-app (contenedor con `BOND_APP=1` y `hc`, sin Herdr), un
 
 | Fase | Implementación | Verificación | Revisión | Evidencia |
 | --- | --- | --- | --- | --- |
-| P1 | pending | not_run | pending | none yet |
-| P2 | pending | not_run | pending | none yet |
-| P3 | pending | not_run | pending | none yet |
+| P1 | implemented | passed | pending | `4e2f1a4` (codex/stuart, rama p1 `6e411c5`): typecheck limpio; en el worktree 820/820 |
+| P2 | implemented | passed | pending | `3445ddb` (codex/bob, rama p2 `d0a8832`): typecheck limpio; en el worktree 823/823; regla hc con y sin `BOND_APP` probada |
+| P3 | implemented | passed | pending | `e90d63c` (codex/kevin, rama p3 `2879b7d`) + `gru` como identidad del agente principal (claude): typecheck limpio; en el worktree 823/823. En `main` integrado: 816 pasan y 10 fallan, los mismos 10 de `app.test` que ya fallaban en `3af7580` (previos, ajenos al plan) |
 | P4 | pending | not_run | pending | none yet |
 
 ## Siguiente paso
 
-P1, P2 y P3 en paralelo con `bond team` (codex), una rama por fase; P4 cuando estén integradas y aceptadas.
+Revisión de P1-P3 por el usuario; después P4 (versión de bond, push con aprobación). Pendiente aparte: los 10 fallos previos de `app.test` en la suite completa (dependen del orden; sueltos pasan).
 
 ## Evidencia y seguimiento
 
