@@ -63,7 +63,7 @@ Do not infer emails, model names, versions, or reasoning effort levels. If manda
 
 In repos with decision memory (a `[decisions]` section in `.bond/bond.toml`), the project may ask for two optional trailers (see the `decision-record` skill):
 
-- `Agent: <kind>[/<name>]` — the agent that made the commit, using only the kind and name the environment provides (Herdr pane label, `bond decisions` authorship); never an invented model name or version.
+- `Agent: <kind>[/<name>]` — the agent that made the commit, using only the kind and name the environment provides (Herdr pane label, hc agent identity in `BOND_AGENT`, or `bond decisions` authorship); never an invented model name or version.
 - `Decision: <id>` — when the commit applies a recorded decision, its id, so `bond decisions check` can verify the link.
 
 Both trailers stay optional: omit them rather than guess values. In repos without decision memory add no agent signature: the default behavior above is unchanged. For non-trivial changes the commit body explains the why regardless; when a recorded decision applies, name its id in the body too.

@@ -48,8 +48,8 @@ in doubt, leave it out; noise is worse than a gap, and `bond decisions check` (a
      --decision "..." --alternatives "..." --link "kind: value"` (repeat `--link` per
      reference), or the same object as JSON on stdin with `--stdin`.
    bond computes the id (`YYYY-MM-DD-slug`, suffix `-2` on same-day collision), the
-   authorship (`decided_by` from your Herdr pane — you do not need to know your own name;
-   outside Herdr it is `user`), links the current branch and HEAD, and writes
+   authorship (`decided_by` from the Herdr pane or the hc agent's `BOND_AGENT`
+   environment variable, with `user` as the fallback), links the current branch and HEAD, and writes
    `<dir>/<id>.md` in the format documented in the
    [decision template](references/decision-template.md). There is no shared index file:
    `bond decisions` lists the records, so parallel branches never conflict over a README.

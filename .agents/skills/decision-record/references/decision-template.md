@@ -13,7 +13,7 @@ id: "2026-10-28-example-slug"
 title: "Short, searchable title of the decision"
 status: "proposed"        # proposed | accepted | rejected | superseded
 date: "2026-10-28"       # actual UTC date of the decision
-decided_by: "agent:pi/worker-2"   # user | agent:<kind> | agent:<kind>/<herdr-name>
+decided_by: "agent:pi/worker-2"   # user | agent:<kind> | agent:<kind>/<name>
 accepted_by: ""          # reference to the user's acceptance (session, PR review, issue)
 accepted_via: ""         # who accepted the decision (D20, B1): user | empty (interactive terminal)
 supersedes: ""           # id of the decision this one replaces
@@ -54,7 +54,7 @@ things that stop being allowed.
   validates that it is `"user"` (or valid author when present) and flags as error if
   `decided_by == accepted_via` (self-acceptance). The agent that executed remains recorded
   in `decided_by` and in git trailers.
-- `decided_by` never carries an invented model name or version. Known Herdr pane name goes
+- `decided_by` never carries an invented model name or version. The known Herdr or hc agent name goes
   after the slash: `agent:claude/lead`; unknown: `agent:claude`.
 - `links` entries are `kind: value` strings (plan, phase, commit, pr, run). Omit what does
   not exist yet rather than leaving dangling references; add them when they appear.
