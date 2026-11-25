@@ -1,13 +1,14 @@
 # Cambios
 
-## Sin publicar
+## 1.16.8
 
 - `plan-team` admite equipos en Herdr y en las terminales hc de bond-app. Los prompts
   `/delegate` y `/team` cargan el skill instalado para el entorno.
 - Con `BOND_APP=1`, `bond setup` escribe las reglas globales de los agentes para las
   terminales de hc de bond-app. Fuera de bond-app aplica las reglas de Herdr.
 - Las decisiones de agentes en hc se registran con su identidad `agent:<kind>/<nombre>`, tanto
-  para el agente principal de bond-app como para los delegados. La autoría configurada a mano
+  para el agente principal de bond-app (`agent:<kind>/gru`, como su terminal) como para los
+  delegados. La autoría configurada a mano
   sigue teniendo prioridad.
 
 ## 1.16.7
