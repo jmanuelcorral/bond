@@ -160,14 +160,17 @@ function globalAuthor(): string | undefined {
 }
 
 /**
- * Autoría según D12: la fijada a mano si la hay; si no, en un panel de Herdr el agente del
- * panel, y fuera (o sin agente) user. El override va primero porque es lo que el usuario
- * decidió que conste; lo demás es lo que bond puede deducir del entorno.
+ * La autoría fijada a mano tiene prioridad. En Herdr manda el agente del panel.
+ * Fuera de Herdr, bond identifica al agente de hc con BOND_AGENT.
  */
 export function resolveAuthor(): string {
 	const fixed = authorOverride();
 	if (fixed) return fixed;
-	const pane = process.env.HERDR_ENV === "1" ? process.env.HERDR_PANE_ID : undefined;
+	if (process.env.HERDR_ENV !== "1") {
+		const identity = process.env.BOND_AGENT;
+		return identity && /^[a-z][a-z0-9_-]*\/[^\s/]+$/.test(identity) ? `agent:${identity}` : "user";
+	}
+	const pane = process.env.HERDR_PANE_ID;
 	if (!pane) return "user";
 	const a = agents(10_000).find((x) => x.pane_id === pane && x.agent);
 	if (!a?.agent) return "user";

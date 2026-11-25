@@ -178,7 +178,7 @@ export interface DelegateWaitOpts {
 export function delegateStart(opts: DelegateStartOpts, env = process.env): { address?: string; name: string } {
 	if (delegateTransport(env) === "hc") {
 		const bin = agentPath(opts.agent) ?? opts.agent;
-		const argv = [bin, ...defaultAgentArgs(opts.agent, opts.args ?? [])];
+		const argv = ["env", `BOND_AGENT=${opts.agent}/${opts.name}`, bin, ...defaultAgentArgs(opts.agent, opts.args ?? [])];
 		const res = hcRun({
 			name: opts.name,
 			cwd: opts.cwd ?? process.cwd(),

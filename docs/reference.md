@@ -841,9 +841,11 @@ sale con 0 explicando que no se usa la memoria.
 | `bond decisions check` | Audita la memoria: frontmatter, id contra nombre de fichero, duplicados, referencias de sustitución rotas, trailers `Decision:` y auto-aceptaciones (`status: accepted` con `decided_by == accepted_via`). El README no se audita: no hay índice que mantener al día. Sale con 1 si hay errores |
 | `bond decisions migrate` | Migra las decisiones `accepted` históricas con `accepted_via` no vacío a `"user"` (semántica B1); `--dry-run`, `--json` |
 
-La autoría (`decided_by`): en un panel de Herdr, `agent:<kind>/<nombre>` —bond mira el agente
-del panel, el agente no necesita saber su propio nombre—; fuera de Herdr o sin agente en el
-panel, `user`. Se puede fijar a mano, y entonces manda sobre lo que bond deduce:
+La autoría (`decided_by`) es `agent:<kind>/<nombre>` en Herdr y en los agentes que bond lanza
+en hc. En Herdr, bond consulta el agente del panel. Fuera de Herdr, lee `BOND_AGENT`, que bond
+exporta como `<kind>/main` para el agente en primer plano de bond-app y como `<kind>/<nombre>`
+para los delegados. Los procesos hijos, incluidas las shells, heredan esa identidad.
+Sin una identidad de agente aplicable, la autoría es `user`. La autoría manual tiene prioridad:
 `BOND_DECISION_AGENT` (la variable gana) o `[decisions] author` en `~/.bond/config.toml`.
 Sirve para que un panel delegado firme con la identidad con la que se habla —el
 orquestador— y no con el minion que bond arrancó en su worktree (`MINIONS` en

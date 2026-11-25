@@ -2,13 +2,13 @@
 
 A **run** is one delegation to an agent: the request sent and the report received. Stored
 by the orchestrator in the main checkout at `<dir>/runs/YYYY-MM-DD-<agent>-<slug>.md`
-(`<agent>` = the agent's Herdr name or kind, `<slug>` = short description of the task).
+(`<agent>` = the agent's Herdr or hc name or kind, `<slug>` = short description of the task).
 The branch agent never writes its own run; it reports in its answer and the orchestrator
 saves that here.
 
 ```markdown
 ---
-agent: "worker-2"          # Herdr pane name; kind if no name
+agent: "worker-2"          # Herdr or hc agent name; kind if no name
 kind: "pi"                 # pi | claude | codex | ...
 branch: "feat/example"
 base: "main@abc1234"       # branch and base commit the work started from

@@ -4,9 +4,9 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 
 process.env.BOND_HOME = mkdtempSync(join(tmpdir(), "bond-home-"));
 const { addDecision, checkDecisions, decisions, loadDecisions, normalizeAuthor, parseFm, resolveAuthor, slugify } = await import("../cli/decisions.mts");
@@ -20,7 +20,7 @@ let repo: string;
 const bond = (args: string[], cwd = repo) =>
 	spawnSync(process.execPath, [MAIN, ...args], {
 		cwd,
-		env: { ...process.env, NO_COLOR: "1", HERDR_ENV: "", HERDR_PANE_ID: "" },
+		env: { ...process.env, NO_COLOR: "1", HERDR_ENV: "", HERDR_PANE_ID: "", BOND_AGENT: "" },
 		encoding: "utf8",
 		stdio: ["ignore", "pipe", "pipe"],
 	});
@@ -28,7 +28,7 @@ const bond = (args: string[], cwd = repo) =>
 const bondWith = (args: string[], env: Record<string, string>, cwd = repo) =>
 	spawnSync(process.execPath, [MAIN, ...args], {
 		cwd,
-		env: { ...process.env, NO_COLOR: "1", HERDR_ENV: "", HERDR_PANE_ID: "", ...env },
+		env: { ...process.env, NO_COLOR: "1", HERDR_ENV: "", HERDR_PANE_ID: "", BOND_AGENT: "", ...env },
 		encoding: "utf8",
 		stdio: ["ignore", "pipe", "pipe"],
 	});
@@ -37,9 +37,10 @@ beforeEach(() => {
 	repo = realpathSync(mkdtempSync(join(tmpdir(), "bond-dec-")));
 	spawnSync("git", ["init", "-q"], { cwd: repo });
 	process.chdir(repo);
-	// Autoría determinista: fuera de Herdr es "user" (el caso de panel se comprueba a mano).
+	// Autoría determinista sin identidad heredada.
 	delete process.env.HERDR_ENV;
 	delete process.env.HERDR_PANE_ID;
+	delete process.env.BOND_AGENT;
 });
 
 afterEach(() => {
@@ -218,7 +219,7 @@ describe("apartados del cuerpo (add / README / plantilla)", () => {
 			input: JSON.stringify({ title: "stdin con sec", decision: "d", consequences: "Via stdin" }),
 			encoding: "utf8",
 			timeout: 30_000,
-			env: { ...process.env, NO_COLOR: "1", HERDR_ENV: "", HERDR_PANE_ID: "" },
+			env: { ...process.env, NO_COLOR: "1", HERDR_ENV: "", HERDR_PANE_ID: "", BOND_AGENT: "" },
 		});
 		expect(r.status).toBe(0);
 		const ds = loadDecisions(repo, "docs/decisions");
@@ -228,17 +229,43 @@ describe("apartados del cuerpo (add / README / plantilla)", () => {
 	});
 });
 
-describe("autoría (D12)", () => {
-	test("fuera de Herdr es user", () => {
+describe("autoría según el entorno", () => {
+	test("sin identidad de agente, user", () => {
 		expect(resolveAuthor()).toBe("user");
 	});
 
-	test("en Herdr sin agente en el panel, user", () => {
-		process.env.HERDR_ENV = "1";
-		process.env.HERDR_PANE_ID = "pane-que-no-existe-9999";
+	test("fuera de Herdr usa la identidad de hc si es válida", () => {
+		process.env.BOND_AGENT = "codex/main";
+		expect(resolveAuthor()).toBe("agent:codex/main");
+		process.env.BOND_AGENT = "codex/";
 		expect(resolveAuthor()).toBe("user");
-		delete process.env.HERDR_ENV;
-		delete process.env.HERDR_PANE_ID;
+	});
+
+	test("la identidad manual tiene prioridad sobre hc", () => {
+		const original = process.env.BOND_DECISION_AGENT;
+		try {
+			process.env.BOND_AGENT = "codex/main";
+			process.env.BOND_DECISION_AGENT = "pi/gru";
+			expect(resolveAuthor()).toBe("agent:pi/gru");
+		} finally {
+			if (original === undefined) delete process.env.BOND_DECISION_AGENT;
+			else process.env.BOND_DECISION_AGENT = original;
+		}
+	});
+
+	test("en Herdr manda el panel, incluso si se heredó BOND_AGENT", () => {
+		enableMemory();
+		const response = JSON.stringify({ result: { agents: [{ pane_id: "p1", agent: "pi", name: "gru" }] } });
+		write("herdr", `#!/bin/sh\nprintf '%s\\n' '${response}'\n`);
+		write("herdr.cmd", `@echo off\necho ${response}\n`);
+		chmodSync(at("herdr"), 0o755);
+		const env = { PATH: `${repo}${delimiter}${process.env.PATH}`, HERDR_ENV: "1", BOND_AGENT: "codex/main" };
+		const args = ["decisions", "add", "--title", "Autoría", "--decision", "Una propuesta", "--json"];
+		for (const [pane, author] of [["p1", "agent:pi/gru"], ["otro", "user"]]) {
+			const result = bondWith(args, { ...env, HERDR_PANE_ID: pane });
+			expect(result.status).toBe(0);
+			expect(JSON.parse(result.stdout).decided_by).toBe(author);
+		}
 	});
 });
 
@@ -361,7 +388,7 @@ describe("accept sin TTY (D13)", () => {
 			cwd: repo,
 			input: answer,
 			encoding: "utf8",
-			env: { ...process.env, NO_COLOR: "1", HERDR_ENV: "", HERDR_PANE_ID: "" },
+			env: { ...process.env, NO_COLOR: "1", HERDR_ENV: "", HERDR_PANE_ID: "", BOND_AGENT: "" },
 		});
 	};
 
@@ -682,13 +709,13 @@ describe("bloqueo por identidad y detección de auto-aceptación (issue #82 / B1
 	test("accept desde el mismo agente que decided_by falla y el fichero queda intacto", () => {
 		enableMemory();
 		bondWith(["decisions", "add", "--title", "Decisión propuesta", "--decision", "Una decisión propuesta"], {
-			BOND_DECISION_AGENT: "agent:pi/stuart",
+			BOND_AGENT: "pi/stuart",
 		});
 		const d = loadDecisions(repo, "docs/decisions")[0];
 		expect(d.decided_by).toBe("agent:pi/stuart");
 		const before = read(d.rel);
 		const r = bondWith(["decisions", "accept", d.id, "--confirmed-by", "auto aceptación"], {
-			BOND_DECISION_AGENT: "agent:pi/stuart",
+			BOND_AGENT: "pi/stuart",
 		});
 		expect(r.status).toBe(1);
 		expect(r.stderr).toContain("la registró agent:pi/stuart");

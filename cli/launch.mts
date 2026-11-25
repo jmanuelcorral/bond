@@ -204,7 +204,7 @@ export async function launch(args: string[], opts: { dev: boolean }): Promise<vo
 		repoDefault = loadRepoDefault(root);
 	}
 	const agent = o.noAgent ? undefined : await chooseAgent(o.agent, repoDefault);
-	if (inPlace && agent) return runHere(agent, root, o.agentArgs);
+	if (inPlace && agent) return runHere(agent, root, o.agentArgs, `${agent}/main`);
 
 	const inside = insideHerdr();
 	// Dentro de su propio workspace no hay nada que enfocar: el agente se abre en este panel.
@@ -229,9 +229,11 @@ export async function launch(args: string[], opts: { dev: boolean }): Promise<vo
 }
 
 /** El agente en primer plano en el panel actual; al salir, se vuelve a la shell. */
-function runHere(agent: string, cwd: string, args: string[]): never {
+function runHere(agent: string, cwd: string, args: string[], identity?: string): never {
 	const dir = missingAgentDir(agent);
-	const env = dir ? { ...process.env, PATH: `${dir}${delimiter}${process.env.PATH ?? ""}` } : process.env;
+	const env = { ...process.env };
+	if (dir) env.PATH = `${dir}${delimiter}${env.PATH ?? ""}`;
+	if (identity) env.BOND_AGENT = identity;
 	// En Windows los agentes suelen ser .cmd: hace falta la shell para lanzarlos.
 	const r = spawnSync(agent, args, { stdio: "inherit", cwd, env, shell: process.platform === "win32" });
 	if (r.error) die(t("launch.run_failed", { agent, err: r.error.message }));

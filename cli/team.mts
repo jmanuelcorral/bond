@@ -540,7 +540,7 @@ export function runHcPlan(root: string, plan: PlanItem[], o: TeamArgs): void {
 			const res = hcRun({
 				name,
 				cwd: path,
-				argv: [agentPath(agent) ?? agent, ...defaultAgentArgs(agent, o.agentArgs)],
+				argv: ["env", `BOND_AGENT=${agent}/${name}`, agentPath(agent) ?? agent, ...defaultAgentArgs(agent, o.agentArgs)],
 				labels: termLabels,
 			});
 			const label = itemLabel(item);

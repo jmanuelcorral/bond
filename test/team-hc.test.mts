@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { catchDie } from "../cli/util.mts";
@@ -228,6 +228,7 @@ describe("orden de requireHerdr antes del parseo", () => {
 describe("herencia de confianza en runHcPlan (motor hc)", () => {
 	let repoDir: string;
 	let binDir: string;
+	let argsLog: string;
 	const origPath = process.env.PATH;
 	const origHerdrEnv = process.env.HERDR_ENV;
 	const origHerdrPane = process.env.HERDR_PANE_ID;
@@ -235,10 +236,11 @@ describe("herencia de confianza en runHcPlan (motor hc)", () => {
 	beforeEach(() => {
 		repoDir = realpathSync(mkdtempSync(join(tmpdir(), "bond-hc-trust-")));
 		binDir = realpathSync(mkdtempSync(join(tmpdir(), "bond-hc-trust-bin-")));
+		argsLog = join(binDir, "args.log");
 		const hcFile = join(binDir, process.platform === "win32" ? "hc.cmd" : "hc");
 		const content = process.platform === "win32"
-			? `@echo off\nif "%1"=="ls" (echo {"terminals":[]}) else if "%1"=="run" (echo {"address":"addr-123"})`
-			: `#!/bin/sh\nif [ "$1" = "ls" ]; then echo '{"terminals":[]}'; elif [ "$1" = "run" ]; then echo '{"address":"addr-123"}'; fi`;
+			? `@echo off\necho %* >> "${argsLog}"\nif "%1"=="ls" (echo {"terminals":[]}) else if "%1"=="run" (echo {"address":"addr-123"})`
+			: `#!/bin/sh\nprintf "%s\n" "$*" >> "${argsLog}"\nif [ "$1" = "ls" ]; then echo '{"terminals":[]}'; elif [ "$1" = "run" ]; then echo '{"address":"addr-123"}'; fi`;
 		writeFileSync(hcFile, content, { mode: 0o755 });
 		process.env.PATH = `${binDir}${delimiter}${origPath}`;
 		delete process.env.HERDR_ENV;
@@ -275,5 +277,6 @@ describe("herencia de confianza en runHcPlan (motor hc)", () => {
 		}
 		const line = logs.find((l) => l.includes("addr-123")) ?? "";
 		expect(line).not.toContain("confianza heredada");
+		expect(readFileSync(argsLog, "utf8")).toContain("-- env BOND_AGENT=pi/kevin ");
 	});
 });

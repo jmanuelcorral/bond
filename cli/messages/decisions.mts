@@ -61,7 +61,9 @@ lista las decisiones.
   --json     Salida JSON estable en lista, add, runs, check y migrate.
   -h, --help Esta ayuda.
 
-Autoría: la calcula bond (en un panel de Herdr, agent:<kind>/<nombre>; fuera, user).
+Autoría: bond identifica al agente del panel de Herdr o, fuera de Herdr, lee
+BOND_AGENT (<kind>/<nombre>, exportado al lanzar agentes en hc). Si no hay
+identidad de agente, usa user.
 Se puede fijar a mano con BOND_DECISION_AGENT o con [decisions] author en
 ~/.bond/config.toml, para que un panel delegado firme con la identidad con la que se
 habla y no con el minion que bond arrancó en su worktree. Vale "user" o
@@ -179,7 +181,9 @@ lists decisions.
   --json     Stable JSON output for list, add, runs, check, and migrate.
   -h, --help This help.
 
-Authorship: bond computes it (in a Herdr pane, agent:<kind>/<name>; outside, user).
+Authorship: bond identifies the agent in the Herdr pane or, outside Herdr, reads
+BOND_AGENT (<kind>/<name>, exported when launching agents in hc). If there is no
+agent identity, it uses user.
 It can be pinned with BOND_DECISION_AGENT or [decisions] author in ~/.bond/config.toml,
 so a delegated pane signs with the identity you talk to instead of the minion bond
 started in its worktree. Valid: "user" or "agent:<kind>[/<name>]"; "pi/gru" normalizes

@@ -75,6 +75,22 @@ describe("D-BB / C1 / C2: transporte hc en bond tras BOND_APP", () => {
 		}
 	};
 
+	test("bond tui pasa su identidad al agente en primer plano", () => {
+		const agent = join(binDir, process.platform === "win32" ? "pi.cmd" : "pi");
+		writeFileSync(agent, process.platform === "win32"
+			? "@echo off\necho %BOND_AGENT%\n"
+			: '#!/bin/sh\nprintf "%s\\n" "$BOND_AGENT"\n', { mode: 0o755 });
+		const main = join(import.meta.dir, "..", "cli", "main.mts");
+		const result = spawnSync(process.execPath, [main, "tui", "--agent", "pi"], {
+			cwd: logDir,
+			env: { ...process.env, BOND_APP: "1", BOND_AGENT: "codex/parent" },
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+		expect(result.status).toBe(0);
+		expect(result.stdout.trim()).toBe("pi/main");
+	});
+
 	describe("selección de transporte (isBondApp, delegateTransport, resolveEngine)", () => {
 		test("isBondApp evalúa estrictamente BOND_APP=1", () => {
 			expect(isBondApp({ BOND_APP: "1" })).toBe(true);
@@ -172,7 +188,7 @@ describe("D-BB / C1 / C2: transporte hc en bond tras BOND_APP", () => {
 			expect(readHerdrCalls()).toEqual([]);
 			const hcCalls = readHcCalls();
 			expect(hcCalls.length).toBe(1);
-			expect(hcCalls[0]).toMatch(/run --bg --keep --no-parent --name rev-hc --cwd \/tmp\/work -- (?:.*\/)?pi/);
+			expect(hcCalls[0]).toMatch(/run --bg --keep --no-parent --name rev-hc --cwd \/tmp\/work -- env BOND_AGENT=pi\/rev-hc (?:.*\/)?pi/);
 		});
 
 		test("delegatePrompt invoca hc send con --wait y --timeout sin tocar herdr", () => {
