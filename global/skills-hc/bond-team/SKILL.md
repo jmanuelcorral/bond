@@ -73,6 +73,10 @@ workspaces: eso lo decide el usuario.
 Cuando él lo pida, `bond team clean` quita los worktrees de las ramas ya integradas (las ramas
 se quedan); `bond team clean <rama>` uno concreto. Nunca con `--force` sin que lo pida.
 
+## Modo loop (bond-app)
+
+Si `printenv BOND_LOOP` da `1` y eres el líder del loop (`BOND_LOOP_ROLE=lead`, skill `loop-lead`), la persona no está mirando: el visto bueno al reparto y las respuestas a un agente bloqueado o con una pregunta las das tú, dentro del plan, en vez de preguntarle. Cada encargo dice que el agente trabaja en modo loop (`loop-member`) y que puede hacer commit de su fase cuando pasen sus comprobaciones. Como líder puedes hacer push de las ramas de trabajo del run para probarlas (nunca a una rama principal: `main`, `master`, `develop`, la base o una de release; nunca forzado). Integrar, abrir PRs, `clean --force` y borrar ramas siguen siendo de la persona o de la entrega de bond-app.
+
 ## En un hub
 
 En un hub la tarea se reparte **por repos**: una rama vertical (el mismo nombre en todos los

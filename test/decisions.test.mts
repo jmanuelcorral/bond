@@ -528,7 +528,7 @@ describe("CLI de lista y runs", () => {
 		add({ title: "Dos" });
 		const all = JSON.parse(await capture(["--json"]));
 		expect(all.length).toBe(2);
-		expect(Object.keys(all[0]).sort().join(",")).toBe("accepted_by,accepted_via,body,date,decided_by,id,links,rel,status,superseded_by,supersedes,title");
+		expect(Object.keys(all[0]).sort().join(",")).toBe("accepted_by,accepted_via,body,date,decided_by,endorsed_by,id,links,rel,status,superseded_by,supersedes,title");
 		expect(JSON.parse(await capture(["--json", "--status", "accepted"])).length).toBe(0);
 		expect(JSON.parse(await capture(["--json", "--agent", "user"])).length).toBe(2);
 	});
@@ -774,5 +774,59 @@ describe("slugify", () => {
 	test("pasa a minúsculas, quita acentos y deja guiones", () => {
 		expect(slugify("Preferir Bun — decisión difícil")).toBe("preferir-bun-decision-dificil");
 		expect(slugify("  spaces & symbols!! ")).toBe("spaces-symbols");
+	});
+});
+
+describe("endorse: gru respalda sin aceptar (#91)", () => {
+	afterEach(() => delete process.env.BOND_DECISION_AGENT);
+
+	test("deja endorsed_by con la autoría, sigue proposed y check cuenta las que esperan", () => {
+		enableMemory();
+		process.env.BOND_DECISION_AGENT = "agent:claude/kevin";
+		const { id } = add();
+		delete process.env.BOND_DECISION_AGENT;
+		const before = read(`docs/decisions/${id}.md`);
+		expect(before).not.toContain("endorsed_by");
+		const r = bondWith(["decisions", "endorse", id, "--json"], { BOND_DECISION_AGENT: "agent:pi/gru" });
+		expect(r.status).toBe(0);
+		expect(JSON.parse(r.stdout)).toEqual([{ id, status: "proposed", endorsed_by: "agent:pi/gru" }]);
+		const d = loadDecisions(repo, "docs/decisions").find((x) => x.id === id)!;
+		expect(d.status).toBe("proposed");
+		expect(d.endorsed_by).toBe("agent:pi/gru");
+		expect(d.accepted_by).toBe("");
+		const rep = checkDecisions(repo, "docs/decisions");
+		expect(rep.errors).toEqual([]);
+		expect(rep.endorsed).toBe(1);
+		expect(bond(["decisions", "check"]).stdout).toContain("1 respaldada(s) esperando al usuario");
+		// Después la acepta el usuario como siempre, y el respaldo se queda.
+		expect(bondWith(["decisions", "accept", id, "--confirmed-by", "vale"], { BOND_DECISION_AGENT: "agent:pi/gru" }).status).toBe(0);
+		const accepted = loadDecisions(repo, "docs/decisions").find((x) => x.id === id)!;
+		expect(accepted.status).toBe("accepted");
+		expect(accepted.endorsed_by).toBe("agent:pi/gru");
+		expect(checkDecisions(repo, "docs/decisions").endorsed).toBe(0);
+	});
+
+	test("no se respaldan las propias, ni las que no están proposed; un id desconocido falla sin abortar", () => {
+		enableMemory();
+		process.env.BOND_DECISION_AGENT = "agent:pi/gru";
+		const { id: own } = add({ title: "Propia" });
+		const { id: done } = add({ title: "Ya aceptada", confirmed_by: "sí" });
+		delete process.env.BOND_DECISION_AGENT;
+		const before = read(`docs/decisions/${own}.md`);
+		const r = bondWith(["decisions", "endorse", own, done, "nope"], { BOND_DECISION_AGENT: "agent:pi/gru" });
+		expect(r.status).toBe(1);
+		expect(r.stderr).toContain("no puedes respaldar tus propias decisiones");
+		expect(r.stderr).toContain("nope");
+		expect(read(`docs/decisions/${own}.md`)).toBe(before);
+	});
+
+	test("check señala un endorsed_by inválido o de quien la registró", () => {
+		enableMemory();
+		const { id } = add();
+		const f = `docs/decisions/${id}.md`;
+		write(f, read(f).replace('accepted_via: ""\n', 'accepted_via: ""\nendorsed_by: "gru"\n'));
+		expect(checkDecisions(repo, "docs/decisions").errors.join("\n")).toContain('endorsed_by "gru" no es una autoría válida');
+		write(f, read(f).replace('endorsed_by: "gru"', 'endorsed_by: "user"'));
+		expect(checkDecisions(repo, "docs/decisions").errors.join("\n")).toContain("la respaldó quien la registró");
 	});
 });

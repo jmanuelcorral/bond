@@ -119,6 +119,10 @@ Check the message and recorded files against the approved scope. Report unexpect
 
 Do not push, fetch, pull, change configuration, reset, clean, restore, checkout, stash, or perform destructive operations as part of this workflow. Any additional operation requires a separate request and the corresponding permissions.
 
+## Loop mode (bond-app)
+
+When `printenv BOND_LOOP` prints `1`, the commit request comes from the loop, not from a person: a phase assigned by gru (see `loop-member`) authorizes one commit of that phase's reviewed changes once its checks pass. Every other rule of this skill holds: only the phase's changes, hooks and signing untouched, no push. Report the commit to gru instead of recommending a next step to the person.
+
 ## Guided handoff
 
 A request such as "commit with option 2" from a phase report selects the exact previously proposed message and reviewed scope. Confirm the mapping is unambiguous and recheck the diff; do not include later unrelated changes or treat the selection as phase acceptance. The calling skill must resolve this installed skill by name rather than copying its procedure or guessing a sibling path. If the scope changed materially, present the revised scope before committing.

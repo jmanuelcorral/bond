@@ -92,6 +92,10 @@ in doubt, leave it out; noise is worse than a gap, and `bond decisions check` (a
    acceptance, say so ("proposed, awaiting your acceptance"). Do not present a `proposed`
    decision as agreed.
 
+## Loop mode (bond-app)
+
+When `printenv BOND_LOOP` prints `1`, nobody from the conversation can accept a decision: record yours as `proposed`. The loop's leader (gru) does not accept them either. It endorses the ones it agrees with with `bond decisions endorse <id>...`, which sets `endorsed_by` and keeps the status, and the person accepts them at the end (`/accept`). Never use `--confirmed-by` in a loop unless you are quoting something the person actually wrote.
+
 ## Runs (delegation records)
 
 Runs are the requests sent to agents by `bond team` / `bond-delegate` and their reports,

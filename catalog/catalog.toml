@@ -46,3 +46,11 @@ default = false
 [skills.catalog-maintain]
 summary = "Fill and maintain a team catalog: skills, commands and MCP servers, checked before publishing"
 default = false
+
+[skills.loop-lead]
+summary = "Lead a bond-app loop as gru: assign phases, answer the team, review, endorse decisions, evaluate"
+default = false
+
+[skills.loop-member]
+summary = "Work in a bond-app loop: do gru's phase, commit when checks pass, ask gru with bond-app ask"
+default = false

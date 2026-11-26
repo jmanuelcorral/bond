@@ -75,6 +75,11 @@ export interface Decision {
 	accepted_by: string;
 	/** Quién ejecutó la aceptación desde la conversación (D20): user o agent:<kind>[/<nombre>]. */
 	accepted_via: string;
+	/**
+	 * #91 (modo loop de bond-app): quién la respaldó sin aceptarla (agent:<kind>/<nombre>, el
+	 * líder gru). No cambia el estado: la acepta luego el usuario. Vacío si nadie la respaldó.
+	 */
+	endorsed_by: string;
 	supersedes: string;
 	superseded_by: string;
 	links: string[];
@@ -91,6 +96,7 @@ const decisionFields = (p: Parsed): Partial<Decision> => ({
 	decided_by: p.scalars.decided_by ?? "",
 	accepted_by: p.scalars.accepted_by ?? "",
 	accepted_via: p.scalars.accepted_via ?? "",
+	endorsed_by: p.scalars.endorsed_by ?? "",
 	supersedes: p.scalars.supersedes ?? "",
 	superseded_by: p.scalars.superseded_by ?? "",
 	links: p.lists.links ?? [],
@@ -99,7 +105,9 @@ const decisionFields = (p: Parsed): Partial<Decision> => ({
 
 function decisionFile(d: Decision): string {
 	const links = d.links.length ? `links:\n${d.links.map((l) => `  - ${q(l)}`).join("\n")}` : "links: []";
-	return `---\nid: ${q(d.id)}\ntitle: ${q(d.title)}\nstatus: ${q(d.status)}\ndate: ${q(d.date)}\ndecided_by: ${q(d.decided_by)}\naccepted_by: ${q(d.accepted_by)}\naccepted_via: ${q(d.accepted_via)}\nsupersedes: ${q(d.supersedes)}\nsuperseded_by: ${q(d.superseded_by)}\n${links}\n---\n${d.body}`;
+	// endorsed_by solo si alguien la respaldó: las decisiones de siempre quedan igual.
+	const endorsed = d.endorsed_by ? `endorsed_by: ${q(d.endorsed_by)}\n` : "";
+	return `---\nid: ${q(d.id)}\ntitle: ${q(d.title)}\nstatus: ${q(d.status)}\ndate: ${q(d.date)}\ndecided_by: ${q(d.decided_by)}\naccepted_by: ${q(d.accepted_by)}\naccepted_via: ${q(d.accepted_via)}\n${endorsed}supersedes: ${q(d.supersedes)}\nsuperseded_by: ${q(d.superseded_by)}\n${links}\n---\n${d.body}`;
 }
 
 const dirAbs = (root: string, dirRel: string) => join(root, ...dirRel.split("/"));
@@ -228,6 +236,7 @@ export function addDecision(root: string, dirRel: string, in_: AddInput): { id: 
 		decided_by,
 		accepted_by: confirmed ?? "",
 		accepted_via: confirmed ? "user" : "",
+		endorsed_by: "",
 		supersedes: "",
 		superseded_by: "",
 		// Sin repetidos: el agente a veces pasa la rama que bond añade de todos modos.
@@ -257,7 +266,7 @@ async function confirm(question: string): Promise<boolean> {
 const hasTty = () => process.stdin.isTTY === true && process.stdout.isTTY === true;
 
 /** Reescribe una decisión cambiando los campos del parche (estado, aceptación, sustitución). */
-function patchDecision(root: string, dirRel: string, id: string, patch: Partial<Pick<Decision, "status" | "accepted_by" | "accepted_via" | "supersedes" | "superseded_by">>): Decision {
+function patchDecision(root: string, dirRel: string, id: string, patch: Partial<Pick<Decision, "status" | "accepted_by" | "accepted_via" | "endorsed_by" | "supersedes" | "superseded_by">>): Decision {
 	const f = findDecisionFile(root, dirRel, id);
 	const p = parseFm(readFileSync(f, "utf8"));
 	if (!p) die(t("decisions.invalid_fm", { file: `${dirRel}/${id}.md` }));
@@ -377,12 +386,49 @@ async function changeStatus(root: string, dirRel: string, req: ChangeRequest): P
 	return failed;
 }
 
+/**
+ * #91: respaldar decisiones `proposed` sin aceptarlas. Es lo que hace gru en el modo loop de
+ * bond-app con las decisiones del equipo: deja `endorsed_by` con su autoría y no toca el estado
+ * ni `accepted_*`; las acepta luego el usuario (/accept). Un agente no respalda las suyas.
+ * Devuelve si alguna falló.
+ */
+export function endorseDecisions(root: string, dirRel: string, ids: string[]): { failed: boolean; endorsed: Decision[] } {
+	const author = resolveAuthor();
+	if (!ids.length) die(t("decisions.missing_id", { sub: "endorse" }));
+	let failed = false;
+	const endorsed: Decision[] = [];
+	for (const id of [...new Set(ids)]) {
+		const f = join(dirAbs(root, dirRel), `${id}.md`);
+		const p = existsSync(f) ? parseFm(readFileSync(f, "utf8")) : null;
+		if (!p) {
+			console.error(`${bad("✗")} ${existsSync(f) ? t("decisions.err_invalid_fm", { file: `${dirRel}/${id}.md` }) : t("decisions.err_not_in_dir", { id, dir: dirRel })}`);
+			failed = true;
+			continue;
+		}
+		const status = p.scalars.status ?? "";
+		if (status !== "proposed") {
+			console.error(`${bad("✗")} ${t("decisions.err_not_proposed", { id, status })}`);
+			failed = true;
+			continue;
+		}
+		if (author === (p.scalars.decided_by ?? "")) {
+			console.error(`${bad("✗")} ${t("decisions.err_endorse_own", { id, author })}`);
+			failed = true;
+			continue;
+		}
+		endorsed.push(patchDecision(root, dirRel, id, { endorsed_by: author }));
+	}
+	return { failed, endorsed };
+}
+
 // --- check ---------------------------------------------------------------------------------
 
 export interface DecisionsReport {
 	errors: string[];
 	counts: Record<string, number>;
 	total: number;
+	/** #91: propuestas respaldadas (endorsed_by) que esperan al usuario. */
+	endorsed: number;
 }
 
 /** Trailers `Decision: <id>` de todos los commits del repo (último párrafo de cada mensaje). */
@@ -436,6 +482,13 @@ export function checkDecisions(root: string, dirRel: string): DecisionsReport {
 		if (via && !/^(user|agent:[a-z0-9._-]+(\/[A-Za-z0-9._-]+)?)$/.test(via)) {
 			errors.push(t("decisions.check_bad_accepted_via", { file: rel, via }));
 		}
+		const endorsedBy = p.scalars.endorsed_by;
+		if (endorsedBy && !/^(user|agent:[a-z0-9._-]+(\/[A-Za-z0-9._-]+)?)$/.test(endorsedBy)) {
+			errors.push(t("decisions.check_bad_endorsed_by", { file: rel, by: endorsedBy }));
+		}
+		if (endorsedBy && endorsedBy === p.scalars.decided_by) {
+			errors.push(t("decisions.check_endorsed_own", { file: rel, author: endorsedBy }));
+		}
 		if (p.scalars.status === "accepted" && via && via !== "user" && via === p.scalars.decided_by) {
 			errors.push(t("decisions.check_same_accepted_via", { file: rel, author: via }));
 		}
@@ -445,7 +498,9 @@ export function checkDecisions(root: string, dirRel: string): DecisionsReport {
 	}
 	// El README no se audita (D19): no hay índice que mantener al día; los que se crearon
 	// con tabla siguen siendo válidos.
-	return { errors, counts, total: byId.size };
+	// #91: las propuestas que gru ya respaldó y esperan al usuario (/accept).
+	const endorsed = [...byId.values()].filter(({ p }) => p.scalars.status === "proposed" && Boolean(p.scalars.endorsed_by)).length;
+	return { errors, counts, total: byId.size, endorsed };
 }
 
 // --- doctor ---------------------------------------------------------------------------------
@@ -540,7 +595,7 @@ async function runAdd(root: string, dir: string, a: Args): Promise<void> {
 export async function decisions(args: string[]): Promise<void> {
 	const [sub, ...rest] = args;
 	const root = repoRoot();
-	const known = ["add", "accept", "reject", "supersede", "show", "runs", "check", "migrate"];
+	const known = ["add", "accept", "reject", "supersede", "endorse", "show", "runs", "check", "migrate"];
 	const name = known.includes(sub ?? "") ? sub! : undefined;
 	const a = parseArgs(name ? rest : args);
 	const dec = memory(root);
@@ -577,6 +632,13 @@ export async function decisions(args: string[]): Promise<void> {
 			if (failed) process.exitCode = 1;
 			return;
 		}
+		case "endorse": {
+			const { failed, endorsed } = endorseDecisions(root, dec.dir, a.pos);
+			if (a.json) console.log(JSON.stringify(endorsed.map((d) => ({ id: d.id, status: d.status, endorsed_by: d.endorsed_by }))));
+			else for (const d of endorsed) console.log(`${ok("~")} ${d.rel}  ${dim(t("decisions.endorsed_ack", { by: d.endorsed_by }))}`);
+			if (failed) process.exitCode = 1;
+			return;
+		}
 		case "show": {
 			const id = a.pos[0] ?? die(t("decisions.show_usage"));
 			const own = join(dirAbs(root, dec.dir), `${id}.md`);
@@ -610,6 +672,7 @@ export async function decisions(args: string[]): Promise<void> {
 			if (a.json) return console.log(JSON.stringify(rep));
 			for (const e of rep.errors) console.log(`${bad("✗")} ${e}`);
 			const parts = STATUSES.filter((s) => rep.counts[s]).map((s) => `${rep.counts[s]} ${s}`);
+			if (rep.endorsed) parts.push(t("decisions.check_endorsed_part", { n: rep.endorsed }));
 			if (!rep.errors.length) console.log(`${ok("✓")} ${t("decisions.check_ok", { dir: dec.dir, total: rep.total, parts: parts.length ? ` (${parts.join(", ")})` : "" })}`);
 			else process.exitCode = 1;
 			return;

@@ -125,6 +125,10 @@ applies with these differences:
 - **Clean from the hub**: `bond team clean plan/<slug>-p2` removes the branch's worktrees in
   every repo of the session (branches kept); `--repo <repo>` only one repo. Watch and cleanup behavior follow steps 7 and 9.
 
+## Loop mode (bond-app)
+
+When `printenv BOND_LOOP` prints `1` and you are the loop's leader (`BOND_LOOP_ROLE=lead`, see `loop-lead`), the person is not watching: you approve the split yourself and answer the agents' questions instead of asking the person, within the plan. Each agent's request says it works in loop mode (`loop-member`) and may commit its phase when its checks pass. As the leader you may push the run's work branches to test them (never a main branch: `main`, `master`, `develop`, a base or release branch; never force). Integrating branches, opening PRs, cleaning with `--force` and deleting branches still need the person or bond-app's delivery.
+
 ## Guided next step
 
 End every outcome with the result, one recommended next step, a brief reason, and a short reply in the user's language. Before creating anything, recommend approving the exact split. After collecting, recommend reviewing a specific branch, or resolving a failed or uncommitted one first. After an integration, recommend accepting the phase or the next eligible round, naming the actual phases and plan path. Keep "change the split" or "stop" as secondary alternatives.

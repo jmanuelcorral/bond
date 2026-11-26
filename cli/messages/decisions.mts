@@ -37,6 +37,11 @@ lista las decisiones.
             Se niega también si quien ejecuta es el mismo agente que la registró
             (decided_by): un agente no se acepta sus propias decisiones; las registra ya
             aceptadas con add --confirmed-by, o las acepta el usuario.
+  endorse <id>... [--json]
+            Respalda decisiones "proposed" sin aceptarlas: deja endorsed_by con tu
+            autoría y no cambia el estado. Es lo que hace el líder (gru) en el modo loop
+            de bond-app con las decisiones de su equipo; las acepta luego el usuario.
+            No respalda las tuyas (decided_by).
   reject <id>... [--ref <motivo>] [--confirmed-by <ref>] [--all-proposed]
             La pasa a "rejected" (misma confirmación).
   supersede <id>... --by <nueva> [--confirmed-by <ref>] [--all-proposed]
@@ -122,6 +127,11 @@ explicando que el repo no usa la memoria.`,
 	"decisions.empty_runs": "sin runs en {dir}/runs/",
 	"decisions.runs_counts": "{commits} commit(s) · {decisions} decisión(es)",
 	"decisions.check_ok": "{dir}/: {total} decisión(es) sin errores{parts}",
+	"decisions.check_endorsed_part": "{n} respaldada(s) esperando al usuario",
+	"decisions.check_bad_endorsed_by": "{file}: endorsed_by \"{by}\" no es una autoría válida (user o agent:<kind>[/<nombre>])",
+	"decisions.check_endorsed_own": "{file}: la respaldó quien la registró ({author})",
+	"decisions.err_endorse_own": "{id}: la registró {author}; no puedes respaldar tus propias decisiones",
+	"decisions.endorsed_ack": "respaldada por {by} (sigue proposed: la acepta el usuario)",
 } as const;
 
 export const en: Record<keyof typeof es, string> = {
@@ -157,6 +167,11 @@ lists decisions.
             the one that recorded the decision (decided_by): an agent does not accept
             its own decisions; it records them already accepted with add
             --confirmed-by, or the user accepts them.
+  endorse <id>... [--json]
+            Endorse "proposed" decisions without accepting them: sets endorsed_by to
+            your authorship and keeps the status. It is what the leader (gru) does in
+            bond-app's loop mode with its team's decisions; the user accepts them later.
+            You cannot endorse your own (decided_by).
   reject <id>... [--ref <reason>] [--confirmed-by <ref>] [--all-proposed]
             Changes status to "rejected" (same confirmation).
   supersede <id>... --by <new> [--confirmed-by <ref>] [--all-proposed]
@@ -242,4 +257,9 @@ everything else exits with 0 explaining that the repo does not use decision memo
 	"decisions.empty_runs": "no runs in {dir}/runs/",
 	"decisions.runs_counts": "{commits} commit(s) · {decisions} decision(s)",
 	"decisions.check_ok": "{dir}/: {total} decision(s) without errors{parts}",
+	"decisions.check_endorsed_part": "{n} endorsed waiting for the user",
+	"decisions.check_bad_endorsed_by": "{file}: endorsed_by \"{by}\" is not a valid authorship (user or agent:<kind>[/<name>])",
+	"decisions.check_endorsed_own": "{file}: endorsed by whoever recorded it ({author})",
+	"decisions.err_endorse_own": "{id}: recorded by {author}; you cannot endorse your own decisions",
+	"decisions.endorsed_ack": "endorsed by {by} (still proposed: the user accepts it)",
 };
