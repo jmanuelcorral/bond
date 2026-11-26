@@ -769,8 +769,9 @@ configs quedan escritos y se puede repetir `bond setup` más tarde.
 `cli/app.mts`. Lanza el entorno de bond con la aplicación de escritorio Herdr:
 
 1. Comprueba si el binario ejecutable `bond-app` está disponible en el `PATH`. Si no lo está,
-   explica con claridad cómo instalarlo desde el paquete local o clon de `bond-app` (por ejemplo
-   `npm install -g <ruta>`) y sale con código 1.
+   explica cómo instalarlo con su instalador (`npx -y @jmanuelcorral/bond-app@latest setup`) y
+   sale con código 1. bond no incluye bond-app: es un paquete aparte, que su instalador pone al
+   día junto con bond.
 2. Ejecuta `bond-app install` para sincronizar el layout, mods y temas específicos de bond en
    `herdr-app`. Si este paso falla, propaga el código de salida.
 3. Ejecuta `bond-app open` para levantar la ventana de `herdr-app` (si no estuviera en marcha)

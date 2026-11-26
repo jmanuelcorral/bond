@@ -16,12 +16,10 @@
     ]
   },
   "bin": {
-    "bond": "bin/bond",
-    "bond-app": "bin/bond-app.mjs"
+    "bond": "bin/bond"
   },
   "dependencies": {
     "@clack/prompts": "1.8.0",
-    "@jmanuelcorral/bond-app": "^0.1.1",
     "smol-toml": "1.9.0"
   },
   "scripts": {

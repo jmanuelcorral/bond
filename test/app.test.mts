@@ -143,7 +143,7 @@ describe("bond app", () => {
 		const r = bond(["app"], { PATH: "/nonexistent-path-for-bond-test", BOND_LANG: "es" });
 		expect(r.status).toBe(1);
 		expect(r.out).toContain("bond-app no está instalado");
-		expect(r.out).toContain("npm install -g @jmanuelcorral/bond-app");
+		expect(r.out).toContain("npx -y @jmanuelcorral/bond-app@latest setup");
 	});
 
 	test("rechaza opciones desconocidas con código 1 (L2)", () => {

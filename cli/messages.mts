@@ -201,7 +201,7 @@ Opciones:
   --home <ruta>        Directorio de configuración de herdr-app
   --token-file <ruta>  Ruta al fichero de token
   -h, --help           Muestra esta ayuda`,
-	"app.missing": "bond-app no está instalado o no está en el PATH.\n  Instálalo desde npm (npm install -g @jmanuelcorral/bond-app) o actualiza bond (npm install -g @jmanuelcorral/bond).",
+	"app.missing": "bond-app no está instalado o no está en el PATH.\n  Instálalo con su instalador: npx -y @jmanuelcorral/bond-app@latest setup",
 	"app.option_needs_value": "La opción {option} requiere un valor.",
 	"app.unknown_option": "Opción desconocida para bond app: {option}",
 	"app.spawn_error": "Error al ejecutar bond-app: {error}",
@@ -397,7 +397,7 @@ Options:
   --home <path>        herdr-app config directory
   --token-file <path>  Path to token file
   -h, --help           Show this help`,
-	"app.missing": "bond-app is not installed or not in PATH.\n  Install it from npm (npm install -g @jmanuelcorral/bond-app) or update bond (npm install -g @jmanuelcorral/bond).",
+	"app.missing": "bond-app is not installed or not in PATH.\n  Install it with its installer: npx -y @jmanuelcorral/bond-app@latest setup",
 	"app.option_needs_value": "Option {option} requires a value.",
 	"app.unknown_option": "Unknown option for bond app: {option}",
 	"app.spawn_error": "Failed to execute bond-app: {error}",

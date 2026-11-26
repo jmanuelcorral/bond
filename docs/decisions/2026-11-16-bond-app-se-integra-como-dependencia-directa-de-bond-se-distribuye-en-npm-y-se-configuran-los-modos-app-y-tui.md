@@ -1,13 +1,13 @@
 ---
 id: "2026-11-16-bond-app-se-integra-como-dependencia-directa-de-bond-se-distribuye-en-npm-y-se-configuran-los-modos-app-y-tui"
 title: "bond-app se integra como dependencia directa de bond, se distribuye en npm y se configuran los modos app y tui"
-status: "accepted"
+status: "superseded"
 date: "2026-11-16"
 decided_by: "agent:agy/kevin"
-accepted_by: "aprobado"
+accepted_by: "arregla bond y bond-app"
 accepted_via: "user"
 supersedes: ""
-superseded_by: ""
+superseded_by: "2026-11-26-bond-deja-de-incluir-bond-app-paquete-aparte-que-instala-y-actualiza-su-instalador"
 links:
   - "branch: chore/bond-1-15"
   - "head: d34e5f7"
