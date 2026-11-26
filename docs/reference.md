@@ -381,6 +381,7 @@ maxTokensField = "max_tokens"
 | Agente | Fichero | Cómo | Necesita de la pasarela |
 |---|---|---|---|
 | pi | `~/.pi/agent/models.json` | Sus proveedores dentro de `providers`; el resto del fichero, igual | API de chat |
+| pi (compactación) | `~/.pi/agent/settings.json` | `compaction.modelOverrides` de los modelos con `context` ≤ 200K: compacta con un 25 % libre (nunca antes de los 16384 de pi, nunca más de la mitad) y guarda el 12 % reciente (máx. 20000). Sin `context`, nada | — |
 | opencode v2 | `~/.config/opencode/opencode.json(c)` | Ídem en `providers` (`settings.baseURL`, `limit.context/output`) | API de chat |
 | Crush | `~/.config/crush/crushrc` | Bloque `# >>> bond >>>` al final, con `provider add` / `model add` | API de chat |
 | Codex | — | Usa su cuenta oficial; bond no le aprovisiona modelos | — |
@@ -392,6 +393,10 @@ Reglas para no pisar lo ajeno:
 - En los JSON, bond solo reescribe los proveedores que gestiona (los de ahora y los que
   escribió la vez anterior, apuntados en `state.json`). Si quitas un proveedor del registro,
   desaparece de los agentes; lo que añadiste tú a mano se queda.
+- En el `settings.json` de pi, bond solo escribe sus entradas de `compaction.modelOverrides`
+  (apuntadas en `state.json`); un ajuste que pusiste tú para un modelo se respeta, y si el
+  fichero es un enlace simbólico no se toca. Con poco contexto, el umbral por defecto de pi
+  llega tarde y la compactación puede fallar sin aviso (#92).
 - En Crush, todo lo de bond va entre marcas; fuera de ellas no se toca nada. Si en
   `crushrc` defines a mano un proveedor con el mismo id, bond no lo duplica y avisa: manda lo
   tuyo. (Hoy pasa con `halo`, que tu `crushrc` define con la IP local `<IP-local>:18080`:

@@ -31,6 +31,10 @@ export interface Target {
 	/** Cómo comprobar a mano que el agente ve los modelos. */
 	verify: string;
 	note?: string;
+	/** Clave en state.managed (por defecto, el agente): un agente puede tener varios ficheros. */
+	stateKey?: string;
+	/** Si el fichero es un enlace simbólico (instalaciones antiguas lo enlazaban al repo), no se toca. */
+	keepSymlink?: boolean;
 }
 
 const xdg = () => process.env.XDG_CONFIG_HOME || join(HOME, ".config");
@@ -112,6 +116,70 @@ const pi: Target = {
 		return { text, managed: Object.keys(generated), skipped: [] };
 	},
 };
+
+// --- pi: compactación por modelo ------------------------------------------------------
+//
+// Con poco contexto, el umbral por defecto de pi (compactar con 16384 libres) llega tarde: un
+// resultado de herramienta grande lo salta y la petición de resumen, que va al mismo modelo, ya
+// no cabe (bond#92). Para esos modelos bond escribe compaction.modelOverrides en el
+// settings.json de pi: solo sus entradas, apuntadas en state.json; las de la persona no se tocan.
+
+/** Hasta este contextWindow bond ajusta la compactación. */
+export const PI_COMPACTION_MAX_CONTEXT = 200_000;
+const PI_DEFAULT_RESERVE = 16_384;
+
+/** Ajuste de compactación para un contextWindow, o null si no hace falta (o no se conoce). */
+export function piCompactionFor(context: number | undefined): { reserveTokens: number; keepRecentTokens: number } | null {
+	if (!context || context <= 0 || context > PI_COMPACTION_MAX_CONTEXT) return null;
+	// Compacta con un 25 % libre (nunca antes que el defecto de pi), sin pasar de la mitad.
+	const reserveTokens = Math.min(Math.max(PI_DEFAULT_RESERVE, Math.ceil(context * 0.25)), Math.floor(context / 2));
+	const keepRecentTokens = Math.min(20_000, Math.floor(context * 0.12));
+	return { reserveTokens, keepRecentTokens };
+}
+
+export const piCompaction: Target = {
+	agent: "pi",
+	stateKey: "pi-compaction",
+	keepSymlink: true,
+	needs: "chat",
+	file: () => join(AGENT_DIR, "settings.json"),
+	installed: () => !!which("pi"),
+	verify: "compaction.modelOverrides en ~/.pi/agent/settings.json",
+	render(current, providers, state) {
+		const obj = current?.trim() ? parseJsonc(current) : {};
+		const compaction = { ...((obj.compaction as Record<string, unknown>) ?? {}) };
+		const overrides = { ...((compaction.modelOverrides as Record<string, unknown>) ?? {}) };
+		const previous = state.managed["pi-compaction"] ?? [];
+		const hadModelOverrides = "modelOverrides" in compaction;
+		for (const key of previous) delete overrides[key];
+		const managed: string[] = [];
+		const skipped: Array<{ id: string; why: string }> = [];
+		for (const p of providers) {
+			for (const m of modelsFor(p, "pi")) {
+				const value = piCompactionFor(m.context);
+				if (!value) continue;
+				const key = `${p.id}/${m.id}`;
+				// Una entrada que bond no escribió es de la persona: se respeta.
+				if (key in overrides) {
+					skipped.push({ id: key, why: t("models.pi_compaction_user_override") });
+					continue;
+				}
+				overrides[key] = value;
+				managed.push(key);
+			}
+		}
+		// Nada que bond escriba ni que quitar: el fichero de pi queda tal cual (ni se reformatea).
+		if (!managed.length && !previous.length) return { text: current ?? "", managed, skipped };
+		if (Object.keys(overrides).length || hadModelOverrides) compaction.modelOverrides = overrides;
+		else delete compaction.modelOverrides;
+		if (Object.keys(compaction).length) obj.compaction = compaction;
+		else delete obj.compaction;
+		return { text: `${JSON.stringify(obj, null, 2)}\n`, managed, skipped };
+	},
+};
+
+/** Ficheros de más que se generan junto al principal de un agente. */
+export const COMPANIONS: Record<string, Target[]> = { pi: [piCompaction] };
 
 // --- opencode v2 ----------------------------------------------------------------------
 

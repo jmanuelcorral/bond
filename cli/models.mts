@@ -1,12 +1,12 @@
 // `bond models`: registro global de modelos (~/.config/bond/config.toml) y su traducción a
 // la configuración de cada agente.
 
-import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { inspect } from "node:util";
 import { activeProviders, type Api, CONFIG_DIR, CONFIG_FILE, initialConfig, loadConfig, loadState, providerApis, saveState, type ProbeApiStatus, type State } from "./config.mts";
-import { BEGIN, codexConfigFile, INCOMPATIBLE, readCurrent, hasComments, TARGETS, withoutBlock } from "./agents.mts";
+import { BEGIN, codexConfigFile, COMPANIONS, INCOMPATIBLE, readCurrent, hasComments, TARGETS, withoutBlock } from "./agents.mts";
 import { t } from "./messages.mts";
 import { act, AGENT_DIR, bad, caution, die, dim, isDryRun, log, ok, REPO_DIR, run, STAMP, warn, which } from "./util.mts";
 
@@ -257,6 +257,14 @@ export function cleanCodexOrphan(say: (s: string) => void, check?: boolean, stat
 	return true;
 }
 
+function isSymlink(file: string): boolean {
+	try {
+		return lstatSync(file).isSymbolicLink();
+	} catch {
+		return false;
+	}
+}
+
 /** Sincroniza; devuelve los agentes desfasados (para --check y bond doctor). */
 export function syncAgents(opts: SyncOptions = {}): string[] {
 	const cfg = loadConfig();
@@ -281,7 +289,14 @@ export function syncAgents(opts: SyncOptions = {}): string[] {
 		say(`${ok("✓")} ${"codex".padEnd(9)}${t("models.sync_codex_no_orphan")}  ${dim(codexConfigFile())}`);
 	}
 
-	for (const target of chosen) {
+	const files = chosen.flatMap((t) => [t, ...(COMPANIONS[t.agent] ?? [])]);
+	for (const target of files) {
+		const stateKey = target.stateKey ?? target.agent;
+		const label = `${target.agent.padEnd(9)}`;
+		if (target.keepSymlink && isSymlink(target.file())) {
+			say(`${caution("!")} ${label}${dim(`${target.file()}: ${t("models.sync_symlink_kept")}`)}`);
+			continue;
+		}
 		const usable = providers.filter((p) => providerApis(p, state).includes(target.needs));
 		const unusable = providers.filter((p) => !usable.includes(p));
 		const file = target.file();
@@ -292,14 +307,13 @@ export function syncAgents(opts: SyncOptions = {}): string[] {
 			...out.skipped.map((s) => `${s.id}: ${s.why}`),
 		];
 		const changed = out.text !== (current ?? "");
-		const label = `${target.agent.padEnd(9)}`;
 		if (!changed) {
 			say(`${ok("✓")} ${label}${dim(`${t("models.sync_up_to_date")}  ${file}`)}`);
 		} else if (opts.check) {
-			stale.push(target.agent);
+			if (!stale.includes(target.agent)) stale.push(target.agent);
 			say(`${bad("✗")} ${label}${t("models.sync_outdated")}  ${dim(file)}`);
 		} else {
-			stale.push(target.agent);
+			if (!stale.includes(target.agent)) stale.push(target.agent);
 			if (current && /\.jsonc?$/.test(file) && hasComments(current)) {
 				warn(t("models.sync_comments_warn", { file }));
 			}
@@ -316,7 +330,7 @@ export function syncAgents(opts: SyncOptions = {}): string[] {
 				// El models.json de pi era un symlink al repo: pasa a ser un fichero de esta máquina.
 				rmSync(file, { force: true });
 				writeFileSync(file, out.text);
-				state.managed[target.agent] = out.managed;
+				state.managed[stateKey] = out.managed;
 				say(`${ok("✓")} ${label}${t("models.sync_updated")}  ${dim(file)}`);
 			}
 		}
