@@ -1,5 +1,14 @@
 # Cambios
 
+## 1.16.9
+
+- bond ya no incluye bond-app: deja de depender de `@jmanuelcorral/bond-app` y de publicar el
+  comando `bond-app`. Con la dependencia `^0.1.1`, instalar bond dejaba una bond-app 0.1.x
+  en el PATH que tapaba la de su instalador, y `npm install -g @jmanuelcorral/bond-app`
+  fallaba con `EEXIST`. bond-app se instala y se actualiza con su instalador
+  (`npx -y @jmanuelcorral/bond-app@latest setup`, luego `bond-app update`), que también
+  pone al día bond. `bond app` sigue igual y, si falta bond-app, dice cómo instalarlo.
+
 ## 1.16.8
 
 - `plan-team` admite equipos en Herdr y en las terminales hc de bond-app. Los prompts
