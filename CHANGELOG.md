@@ -1,5 +1,25 @@
 # Cambios
 
+## 1.17.0
+
+- **Modo loop de bond-app.** Dos skills nuevas en el catálogo, opcionales: `loop-lead` (gru)
+  y `loop-member` (el equipo). gru ejecuta un plan aprobado vuelta a vuelta de revisión:
+  reparte fases, contesta las preguntas del equipo (`bond-app ask`), revisa y verifica,
+  avala decisiones, lleva el registro del loop y evalúa al final. Puede hacer push de las
+  ramas del run para probarlas en entornos, pero nunca a una rama principal ni forzado.
+  Relee en cada vuelta las instrucciones de la persona que bond-app deja en el registro.
+  Con `BOND_LOOP=1`, las puertas de `plan-execute`, `plan-team`, `git-conventional-commit`,
+  `decision-record` y `bond-team` (hc) que esperaban a la persona esperan a gru.
+- `bond decisions endorse <id>...` avala una decisión sin aceptarla (`endorsed_by`). `check`
+  cuenta las avaladas que esperan a la persona y el JSON del listado lleva el campo.
+- pi compacta antes en modelos de contexto pequeño (≤ 200K): `bond models sync` y
+  `bond setup` escriben `compaction.modelOverrides` en su `settings.json` (25 % libre). Con
+  el valor por defecto de pi, un resultado grande dejaba la petición de resumen sin sitio y
+  el agente se quedaba parado sin avisar. Solo toca sus entradas; respeta las puestas a mano
+  y no toca un fichero enlazado.
+- Las pruebas ya no leen el `~/.bond` real de quien las lanza (fallaban diez si tenía una
+  instalación).
+
 ## 1.16.9
 
 - bond ya no incluye bond-app: deja de depender de `@jmanuelcorral/bond-app` y de publicar el
