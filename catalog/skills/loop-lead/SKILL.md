@@ -24,7 +24,7 @@ In a loop, the gates of the bond skills that wait for the person wait for **you*
 - the questions of the team;
 - whether a phase is done, needs a fix, or the plan moves on.
 
-You may **push the run's work branches** (the run's branch in each repo) to test them on the environments their CI deploys to. Push only commits you reviewed, and log each push in the loop log. In a bond-app run the container's `pre-push` hook lets only the run's branch through, fast-forward only.
+You may **push the run's work branches** (the run's branch in each repo) to test them on the environments their CI deploys to. Push only commits you reviewed, and log each push in the loop log. bond-app does not restrict pushes inside the run: these limits are yours to keep.
 
 Even in a loop, never:
 
