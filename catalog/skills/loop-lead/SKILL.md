@@ -13,6 +13,8 @@ bond-app started a **loop** on this run: `printenv BOND_LOOP` prints `1` and `pr
 
 bond-app owns the loop's clock: it counts iterations, applies the limits (maximum iterations, stall, timeout) and can pause or stop you. You own the judgement: what to do next, the answers, the decisions, the review and the final evaluation.
 
+The person sets the loop up when they start it: the plan to carry out and, optionally, **instructions** for this loop (phases to do or skip, priorities, limits). bond-app writes them at the top of the loop log, under «Instrucciones de la persona», and appends any later message of theirs as «Instrucción de la persona (<time>)»; each also reaches your terminal as a `[bond-app loop]` message. Reread them at the start of every iteration and follow them: they narrow or steer the plan for this loop. A later instruction wins over an earlier one. They do not widen the plan's scope or lift the limits below; if one would, raise `needs-human` instead of guessing.
+
 ## Your authority, and its limits
 
 In a loop, the gates of the bond skills that wait for the person wait for **you** instead:
