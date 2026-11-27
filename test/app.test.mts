@@ -6,11 +6,19 @@ import { join } from "node:path";
 import { parse, stringify } from "smol-toml";
 import * as p from "@clack/prompts";
 
-const home = mkdtempSync(join(tmpdir(), "bond-app-test-home-"));
+const requested = mkdtempSync(join(tmpdir(), "bond-app-test-home-"));
+process.env.BOND_HOME = requested;
+process.env.XDG_CONFIG_HOME = join(requested, ".config");
+
+const { defaultCommand, hasExistingInstallEvidence, CONFIG_DIR } = await import("../cli/config.mts");
+// bun runs every test file in one process and shares its modules: when another file imported
+// config.mts first, its BOND_HOME (another temp dir) is the one config.mts uses. Work there,
+// and never anywhere but a temp dir.
+const home = CONFIG_DIR;
+if (!home.startsWith(tmpdir())) throw new Error(`config.mts resolved BOND_HOME outside the temp dir: ${home}`);
+if (home !== requested) rmSync(requested, { recursive: true, force: true });
 process.env.BOND_HOME = home;
 process.env.XDG_CONFIG_HOME = join(home, ".config");
-
-const { defaultCommand, hasExistingInstallEvidence } = await import("../cli/config.mts");
 type Config = import("../cli/config.mts").Config;
 
 const ROOT = join(import.meta.dir, "..");
