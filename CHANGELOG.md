@@ -1,5 +1,9 @@
 # Cambios
 
+## 1.17.1
+
+- `loop-lead`: bond-app ya no limita el push dentro del run (quitó su hook `pre-push`). La skill ya no lo da por hecho: los límites (nunca a una rama principal, nunca forzado, nunca borrar ramas remotas) los mantiene gru.
+
 ## 1.17.0
 
 - **Modo loop de bond-app.** Dos skills nuevas en el catálogo, opcionales: `loop-lead` (gru)
